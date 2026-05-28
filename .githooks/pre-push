@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+set -eu
+
+protected="refs/heads/main"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "$protected" ] && [ "${ALLOW_MAIN_PUSH:-}" != "1" ]; then
+    cat >&2 <<'EOF'
+Pushes to main are blocked by the local repository policy.
+
+Open a PR from a branch rooted at dev-root, or set ALLOW_MAIN_PUSH=1 only for
+an intentional administrative bootstrap.
+EOF
+    exit 1
+  fi
+done
+

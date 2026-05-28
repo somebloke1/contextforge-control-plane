@@ -1,0 +1,64 @@
+# Python environments and packaging
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node and package manager caches
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# ContextPortal / ContextForge runtime state
+.env
+.env.*
+!.env.example
+data/
+db/
+logs/
+run/
+tmp/
+*.sqlite
+*.sqlite3
+*.db
+*.pid
+*.sock
+inventory/*.local.json
+inventory/*.local.yaml
+inventory/*.secrets.json
+generated/
+
+# MCP/client generated local state
+.code_index/
+.gemini-mcp/
+.mcp-cache/
+
+# Systemd and install outputs generated locally
+systemd/*.local.service
+systemd/*.local.target
+install/*.local.sh
+
+# Editor, OS, and tool noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Logs and diagnostics
+*.log
+*.trace
+*.prof
+

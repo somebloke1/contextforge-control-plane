@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+set -eu
+
+branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+
+if [ "$branch" = "main" ] && [ "${ALLOW_MAIN_COMMIT:-}" != "1" ]; then
+  cat >&2 <<'EOF'
+Direct commits to main are blocked in this repository.
+
+Create work from dev-root instead:
+  git switch dev-root
+  git switch -c <agent-or-feature-branch>
+
+For the one-time repository bootstrap only, set ALLOW_MAIN_COMMIT=1.
+EOF
+  exit 1
+fi
+
