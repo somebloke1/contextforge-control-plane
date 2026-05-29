@@ -1,0 +1,92 @@
+{
+  "name": "github",
+  "slug": "github",
+  "client": "canonical",
+  "source": "deduplicated from the OpenCode github MCP entry using @modelcontextprotocol/server-github and gh auth token",
+  "config_path": null,
+  "enabled": true,
+  "kind": "mcp",
+  "scope": {
+    "requires_local_project_scope": false,
+    "scope_type": "github_account_and_request_repo",
+    "configuration_signal": "tool arguments owner, repo, branch, path, issue_number, or pull_number",
+    "notes": "GitHub operations are scoped by the runtime gh account token and explicit owner/repo style tool arguments, not by local workspace path."
+  },
+  "backend": {
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-github"
+    ],
+    "env": {
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "<from gh auth token at runtime>"
+    },
+    "env_vars": [
+      "GITHUB_PERSONAL_ACCESS_TOKEN"
+    ]
+  },
+  "bridge": {
+    "needed": true,
+    "provider": "mcpgateway.translate",
+    "reason": "@modelcontextprotocol/server-github is configured as stdio; ContextForge registration needs HTTP/SSE exposure",
+    "host": "127.0.0.1",
+    "port": 9106,
+    "streamable_http_url": "http://127.0.0.1:9106/mcp",
+    "sse_url": "http://127.0.0.1:9106/sse"
+  },
+  "contextforge": {
+    "gateway": {
+      "name": "github",
+      "url": "http://localhost:9106/mcp",
+      "transport": "STREAMABLEHTTP",
+      "id": "35de0ef8f791449898317435f986d6dd"
+    },
+    "virtual_server": {
+      "name": "github_server",
+      "grouping": "canonical",
+      "id": "898d2179080744ffadd0add57494f197"
+    }
+  },
+  "registration": {
+    "status": "registered",
+    "registered_tools": [
+      "github-add-issue-comment",
+      "github-create-branch",
+      "github-create-issue",
+      "github-create-or-update-file",
+      "github-create-pull-request",
+      "github-create-pull-request-review",
+      "github-create-repository",
+      "github-fork-repository",
+      "github-get-file-contents",
+      "github-get-issue",
+      "github-get-pull-request",
+      "github-get-pull-request-comments",
+      "github-get-pull-request-files",
+      "github-get-pull-request-reviews",
+      "github-get-pull-request-status",
+      "github-list-commits",
+      "github-list-issues",
+      "github-list-pull-requests",
+      "github-merge-pull-request",
+      "github-push-files",
+      "github-search-code",
+      "github-search-issues",
+      "github-search-repositories",
+      "github-search-users",
+      "github-update-issue",
+      "github-update-pull-request-branch"
+    ],
+    "verified": {
+      "direct_stdio": "listed 26 GitHub tools and successfully called search_repositories with one result",
+      "bridge": "systemd user service contextforge-github.service exposes streamable HTTP and SSE on 127.0.0.1:9106",
+      "contextforge": "gateway and github_server virtual server registered through ContextForge API; 26 tool prompts and resources registered"
+    },
+    "review_completed": [
+      "confirmed gh CLI has an authenticated account with repo, workflow, gist, and read:org scopes",
+      "confirmed the OpenCode source entry points at @modelcontextprotocol/server-github",
+      "confirmed the backend supports a low-risk read-only search_repositories call"
+    ]
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "name": "openzeppelin-solidity-contracts",
+  "slug": "openzeppelin-solidity-contracts",
+  "client": "canonical",
+  "source": "user-registered OpenZeppelin Solidity Contracts gateway",
+  "config_path": null,
+  "enabled": true,
+  "kind": "mcp",
+  "scope": {
+    "requires_local_project_scope": false,
+    "scope_type": "global_contract_template_lookup",
+    "configuration_signal": "tool selection and contract-generation arguments",
+    "notes": "OpenZeppelin Solidity Contracts is a remote template/documentation service and is not scoped to a local workspace."
+  },
+  "backend": {
+    "transport": "streamable_http",
+    "url": "https://mcp.openzeppelin.com/contracts/solidity/mcp",
+    "command": null,
+    "args": null,
+    "env": null,
+    "env_vars": null
+  },
+  "bridge": {
+    "needed": false,
+    "provider": null,
+    "reason": "OpenZeppelin Solidity Contracts exposes native streamable HTTP",
+    "streamable_http_url": "https://mcp.openzeppelin.com/contracts/solidity/mcp",
+    "sse_url": null
+  },
+  "contextforge": {
+    "gateway": {
+      "name": "OpenZeppelin Solidity Contracts",
+      "url": "https://mcp.openzeppelin.com/contracts/solidity/mcp",
+      "transport": "STREAMABLEHTTP",
+      "id": "30e0189877854e24879e1428fcc73b2c"
+    },
+    "virtual_server": {
+      "name": "openzeppelin_solidity_contracts_server",
+      "grouping": "canonical",
+      "id": "f865e5ae3eca49b39f6dc3056212fcb3"
+    }
+  },
+  "registration": {
+    "status": "registered",
+    "registered_tools": [
+      "openzeppelin-solidity-contracts-solidity-account",
+      "openzeppelin-solidity-contracts-solidity-custom",
+      "openzeppelin-solidity-contracts-solidity-erc1155",
+      "openzeppelin-solidity-contracts-solidity-erc20",
+      "openzeppelin-solidity-contracts-solidity-erc721",
+      "openzeppelin-solidity-contracts-solidity-governor",
+      "openzeppelin-solidity-contracts-solidity-rwa",
+      "openzeppelin-solidity-contracts-solidity-stablecoin"
+    ],
+    "verified": {
+      "native_streamable_http": "standard remote OpenZeppelin gateway imported 8 tools",
+      "contextforge_streamable_http": "listed 8 openzeppelin tools",
+      "contextforge_sse": "listed 8 openzeppelin tools"
+    },
+    "review_completed": [
+      "created ContextForge virtual server without altering the user-registered gateway",
+      "verified ContextForge virtual /sse and /mcp endpoints"
+    ]
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "name": "exa-search",
+  "slug": "exa-search",
+  "client": "canonical",
+  "source": "local ContextForge Exa MCP backend",
+  "config_path": null,
+  "enabled": true,
+  "kind": "mcp",
+  "scope": {
+    "requires_local_project_scope": false,
+    "scope_type": "provider_credential_scope",
+    "configuration_signal": "tool arguments query, url, and maxCharacters",
+    "notes": "Search and fetch operations are scoped by provider credentials and explicit request arguments, not by local workspace path."
+  },
+  "backend": {
+    "transport": "stdio",
+    "url": null,
+    "command": ".venv/bin/python",
+    "args": [
+      "server-instances/exa-search/server.py"
+    ],
+    "env": "server-instances/exa-search/.env",
+    "env_vars": [
+      "EXA_API_KEY",
+      "GEMINI_API_KEY"
+    ]
+  },
+  "bridge": {
+    "needed": true,
+    "provider": "mcpgateway.translate",
+    "reason": "local backend is a stdio FastMCP server and ContextForge exposes it over streamable HTTP and SSE",
+    "streamable_http_url": "http://localhost:9105/mcp",
+    "sse_url": "http://localhost:9105/sse"
+  },
+  "contextforge": {
+    "gateway": {
+      "name": "Exa Search",
+      "url": "http://localhost:9105/mcp",
+      "transport": "STREAMABLEHTTP",
+      "id": "05754613e3644721aa12f2d923dc6403"
+    },
+    "virtual_server": {
+      "name": "exa_search_server",
+      "grouping": "canonical",
+      "id": "c8d6f6fdbb83456ba6350cd4c7e5c8bf"
+    }
+  },
+  "registration": {
+    "status": "registered",
+    "registered_tools": [
+      "exa-search-web-fetch-exa",
+      "exa-search-web-search-exa",
+      "exa-search-web-search-gemini-exa"
+    ],
+    "verified": {
+      "direct_streamable_http": "listed web_search_exa, web_fetch_exa, and web_search_gemini_exa",
+      "direct_sse": "listed web_search_exa, web_fetch_exa, and web_search_gemini_exa",
+      "contextforge_streamable_http": "listed 3 exa-search tools from exa_search_server",
+      "contextforge_sse": "listed 3 exa-search tools from exa_search_server",
+      "contextforge_tool_call": "called exa-search-web-search-gemini-exa successfully through the virtual MCP server"
+    },
+    "review_completed": [
+      "deleted the prior hosted Exa ContextForge gateway and virtual server through the ContextForge API",
+      "registered the local exa-search bridge as the replacement Exa Search gateway",
+      "created ContextForge virtual server over the 3 local Exa tools",
+      "verified direct and ContextForge virtual /sse and /mcp endpoints"
+    ]
+  }
+}

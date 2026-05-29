@@ -1,0 +1,79 @@
+{
+  "name": "web-search",
+  "slug": "web-search",
+  "client": "canonical",
+  "source": "/home/dgk/workspace/web_search standalone MCP server",
+  "config_path": "/home/dgk/workspace/web_search/.codex/config.toml",
+  "enabled": true,
+  "kind": "mcp",
+  "scope": {
+    "requires_local_project_scope": false,
+    "scope_type": "provider_credential_and_request_scope",
+    "configuration_signal": "tool arguments query, url, maxCharacters, maxPages, and repository URL",
+    "notes": "The centralized web-search service is scoped by request arguments and provider credentials. It does not infer a local workspace path from the client project."
+  },
+  "backend": {
+    "transport": "stdio",
+    "url": null,
+    "command": "node",
+    "args": [
+      "/home/dgk/workspace/web_search/dist/mcp-server.js"
+    ],
+    "env": "server-instances/web-search/.env",
+    "env_vars": [
+      "EXA_API_KEY",
+      "GEMINI_API_KEY",
+      "GEMINI_MODEL",
+      "GITHUB_TOKEN",
+      "PERPLEXITY_API_KEY",
+      "WEB_ACCESS_ENABLE_GEMINI_WEB"
+    ]
+  },
+  "bridge": {
+    "needed": true,
+    "provider": "mcpgateway.translate",
+    "reason": "local backend is a stdio MCP server and ContextForge exposes it over streamable HTTP and SSE",
+    "streamable_http_url": "http://localhost:9107/mcp",
+    "sse_url": "http://localhost:9107/sse"
+  },
+  "contextforge": {
+    "gateway": {
+      "name": "web-search",
+      "url": "http://localhost:9107/mcp",
+      "transport": "STREAMABLEHTTP",
+      "id": "68493a5f5b5048f5973edb8c5d00dc5b"
+    },
+    "virtual_server": {
+      "name": "web_search_server",
+      "grouping": "canonical",
+      "id": "51a4c7adcdae4cc9a7cf9552c5858011"
+    }
+  },
+  "registration": {
+    "status": "registered",
+    "registered_tools": [
+      "web-search-code-search",
+      "web-search-fetch-content",
+      "web-search-github-repo",
+      "web-search-pdf-extract",
+      "web-search-web-search"
+    ],
+    "verified": {
+      "direct_stdio": "listed web_search, fetch_content, code_search, github_repo, and pdf_extract",
+      "direct_streamable_http": "listed web_search, fetch_content, code_search, github_repo, and pdf_extract",
+      "direct_sse": "listed web_search, fetch_content, code_search, github_repo, and pdf_extract",
+      "contextforge_registration": "registered gateway and web_search_server virtual server with 5 tools",
+      "contextforge_streamable_http": "listed 5 web-search tools from web_search_server",
+      "contextforge_sse": "listed 5 web-search tools from web_search_server",
+      "contextforge_tool_call": "called web-search-fetch-content for https://example.com successfully through the virtual MCP server"
+    },
+    "review_completed": [
+      "direct stdio backend listed five standalone MCP tools",
+      "installed and started contextforge-web-search.service",
+      "registered the local web-search bridge as a canonical ContextForge gateway",
+      "created ContextForge virtual server over the 5 local web_search tools",
+      "registered 5 tool-bound guidance resources and 5 prompts",
+      "verified direct and ContextForge virtual /sse and /mcp endpoints"
+    ]
+  }
+}

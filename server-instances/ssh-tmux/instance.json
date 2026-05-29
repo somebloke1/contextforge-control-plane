@@ -1,0 +1,71 @@
+{
+  "name": "ssh-tmux",
+  "slug": "ssh-tmux",
+  "client": "canonical",
+  "source": "deduplicated from ssh-mcp entries in Codex, Claude, Gemini, and OpenCode client configs",
+  "config_path": null,
+  "enabled": true,
+  "kind": "mcp",
+  "scope": {
+    "requires_local_project_scope": false,
+    "scope_type": "ssh_target_and_tmux_session",
+    "configuration_signal": "tool arguments command, session_id, remote host details, and remote path",
+    "notes": "ssh-tmux is scoped by explicit session and remote target arguments, not by local workspace path."
+  },
+  "backend": {
+    "transport": "stdio",
+    "command": "uvx",
+    "args": [
+      "mcp-ssh-tmux"
+    ],
+    "env": null,
+    "env_vars": null
+  },
+  "bridge": {
+    "needed": true,
+    "provider": "mcpgateway.translate",
+    "reason": "mcp-ssh-tmux starts as stdio; ContextForge registration needs HTTP/SSE exposure",
+    "host": "127.0.0.1",
+    "port": 9102,
+    "sse_url": "http://127.0.0.1:9102/sse",
+    "streamable_http_url": "http://127.0.0.1:9102/mcp"
+  },
+  "contextforge": {
+    "gateway": {
+      "name": "ssh-tmux",
+      "url": "http://localhost:9102/mcp",
+      "transport": "STREAMABLEHTTP",
+      "id": "5c2a76c98c074afe87df07dc207476e3"
+    },
+    "virtual_server": {
+      "name": "ssh_tmux_server",
+      "grouping": "canonical",
+      "id": "824278b0c61248489ca2b203f3f20741"
+    }
+  },
+  "registration": {
+    "status": "registered",
+    "registered_tools": [
+      "ssh-tmux-close-session",
+      "ssh-tmux-get-snapshot",
+      "ssh-tmux-list-sessions",
+      "ssh-tmux-open-session",
+      "ssh-tmux-read-remote-file",
+      "ssh-tmux-send-command",
+      "ssh-tmux-send-keys",
+      "ssh-tmux-write-remote-file"
+    ],
+    "verified": {
+      "direct_streamable_http": "listed 8 ssh-tmux tools",
+      "direct_sse": "listed 8 ssh-tmux tools",
+      "contextforge_streamable_http": "listed 8 ssh-tmux-prefixed tools",
+      "contextforge_sse": "listed 8 ssh-tmux-prefixed tools"
+    },
+    "review_completed": [
+      "command starts non-interactively through uvx",
+      "direct /sse and /mcp bridge endpoints probed",
+      "registered through stock ContextForge after probes passed",
+      "verified ContextForge virtual /sse and /mcp endpoints"
+    ]
+  }
+}

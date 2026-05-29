@@ -19,29 +19,49 @@ yarn-error.log*
 pnpm-debug.log*
 .pnpm-store/
 
-# ContextPortal / ContextForge runtime state
+# ContextForge runtime state
 .env
 .env.*
 !.env.example
+config/contextforge.env
+config/*.local.env
+config/tls/
 data/
 db/
 logs/
 run/
+run/*.local.env
 tmp/
 *.sqlite
 *.sqlite3
 *.db
+*.db-shm
+*.db-wal
+*-shm
+*-wal
 *.pid
 *.sock
 inventory/*.local.json
 inventory/*.local.yaml
 inventory/*.secrets.json
 generated/
+upstream/
+server-instances/*/.env
+server-instances/*/run/
+server-instances/*/logs/
+server-instances/*/*.local.json
+server-instances/serena-*/
+!server-instances/serena-context-portal/
+!server-instances/serena-context-portal/README.md
+!server-instances/serena-context-portal/instance.json
+!server-instances/serena-context-portal/probe.sh
+!server-instances/serena-context-portal/run-server.sh
 
 # MCP/client generated local state
 .code_index/
 .gemini-mcp/
 .mcp-cache/
+.playwright-mcp/
 
 # Systemd and install outputs generated locally
 systemd/*.local.service
@@ -61,4 +81,3 @@ Thumbs.db
 *.log
 *.trace
 *.prof
-

@@ -1,0 +1,93 @@
+{
+  "name": "playwright",
+  "slug": "playwright",
+  "client": "canonical",
+  "source": "deduplicated from Playwright MCP entries in Codex and Gemini client configs",
+  "config_path": null,
+  "enabled": true,
+  "kind": "mcp",
+  "scope": {
+    "requires_local_project_scope": false,
+    "scope_type": "isolated_browser_runtime",
+    "configuration_signal": "tool arguments url, selectors, page actions, and isolated browser session state",
+    "notes": "Playwright is scoped to its isolated browser process and requested URLs, not by local workspace path."
+  },
+  "backend": {
+    "transport": "streamable-http-and-sse",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@playwright/mcp@latest",
+      "--browser=chromium",
+      "--headless",
+      "--isolated",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9104"
+    ],
+    "env": null,
+    "env_vars": null
+  },
+  "bridge": {
+    "needed": false,
+    "provider": null,
+    "reason": "@playwright/mcp exposes native streamable HTTP at /mcp and legacy SSE at /sse",
+    "host": "127.0.0.1",
+    "port": 9104,
+    "sse_url": "http://localhost:9104/sse",
+    "streamable_http_url": "http://localhost:9104/mcp"
+  },
+  "contextforge": {
+    "gateway": {
+      "name": "playwright",
+      "url": "http://localhost:9104/mcp",
+      "transport": "STREAMABLEHTTP",
+      "id": "19af5a4c3a944decb7242ea51b072bce"
+    },
+    "virtual_server": {
+      "name": "playwright_server",
+      "grouping": "canonical",
+      "id": "e8ef7f9fdd784e7c9ea64c06cbac4110"
+    }
+  },
+  "registration": {
+    "status": "registered",
+    "registered_tools": [
+      "playwright-browser-click",
+      "playwright-browser-close",
+      "playwright-browser-console-messages",
+      "playwright-browser-drag",
+      "playwright-browser-drop",
+      "playwright-browser-evaluate",
+      "playwright-browser-file-upload",
+      "playwright-browser-fill-form",
+      "playwright-browser-handle-dialog",
+      "playwright-browser-hover",
+      "playwright-browser-navigate",
+      "playwright-browser-navigate-back",
+      "playwright-browser-network-request",
+      "playwright-browser-network-requests",
+      "playwright-browser-press-key",
+      "playwright-browser-resize",
+      "playwright-browser-run-code-unsafe",
+      "playwright-browser-select-option",
+      "playwright-browser-snapshot",
+      "playwright-browser-tabs",
+      "playwright-browser-take-screenshot",
+      "playwright-browser-type",
+      "playwright-browser-wait-for"
+    ],
+    "verified": {
+      "native_streamable_http": "listed 23 playwright tools",
+      "native_sse": "listed 23 playwright tools",
+      "contextforge_streamable_http": "listed 23 playwright-prefixed tools",
+      "contextforge_sse": "listed 23 playwright-prefixed tools"
+    },
+    "review_completed": [
+      "confirmed native /mcp and /sse endpoints",
+      "registered through stock ContextForge",
+      "verified ContextForge virtual /sse and /mcp endpoints"
+    ]
+  }
+}

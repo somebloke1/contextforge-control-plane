@@ -1,0 +1,72 @@
+{
+  "name": "mentality",
+  "slug": "mentality",
+  "kind": "mcp",
+  "scope": {
+    "requires_local_project_scope": true,
+    "scope_type": "caller_supplied_local_repo",
+    "configuration_signal": "tool argument repo",
+    "default_scope": null,
+    "notes": "All governance tools require a repo argument and resolve ledgers under that repository. This keeps the centralized service reusable while preserving explicit local-project selection per call."
+  },
+  "backend": {
+    "transport": "stdio",
+    "command": ".venv/bin/python",
+    "args": [
+      "scripts/governance_mcp.py"
+    ],
+    "working_directory": "/home/dgk/workspace/context-portal"
+  },
+  "bridge": {
+    "needed": true,
+    "provider": "mcpgateway.translate",
+    "reason": "stdio backend needs HTTP and SSE exposure for ContextForge registration",
+    "host": "127.0.0.1",
+    "port": 9100,
+    "sse_url": "http://127.0.0.1:9100/sse",
+    "streamable_http_url": "http://127.0.0.1:9100/mcp"
+  },
+  "contextforge": {
+    "gateway": {
+      "name": "mentality",
+      "url": "http://localhost:9100/sse",
+      "transport": "SSE",
+      "id": "21bf9a1aa70a49e9ba2d11bafa280ef7"
+    },
+    "virtual_server": {
+      "name": "mentality_server",
+      "exposes_tools_from_gateway": "mentality",
+      "id": "0ed1b12cf6a04d3b89b62308925dfe16"
+    }
+  },
+  "registration": {
+    "status": "registered",
+    "registered_tools": [
+      "mentality-governance-create",
+      "mentality-governance-delete",
+      "mentality-governance-list",
+      "mentality-governance-read",
+      "mentality-governance-update"
+    ],
+    "verified": {
+      "direct_streamable_http": "listed 5 governance tools",
+      "direct_sse": "listed 5 governance tools",
+      "contextforge_streamable_http": "listed 5 mentality-prefixed tools",
+      "contextforge_sse": "listed 5 mentality-prefixed tools"
+    }
+  },
+  "verification": {
+    "direct_transports": [
+      "http://127.0.0.1:9100/sse",
+      "http://127.0.0.1:9100/mcp"
+    ],
+    "expected_tool_count": 5,
+    "expected_tools": [
+      "governance_list",
+      "governance_read",
+      "governance_create",
+      "governance_update",
+      "governance_delete"
+    ]
+  }
+}

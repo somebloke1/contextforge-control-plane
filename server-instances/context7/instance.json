@@ -1,0 +1,70 @@
+{
+  "name": "context7",
+  "slug": "context7",
+  "client": "canonical",
+  "source": "deduplicated from Context7 MCP entries in Codex, Gemini, and OpenCode client configs",
+  "config_path": null,
+  "enabled": true,
+  "kind": "mcp",
+  "scope": {
+    "requires_local_project_scope": false,
+    "scope_type": "global_documentation_lookup",
+    "configuration_signal": "tool arguments libraryName, context7CompatibleLibraryID, topic, and tokens",
+    "notes": "Context7 lookups are package/library scoped by tool arguments, not by local workspace path."
+  },
+  "backend": {
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@upstash/context7-mcp@latest"
+    ],
+    "env": {
+      "CONTEXT7_API_KEY": "<from environment or server-instances/context7/.env>"
+    },
+    "env_vars": [
+      "CONTEXT7_API_KEY"
+    ]
+  },
+  "bridge": {
+    "needed": true,
+    "provider": "mcpgateway.translate",
+    "reason": "native HTTP mode requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN, which are not present in the discovered client configs; stdio mode is the available configured backend",
+    "host": "127.0.0.1",
+    "port": 9103,
+    "streamable_http_url": "http://127.0.0.1:9103/mcp",
+    "sse_url": "http://127.0.0.1:9103/sse"
+  },
+  "contextforge": {
+    "gateway": {
+      "name": "context7-local",
+      "url": "http://localhost:9103/mcp",
+      "transport": "STREAMABLEHTTP",
+      "id": "c8e2bd7d99254b98b2904bce6f39aedc"
+    },
+    "virtual_server": {
+      "name": "context7_local_server",
+      "grouping": "canonical",
+      "id": "d321bc2a620b43fca1f31f6ee61d1ba0"
+    }
+  },
+  "registration": {
+    "status": "registered",
+    "registered_tools": [
+      "context7-local-query-docs",
+      "context7-local-resolve-library-id"
+    ],
+    "verified": {
+      "direct_streamable_http": "listed 2 context7 tools",
+      "direct_sse": "listed 2 context7 tools",
+      "contextforge_streamable_http": "listed 2 context7-local-prefixed tools",
+      "codex_stdio_wrapper": "listed 2 context7-local-prefixed tools through context7"
+    },
+    "review_completed": [
+      "native HTTP mode checked and rejected because Upstash Redis session-store credentials were absent",
+      "direct bridge /mcp and /sse endpoints probed",
+      "registered visible replacement through stock ContextForge using streamable HTTP because the old hidden context7 gateway/server names remained reserved",
+      "verified ContextForge virtual /mcp endpoint through Codex stdio wrapper"
+    ]
+  }
+}

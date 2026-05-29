@@ -1,0 +1,40 @@
+[mcp_servers.exa_web_search]
+enabled = false
+
+[mcp_servers.node_repl]
+enabled = false
+
+[mcp_servers.open-computer-use]
+enabled = false
+
+[mcp_servers.desktop-commander]
+enabled = false
+
+[mcp_servers.mentality]
+command = "/home/dgk/workspace/context-portal/.venv/bin/python"
+args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "mentality_server"]
+
+[mcp_servers.ssh_tmux]
+command = "/home/dgk/workspace/context-portal/.venv/bin/python"
+args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "ssh_tmux_server"]
+
+[mcp_servers.context7]
+command = "/home/dgk/workspace/context-portal/.venv/bin/python"
+args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "context7_local_server"]
+
+[mcp_servers.playwright]
+command = "/home/dgk/workspace/context-portal/.venv/bin/python"
+args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "playwright_server"]
+
+[mcp_servers.exa_search]
+command = "/home/dgk/workspace/context-portal/.venv/bin/python"
+args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "exa_search_server"]
+
+[mcp_servers.openzeppelin_solidity_contracts]
+command = "/home/dgk/workspace/context-portal/.venv/bin/python"
+args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "openzeppelin_solidity_contracts_server"]
+
+[mcp_servers.serena]
+command = "/home/dgk/workspace/context-portal/.venv/bin/python"
+args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "serena_context_portal_server"]
+cwd = "/home/dgk/workspace/context-portal"
