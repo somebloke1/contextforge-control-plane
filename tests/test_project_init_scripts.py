@@ -234,6 +234,152 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertTrue(path.name.endswith(".py"))
             path.unlink()
 
+    def test_optional_lsp_method_missing_is_advisory(self) -> None:
+        classified = serena_manager.classify_lsp_probe_response(
+            "find_implementations",
+            {"error": {"code": -32601, "message": "method not found"}},
+            baseline=False,
+        )
+        self.assertTrue(classified["ok"])
+        self.assertEqual("unsupported_by_lsp_backend", classified["classification"])
+        self.assertEqual("optional_capability_gap", classified["severity"])
+
+    def test_baseline_lsp_method_missing_is_blocking(self) -> None:
+        classified = serena_manager.classify_lsp_probe_response(
+            "get_symbols_overview",
+            {"error": {"code": -32601, "message": "method not found"}},
+            baseline=True,
+        )
+        self.assertFalse(classified["ok"])
+        self.assertEqual("baseline_blocking", classified["severity"])
+
+    def test_baseline_lsp_tool_error_text_is_blocking(self) -> None:
+        classified = serena_manager.classify_lsp_probe_response(
+            "get_symbols_overview",
+            {"result": {"content": [{"text": "Error executing tool: Exception - language server manager is not initialized"}]}},
+            baseline=True,
+        )
+        self.assertFalse(classified["ok"])
+        self.assertEqual("probe_error", classified["classification"])
+        self.assertEqual("baseline_blocking", classified["severity"])
+
+    def test_automatic_lsp_probes_are_read_only(self) -> None:
+        suffixes = serena_manager.automatic_lsp_probe_tool_suffixes(include_optional=True)
+        self.assertIn("find-implementations", suffixes)
+        self.assertFalse(set(suffixes) & set(serena_manager.EDIT_LSP_TOOL_SUFFIXES))
+
+    def test_python_find_implementations_gap_is_optional(self) -> None:
+        gap = serena_manager.unsupported_optional_gap("find_implementations", "find-implementations")
+        self.assertEqual("optional_capability_gap", gap["severity"])
+        self.assertEqual("unsupported_by_lsp_backend", gap["classification"])
+
+    def test_javascript_backend_options_normalize_to_typescript(self) -> None:
+        self.assertEqual("typescript", serena_manager.validate_language("javascript"))
+        options = serena_manager.lsp_backend_options("javascript")
+        self.assertLessEqual(len(options), 3)
+        self.assertEqual("typescript", options[0]["backend_id"])
+        self.assertEqual("javascript", options[0]["requested_language"])
+        self.assertEqual("typescript", options[0]["normalized_language"])
+
+    def test_backend_catalog_returns_user_facing_choices(self) -> None:
+        options = serena_manager.lsp_backend_options("python")
+        self.assertLessEqual(len(options), 3)
+        self.assertTrue(all(option["label"] for option in options))
+        self.assertTrue(all(option["recommended_scope"] == "instance" for option in options))
+        self.assertFalse(any(option["install_implemented"] for option in options))
+
+    def test_status_output_includes_lsp_advisory_fields(self) -> None:
+        with tempfile.TemporaryDirectory(dir=common.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            (root / "script.py").write_text("print('ok')\n", encoding="utf-8")
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = serena_manager.status(Namespace(project_root=str(root), require_workspace=True, language=None))
+            result = json.loads(stdout.getvalue())
+            self.assertEqual(0, code)
+            for key in (
+                "lsp_capability_status",
+                "lsp_gap_severity",
+                "optional_capability_gaps",
+                "lsp_backend_options",
+                "lsp_next_action",
+                "lsp_instance_scope",
+            ):
+                self.assertIn(key, result)
+
+    def test_verify_without_manifest_includes_lsp_advisory_fields(self) -> None:
+        with tempfile.TemporaryDirectory(dir=common.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            (root / "script.py").write_text("print('ok')\n", encoding="utf-8")
+            result = serena_manager.build_verify_result(
+                Namespace(project_root=str(root), require_workspace=True, language=None, app_server=False)
+            )
+            self.assertFalse(result["ok"])
+            self.assertIn("lsp_capability_status", result)
+            self.assertIn("lsp_backend_options", result)
+
+    def test_instance_lsp_scaffold_is_local_and_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            instance = Path(tmp) / "serena-test"
+            scaffold = serena_manager.ensure_lsp_scaffold(instance, "python")
+            self.assertTrue((instance / "lsp-tools/bin").is_dir())
+            self.assertTrue((instance / "lsp-tools/cache").is_dir())
+            self.assertTrue((instance / "lsp-tools/logs").is_dir())
+            self.assertTrue((instance / "lsp-tools/solidlsp").is_dir())
+            self.assertTrue((instance / "lsp.env").is_file())
+            self.assertEqual(str(instance / "lsp-tools"), scaffold["lsp_tools_dir"])
+            manifest = json.loads((instance / "lsp-tools/manifest.json").read_text(encoding="utf-8"))
+            self.assertFalse(manifest["install_command_execution_enabled"])
+
+    def test_lsp_scaffold_rejects_symlink_and_world_writable_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            symlink_instance = root / "symlink-instance"
+            symlink_instance.symlink_to("/tmp")
+            with self.assertRaises(RuntimeError):
+                serena_manager.ensure_lsp_scaffold(symlink_instance, "python")
+
+            instance = root / "world-writable-instance"
+            (instance / "lsp-tools").mkdir(parents=True)
+            (instance / "lsp-tools").chmod(0o777)
+            try:
+                with self.assertRaises(RuntimeError):
+                    serena_manager.ensure_lsp_scaffold(instance, "python")
+            finally:
+                (instance / "lsp-tools").chmod(0o755)
+
+    def test_manifest_merge_preserves_existing_fields_while_adding_lsp(self) -> None:
+        with tempfile.TemporaryDirectory(dir=common.WORKSPACE_ROOT) as tmp:
+            project = Path(tmp).resolve()
+            identity = common.project_identity(project)
+            with tempfile.TemporaryDirectory() as instance_tmp:
+                instance = Path(instance_tmp)
+                (instance / "instance.json").write_text(
+                    json.dumps(
+                        {
+                            "contextforge": {"gateway": {"id": "existing"}},
+                            "runtime": {"kept": True},
+                            "custom_future_field": "preserve-me",
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                serena_manager.write_manifest(
+                    instance,
+                    identity,
+                    9111,
+                    lsp_metadata={"advisory_status": "instance_scaffold_ready"},
+                )
+                manifest = json.loads((instance / "instance.json").read_text(encoding="utf-8"))
+                self.assertEqual({"gateway": {"id": "existing"}}, manifest["contextforge"])
+                self.assertEqual({"kept": True}, manifest["runtime"])
+                self.assertEqual("preserve-me", manifest["custom_future_field"])
+                self.assertEqual("instance_scaffold_ready", manifest["lsp"]["advisory_status"])
+
+    def test_install_commands_are_not_enabled(self) -> None:
+        self.assertFalse(serena_manager.install_command_execution_enabled())
+        self.assertFalse(any(option["install_implemented"] for option in serena_manager.lsp_backend_options("rust")))
+
     def test_prompt_distinguishes_env_defaults_and_preflight_flow(self) -> None:
         text = prompt_registration.PROJECT_INIT_TEXT
         self.assertIn("otherwise hook defaults", text)
@@ -241,6 +387,8 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertIn("status --project-root", text)
         self.assertIn("do not provision first", text)
         self.assertIn("related instances only", text)
+        self.assertIn("LSP installs and project configuration changes are not automatic", text)
+        self.assertIn("Optional LSP gaps should be reported as advisory details", text)
 
 
 if __name__ == "__main__":

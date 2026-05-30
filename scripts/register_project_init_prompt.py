@@ -57,6 +57,8 @@ Active Serena services for parent or child directories may appear in diagnostics
 Never configure Serena globally. Never let Serena treat /, /home/dgk, or /home/dgk/workspace as the project. Do not use direct Serena stdio as the Codex-facing path. The Codex local alias may be serena, but the upstream virtual server name must be project-specific.
 
 Completion evidence for this dialogue requires current proof that global Serena is absent from /home/dgk, project-local Serena points at the project-specific ContextForge virtual server, activate_project is filtered from the ContextForge/Codex exposed tool list, and the active project is the canonical root shown above. Prefer the manager's --verify --app-server JSON for these checks. If manual codex mcp get serena checks are needed, run project-local success and /home/dgk expected failure as separate commands so the expected global failure is not mistaken for an overall verification failure. LSP diagnostics or symbols must work through the actual exposed tool path when a language is configured; for empty projects without a selected language, report the manager's needs_user_language_choice state instead of claiming completion.
+
+First-run initialization asks only for Serena enablement and, when needed, a language. LSP installs and project configuration changes are not automatic. Optional LSP gaps should be reported as advisory details, not treated as setup failure; only baseline-blocking LSP failures should interrupt initialization. If an install or backend/config change is suggested, present at most three choices: keep the current backend, configure or switch to the recommended instance-local backend, or defer and document the limitation. Backend ids belong in technical details; user-facing labels should be plain language. Any future install must be explicit, instance-local, curated by ContextForge-owned code, and approved before it runs.
 """.strip()
 
 
@@ -76,6 +78,8 @@ Codex should see the local alias serena only from the project's .codex/config.to
 ContextForge virtual server filtering must exclude only Serena project switching, activate_project. Keep get_current_config available because it proves the active project and language backend. Serena's own get_current_config text may still list activate_project among upstream internal active tools; that is not Codex exposure. Judge exposure only from the ContextForge virtual server tool list or the Codex app-server tool list. Do not enable Serena single_project mode in this version unless an equivalent current-config verification path is proven.
 
 Before claiming setup success, verify the user systemd service, ContextForge gateway, ContextForge virtual server tools, project-local Codex config, absence of global Serena exposure, get_current_config active project, and an LSP-backed diagnostics or symbols result when a language is configured. The LSP probe must use a file path, never a directory such as ".". For empty projects, ask for a language and use the manager's --language flow before LSP verification.
+
+Optional read-only LSP capabilities, such as find implementations, are advisory. If an optional probe reports unsupported method -32601, report it as unsupported by the LSP backend with optional-capability-gap severity. Do not call Serena editing tools during automatic LSP verification. LSP runtime scaffolding belongs inside the Serena instance directory under lsp-tools, and no package manager or network install may run unless a future curated approval path explicitly allows it.
 """.strip()
 
 

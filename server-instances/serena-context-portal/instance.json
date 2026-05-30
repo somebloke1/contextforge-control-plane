@@ -1,27 +1,5 @@
 {
-  "name": "serena-context-portal",
-  "slug": "serena-context-portal",
-  "label": "context-portal",
-  "client": "canonical",
-  "source": "Serena MCP backend scoped to the ContextForge operator repository",
-  "config_path": null,
-  "enabled": true,
-  "kind": "mcp",
-  "scope": {
-    "requires_local_project_scope": true,
-    "scope_type": "single_workspace_code_intelligence",
-    "workspace_root": "/home/dgk/workspace/context-portal",
-    "configuration_signal": "Serena is started with --project /home/dgk/workspace/context-portal",
-    "notes": "Serena is stateful and project-scoped. This instance inspects only the ContextForge operator repo."
-  },
-  "state_layout": {
-    "serena_service_home": "server-instances/serena-context-portal/run/serena-home",
-    "project_metadata": ".serena/",
-    "notes": "The operator-owned service instance and caller-owned project metadata are separate roles. They happen to point at the same checkout for this instance, but the same split applies when publishing Serena for any other workspace."
-  },
   "backend": {
-    "transport": "streamable_http",
-    "command": "serena",
     "args": [
       "start-mcp-server",
       "--transport",
@@ -37,39 +15,103 @@
       "--open-web-dashboard",
       "false"
     ],
+    "command": "serena",
     "env": {
       "SERENA_HOME": "server-instances/serena-context-portal/run/serena-home"
     },
     "env_vars": [
       "SERENA_HOME"
-    ]
+    ],
+    "transport": "streamable_http"
   },
   "bridge": {
-    "needed": false,
-    "provider": null,
-    "reason": "Serena exposes native streamable HTTP; no ContextForge bridge is used.",
     "host": "127.0.0.1",
-    "requested_port": 9107,
+    "needed": false,
     "port": 9108,
     "port_adjustment_reason": "127.0.0.1:9107 is already used by contextforge-web-search.service.",
-    "streamable_http_url": "http://127.0.0.1:9108/mcp",
-    "sse_url": null
+    "provider": null,
+    "reason": "Serena exposes native streamable HTTP; no ContextForge bridge is used.",
+    "requested_port": 9107,
+    "sse_url": null,
+    "streamable_http_url": "http://127.0.0.1:9108/mcp"
   },
+  "canonical_project_root": "/home/dgk/workspace/context-portal",
+  "client": "canonical",
+  "codex_alias": "serena",
+  "codex_config_path": "/home/dgk/workspace/context-portal/.codex/config.toml",
+  "config_path": null,
   "contextforge": {
     "gateway": {
+      "id": "6737c3908d3a4bb098d829a5a4e5327f",
       "name": "serena-context-portal",
-      "url": "http://localhost:9108/mcp",
       "transport": "STREAMABLEHTTP",
-      "id": "6737c3908d3a4bb098d829a5a4e5327f"
+      "url": "http://localhost:9108/mcp"
     },
     "virtual_server": {
-      "name": "serena_context_portal_server",
       "grouping": "canonical",
-      "id": "c14f033a68f34b9ba26870bfede42cbf"
+      "id": "c14f033a68f34b9ba26870bfede42cbf",
+      "name": "serena_context_portal_server"
     }
   },
+  "enabled": true,
+  "hash": "42304ce73dad",
+  "instance_slug": "serena-context-portal",
+  "kind": "mcp",
+  "label": "context-portal",
+  "lsp": {
+    "advisory_status": "instance_scaffold_ready",
+    "backend_options": [
+      {
+        "backend_id": "python",
+        "caveats": [
+          "find implementations is optional for Python backends"
+        ],
+        "install_implemented": false,
+        "label": "Pyright for Python",
+        "recommended_scope": "instance",
+        "strategy_class": "solidlsp_managed",
+        "tool_identity": "pyright"
+      },
+      {
+        "backend_id": "python_jedi",
+        "caveats": [
+          "different behavior from the default Pyright backend"
+        ],
+        "install_implemented": false,
+        "label": "Jedi for Python",
+        "recommended_scope": "instance",
+        "strategy_class": "solidlsp_managed",
+        "tool_identity": "jedi-language-server"
+      },
+      {
+        "backend_id": "python_ty",
+        "caveats": [
+          "experimental Serena backend"
+        ],
+        "install_implemented": false,
+        "label": "Ty for Python",
+        "recommended_scope": "instance",
+        "strategy_class": "solidlsp_managed",
+        "tool_identity": "ty"
+      }
+    ],
+    "install_command_execution_enabled": false,
+    "install_implemented": false,
+    "instance_scope": {
+      "created": true,
+      "env_file": "/home/dgk/workspace/context-portal/server-instances/serena-context-portal/lsp.env",
+      "instance_dir": "/home/dgk/workspace/context-portal/server-instances/serena-context-portal",
+      "lsp_tools_dir": "/home/dgk/workspace/context-portal/server-instances/serena-context-portal/lsp-tools",
+      "manifest_path": "/home/dgk/workspace/context-portal/server-instances/serena-context-portal/lsp-tools/manifest.json"
+    },
+    "language": "python",
+    "updated_at": "2026-05-29T21:35:32.858737+00:00"
+  },
+  "mcp_url": "http://127.0.0.1:9108/mcp",
+  "name": "serena-context-portal",
+  "port": 9108,
+  "project_root_hash": "42304ce73dad61a491e9a20d0825d060b606b0035737e60795bc2bf6eefb32f2",
   "registration": {
-    "status": "registered",
     "registered_tools": [
       "serena-context-portal-delete-memory",
       "serena-context-portal-edit-memory",
@@ -94,20 +136,6 @@
       "serena-context-portal-search-for-pattern",
       "serena-context-portal-write-memory"
     ],
-    "verified": {
-      "serena_install": "serena-agent 1.5.3 installed with uv tool install -p 3.13 serena-agent",
-      "serena_init": "serena init completed successfully with LSP backend",
-      "systemd": "contextforge-serena-context-portal.service active and listening on 127.0.0.1:9108",
-      "requested_port": "9107 was occupied by the existing web-search bridge; runtime port adjusted to 9108",
-      "direct_streamable_http": "listed 23 Serena tools from http://127.0.0.1:9108/mcp",
-      "direct_sse": "http://127.0.0.1:9108/sse returned HTTP 404; Serena 1.5.3 native streamable HTTP does not expose /sse in this mode",
-      "direct_tool_call": "called search_for_pattern against AGENTS.md successfully",
-      "contextforge_registration": "registered gateway 6737c3908d3a4bb098d829a5a4e5327f and virtual server c14f033a68f34b9ba26870bfede42cbf with 23 tools",
-      "contextforge_streamable_http": "listed 23 serena-context-portal tools from /servers/c14f033a68f34b9ba26870bfede42cbf/mcp/",
-      "contextforge_sse": "listed 23 serena-context-portal tools from /servers/c14f033a68f34b9ba26870bfede42cbf/sse",
-      "contextforge_tool_call": "called serena-context-portal-search-for-pattern against AGENTS.md successfully",
-      "contextforge_tool_scope": "virtual server lists 22 tools and does not expose serena-context-portal-activate-project"
-    },
     "review_completed": [
       "confirmed Serena CLI is installed and initialized",
       "confirmed native streamable HTTP CLI flags",
@@ -117,6 +145,47 @@
       "verified direct and ContextForge virtual /mcp endpoints",
       "verified ContextForge virtual /sse endpoint despite direct Serena /sse absence",
       "removed activate_project from the ContextForge virtual server association"
-    ]
-  }
+    ],
+    "status": "registered",
+    "verified": {
+      "contextforge_registration": "registered gateway 6737c3908d3a4bb098d829a5a4e5327f and virtual server c14f033a68f34b9ba26870bfede42cbf with 23 tools",
+      "contextforge_sse": "listed 23 serena-context-portal tools from /servers/c14f033a68f34b9ba26870bfede42cbf/sse",
+      "contextforge_streamable_http": "listed 23 serena-context-portal tools from /servers/c14f033a68f34b9ba26870bfede42cbf/mcp/",
+      "contextforge_tool_call": "called serena-context-portal-search-for-pattern against AGENTS.md successfully",
+      "contextforge_tool_scope": "virtual server lists 22 tools and does not expose serena-context-portal-activate-project",
+      "direct_sse": "http://127.0.0.1:9108/sse returned HTTP 404; Serena 1.5.3 native streamable HTTP does not expose /sse in this mode",
+      "direct_streamable_http": "listed 23 Serena tools from http://127.0.0.1:9108/mcp",
+      "direct_tool_call": "called search_for_pattern against AGENTS.md successfully",
+      "requested_port": "9107 was occupied by the existing web-search bridge; runtime port adjusted to 9108",
+      "serena_init": "serena init completed successfully with LSP backend",
+      "serena_install": "serena-agent 1.5.3 installed with uv tool install -p 3.13 serena-agent",
+      "systemd": "contextforge-serena-context-portal.service active and listening on 127.0.0.1:9108"
+    }
+  },
+  "schema_version": 1,
+  "scope": {
+    "configuration_signal": "Serena is started with --project /home/dgk/workspace/context-portal",
+    "notes": "Serena is stateful and project-scoped. This instance inspects only the ContextForge operator repo.",
+    "requires_local_project_scope": true,
+    "scope_type": "single_workspace_code_intelligence",
+    "workspace_root": "/home/dgk/workspace/context-portal"
+  },
+  "server_name": "serena_context_portal_server",
+  "service": "serena",
+  "slug": "serena-context-portal",
+  "source": "Serena MCP backend scoped to the ContextForge operator repository",
+  "state_layout": {
+    "notes": "The operator-owned service instance and caller-owned project metadata are separate roles. They happen to point at the same checkout for this instance, but the same split applies when publishing Serena for any other workspace.",
+    "project_metadata": ".serena/",
+    "serena_service_home": "server-instances/serena-context-portal/run/serena-home"
+  },
+  "tool_policy": {
+    "contextforge_excluded_original_tool_names": [
+      "activate_project"
+    ],
+    "single_project_mode": false,
+    "source_level_exclusion": "not_applied_v1_contextforge_virtual_filter_is_authoritative"
+  },
+  "unit": "contextforge-serena-context-portal.service",
+  "updated_at": "2026-05-29T21:35:32.858815+00:00"
 }

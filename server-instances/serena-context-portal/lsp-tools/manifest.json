@@ -1,0 +1,43 @@
+{
+  "backend_options": [
+    {
+      "backend_id": "python",
+      "caveats": [
+        "find implementations is optional for Python backends"
+      ],
+      "install_implemented": false,
+      "label": "Pyright for Python",
+      "recommended_scope": "instance",
+      "strategy_class": "solidlsp_managed",
+      "tool_identity": "pyright"
+    },
+    {
+      "backend_id": "python_jedi",
+      "caveats": [
+        "different behavior from the default Pyright backend"
+      ],
+      "install_implemented": false,
+      "label": "Jedi for Python",
+      "recommended_scope": "instance",
+      "strategy_class": "solidlsp_managed",
+      "tool_identity": "jedi-language-server"
+    },
+    {
+      "backend_id": "python_ty",
+      "caveats": [
+        "experimental Serena backend"
+      ],
+      "install_implemented": false,
+      "label": "Ty for Python",
+      "recommended_scope": "instance",
+      "strategy_class": "solidlsp_managed",
+      "tool_identity": "ty"
+    }
+  ],
+  "install_command_execution_enabled": false,
+  "install_implemented": false,
+  "language": "python",
+  "schema_version": 1,
+  "scope": "instance",
+  "updated_at": "2026-05-29T21:35:32.857896+00:00"
+}
