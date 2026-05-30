@@ -84,3 +84,16 @@ The earlier generated 22-entry backend-home pass was superseded by the canonical
 
 The remaining canonical service set has been registered and verified in controlled batches. Current active canonical virtual servers are mentality_server, ssh_tmux_server, context7_local_server, playwright_server, exa_search_server, openzeppelin_solidity_contracts_server, github_server, and web_search_server. Direct API readback and MCP stdio wrapper readback confirmed matching tool, resource, and prompt counts for each server.
 <!-- governance-crud:end id=ai-20260528-0006 -->
+
+<!-- governance-crud:start id=ai-20260530-0001 -->
+## ai-20260530-0001: ContextForge as host-wide assistant control plane
+
+- Ledger: abeyant-intentions
+- Status: parked
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-29
+- Updated: 2026-05-29
+- Tags: contextforge,bootstrap,control-plane,project-init,governance,serena,lsp
+
+Develop ContextForge from a registered-service gateway into the host-wide assistant control plane. The working dialogue plan is tracked in docs/initiatives/contextforge-control-plane/dialogue-plan.md and must refine the project-state schema, cross-client bootstrap flow, ContextForge resource taxonomy, user-confirmed service selection, generalized language tooling across a user-confirmed common language set, instance-local LSP/tooling policy, Serena as the empirical proof of concept, and the intended relationship between Serena memory and the durable governance registry.
+<!-- governance-crud:end id=ai-20260530-0001 -->

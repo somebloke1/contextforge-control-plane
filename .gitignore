@@ -54,6 +54,10 @@ server-instances/serena-*/
 !server-instances/serena-context-portal/
 !server-instances/serena-context-portal/README.md
 !server-instances/serena-context-portal/instance.json
+!server-instances/serena-context-portal/lsp.env
+!server-instances/serena-context-portal/lsp-tools/
+server-instances/serena-context-portal/lsp-tools/*
+!server-instances/serena-context-portal/lsp-tools/manifest.json
 !server-instances/serena-context-portal/probe.sh
 !server-instances/serena-context-portal/run-server.sh
 
