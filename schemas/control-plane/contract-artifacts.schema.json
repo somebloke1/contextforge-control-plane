@@ -1,0 +1,1131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contextforge://control-plane/schemas/contract-artifacts/v1",
+  "title": "ContextForge control-plane contract artifacts",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/service_binding_contract_card" },
+    { "$ref": "#/$defs/shared_service_capability_capsule" },
+    { "$ref": "#/$defs/semantic_tool_policy" },
+    { "$ref": "#/$defs/service_memory_provider" },
+    { "$ref": "#/$defs/service_management_handoff" },
+    { "$ref": "#/$defs/service_management_result" },
+    { "$ref": "#/$defs/service_provision_plan" },
+    { "$ref": "#/$defs/consent_receipt" },
+    { "$ref": "#/$defs/verification_trace" },
+    { "$ref": "#/$defs/client_adapter_conformance_pack" },
+    { "$ref": "#/$defs/requirement_scenario" },
+    { "$ref": "#/$defs/evaluator_verdict" },
+    { "$ref": "#/$defs/evidence_ledger" },
+    { "$ref": "#/$defs/governance_reconciliation_pack" }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/@+-]*$"
+    },
+    "timestamp": {
+      "type": "string",
+      "minLength": 1
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nullable_digest": {
+      "anyOf": [
+        { "$ref": "#/$defs/digest" },
+        { "type": "null" }
+      ]
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": ["ref", "content_digest", "catalog_revision_or_etag", "resolved_at"],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(contextforge://|run/|generated/|tests/|[A-Za-z0-9_.:/@+-]+$)"
+        },
+        "content_digest": { "$ref": "#/$defs/digest" },
+        "catalog_revision_or_etag": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "resolved_at": { "$ref": "#/$defs/timestamp" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "artifact_ref_list": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact_ref" }
+    },
+    "redaction_status": {
+      "type": "string",
+      "enum": ["redacted", "passed", "failed"]
+    },
+    "instantiation_class": {
+      "type": "string",
+      "enum": [
+        "instance_per_project",
+        "project_scoped_shared_backend",
+        "shared_canonical",
+        "credential_scoped",
+        "resource_scoped",
+        "caller_scoped",
+        "session_scoped",
+        "static_repo_local",
+        "candidate_or_uncataloged_backend"
+      ]
+    },
+    "consent_class": {
+      "type": "string",
+      "enum": [
+        "read_only_inspection",
+        "project_state_write",
+        "project_local_config_write",
+        "service_provision",
+        "catalog_promotion",
+        "user_global_client_trust",
+        "user_global_config_write",
+        "secret_placeholder_change",
+        "secret_value_write",
+        "token_material_change",
+        "network_exposure_change"
+      ]
+    },
+    "transport": {
+      "type": "string",
+      "enum": ["stdio", "http", "sse", "streamable_http", "rest"]
+    },
+    "transport_profile": {
+      "type": "object",
+      "required": [
+        "native_transports",
+        "required_client_transports",
+        "bridge_mode",
+        "package_bridge_ref",
+        "forbidden_bridge_effects",
+        "required_endpoint_verification"
+      ],
+      "properties": {
+        "native_transports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transport" },
+          "uniqueItems": true
+        },
+        "required_client_transports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transport" },
+          "uniqueItems": true
+        },
+        "bridge_mode": {
+          "type": "string",
+          "enum": ["none", "stdio_to_http_sse", "sse_to_http", "http_to_sse"]
+        },
+        "package_bridge_ref": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "forbidden_bridge_effects": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "required_endpoint_verification": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["/mcp", "/sse"]
+          },
+          "contains": { "const": "/mcp" }
+        }
+      },
+      "allOf": [
+        {
+          "properties": {
+            "required_endpoint_verification": {
+              "contains": { "const": "/sse" }
+            }
+          }
+        }
+      ],
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "verification_matrix": {
+      "type": "object",
+      "required": ["required_layers"],
+      "properties": {
+        "required_layers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "backend",
+              "contextforge_gateway",
+              "virtual_server",
+              "target_client",
+              "trust",
+              "tool_policy",
+              "redaction"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "layer_requirements": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "selector": {
+      "type": "object",
+      "required": ["selector_type", "value"],
+      "properties": {
+        "selector_type": {
+          "type": "string",
+          "enum": ["tool_id", "tool_name", "tag", "risk_class", "pattern", "unknown"]
+        },
+        "value": { "type": "string", "minLength": 1 },
+        "fail_closed": { "type": "boolean" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "service_binding_contract_card": {
+      "type": "object",
+      "required": [
+        "card_id",
+        "schema_uri",
+        "service_family",
+        "service_binding",
+        "instantiation_class",
+        "authority_boundary",
+        "project_scope",
+        "credential_scope",
+        "resource_scope",
+        "caller_or_session_scope",
+        "backend_instance_ref",
+        "contextforge_gateway",
+        "virtual_server",
+        "client_adapter_refs",
+        "semantic_tool_policy_ref",
+        "transport_profile",
+        "required_consent_classes",
+        "verification_matrix",
+        "non_actions",
+        "evidence_requirements"
+      ],
+      "properties": {
+        "card_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/service-binding-contract-card/v1" },
+        "service_family": { "$ref": "#/$defs/identifier" },
+        "service_binding": { "type": "string", "minLength": 1 },
+        "instantiation_class": { "$ref": "#/$defs/instantiation_class" },
+        "authority_boundary": { "type": "string", "minLength": 1 },
+        "project_scope": {
+          "anyOf": [
+            { "type": "object", "additionalProperties": true },
+            { "type": "null" }
+          ]
+        },
+        "credential_scope": {
+          "anyOf": [
+            { "type": "object", "additionalProperties": true },
+            { "type": "null" }
+          ]
+        },
+        "resource_scope": {
+          "anyOf": [
+            { "type": "object", "additionalProperties": true },
+            { "type": "null" }
+          ]
+        },
+        "caller_or_session_scope": {
+          "anyOf": [
+            { "type": "object", "additionalProperties": true },
+            { "type": "null" }
+          ]
+        },
+        "backend_instance_ref": {
+          "anyOf": [
+            { "$ref": "#/$defs/artifact_ref" },
+            { "type": "null" }
+          ]
+        },
+        "contextforge_gateway": {
+          "anyOf": [
+            { "type": "object", "additionalProperties": true },
+            { "type": "null" }
+          ]
+        },
+        "virtual_server": {
+          "anyOf": [
+            { "type": "object", "additionalProperties": true },
+            { "type": "null" }
+          ]
+        },
+        "client_adapter_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "semantic_tool_policy_ref": {
+          "anyOf": [
+            { "$ref": "#/$defs/artifact_ref" },
+            { "type": "null" }
+          ]
+        },
+        "transport_profile": { "$ref": "#/$defs/transport_profile" },
+        "required_consent_classes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/consent_class" },
+          "uniqueItems": true
+        },
+        "verification_matrix": { "$ref": "#/$defs/verification_matrix" },
+        "non_actions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence_requirements": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "shared_service_capability_capsule": {
+      "type": "object",
+      "required": [
+        "capsule_id",
+        "schema_uri",
+        "service_family",
+        "canonical_service",
+        "allowed_project_binding_modes",
+        "project_state_recording_policy",
+        "verification_requirements",
+        "consent_requirements",
+        "transport_profile",
+        "forbidden_project_init_effects",
+        "contract_card_refs"
+      ],
+      "properties": {
+        "capsule_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/shared-service-capability-capsule/v1" },
+        "service_family": { "$ref": "#/$defs/identifier" },
+        "canonical_service": { "type": "string", "minLength": 1 },
+        "allowed_project_binding_modes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["record_availability", "bind_existing", "verify_existing", "project_virtual_view"]
+          },
+          "uniqueItems": true
+        },
+        "project_state_recording_policy": { "type": "string", "minLength": 1 },
+        "verification_requirements": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "consent_requirements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/consent_class" },
+          "uniqueItems": true
+        },
+        "transport_profile": { "$ref": "#/$defs/transport_profile" },
+        "forbidden_project_init_effects": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["new_backend", "new_gateway", "new_bridge", "new_wrapper", "new_port", "new_unit", "server_instance_directory", "catalog_mutation"]
+          }
+        },
+        "contract_card_refs": { "$ref": "#/$defs/artifact_ref_list" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "semantic_tool_policy": {
+      "type": "object",
+      "required": [
+        "policy_id",
+        "schema_uri",
+        "service_binding",
+        "risk_classes",
+        "scope_impacts",
+        "approval_gates",
+        "allowed_tool_selectors",
+        "excluded_tool_selectors",
+        "manual_overrides",
+        "compiled_tool_ids",
+        "negative_checks",
+        "last_compiled_at",
+        "last_readback_trace_ref"
+      ],
+      "properties": {
+        "policy_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/semantic-tool-policy/v1" },
+        "service_binding": { "type": "string", "minLength": 1 },
+        "risk_classes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["unknown", "read_only", "write", "scope_changing", "admin", "secret", "network_exposure"]
+          }
+        },
+        "scope_impacts": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "approval_gates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/consent_class" },
+          "uniqueItems": true
+        },
+        "allowed_tool_selectors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/selector" }
+        },
+        "excluded_tool_selectors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/selector" }
+        },
+        "manual_overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["tool_selector", "decision", "consent_receipt_ref"],
+            "properties": {
+              "tool_selector": { "$ref": "#/$defs/selector" },
+              "decision": { "type": "string", "enum": ["allow", "deny"] },
+              "consent_receipt_ref": { "$ref": "#/$defs/artifact_ref" }
+            },
+            "patternProperties": { "^x_": true },
+            "additionalProperties": false
+          }
+        },
+        "compiled_tool_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "negative_checks": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "last_compiled_at": {
+          "anyOf": [
+            { "$ref": "#/$defs/timestamp" },
+            { "type": "null" }
+          ]
+        },
+        "last_readback_trace_ref": {
+          "anyOf": [
+            { "$ref": "#/$defs/artifact_ref" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "service_memory_provider": {
+      "type": "object",
+      "required": [
+        "provider_id",
+        "schema_uri",
+        "provider_name",
+        "service_binding",
+        "provider_scope",
+        "durability",
+        "storage_location_class",
+        "supported_operations",
+        "allowed_record_classes",
+        "governance_reference_policy",
+        "conflict_flag_behavior",
+        "verification_probe",
+        "writes_require_approval",
+        "advisory_only",
+        "forbidden_effects",
+        "redaction_status"
+      ],
+      "properties": {
+        "provider_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/service-memory-provider/v1" },
+        "provider_name": { "type": "string", "minLength": 1 },
+        "service_binding": { "type": "string", "minLength": 1 },
+        "provider_scope": {
+          "type": "string",
+          "enum": ["project", "repository", "credential", "session", "host"]
+        },
+        "durability": {
+          "type": "string",
+          "enum": [
+            "ephemeral",
+            "session_persistent",
+            "project_persistent",
+            "repository_persistent",
+            "host_persistent",
+            "external_service_persistent"
+          ]
+        },
+        "storage_location_class": {
+          "type": "string",
+          "enum": [
+            "service_local_store",
+            "project_local_file",
+            "repository_local_file",
+            "host_user_state",
+            "host_system_state",
+            "remote_service",
+            "unknown"
+          ]
+        },
+        "supported_operations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["list", "read", "write", "update", "delete", "rename", "none"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_record_classes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "working_note",
+              "recall_hint",
+              "code_navigation_note",
+              "governance_reference",
+              "governance_proposal",
+              "conflict_flag"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "governance_reference_policy": {
+          "type": "object",
+          "required": [
+            "reference_format",
+            "allowed_ledger_id_prefixes",
+            "authoritative_source",
+            "required_write_path",
+            "generated_governance_projection_allowed",
+            "bidirectional_sync_allowed"
+          ],
+          "properties": {
+            "reference_format": { "type": "string", "minLength": 1 },
+            "allowed_ledger_id_prefixes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["dec-", "oq-", "ai-"]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "authoritative_source": { "const": "governance_ledgers" },
+            "required_write_path": { "const": "mentality_or_governance_crud_after_user_approval" },
+            "generated_governance_projection_allowed": { "const": false },
+            "bidirectional_sync_allowed": { "const": false }
+          },
+          "patternProperties": { "^x_": true },
+          "additionalProperties": false
+        },
+        "conflict_flag_behavior": {
+          "type": "object",
+          "required": [
+            "on_conflict",
+            "authority",
+            "memory_mutation",
+            "proposal_allowed",
+            "warning_class"
+          ],
+          "properties": {
+            "on_conflict": { "const": "flag_and_prefer_governance_ledger" },
+            "authority": { "const": "governance_ledger" },
+            "memory_mutation": { "const": "none" },
+            "proposal_allowed": { "const": true },
+            "warning_class": { "const": "service_memory_governance_conflict" }
+          },
+          "patternProperties": { "^x_": true },
+          "additionalProperties": false
+        },
+        "verification_probe": {
+          "type": "object",
+          "required": ["probe_type", "expected_fields", "mutation_allowed"],
+          "properties": {
+            "probe_type": { "type": "string", "minLength": 1 },
+            "expected_fields": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1
+            },
+            "mutation_allowed": { "const": false }
+          },
+          "patternProperties": { "^x_": true },
+          "additionalProperties": false
+        },
+        "writes_require_approval": { "type": "boolean" },
+        "advisory_only": { "const": true },
+        "forbidden_effects": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "settle_governance_decision",
+              "settle_open_question",
+              "settle_parked_intention",
+              "record_consent",
+              "change_project_policy",
+              "edit_governance_ledgers",
+              "generate_governance_projection",
+              "bidirectional_sync"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "redaction_status": { "$ref": "#/$defs/redaction_status" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "service_management_handoff": {
+      "type": "object",
+      "required": [
+        "handoff_id",
+        "schema_uri",
+        "source",
+        "project_root",
+        "candidate_descriptor",
+        "redaction_status",
+        "dedupe_keys",
+        "suspected_instantiation_class",
+        "required_next_workflow",
+        "forbidden_under_current_approval"
+      ],
+      "properties": {
+        "handoff_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/service-management-handoff/v1" },
+        "source": { "type": "string", "enum": ["project_init", "catalog_read", "user_request"] },
+        "project_root": {
+          "anyOf": [
+            { "type": "string", "pattern": "^/" },
+            { "type": "null" }
+          ]
+        },
+        "candidate_descriptor": { "type": "object", "additionalProperties": true },
+        "redaction_status": { "type": "string", "enum": ["redacted"] },
+        "dedupe_keys": {
+          "type": "object",
+          "required": ["backend_package", "runtime_scope", "credential_scope", "resource_scope", "transport_scope"],
+          "properties": {
+            "backend_package": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "runtime_scope": { "type": "string", "enum": ["host", "project", "credential", "caller", "session", "unknown"] },
+            "credential_scope": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "resource_scope": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "transport_scope": { "type": "string", "enum": ["stdio", "http", "sse", "rest", "unknown"] }
+          },
+          "patternProperties": { "^x_": true },
+          "additionalProperties": false
+        },
+        "suspected_instantiation_class": { "const": "candidate_or_uncataloged_backend" },
+        "required_next_workflow": { "const": "service_management_plan" },
+        "forbidden_under_current_approval": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "service_management_result": {
+      "type": "object",
+      "required": [
+        "result_id",
+        "schema_uri",
+        "handoff_id",
+        "status",
+        "contract_card_refs",
+        "capsule_refs",
+        "semantic_tool_policy_refs",
+        "canonical_names",
+        "catalog_revision",
+        "consent_receipt_refs",
+        "verification_trace_refs",
+        "redaction_status",
+        "forbidden_follow_up_effects"
+      ],
+      "properties": {
+        "result_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/service-management-result/v1" },
+        "handoff_id": { "$ref": "#/$defs/identifier" },
+        "status": { "type": "string", "enum": ["plan_only", "dedupe_existing", "refused", "approved_completed", "failed"] },
+        "contract_card_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "capsule_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "semantic_tool_policy_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "canonical_names": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "catalog_revision": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "consent_receipt_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "verification_trace_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "redaction_status": { "$ref": "#/$defs/redaction_status" },
+        "forbidden_follow_up_effects": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "service_provision_step": {
+      "type": "object",
+      "required": [
+        "step_id",
+        "preconditions",
+        "persistent_target",
+        "operation_class",
+        "expected_state_transition",
+        "required_policy_refs",
+        "required_conformance_refs",
+        "negative_checks"
+      ],
+      "properties": {
+        "step_id": { "$ref": "#/$defs/identifier" },
+        "preconditions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "persistent_target": { "type": "string", "enum": ["project_state", "project_local_config", "backend_home", "systemd", "contextforge", "virtual_server", "client_config", "trust_store", "token_store", "network"] },
+        "operation_class": { "$ref": "#/$defs/consent_class" },
+        "expected_state_transition": { "type": "string", "minLength": 1 },
+        "required_policy_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "required_conformance_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "negative_checks": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "service_provision_plan": {
+      "type": "object",
+      "required": [
+        "provision_plan_id",
+        "schema_uri",
+        "service_binding",
+        "service_provision_steps",
+        "stale_inputs",
+        "write_set",
+        "consent_receipt_refs",
+        "expected_readback",
+        "idempotency_mode",
+        "compensation_repair_mode",
+        "produced_artifact_refs",
+        "redaction_status"
+      ],
+      "properties": {
+        "provision_plan_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/service-provision-plan/v1" },
+        "service_binding": { "type": "string", "minLength": 1 },
+        "service_provision_steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/service_provision_step" }
+        },
+        "stale_inputs": { "$ref": "#/$defs/artifact_ref_list" },
+        "write_set": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "consent_receipt_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "expected_readback": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "idempotency_mode": { "type": "string", "enum": ["idempotent", "resume_only", "manual_recovery_only", "fresh_approval_required"] },
+        "compensation_repair_mode": { "type": "string", "enum": ["none", "resume", "forward_repair", "rollback_by_approved_workflow", "manual_recovery", "fresh_approval_required"] },
+        "produced_artifact_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "redaction_status": { "$ref": "#/$defs/redaction_status" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "consent_receipt": {
+      "type": "object",
+      "required": [
+        "receipt_id",
+        "schema_uri",
+        "plan_id",
+        "plan_digest",
+        "plan_presented_digest",
+        "consent_class",
+        "scope",
+        "actor",
+        "source_client",
+        "source_client_auth_strength",
+        "approval_nonce",
+        "approval_channel",
+        "approval_event_ref",
+        "issued_by",
+        "approved_at",
+        "approval_evidence",
+        "expires_at",
+        "replay_policy",
+        "redaction_status"
+      ],
+      "properties": {
+        "receipt_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/consent-receipt/v1" },
+        "plan_id": { "$ref": "#/$defs/identifier" },
+        "plan_digest": { "$ref": "#/$defs/digest" },
+        "plan_presented_digest": { "$ref": "#/$defs/digest" },
+        "consent_class": { "$ref": "#/$defs/consent_class" },
+        "scope": {
+          "type": "object",
+          "required": ["project_root", "service_binding", "client", "persistent_target"],
+          "properties": {
+            "project_root": { "anyOf": [{ "type": "string", "pattern": "^/" }, { "type": "null" }] },
+            "service_binding": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "client": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "persistent_target": { "type": "string", "enum": ["file", "trust-store", "contextforge", "systemd", "token-store", "network"] }
+          },
+          "patternProperties": { "^x_": true },
+          "additionalProperties": false
+        },
+        "actor": { "type": "string", "minLength": 1 },
+        "source_client": { "type": "string", "minLength": 1 },
+        "source_client_auth_strength": { "type": "string", "enum": ["asserted", "shared_token", "wrapper_bound", "per_client_token"] },
+        "approval_nonce": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "approval_channel": { "type": "string", "enum": ["interactive_user", "local_ui", "signed_file", "external_review"] },
+        "approval_event_ref": { "type": "string", "minLength": 1 },
+        "issued_by": { "type": "string", "enum": ["approve_plan", "record_project_decision", "external-human-review"] },
+        "approved_at": { "$ref": "#/$defs/timestamp" },
+        "approval_evidence": { "type": "string", "minLength": 1 },
+        "expires_at": { "$ref": "#/$defs/timestamp" },
+        "replay_policy": { "type": "string", "enum": ["single_use", "same_plan_resume", "repair_only", "fresh_approval_required"] },
+        "redaction_status": { "$ref": "#/$defs/redaction_status" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "probe_event": {
+      "type": "object",
+      "required": ["probe_id", "layer", "status", "evidence_hash"],
+      "properties": {
+        "probe_id": { "$ref": "#/$defs/identifier" },
+        "layer": { "type": "string", "enum": ["backend", "contextforge_gateway", "virtual_server", "target_client", "trust", "tool_policy", "redaction"] },
+        "status": { "type": "string", "enum": ["passed", "failed", "skipped"] },
+        "evidence_hash": { "$ref": "#/$defs/digest" },
+        "summary": { "type": "string" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "verification_trace": {
+      "type": "object",
+      "required": [
+        "trace_id",
+        "schema_uri",
+        "plan_id",
+        "service_binding",
+        "target_client",
+        "adapter_conformance_pack",
+        "probe_events",
+        "negative_checks",
+        "redaction_checks",
+        "result",
+        "failed_layer",
+        "result_hash",
+        "generated_at",
+        "redaction_status"
+      ],
+      "properties": {
+        "trace_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/verification-trace/v1" },
+        "plan_id": { "anyOf": [{ "$ref": "#/$defs/identifier" }, { "type": "null" }] },
+        "service_binding": { "type": "string", "minLength": 1 },
+        "target_client": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "adapter_conformance_pack": { "anyOf": [{ "$ref": "#/$defs/artifact_ref" }, { "type": "null" }] },
+        "probe_events": { "type": "array", "items": { "$ref": "#/$defs/probe_event" } },
+        "negative_checks": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "redaction_checks": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "result": { "type": "string", "enum": ["passed", "failed", "inconclusive"] },
+        "failed_layer": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "result_hash": { "$ref": "#/$defs/digest" },
+        "generated_at": { "$ref": "#/$defs/timestamp" },
+        "redaction_status": { "$ref": "#/$defs/redaction_status" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "client_adapter_conformance_pack": {
+      "type": "object",
+      "required": [
+        "pack_id",
+        "schema_uri",
+        "client_name",
+        "version_constraints",
+        "config_surface_fixtures",
+        "owned_block_classes",
+        "direct_http_header_support",
+        "stdio_wrapper_behavior",
+        "trust_requirements",
+        "trust_broker_interface",
+        "restart_model",
+        "stale_config_probes",
+        "list_tools_probes",
+        "call_tool_probes",
+        "token_source_constraints",
+        "negative_tool_policy_visibility_checks",
+        "known_unsupported_behaviors",
+        "redaction_status"
+      ],
+      "properties": {
+        "pack_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/client-adapter-conformance-pack/v1" },
+        "client_name": { "type": "string", "minLength": 1 },
+        "version_constraints": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "config_surface_fixtures": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "owned_block_classes": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["owned", "legacy_owned", "user_modified_owned", "unmanaged_same_name", "unsupported_schema", "absent"] }
+        },
+        "direct_http_header_support": { "type": "boolean" },
+        "stdio_wrapper_behavior": { "type": "object", "additionalProperties": true },
+        "trust_requirements": { "type": "object", "additionalProperties": true },
+        "trust_broker_interface": { "type": "object", "additionalProperties": true },
+        "restart_model": { "type": "object", "additionalProperties": true },
+        "stale_config_probes": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "list_tools_probes": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "call_tool_probes": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "token_source_constraints": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "negative_tool_policy_visibility_checks": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "known_unsupported_behaviors": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "redaction_status": { "$ref": "#/$defs/redaction_status" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "scenario_event": {
+      "type": "object",
+      "required": ["event_id", "actor", "visible_to", "payload", "hidden_state_delta", "tool_output_visibility", "evaluator_only"],
+      "properties": {
+        "event_id": { "$ref": "#/$defs/identifier" },
+        "actor": { "type": "string", "enum": ["user", "tested_agent", "tool", "backend", "evaluator", "harness"] },
+        "visible_to": { "type": "array", "items": { "type": "string", "enum": ["tested_agent", "evaluator", "harness", "remediator"] } },
+        "payload": { "type": "object", "additionalProperties": true },
+        "hidden_state_delta": { "type": "object", "additionalProperties": true },
+        "tool_output_visibility": { "type": "string", "enum": ["tested_agent", "evaluator_only", "hidden"] },
+        "evaluator_only": { "type": "boolean" }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "requirement_scenario": {
+      "type": "object",
+      "required": [
+        "scenario_id",
+        "schema_uri",
+        "requirement_ids",
+        "tested_agent_view",
+        "hidden_initial_conditions",
+        "during_test_events",
+        "allowed_mutations",
+        "forbidden_mutations",
+        "expected_outcomes",
+        "deterministic_assertions",
+        "inference_rubric"
+      ],
+      "properties": {
+        "scenario_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/requirement-scenario/v1" },
+        "requirement_ids": { "type": "array", "items": { "$ref": "#/$defs/identifier" } },
+        "tested_agent_view": {
+          "type": "object",
+          "required": ["cwd", "user_prompt", "available_tools", "visible_files"],
+          "properties": {
+            "cwd": { "type": "string", "pattern": "^/" },
+            "user_prompt": { "type": "string", "minLength": 1 },
+            "available_tools": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+            "visible_files": { "type": "array", "items": { "type": "string" } }
+          },
+          "patternProperties": { "^x_": true },
+          "additionalProperties": false
+        },
+        "hidden_initial_conditions": {
+          "type": "object",
+          "required": ["filesystem", "contextforge_catalog", "client_configs", "trust_state", "ports_units", "project_state"],
+          "properties": {
+            "filesystem": { "type": "object", "additionalProperties": true },
+            "contextforge_catalog": { "type": "object", "additionalProperties": true },
+            "client_configs": { "type": "object", "additionalProperties": true },
+            "trust_state": { "type": "object", "additionalProperties": true },
+            "ports_units": { "type": "object", "additionalProperties": true },
+            "project_state": { "type": "object", "additionalProperties": true }
+          },
+          "patternProperties": { "^x_": true },
+          "additionalProperties": false
+        },
+        "during_test_events": { "type": "array", "items": { "$ref": "#/$defs/scenario_event" } },
+        "allowed_mutations": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "forbidden_mutations": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "expected_outcomes": {
+          "type": "object",
+          "required": ["state", "open_items", "non_actions", "required_traces", "required_receipts"],
+          "properties": {
+            "state": { "type": "object", "additionalProperties": true },
+            "open_items": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+            "non_actions": { "type": "array", "items": { "type": "string" } },
+            "required_traces": { "type": "array", "items": { "type": "string" } },
+            "required_receipts": { "type": "array", "items": { "type": "string" } }
+          },
+          "patternProperties": { "^x_": true },
+          "additionalProperties": false
+        },
+        "deterministic_assertions": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "inference_rubric": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "evaluator_verdict": {
+      "type": "object",
+      "required": [
+        "verdict_id",
+        "schema_uri",
+        "created_at",
+        "evaluator_run",
+        "verdict",
+        "scenario_id",
+        "requirement_ids",
+        "evaluated_artifact_refs",
+        "deterministic_assertion_refs",
+        "failed_requirements",
+        "evidence",
+        "likely_cause",
+        "remediation_target",
+        "redaction_status",
+        "evidence_hashes",
+        "requirement_gap_proposal"
+      ],
+      "properties": {
+        "verdict_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/evaluator-verdict/v1" },
+        "created_at": { "$ref": "#/$defs/timestamp" },
+        "evaluator_run": {
+          "type": "object",
+          "required": ["model_or_agent", "prompt_digest"],
+          "properties": {
+            "model_or_agent": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "prompt_digest": { "$ref": "#/$defs/nullable_digest" }
+          },
+          "patternProperties": { "^x_": true },
+          "additionalProperties": false
+        },
+        "verdict": { "type": "string", "enum": ["pass", "fail", "inconclusive", "requirement_gap"] },
+        "scenario_id": { "$ref": "#/$defs/identifier" },
+        "requirement_ids": { "type": "array", "items": { "$ref": "#/$defs/identifier" } },
+        "evaluated_artifact_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "deterministic_assertion_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "failed_requirements": { "type": "array", "items": { "$ref": "#/$defs/identifier" } },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source", "reference", "summary", "evidence_hash"],
+            "properties": {
+              "source": { "type": "string", "enum": ["transcript", "filesystem", "probe", "project_state", "audit", "trace"] },
+              "reference": { "type": "string", "minLength": 1 },
+              "summary": { "type": "string", "minLength": 1 },
+              "evidence_hash": { "$ref": "#/$defs/nullable_digest" }
+            },
+            "patternProperties": { "^x_": true },
+            "additionalProperties": false
+          }
+        },
+        "likely_cause": { "type": "string", "enum": ["implementation_failure", "agent_inference_failure", "fixture_failure", "flaky_environment", "requirement_gap"] },
+        "remediation_target": { "type": "string", "enum": ["code", "prompt", "schema", "test_fixture", "rfc", "governance"] },
+        "redaction_status": { "$ref": "#/$defs/redaction_status" },
+        "evidence_hashes": { "type": "array", "items": { "$ref": "#/$defs/digest" } },
+        "requirement_gap_proposal": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "evidence_ledger": {
+      "type": "object",
+      "required": [
+        "ledger_id",
+        "schema_uri",
+        "run_id",
+        "requirement_ids",
+        "scenario_ref",
+        "tested_agent_transcript_ref",
+        "deterministic_assertion_results",
+        "consent_receipt_refs",
+        "verification_trace_refs",
+        "world_state_diff_ref",
+        "evaluator_verdict_refs",
+        "remediation_refs",
+        "redaction_status",
+        "evidence_hashes"
+      ],
+      "properties": {
+        "ledger_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/evidence-ledger/v1" },
+        "run_id": { "$ref": "#/$defs/identifier" },
+        "requirement_ids": { "type": "array", "items": { "$ref": "#/$defs/identifier" } },
+        "scenario_ref": { "type": "string", "minLength": 1 },
+        "tested_agent_transcript_ref": { "type": "string", "minLength": 1 },
+        "deterministic_assertion_results": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "consent_receipt_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "verification_trace_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "world_state_diff_ref": { "type": "string", "minLength": 1 },
+        "evaluator_verdict_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "remediation_refs": { "$ref": "#/$defs/artifact_ref_list" },
+        "redaction_status": { "$ref": "#/$defs/redaction_status" },
+        "evidence_hashes": { "type": "array", "items": { "$ref": "#/$defs/digest" } }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    },
+    "governance_reconciliation_pack": {
+      "type": "object",
+      "required": [
+        "pack_id",
+        "schema_uri",
+        "rfc_digest",
+        "ledger_digests",
+        "decisions_missing_from_ledgers",
+        "open_questions_answered_or_narrowed",
+        "abeyant_intentions_needing_updates",
+        "service_memory_conflicts",
+        "suggested_governance_crud_operations",
+        "advisory_only",
+        "forbidden_effects",
+        "redaction_status",
+        "evidence_hashes"
+      ],
+      "properties": {
+        "pack_id": { "$ref": "#/$defs/identifier" },
+        "schema_uri": { "const": "contextforge://control-plane/schemas/governance-reconciliation-pack/v1" },
+        "rfc_digest": { "$ref": "#/$defs/digest" },
+        "ledger_digests": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/digest" }
+        },
+        "decisions_missing_from_ledgers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "open_questions_answered_or_narrowed": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "abeyant_intentions_needing_updates": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "service_memory_conflicts": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "suggested_governance_crud_operations": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "advisory_only": { "const": true },
+        "forbidden_effects": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["edit_ledgers", "bypass_governance_crud", "bypass_mentality", "catalog_mutation", "project_state_write"]
+          }
+        },
+        "redaction_status": { "$ref": "#/$defs/redaction_status" },
+        "evidence_hashes": { "type": "array", "items": { "$ref": "#/$defs/digest" } }
+      },
+      "patternProperties": { "^x_": true },
+      "additionalProperties": false
+    }
+  }
+}

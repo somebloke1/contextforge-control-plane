@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "resolved_at": "2026-05-30T22:30:00Z",
+  "service_binding": "project-inspector:context-portal",
+  "virtual_server_id": "vs-project-inspector-context-portal",
+  "target_client": "codex",
+  "expected_gateway_revision": "gw-r1",
+  "current_gateway_revision": "gw-r1",
+  "expected_target_client_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "current_target_client_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "cases": [
+    {
+      "name": "read_only_tools_compile_to_allowed_associations",
+      "inputs": {
+        "tools": [
+          {
+            "tool_id": "cf-tool-list-files",
+            "original_name": "list_files",
+            "exposed_name": "project_inspector__list_files",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["codex"],
+            "risk_classes": ["read_only"],
+            "scope_impacts": ["project_scope_read"],
+            "tags": ["project"]
+          },
+          {
+            "tool_id": "cf-tool-read-file",
+            "original_name": "read_file",
+            "exposed_name": "project_inspector__read_file",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["codex"],
+            "risk_classes": ["read_only"],
+            "scope_impacts": ["project_scope_read"],
+            "tags": ["project"]
+          }
+        ],
+        "manual_overrides": []
+      },
+      "expected": {
+        "status": "compiled",
+        "compiled_tool_ids": ["cf-tool-list-files", "cf-tool-read-file"],
+        "excluded_tool_ids": [],
+        "negative_check_count": 1,
+        "blocker_types": []
+      }
+    },
+    {
+      "name": "semantic_scope_changing_and_admin_risks_are_excluded",
+      "inputs": {
+        "tools": [
+          {
+            "tool_id": "cf-tool-activate-project",
+            "original_name": "activate_project",
+            "exposed_name": "project_inspector__activate_project",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["codex"],
+            "risk_classes": ["scope_changing"],
+            "scope_impacts": ["active_project"]
+          },
+          {
+            "tool_id": "cf-tool-catalog-refresh",
+            "original_name": "refresh_registry",
+            "exposed_name": "project_inspector__refresh_registry",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["codex"],
+            "risk_classes": ["catalog_admin"],
+            "scope_impacts": ["catalog"]
+          },
+          {
+            "tool_id": "cf-tool-trust-grant",
+            "original_name": "grant_client_trust",
+            "exposed_name": "project_inspector__grant_client_trust",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["codex"],
+            "risk_classes": ["trust"],
+            "scope_impacts": ["credential_scope"]
+          },
+          {
+            "tool_id": "cf-tool-open-tunnel",
+            "original_name": "open_remote_tunnel",
+            "exposed_name": "project_inspector__open_remote_tunnel",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["codex"],
+            "risk_classes": ["remote_exposure"],
+            "scope_impacts": ["network_exposure"]
+          }
+        ],
+        "manual_overrides": []
+      },
+      "expected": {
+        "status": "blocked",
+        "compiled_tool_ids": [],
+        "excluded_tool_ids": [
+          "cf-tool-activate-project",
+          "cf-tool-catalog-refresh",
+          "cf-tool-open-tunnel",
+          "cf-tool-trust-grant"
+        ],
+        "negative_check_count": 9,
+        "blocker_types": ["scope_changing_excluded", "semantic_risk_excluded"]
+      }
+    },
+    {
+      "name": "unknown_missing_metadata_and_service_binding_fail_closed",
+      "inputs": {
+        "tools": [
+          {
+            "tool_id": "cf-tool-unknown",
+            "original_name": "mystery",
+            "exposed_name": "project_inspector__mystery",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["codex"]
+          },
+          {
+            "tool_id": "cf-tool-no-binding",
+            "original_name": "inspect",
+            "exposed_name": "project_inspector__inspect",
+            "target_clients": ["codex"],
+            "risk_classes": ["read_only"],
+            "scope_impacts": ["project_scope_read"]
+          }
+        ],
+        "manual_overrides": []
+      },
+      "expected": {
+        "status": "blocked",
+        "compiled_tool_ids": [],
+        "excluded_tool_ids": ["cf-tool-no-binding", "cf-tool-unknown"],
+        "negative_check_count": 5,
+        "blocker_types": ["missing_risk_metadata", "missing_service_binding", "semantic_risk_excluded", "unknown_risk_class"]
+      }
+    },
+    {
+      "name": "target_client_mismatch_and_stale_inputs_fail_closed",
+      "inputs": {
+        "current_gateway_revision": "gw-r2",
+        "current_target_client_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "tools": [
+          {
+            "tool_id": "cf-tool-list-files",
+            "original_name": "list_files",
+            "exposed_name": "project_inspector__list_files",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["claude"],
+            "risk_classes": ["read_only"],
+            "scope_impacts": ["project_scope_read"]
+          }
+        ],
+        "manual_overrides": []
+      },
+      "expected": {
+        "status": "blocked",
+        "compiled_tool_ids": [],
+        "excluded_tool_ids": ["cf-tool-list-files"],
+        "negative_check_count": 3,
+        "blocker_types": ["stale_policy_inputs", "target_client_mismatch"]
+      }
+    },
+    {
+      "name": "manual_allow_without_required_evidence_stays_excluded",
+      "inputs": {
+        "tools": [
+          {
+            "tool_id": "cf-tool-write-state",
+            "original_name": "write_project_state",
+            "exposed_name": "project_inspector__write_project_state",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["codex"],
+            "risk_classes": ["write"],
+            "scope_impacts": ["project_state"]
+          }
+        ],
+        "manual_overrides": [
+          {
+            "tool_selector": {"selector_type": "tool_id", "value": "cf-tool-write-state", "fail_closed": true},
+            "decision": "allow",
+            "consent_receipt_ref": {
+              "ref": "contextforge://control-plane/consent-receipts/receipt-write",
+              "content_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "catalog_revision_or_etag": null,
+              "resolved_at": "2026-05-30T22:30:00Z"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "status": "blocked",
+        "compiled_tool_ids": [],
+        "excluded_tool_ids": ["cf-tool-write-state"],
+        "negative_check_count": 3,
+        "blocker_types": ["manual_allow_missing_evidence", "semantic_risk_excluded"]
+      }
+    },
+    {
+      "name": "manual_allow_with_consent_requirement_and_negative_checks_can_allow",
+      "inputs": {
+        "tools": [
+          {
+            "tool_id": "cf-tool-write-state",
+            "original_name": "write_project_state",
+            "exposed_name": "project_inspector__write_project_state",
+            "service_binding": "project-inspector:context-portal",
+            "target_clients": ["codex"],
+            "risk_classes": ["write"],
+            "scope_impacts": ["project_state"],
+            "required_consent_classes": ["service_provision"]
+          }
+        ],
+        "manual_overrides": [
+          {
+            "tool_selector": {"selector_type": "tool_id", "value": "cf-tool-write-state", "fail_closed": true},
+            "decision": "allow",
+            "consent_receipt_ref": {
+              "ref": "contextforge://control-plane/consent-receipts/receipt-write",
+              "content_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "catalog_revision_or_etag": null,
+              "resolved_at": "2026-05-30T22:30:00Z"
+            },
+            "x_requirement_id": "REQ-D10-MANUAL-WRITE",
+            "x_risk_class": "write",
+            "x_negative_checks": ["contextforge_virtual_server", "target_client"]
+          }
+        ]
+      },
+      "expected": {
+        "status": "compiled",
+        "compiled_tool_ids": ["cf-tool-write-state"],
+        "excluded_tool_ids": [],
+        "negative_check_count": 1,
+        "blocker_types": []
+      }
+    }
+  ]
+}

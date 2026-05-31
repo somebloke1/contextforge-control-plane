@@ -1,0 +1,195 @@
+{
+  "version": 1,
+  "project_root": "/home/dgk/workspace/context-portal",
+  "resolved_at": "2026-05-30T23:30:00Z",
+  "candidate_descriptor": {
+    "candidate": true,
+    "service_family": "vectornotes",
+    "canonical_service": "vectornotes",
+    "backend": {
+      "command": "vectornotes-mcp",
+      "package": "vectornotes-mcp",
+      "native_transports": ["streamable_http", "sse"]
+    },
+    "scope": {
+      "runtime_scope": "host",
+      "credential_scope": {
+        "scope": "redacted-tenant-a"
+      },
+      "resource_scope": {
+        "scope": "redacted-project-docs"
+      }
+    },
+    "source_clients": ["codex", "claude"],
+    "client_config_names": ["codex_vectornotes_alias", "claude_vectornotes_alias"]
+  },
+  "stdio_candidate_descriptor": {
+    "candidate": true,
+    "service_family": "localnotes",
+    "canonical_service": "localnotes",
+    "backend": {
+      "command": "localnotes-mcp",
+      "package": "localnotes-mcp",
+      "native_transports": ["stdio"]
+    },
+    "scope": {
+      "runtime_scope": "host",
+      "credential_scope": {
+        "scope": "redacted-tenant-b"
+      },
+      "resource_scope": {
+        "scope": "redacted-notes"
+      }
+    },
+    "source_clients": ["codex"],
+    "client_config_names": ["codex_localnotes_alias"]
+  },
+  "artifact_refs": {
+    "contract_card": {
+      "ref": "contextforge://control-plane/service-bindings/vectornotes",
+      "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "catalog_revision_or_etag": "catalog-r9",
+      "resolved_at": "2026-05-30T23:30:00Z"
+    },
+    "capsule": {
+      "ref": "contextforge://control-plane/capability-capsules/vectornotes",
+      "content_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "catalog_revision_or_etag": "catalog-r9",
+      "resolved_at": "2026-05-30T23:30:00Z"
+    },
+    "policy": {
+      "ref": "contextforge://control-plane/tool-policies/vectornotes",
+      "content_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "catalog_revision_or_etag": "catalog-r9",
+      "resolved_at": "2026-05-30T23:30:00Z"
+    },
+    "verification_trace": {
+      "ref": "contextforge://control-plane/traces/vectornotes",
+      "content_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "catalog_revision_or_etag": "catalog-r9",
+      "resolved_at": "2026-05-30T23:30:00Z"
+    },
+    "consent_receipt": {
+      "ref": "contextforge://control-plane/receipts/vectornotes-catalog",
+      "content_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "catalog_revision_or_etag": "catalog-r9",
+      "resolved_at": "2026-05-30T23:30:00Z"
+    }
+  },
+  "existing_service": {
+    "canonical_names": ["vectornotes-gateway", "vectornotes-server"],
+    "catalog_revision": "catalog-r9",
+    "dedupe_keys": {
+      "backend_package": "vectornotes-mcp",
+      "x_backend_command": "vectornotes-mcp",
+      "runtime_scope": "host",
+      "credential_scope": "redacted-tenant-a",
+      "resource_scope": "redacted-project-docs",
+      "transport_scope": "http"
+    },
+    "contract_card_refs": [
+      {
+        "ref": "contextforge://control-plane/service-bindings/vectornotes",
+        "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "catalog_revision_or_etag": "catalog-r9",
+        "resolved_at": "2026-05-30T23:30:00Z"
+      }
+    ],
+    "capsule_refs": [
+      {
+        "ref": "contextforge://control-plane/capability-capsules/vectornotes",
+        "content_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_revision_or_etag": "catalog-r9",
+        "resolved_at": "2026-05-30T23:30:00Z"
+      }
+    ],
+    "semantic_tool_policy_refs": [
+      {
+        "ref": "contextforge://control-plane/tool-policies/vectornotes",
+        "content_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "catalog_revision_or_etag": "catalog-r9",
+        "resolved_at": "2026-05-30T23:30:00Z"
+      }
+    ],
+    "verification_trace_refs": [
+      {
+        "ref": "contextforge://control-plane/traces/vectornotes",
+        "content_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "catalog_revision_or_etag": "catalog-r9",
+        "resolved_at": "2026-05-30T23:30:00Z"
+      }
+    ]
+  },
+  "service_memory_provider_input": {
+    "provider_name": "vectornotes",
+    "service_binding": "vectornotes:project",
+    "provider_scope": "project",
+    "durability": "project_persistent",
+    "storage_location_class": "service_local_store",
+    "supported_operations": ["list", "read", "write", "update"],
+    "writes_require_approval": true
+  },
+  "governance_reconciliation_pack": {
+    "pack_id": "gov-pack-wave10-vectornotes",
+    "schema_uri": "contextforge://control-plane/schemas/governance-reconciliation-pack/v1",
+    "rfc_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ledger_digests": {
+      "DECISIONS.md": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "OPEN_QUESTIONS.md": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "ABEYANT_INTENTIONS.md": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "decisions_missing_from_ledgers": [
+      {
+        "governance_id": "dec-20260530-1001",
+        "summary": "Catalog candidates require typed service-management completion before canonical project binding."
+      }
+    ],
+    "open_questions_answered_or_narrowed": [
+      {
+        "governance_id": "oq-20260530-1001",
+        "summary": "Service-memory providers may propose governance updates but cannot settle them."
+      }
+    ],
+    "abeyant_intentions_needing_updates": [
+      {
+        "governance_id": "ai-20260530-1001",
+        "summary": "Review service-management catalog promotion wording after Wave 10 evidence lands."
+      }
+    ],
+    "service_memory_conflicts": [
+      {
+        "governance_id": "ai-20260530-1001",
+        "warning_class": "service_memory_governance_conflict",
+        "selected_value_source": "governance_ledger",
+        "memory_value_used_as_authority": false
+      }
+    ],
+    "suggested_governance_crud_operations": [
+      {
+        "operation": "propose_governance_update",
+        "required_tool": "scripts/governance_crud.py",
+        "mutation_performed": false
+      }
+    ],
+    "advisory_only": true,
+    "forbidden_effects": ["edit_ledgers", "bypass_governance_crud", "bypass_mentality", "catalog_mutation", "project_state_write"],
+    "redaction_status": "passed",
+    "evidence_hashes": ["sha256:4444444444444444444444444444444444444444444444444444444444444444"]
+  },
+  "language_profile_case": {
+    "project_paths": ["pyproject.toml", "src/vectornotes/app.py"],
+    "selected_profile_id": "python",
+    "expected_language_id": "python"
+  },
+  "expected": {
+    "canonical_names": ["vectornotes-gateway", "vectornotes-server"],
+    "catalog_revision": "catalog-r9",
+    "native_transport_decision": "native_http_sse",
+    "stdio_transport_decision": "package_bridge_stdio_to_http_sse",
+    "forbidden_follow_up_effects": [
+      "project_init_catalog_mutation",
+      "project_state_service_record_without_consumable_service_management_result",
+      "direct_contextforge_database_write"
+    ]
+  }
+}

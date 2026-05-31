@@ -1,0 +1,218 @@
+{
+  "fixture_id": "control-plane-apply-journal-w5-c",
+  "project_root": "/home/dgk/workspace/context-portal",
+  "run_id": "20260530T202154Z",
+  "resolved_at": "2026-05-30T22:30:00Z",
+  "expires_at": "2026-05-31T22:30:00Z",
+  "actor": "user",
+  "workflow_identity": "project_init",
+  "source_client": "codex",
+  "source_client_auth_strength": "shared_token",
+  "plan_id": "project-init-apply-fixture",
+  "service_binding": "context7:shared",
+  "target_clients": [
+    "codex",
+    "claude"
+  ],
+  "persistent_target": "systemd",
+  "base_revision": 7,
+  "target_client_digests": {
+    "codex": "sha256:fixture-codex-client-digest",
+    "claude": "sha256:fixture-claude-client-digest"
+  },
+  "trust_state_digest": "sha256:fixture-trust-digest",
+  "catalog_revision_or_etag": "catalog-r1",
+  "service_contract_ref": {
+    "ref": "contextforge://control-plane/service-bindings/context7/v1",
+    "payload": {
+      "card_id": "context7-card",
+      "redaction_status": "redacted"
+    }
+  },
+  "service_management_handoff_ref": {
+    "ref": "contextforge://control-plane/service-handoffs/context7/v1",
+    "payload": {
+      "handoff_id": "context7-handoff",
+      "redaction_status": "redacted"
+    }
+  },
+  "cases": [
+    {
+      "name": "stale_plan_replay_blocks",
+      "description": "State revision and target-client digest drift make an otherwise approved apply replay stale.",
+      "kind": "authorization",
+      "operation_class": "service_provision",
+      "replay_intent": "resume",
+      "current_state_revision": 8,
+      "current_target_client_digests": {
+        "codex": "sha256:changed-codex-client-digest",
+        "claude": "sha256:fixture-claude-client-digest"
+      },
+      "expected_decision": "block",
+      "expected_reason_fragments": [
+        "project state revision changed",
+        "target client digest changed: codex"
+      ]
+    },
+    {
+      "name": "receipt_scope_change_blocks",
+      "description": "Receipts for the same plan cannot be replayed across service binding, target-client, or persistent-target scope changes.",
+      "kind": "receipt_scope",
+      "operation_class": "service_provision",
+      "scope_variants": [
+        {
+          "name": "different_service_binding",
+          "receipt_service_binding": "other:shared",
+          "receipt_target_clients": [
+            "codex",
+            "claude"
+          ],
+          "receipt_persistent_target": "systemd",
+          "expected_reason_fragment": "service binding scope"
+        },
+        {
+          "name": "different_target_clients",
+          "receipt_service_binding": "context7:shared",
+          "receipt_target_clients": [
+            "codex"
+          ],
+          "receipt_persistent_target": "systemd",
+          "expected_reason_fragment": "target-client scope"
+        },
+        {
+          "name": "different_persistent_target",
+          "receipt_service_binding": "context7:shared",
+          "receipt_target_clients": [
+            "codex",
+            "claude"
+          ],
+          "receipt_persistent_target": "file",
+          "expected_reason_fragment": "persistent target scope"
+        }
+      ],
+      "expected_decision": "block"
+    },
+    {
+      "name": "interrupted_run_resume_records_recovery",
+      "description": "A compatible same-plan resume receipt allows an interrupted run to resume and journal the replay recovery.",
+      "kind": "resume_journal",
+      "operation_class": "service_provision",
+      "replay_intent": "resume",
+      "expected_decision": "resume",
+      "journal": {
+        "step_id": "provision-context7",
+        "status": "resumed",
+        "replay_policy": "same_plan_resume",
+        "recovery_outcome": "resume",
+        "redacted_output_summary": {
+          "effect": "recovered interrupted provision after readback",
+          "mutation_performed": false
+        }
+      }
+    },
+    {
+      "name": "failed_trace_transition_blocks_and_journals_refs",
+      "description": "A failed or missing verification trace blocks a verified lifecycle transition and the journal records available trace refs and result hashes.",
+      "kind": "verification_journal",
+      "operation_class": "service_provision",
+      "trace": {
+        "trace_id": "trace-context7-gateway-failed",
+        "step_id": "verify-context7",
+        "layer": "contextforge_gateway",
+        "status": "failed",
+        "failure_classification": "gateway_readback_failed",
+        "target_state": "verified",
+        "required_layers": [
+          "contextforge_gateway"
+        ]
+      },
+      "missing_trace": {
+        "step_id": "verify-context7-missing",
+        "target_state": "verified",
+        "required_layers": [
+          "contextforge_gateway"
+        ]
+      },
+      "expected_decision": "block",
+      "journal": {
+        "step_id": "verify-context7",
+        "status": "failed",
+        "replay_policy": "same_plan_resume",
+        "recovery_outcome": "blocked_failed_trace",
+        "redacted_output_summary": {
+          "effect": "verification transition blocked",
+          "failed_layer": "contextforge_gateway"
+        }
+      }
+    },
+    {
+      "name": "owned_config_idempotency_boundaries",
+      "description": "Owned same-content config is a noop resume, owned changed content is an approved update, and unmanaged same-name config blocks for user action.",
+      "kind": "project_local_config",
+      "operation_class": "project_local_config_write",
+      "target_path": ".codex/config.toml",
+      "desired_content": {
+        "mcpServers": {
+          "contextforge": {
+            "type": "sse",
+            "url": "http://127.0.0.1:4444/sse"
+          }
+        }
+      },
+      "changed_content": {
+        "mcpServers": {
+          "contextforge": {
+            "type": "sse",
+            "url": "http://127.0.0.1:4444/sse"
+          }
+        },
+        "metadata": {
+          "managed_by": "contextforge-control-plane"
+        }
+      },
+      "owned_block": {
+        "name": "contextforge-control-plane",
+        "managed_by": "contextforge-control-plane"
+      },
+      "unmanaged_block": {
+        "name": "contextforge-control-plane",
+        "managed_by": "manual-user-edit",
+        "content": {
+          "mcpServers": {
+            "contextforge": {
+              "type": "stdio"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned_same_content": {
+          "decision": "resume",
+          "action": "noop"
+        },
+        "owned_different_content": {
+          "decision": "allow",
+          "action": "update_owned_block"
+        },
+        "unmanaged_same_name": {
+          "decision": "block",
+          "action": "user_action"
+        }
+      }
+    },
+    {
+      "name": "generic_project_init_forbidden_classes_block",
+      "description": "Generic project-init approval does not authorize separate consent classes.",
+      "kind": "forbidden_project_init",
+      "operation_classes": [
+        "user_global_client_trust",
+        "catalog_promotion",
+        "token_material_change",
+        "secret_value_write",
+        "network_exposure_change"
+      ],
+      "expected_decision": "block",
+      "expected_reason_fragment": "requires a separate explicit workflow"
+    }
+  ]
+}

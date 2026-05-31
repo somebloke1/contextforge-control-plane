@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "resolved_at": "2026-05-30T20:21:54Z",
+  "expected_profile_ids": [
+    "python",
+    "typescript_javascript",
+    "rust",
+    "bash"
+  ],
+  "detection_cases": [
+    {
+      "name": "empty_project_requires_explicit_selection",
+      "paths": [],
+      "selected_profile_id": null,
+      "expected": {
+        "matched_profile_ids": [],
+        "selected_profile_id": null,
+        "open_item_types": [
+          "empty_project_requires_explicit_language_selection"
+        ]
+      }
+    },
+    {
+      "name": "mixed_python_and_typescript_records_multiple_matches",
+      "paths": [
+        "pyproject.toml",
+        "src/app.py",
+        "package.json",
+        "src/index.ts"
+      ],
+      "selected_profile_id": null,
+      "expected": {
+        "matched_profile_ids": [
+          "python",
+          "typescript_javascript"
+        ],
+        "selected_profile_id": null,
+        "open_item_types": [
+          "multiple_profiles_require_primary_selection"
+        ]
+      }
+    },
+    {
+      "name": "explicit_selection_is_recorded_separately_from_acceptance",
+      "paths": [
+        "package.json",
+        "src/index.ts"
+      ],
+      "selected_profile_id": "typescript_javascript",
+      "expected": {
+        "matched_profile_ids": [
+          "typescript_javascript"
+        ],
+        "selected_profile_id": "typescript_javascript",
+        "open_item_types": []
+      }
+    }
+  ],
+  "selection_cases": [
+    {
+      "name": "initial_selection_does_not_need_change_approval",
+      "current_selected_profile_id": null,
+      "requested_profile_id": "python",
+      "approval_ref": null,
+      "expected": {
+        "decision": "select",
+        "approval_required": false,
+        "open_item_types": []
+      }
+    },
+    {
+      "name": "profile_change_requires_approval",
+      "current_selected_profile_id": "python",
+      "requested_profile_id": "rust",
+      "approval_ref": null,
+      "expected": {
+        "decision": "block",
+        "approval_required": true,
+        "open_item_types": [
+          "language_profile_change_requires_approval"
+        ]
+      }
+    },
+    {
+      "name": "approved_profile_change_can_select",
+      "current_selected_profile_id": "python",
+      "requested_profile_id": "rust",
+      "approval_ref": {
+        "ref": "contextforge://control-plane/consent-receipts/language-profile-change",
+        "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "resolved_at": "2026-05-30T20:21:54Z"
+      },
+      "expected": {
+        "decision": "select",
+        "approval_required": true,
+        "open_item_types": []
+      }
+    }
+  ],
+  "install_cases": [
+    {
+      "name": "missing_python_tooling_blocks_execution_but_returns_choices",
+      "profile_id": "python",
+      "missing_tool_ids": [
+        "python",
+        "pyright"
+      ],
+      "requested_scope": "instance_local",
+      "execution_approved": false,
+      "global_mutation_approved": false,
+      "expected": {
+        "decision": "block",
+        "blockers": [
+          "execution_requires_separate_approval"
+        ],
+        "open_item_types": [
+          "missing_language_tooling"
+        ]
+      }
+    },
+    {
+      "name": "global_tooling_mutation_is_blocked_without_separate_approval",
+      "profile_id": "rust",
+      "missing_tool_ids": [
+        "rust-analyzer"
+      ],
+      "requested_scope": "host_global",
+      "execution_approved": false,
+      "global_mutation_approved": false,
+      "expected": {
+        "decision": "block",
+        "blockers": [
+          "execution_requires_separate_approval",
+          "global_language_tooling_mutation_blocked"
+        ],
+        "open_item_types": [
+          "missing_language_tooling",
+          "global_language_tooling_mutation_requires_approval"
+        ]
+      }
+    }
+  ]
+}

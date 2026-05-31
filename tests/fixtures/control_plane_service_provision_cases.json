@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "run_id": "20260530T202154Z",
+  "resolved_at": "2026-05-30T22:30:00Z",
+  "project_root": "/home/dgk/workspace/context-portal",
+  "service_binding": "proof:project",
+  "target_client": "codex",
+  "plan_id": "w7c-proof-project-provision",
+  "backend_command": ["uv", "run", "proof-mcp"],
+  "port": 48765,
+  "required_env": ["PROOF_SERVICE_CREDENTIAL"],
+  "optional_env": ["PROOF_LOG_LEVEL"],
+  "fixture_refs": {
+    "stale_input_refs": ["service-bindings/proof-project"],
+    "consent_receipt_refs": ["receipts/service-provision", "receipts/project-local-config"],
+    "verification_trace_refs": [
+      "traces/backend",
+      "traces/contextforge-gateway",
+      "traces/virtual-server",
+      "traces/tool-policy",
+      "traces/target-client",
+      "traces/redaction"
+    ],
+    "policy_refs": ["semantic-tool-policies/proof-project"],
+    "conformance_refs": ["client-conformance/codex-v1"]
+  },
+  "apply_outcome_cases": [
+    {
+      "name": "interrupted_provision_needs_resume",
+      "description": "An interrupted owned artifact write can resume under the same approved provision plan.",
+      "current_artifacts": {
+        "backend_home": "match",
+        "env_placeholder": "interrupted",
+        "backend_manifest": "match"
+      },
+      "unit_observation": "active_match",
+      "ports": "already_owned",
+      "readiness": "passed",
+      "expected": {
+        "aggregate_outcome": "needs_resume",
+        "components": {
+          "env_placeholder": "needs_resume"
+        }
+      }
+    },
+    {
+      "name": "port_conflict_fresh_approval_required",
+      "description": "A requested port occupied by another owner changes network exposure and requires fresh approval.",
+      "current_artifacts": {
+        "backend_home": "match",
+        "env_placeholder": "match",
+        "backend_manifest": "match"
+      },
+      "unit_observation": "active_match",
+      "ports": "other_owner",
+      "readiness": "passed",
+      "expected": {
+        "aggregate_outcome": "fresh_approval_required",
+        "components": {
+          "ports": "fresh_approval_required"
+        }
+      }
+    },
+    {
+      "name": "stale_owned_unit_forward_repair",
+      "description": "A stale unit still owned by the control plane can be repaired forward.",
+      "current_artifacts": {
+        "backend_home": "match",
+        "env_placeholder": "match",
+        "backend_manifest": "match"
+      },
+      "unit_observation": "stale_owned",
+      "ports": "already_owned",
+      "readiness": "passed",
+      "expected": {
+        "aggregate_outcome": "forward_repair",
+        "components": {
+          "user_systemd_unit": "forward_repair"
+        }
+      }
+    },
+    {
+      "name": "stale_unmanaged_unit_rollback_workflow",
+      "description": "A stale same-name unit outside control-plane ownership needs an approved rollback workflow.",
+      "current_artifacts": {
+        "backend_home": "match",
+        "env_placeholder": "match",
+        "backend_manifest": "match"
+      },
+      "unit_observation": "stale_unmanaged",
+      "ports": "already_owned",
+      "readiness": "passed",
+      "expected": {
+        "aggregate_outcome": "rollback_by_approved_workflow",
+        "components": {
+          "user_systemd_unit": "rollback_by_approved_workflow"
+        }
+      }
+    },
+    {
+      "name": "stale_system_unit_manual_recovery",
+      "description": "A conflicting system-level unit is outside user service scope and requires manual recovery.",
+      "current_artifacts": {
+        "backend_home": "match",
+        "env_placeholder": "match",
+        "backend_manifest": "match"
+      },
+      "unit_observation": "system_scope",
+      "ports": "already_owned",
+      "readiness": "passed",
+      "expected": {
+        "aggregate_outcome": "manual_recovery",
+        "components": {
+          "user_systemd_unit": "manual_recovery"
+        }
+      }
+    },
+    {
+      "name": "readiness_failure_forward_repair",
+      "description": "A failed readiness probe after unit setup is a forward repair path.",
+      "current_artifacts": {
+        "backend_home": "match",
+        "env_placeholder": "match",
+        "backend_manifest": "match"
+      },
+      "unit_observation": "active_match",
+      "ports": "already_owned",
+      "readiness": "failed",
+      "expected": {
+        "aggregate_outcome": "forward_repair",
+        "components": {
+          "readiness": "forward_repair"
+        }
+      }
+    }
+  ],
+  "contextforge_recovery_cases": [
+    {
+      "name": "partial_contextforge_registration_missing_resume",
+      "failure_type": "registration_missing",
+      "expected_recovery": "resume"
+    },
+    {
+      "name": "partial_stale_virtual_server_policy_forward_repair",
+      "failure_type": "virtual_server_policy_mismatch",
+      "expected_recovery": "forward_repair"
+    },
+    {
+      "name": "client_config_conflict_manual_recovery",
+      "failure_type": "client_binding_config_conflict",
+      "expected_recovery": "manual_recovery"
+    },
+    {
+      "name": "stale_target_client_digest_fresh_approval_required",
+      "failure_type": "stale_client_digest",
+      "expected_recovery": "fresh_approval_required"
+    }
+  ],
+  "client_binding_cases": [
+    {
+      "name": "client_write_hook_unmanaged_config_conflict",
+      "mode": "write_hook",
+      "owned_block_class": "unmanaged_same_name",
+      "expected_decision": "block",
+      "expected_blockers": ["client_config_conflict"],
+      "expected_recovery": "manual_recovery"
+    },
+    {
+      "name": "stale_target_client_binding_digest",
+      "mode": "client_binding",
+      "current_client_digest": "sha256:client-r2",
+      "expected_decision": "block",
+      "expected_blockers": ["stale_client_digest"],
+      "expected_recovery": "fresh_approval_required"
+    }
+  ],
+  "exposure_gate_cases": [
+    {
+      "name": "blocked_until_policy_compiled",
+      "policy_status": "blocked",
+      "expected_blockers": ["semantic_tool_policy_not_compiled", "missing_risk_metadata"]
+    },
+    {
+      "name": "blocked_until_negative_checks_pass",
+      "negative_readbacks": "failed",
+      "expected_blockers": ["failed_negative_check_readback"]
+    },
+    {
+      "name": "blocked_until_conformance_passes",
+      "conformance_status": "failed_conformance",
+      "expected_blockers": ["failed_conformance", "list_tools_proof"]
+    },
+    {
+      "name": "blocked_until_consent_refs_present",
+      "consent_refs": ["service_provision"],
+      "expected_blockers": ["missing_project_local_config_write_receipt"]
+    },
+    {
+      "name": "blocked_until_trace_refs_present",
+      "trace_layers": ["contextforge_gateway", "virtual_server", "tool_policy"],
+      "expected_blockers": ["trace_missing"]
+    },
+    {
+      "name": "exposure_allowed_after_all_gates_pass",
+      "expected_decision": "intend",
+      "expected_eligible": true
+    }
+  ],
+  "state_reference_case": {
+    "name": "generated_service_state_and_intents_reference_receipts_and_traces",
+    "expected_lifecycle_state": "backend_ready",
+    "expected_recovery_outcome": "resume",
+    "expected_receipt_ref_count": 2,
+    "expected_trace_layers": [
+      "backend",
+      "contextforge_gateway",
+      "virtual_server",
+      "tool_policy",
+      "target_client",
+      "redaction"
+    ]
+  }
+}

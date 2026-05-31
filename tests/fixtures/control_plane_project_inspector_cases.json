@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "run_id": "20260530T202154Z",
+  "generated_at": "2026-05-30T20:21:54Z",
+  "project_root": "/home/dgk/workspace/context-portal",
+  "gateway_revision": "gateway-r1",
+  "target_client": "codex",
+  "target_client_digest": "sha256:client-r1",
+  "service_binding": "project-inspector:project",
+  "runtime_cases": [
+    {
+      "name": "empty_root",
+      "description": "An empty project root is still a canonical read-only project-inspector target and does not default language tooling.",
+      "setup": {
+        "kind": "empty"
+      },
+      "expected": {
+        "root_bound": true,
+        "read_only": true,
+        "shell_allowed": false,
+        "mutation_allowed": false,
+        "input_path_count": 0,
+        "open_item_type": "empty_project_requires_explicit_language_selection",
+        "non_action": "does not default empty projects to python"
+      }
+    },
+    {
+      "name": "nested_root",
+      "description": "Nested project roots receive distinct canonical root hashes and do not inherit the parent identity.",
+      "setup": {
+        "kind": "nested",
+        "nested_relative": "packages/child"
+      },
+      "expected": {
+        "nested_relative": "packages/child",
+        "identity_source": "canonical_realpath_plus_uid"
+      }
+    },
+    {
+      "name": "symlink_path_escape",
+      "description": "A symlink from the project to an outside directory cannot be inspected through the project root.",
+      "setup": {
+        "kind": "symlink_escape",
+        "link_name": "escape",
+        "outside_file": "outside.txt"
+      },
+      "expected": {
+        "blocked_path": "escape/outside.txt",
+        "error_fragment": "outside project root"
+      }
+    },
+    {
+      "name": "ignored_path",
+      "description": "Caller-supplied ignored paths fail closed and cannot be converted into file metadata.",
+      "setup": {
+        "kind": "ignored",
+        "file": "build/output.log",
+        "ignored_paths": [
+          "build"
+        ]
+      },
+      "expected": {
+        "classification_status": "denied_ignored",
+        "summary_source": "caller_supplied_evidence_plus_static_defaults"
+      }
+    },
+    {
+      "name": "dirty_worktree_root",
+      "description": "Dirty worktree evidence is caller supplied, sanitized, filtered by ignored paths, and never produced by shell execution.",
+      "setup": {
+        "kind": "dirty_worktree",
+        "ignored_paths": [
+          "ignored.log"
+        ],
+        "dirty_worktree": {
+          "source": "fixture_status",
+          "clean": false,
+          "entries": [
+            {
+              "path": "src/app.py",
+              "status": "modified"
+            },
+            {
+              "path": "ignored.log",
+              "status": "untracked"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "source": "fixture_status",
+        "clean": false,
+        "entry_count": 1,
+        "visible_path": "src/app.py",
+        "shell_executed": false
+      }
+    },
+    {
+      "name": "useful_root_bound_read_only_tools",
+      "description": "Read-only project-inspector tools provide identity, language, and sanitized metadata without requiring a shell.",
+      "setup": {
+        "kind": "python_project",
+        "files": {
+          "pyproject.toml": "[project]\nname = 'project-inspector-fixture'\n",
+          "src/app.py": "print('ok')\n"
+        }
+      },
+      "expected": {
+        "selected_language": "python",
+        "metadata_path": "pyproject.toml",
+        "metadata_kind": "file",
+        "content_digest_status": "computed"
+      }
+    },
+    {
+      "name": "no_shell_or_file_exfiltration",
+      "description": "Shell, mutation, and arbitrary file-content dump style requests are rejected; metadata remains sanitized.",
+      "setup": {
+        "kind": "secret_metadata",
+        "file": "token.txt",
+        "content": "placeholder auth marker\n"
+      },
+      "expected": {
+        "forbidden_tools": [
+          "exec_command",
+          "write_file",
+          "read_file",
+          "cat"
+        ],
+        "redacted_path": "<redacted>",
+        "not_contains": "placeholder auth marker"
+      }
+    }
+  ],
+  "proof_cases": [
+    {
+      "name": "rfc_seeded_project_inspector_not_catalog_candidate",
+      "description": "The seed is the RFC-named proof service, not a discovered catalog candidate and not a generic catalog promotion.",
+      "expected": {
+        "proof_status": "rfc_seeded_proof",
+        "service_family": "project-inspector",
+        "service_binding": "project-inspector:project",
+        "catalog_candidate": false,
+        "catalog_promotion_allowed": false,
+        "instantiation_class": "instance_per_project",
+        "forbidden_instantiation_class": "candidate_or_uncataloged_backend",
+        "forbidden_operation_classes": [
+          "catalog_promotion",
+          "user_global_client_trust"
+        ]
+      }
+    },
+    {
+      "name": "generic_project_init_acceptance_does_not_promote_catalog",
+      "description": "Generic project-scoped acceptance can plan a non-mutating project-inspector path, but it does not promote a host catalog entry.",
+      "project_service_decision": "accepted",
+      "trace_layers": [
+        "backend",
+        "contextforge_gateway",
+        "virtual_server",
+        "tool_policy",
+        "target_client",
+        "redaction"
+      ],
+      "receipts": [
+        "service_provision",
+        "project_local_config_write"
+      ],
+      "expected": {
+        "status": "planned_non_mutating",
+        "mutation_allowed": false,
+        "mutation_performed": false,
+        "identity_source": "rfc_seed",
+        "client_configs_are_discovery_only": true,
+        "catalog_operation_absent": true
+      }
+    },
+    {
+      "name": "client_binding_seed_blocked_until_runtime_proof",
+      "description": "The W9-A seed exposes the full contract and proof refs but keeps client binding blocked until runtime conformance, readback, and trace proof exist.",
+      "expected": {
+        "decision": "block",
+        "eligible_for_client_visible_binding": false,
+        "blocker_types": [
+          "failed_conformance",
+          "missing_negative_check_readback",
+          "trace_missing"
+        ],
+        "consent_classes": [
+          "project_local_config_write",
+          "service_provision"
+        ],
+        "verification_layers": [
+          "backend",
+          "contextforge_gateway",
+          "redaction",
+          "target_client",
+          "tool_policy",
+          "virtual_server"
+        ]
+      }
+    },
+    {
+      "name": "client_binding_allowed_after_conformance_readbacks_and_traces",
+      "description": "A synthetic post-W9-B proof with passing conformance, passed policy readbacks, consent refs, and traces follows the same client-verification path as Serena.",
+      "expected": {
+        "decision": "intend",
+        "eligible_for_client_visible_binding": true,
+        "binding_surface": ".codex/config.toml",
+        "write_set": [
+          ".codex/config.toml"
+        ],
+        "non_actions": [
+          "does not write client config",
+          "does not grant user-global trust",
+          "does not write secrets"
+        ]
+      }
+    }
+  ]
+}

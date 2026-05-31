@@ -1,0 +1,253 @@
+{
+  "version": 1,
+  "run_id": "20260530T202154Z",
+  "project_root": "/home/dgk/workspace/context-portal",
+  "resolved_at": "2026-05-30T20:21:54Z",
+  "gateway_revision": "gateway-r1",
+  "target_client_digest": "sha256:client-r1",
+  "cases": [
+    {
+      "name": "serena_current_run_declined_preserves_no_mutation",
+      "description": "The current run has Serena explicitly declined, so the generic adapter path preserves the decline and emits no mutating plan sections.",
+      "adapter": "serena",
+      "selected_language_profile_id": "python",
+      "project_service_decision": "declined",
+      "policy": "omitted",
+      "conformance": "omitted",
+      "receipts": [],
+      "trace_layers": [],
+      "expected": {
+        "env_decision": "declined",
+        "status": "blocked_declined",
+        "project_service_decision": "declined",
+        "planned_section_keys": [],
+        "blocker_types": [
+          "service_declined"
+        ],
+        "mutation_allowed": false,
+        "mutation_performed": false,
+        "declined_preserved": true,
+        "non_action_fragments": [
+          "does not write backend homes",
+          "does not provision Serena"
+        ]
+      }
+    },
+    {
+      "name": "serena_accepted_shape_is_language_profile_backed_and_non_mutating",
+      "description": "A fixture-only Serena acceptance shape consumes W8-A language profile metadata through the generic adapter interface without provisioning Serena.",
+      "adapter": "serena",
+      "selected_language_profile_id": "rust",
+      "project_service_decision": "accepted",
+      "policy": "fresh",
+      "conformance": "passing",
+      "receipts": [
+        "service_provision",
+        "project_local_config_write"
+      ],
+      "trace_layers": [
+        "backend",
+        "contextforge_gateway",
+        "virtual_server",
+        "tool_policy",
+        "target_client",
+        "redaction"
+      ],
+      "expected": {
+        "status": "blocked",
+        "planned_section_keys": [],
+        "mutation_allowed": false,
+        "mutation_performed": false,
+        "language_profile_id": "rust",
+        "language_consumed_from": "control_plane_language_profiles",
+        "service_local_language_policy": false,
+        "required_probe_ids": [
+          "rustc-version",
+          "rust-analyzer-version"
+        ]
+      }
+    },
+    {
+      "name": "serena_activate_project_semantic_scope_changing_filtered",
+      "description": "Serena activate_project is filtered as a semantic scope-changing tool and negative checks cover virtual-server plus target-client absence.",
+      "adapter": "serena",
+      "selected_language_profile_id": "python",
+      "project_service_decision": "accepted",
+      "policy": "fresh",
+      "expected": {
+        "excluded_tool_id": "serena-activate-project",
+        "excluded_original_name": "activate_project",
+        "semantic_risk_class": "scope_changing",
+        "scope_impacts": [
+          "active_project",
+          "workspace_root",
+          "backend_operating_scope"
+        ],
+        "negative_check_layers": [
+          "contextforge_virtual_server",
+          "target_client"
+        ],
+        "not_compiled_tool_id": "serena-activate-project"
+      }
+    },
+    {
+      "name": "client_visible_verification_missing_target_client_proof_blocks",
+      "description": "Client-visible verification fails closed when target-client trace proof is missing even if other layers and conformance are present.",
+      "adapter": "project-inspector",
+      "project_service_decision": "accepted",
+      "policy": "fresh",
+      "conformance": "passing",
+      "receipts": [
+        "service_provision",
+        "project_local_config_write"
+      ],
+      "trace_layers": [
+        "backend",
+        "contextforge_gateway",
+        "virtual_server",
+        "tool_policy",
+        "redaction"
+      ],
+      "verification_transition": {
+        "required_layers": [
+          "backend",
+          "contextforge_gateway",
+          "virtual_server",
+          "tool_policy",
+          "target_client",
+          "redaction"
+        ],
+        "trace_status_by_layer": {
+          "backend": "passed",
+          "contextforge_gateway": "passed",
+          "virtual_server": "passed",
+          "tool_policy": "passed",
+          "redaction": "passed"
+        }
+      },
+      "expected": {
+        "status": "blocked",
+        "mutation_allowed": false,
+        "mutation_performed": false,
+        "blocker_types": [
+          "trace_missing"
+        ],
+        "missing_trace_layers": [
+          "target_client"
+        ],
+        "verification_decision": "block",
+        "verification_reason": "required_trace_not_passed",
+        "target_client_matrix_status": "missing"
+      }
+    },
+    {
+      "name": "client_visible_verification_stale_target_client_proof_blocks",
+      "description": "Client-visible verification fails closed when target-client trace proof is stale and conformance is not passing.",
+      "adapter": "project-inspector",
+      "project_service_decision": "accepted",
+      "policy": "fresh",
+      "conformance": "stale",
+      "receipts": [
+        "service_provision",
+        "project_local_config_write"
+      ],
+      "trace_layers": [
+        "backend",
+        "contextforge_gateway",
+        "virtual_server",
+        "tool_policy",
+        "target_client",
+        "redaction"
+      ],
+      "trace_result_by_layer": {
+        "target_client": "stale"
+      },
+      "verification_transition": {
+        "required_layers": [
+          "target_client"
+        ],
+        "trace_status_by_layer": {
+          "target_client": "stale"
+        }
+      },
+      "expected": {
+        "status": "blocked",
+        "mutation_allowed": false,
+        "mutation_performed": false,
+        "blocker_types": [
+          "failed_conformance",
+          "trace_missing"
+        ],
+        "missing_trace_layers": [
+          "target_client"
+        ],
+        "verification_decision": "block",
+        "verification_reason": "required_trace_not_passed",
+        "target_client_matrix_status": "stale"
+      }
+    },
+    {
+      "name": "scope_changing_tool_remains_filtered_after_refresh_events",
+      "description": "Gateway refresh, server association update, restart, and stale-config repair events do not reintroduce Serena scope-changing tools.",
+      "adapter": "serena",
+      "selected_language_profile_id": "python",
+      "project_service_decision": "accepted",
+      "refresh_events": [
+        "gateway_refresh",
+        "server_association_update",
+        "restart",
+        "stale_config_repair"
+      ],
+      "expected": {
+        "excluded_tool_id": "serena-activate-project",
+        "semantic_risk_class": "scope_changing",
+        "negative_check_layers": [
+          "contextforge_virtual_server",
+          "target_client"
+        ],
+        "event_policy_status": {
+          "gateway_refresh": "blocked",
+          "server_association_update": "blocked",
+          "restart": "blocked",
+          "stale_config_repair": "blocked"
+        }
+      }
+    },
+    {
+      "name": "project_inspector_uses_same_generic_adapter_without_serena_logic",
+      "description": "A second project-scoped service uses the same adapter interface and remains free of Serena-specific command or policy coupling.",
+      "adapter": "project-inspector",
+      "selected_language_profile_id": "typescript_javascript",
+      "language_profile_required": true,
+      "project_service_decision": "accepted",
+      "policy": "fresh",
+      "conformance": "passing",
+      "receipts": [
+        "service_provision",
+        "project_local_config_write"
+      ],
+      "trace_layers": [
+        "backend",
+        "contextforge_gateway",
+        "virtual_server",
+        "tool_policy",
+        "target_client",
+        "redaction"
+      ],
+      "expected": {
+        "status": "planned_non_mutating",
+        "mutation_allowed": false,
+        "mutation_performed": false,
+        "service_binding": "project-inspector:project",
+        "adapter_id": "project-inspector",
+        "language_profile_id": "typescript_javascript",
+        "language_consumed_from": "control_plane_language_profiles",
+        "forbidden_command_fragment": "serena",
+        "compiled_tool_ids": [
+          "project-inspector-languages",
+          "project-inspector-root"
+        ]
+      }
+    }
+  ]
+}

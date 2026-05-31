@@ -1,0 +1,302 @@
+{
+  "version": 1,
+  "run_id": "20260530T234500Z",
+  "generated_at": "2026-05-30T23:45:00Z",
+  "project_root": "/home/dgk/workspace/context-portal",
+  "default_request": {
+    "request_id": "remote-proof-request",
+    "requested_profile": "remote_ready",
+    "remote_exposure_requested": true,
+    "bind_address": "192.0.2.10",
+    "reviews": {
+      "bind_address_review": {"status": "approved", "reviewed": true},
+      "tls_material_review": {"status": "approved", "reviewed": true},
+      "origin_policy": {
+        "status": "approved",
+        "reviewed": true,
+        "allowed_origins": ["https://remote.example.test"]
+      },
+      "scoped_token_review": {"status": "approved", "reviewed": true},
+      "service_tool_allowlist": {"status": "approved", "reviewed": true},
+      "excluded_service_tool_list": {"status": "approved", "reviewed": true},
+      "rollback_instructions": {"status": "approved", "reviewed": true},
+      "remote_probe_plan": {"status": "approved", "reviewed": true},
+      "diagnostic_redaction": {"status": "passed", "reviewed": true}
+    },
+    "remote_auth_profile": {
+      "name": "remote-proof-profile",
+      "profile_type": "remote",
+      "token_source_class": "remote_scoped_token",
+      "separate_from_local": true,
+      "scope": {
+        "services": ["proof:project"],
+        "tools": ["proof.read"]
+      },
+      "revocation_plan": {
+        "profile": "remote-proof-profile",
+        "steps": ["disable remote profile", "revoke remote credential handle"]
+      }
+    },
+    "service_allowlist": [
+      {
+        "service_binding": "proof:project",
+        "tool_ids": ["proof.read"],
+        "reviewed": true,
+        "remote_eligible": true,
+        "rationale": "read-only proof endpoint for remote experiment"
+      }
+    ],
+    "excluded_services": ["contextforge-admin", "serena:project"],
+    "excluded_tools": ["control_plane.apply_plan", "catalog.raw_update"],
+    "candidate_tools": [
+      {
+        "service_binding": "proof:project",
+        "tool_id": "proof.read",
+        "name": "read_proof_status",
+        "risk_classes": ["read_only"],
+        "scope_impacts": ["none"]
+      }
+    ],
+    "consent_receipt_refs": [
+      {
+        "ref": "contextforge://control-plane/receipts/network-exposure-change",
+        "content_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "resolved_at": "2026-05-30T23:40:00Z",
+        "x_consent_class": "network_exposure_change"
+      }
+    ],
+    "rollback": {
+      "instructions": ["remove remote profile binding", "restore loopback-only exposure"],
+      "revocation_steps": ["revoke remote-proof-profile credential handle"]
+    },
+    "remote_probe_plan": {
+      "external_or_remote_probe": "probe reviewed remote URL from outside loopback scope",
+      "negative_probe": "verify denied admin and mutation tools are absent remotely"
+    },
+    "diagnostic_redaction": {
+      "status": "passed",
+      "proves": ["argv", "stdout", "stderr", "logs", "diagnostics", "audit"]
+    }
+  },
+  "cases": [
+    {
+      "name": "default_blocked_local_profile",
+      "description": "Normal local profile state cannot become remote exposure by default or by project-local approval.",
+      "overrides": {
+        "requested_profile": "loopback_authenticated_http",
+        "remote_exposure_requested": false,
+        "consent_receipt_refs": [
+          {
+            "ref": "contextforge://control-plane/receipts/project-local-config",
+            "content_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+            "resolved_at": "2026-05-30T23:40:00Z",
+            "x_consent_class": "project_local_config_write"
+          }
+        ]
+      },
+      "expected": {
+        "decision": "block",
+        "blockers": ["remote_exposure_non_default", "missing_network_exposure_approval", "approval_class_not_substitutable"],
+        "local_state_status": "separate_open_item"
+      }
+    },
+    {
+      "name": "local_shared_token_rejected",
+      "description": "Remote exposure cannot reuse the local shared assistant token or wrapper token material.",
+      "overrides": {
+        "remote_auth_profile": {
+          "name": "local-shared-wrapper",
+          "profile_type": "local",
+          "token_source_class": "local_shared_token",
+          "separate_from_local": false,
+          "scope": {
+            "services": ["proof:project"],
+            "tools": ["proof.read"]
+          },
+          "revocation_plan": {
+            "profile": "local-shared-wrapper",
+            "steps": ["rotate local wrapper credential handle"]
+          }
+        }
+      },
+      "expected": {
+        "decision": "block",
+        "blockers": ["local_token_reuse_rejected", "missing_remote_token_profile", "remote_token_not_separate"]
+      }
+    },
+    {
+      "name": "missing_tls_origin_revocation_blocked",
+      "description": "Remote plan is blocked when TLS, origin policy, and revocation/rollback evidence are missing.",
+      "overrides": {
+        "reviews": {
+          "bind_address_review": {"status": "approved", "reviewed": true},
+          "tls_material_review": {"status": "missing", "reviewed": false},
+          "origin_policy": {"status": "missing", "reviewed": false, "allowed_origins": []},
+          "scoped_token_review": {"status": "approved", "reviewed": true},
+          "service_tool_allowlist": {"status": "approved", "reviewed": true},
+          "excluded_service_tool_list": {"status": "approved", "reviewed": true},
+          "rollback_instructions": {"status": "missing", "reviewed": false},
+          "remote_probe_plan": {"status": "approved", "reviewed": true},
+          "diagnostic_redaction": {"status": "passed", "reviewed": true}
+        },
+        "remote_auth_profile": {
+          "name": "remote-proof-profile",
+          "profile_type": "remote",
+          "token_source_class": "remote_scoped_token",
+          "separate_from_local": true,
+          "scope": {
+            "services": ["proof:project"],
+            "tools": ["proof.read"]
+          },
+          "revocation_plan": null
+        },
+        "rollback": {
+          "instructions": [],
+          "revocation_steps": []
+        }
+      },
+      "expected": {
+        "decision": "block",
+        "blockers": [
+          "missing_tls_material_review",
+          "missing_origin_policy",
+          "missing_rollback_instructions",
+          "missing_revocation_plan"
+        ]
+      }
+    },
+    {
+      "name": "allowlisted_service_pass_shape",
+      "description": "A read-only allowlisted service/tool with separate remote approval produces a non-mutating intend plan.",
+      "overrides": {},
+      "expected": {
+        "decision": "intend",
+        "eligible_for_remote_exposure": true,
+        "allowed_tools": ["proof.read"],
+        "negative_check_status": "pending",
+        "required_consent_class": "network_exposure_change",
+        "local_state_status": "separate_profile_approved",
+        "active_local_auth_profile": "loopback_authenticated_http"
+      }
+    },
+    {
+      "name": "broad_serena_scope_changing_exposure_blocked",
+      "description": "Broad project-scoped Serena exposure and scope-changing tools are denied by default.",
+      "overrides": {
+        "service_allowlist": [
+          {
+            "service_binding": "serena:project",
+            "tool_ids": ["*"],
+            "reviewed": true,
+            "remote_eligible": true,
+            "rationale": "intentionally over-broad fixture"
+          }
+        ],
+        "candidate_tools": [
+          {
+            "service_binding": "serena:project",
+            "tool_id": "serena.activate_project",
+            "name": "activate_project",
+            "risk_classes": ["scope_changing"],
+            "scope_impacts": ["workspace_root", "active_project"],
+            "exposure_scope": "broad"
+          }
+        ],
+        "remote_auth_profile": {
+          "name": "remote-serena-profile",
+          "profile_type": "remote",
+          "token_source_class": "remote_scoped_token",
+          "separate_from_local": true,
+          "scope": {
+            "services": ["serena:project"],
+            "tools": ["*"]
+          },
+          "revocation_plan": {
+            "profile": "remote-serena-profile",
+            "steps": ["revoke remote profile"]
+          }
+        }
+      },
+      "expected": {
+        "decision": "block",
+        "blockers": ["wildcard_remote_allowlist_denied", "scope_changing_denied", "scope_changing_tool_denied", "broad_serena_exposure_denied"],
+        "denied_tools": ["serena.activate_project"]
+      }
+    },
+    {
+      "name": "denied_admin_token_secret_catalog_tools",
+      "description": "Remote negative exposure checks deny admin, token, secret, catalog, trust, service-management, mutation, and non-allowlisted tools.",
+      "overrides": {
+        "candidate_tools": [
+          {
+            "service_binding": "contextforge-admin",
+            "tool_id": "catalog.raw_update",
+            "name": "raw_catalog_update",
+            "risk_classes": ["catalog_admin", "admin"],
+            "scope_impacts": ["resource_scope"]
+          },
+          {
+            "service_binding": "contextforge-admin",
+            "tool_id": "tokens.rotate",
+            "name": "rotate_token_profile",
+            "risk_classes": ["token_workflow", "token_material"],
+            "scope_impacts": ["credential_scope"]
+          },
+          {
+            "service_binding": "contextforge-admin",
+            "tool_id": "secrets.write_value",
+            "name": "write_secret_value",
+            "risk_classes": ["secret_value_workflow", "secret_value"],
+            "scope_impacts": ["credential_scope"]
+          },
+          {
+            "service_binding": "contextforge-admin",
+            "tool_id": "trust.promote_global",
+            "name": "promote_global_trust",
+            "risk_classes": ["trust_change", "user_global_trust"],
+            "scope_impacts": ["workspace_root"]
+          },
+          {
+            "service_binding": "contextforge-admin",
+            "tool_id": "services.restart",
+            "name": "restart_managed_service",
+            "risk_classes": ["service_management_mutation"],
+            "scope_impacts": ["backend_operating_scope"]
+          },
+          {
+            "service_binding": "contextforge-admin",
+            "tool_id": "control_plane.apply_plan",
+            "name": "apply_plan",
+            "risk_classes": ["control_plane_mutation"],
+            "scope_impacts": ["project_scope"]
+          }
+        ]
+      },
+      "expected": {
+        "decision": "block",
+        "blockers": [
+          "non_allowlisted_service_denied",
+          "catalog_admin_denied",
+          "admin_denied",
+          "token_workflow_denied",
+          "token_material_denied",
+          "secret_value_workflow_denied",
+          "secret_value_denied",
+          "trust_change_denied",
+          "user_global_trust_denied",
+          "service_management_mutation_denied",
+          "control_plane_mutation_denied",
+          "scope_changing_tool_denied"
+        ],
+        "denied_tools": [
+          "catalog.raw_update",
+          "tokens.rotate",
+          "secrets.write_value",
+          "trust.promote_global",
+          "services.restart",
+          "control_plane.apply_plan"
+        ]
+      }
+    }
+  ]
+}

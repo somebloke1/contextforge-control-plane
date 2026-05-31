@@ -1,0 +1,501 @@
+{
+  "version": 1,
+  "project_root": "/home/dgk/workspace/context-portal",
+  "resolved_at": "2026-05-30T00:00:00Z",
+  "cases": [
+    {
+      "name": "accepted_context7_shared_binding_read_only",
+      "description": "Accepted canonical context7 binding plans only read-only verification of an existing shared service.",
+      "inputs": {
+        "state": {
+          "meta": {
+            "revision": 14
+          },
+          "project": {
+            "root": "/home/dgk/workspace/context-portal",
+            "name": "context-portal"
+          },
+          "status": "uninitialized",
+          "decisions": {},
+          "services": {},
+          "client_trust": {},
+          "open_items": []
+        },
+        "catalog": {
+          "revision": "catalog-r4"
+        },
+        "service_descriptors": [
+          {
+            "service_family": "context7",
+            "canonical_service": "context7",
+            "service": "context7",
+            "name": "codex_context7_alias",
+            "client_config_names": [
+              "codex_context7",
+              "claude_context7",
+              "gemini_context7"
+            ],
+            "instantiation_class": "shared_canonical",
+            "native_transports": [
+              "streamable_http",
+              "sse"
+            ],
+            "scope": {
+              "shared_canonical": true,
+              "scope_type": "global_documentation_lookup",
+              "resource_scope": {
+                "scope": "documentation"
+              }
+            },
+            "contextforge": {
+              "gateway": {
+                "name": "context7-local",
+                "transport": "STREAMABLEHTTP"
+              },
+              "virtual_server": {
+                "name": "context7_local_server",
+                "grouping": "canonical"
+              }
+            },
+            "registration": {
+              "status": "registered"
+            }
+          }
+        ],
+        "target_client_digests": {
+          "codex": "sha256:fixture-client-digest"
+        },
+        "trust_state_digest": "sha256:fixture-trust-digest"
+      },
+      "expected": {
+        "status": "planned_non_mutating",
+        "required_consent_classes": [
+          "read_only_inspection"
+        ],
+        "forbidden_consent_absent": [
+          "service_provision",
+          "project_state_write",
+          "user_global_client_trust"
+        ],
+        "plan_step_count": 1,
+        "handoff_count": 0,
+        "open_item_types": [],
+        "plan_steps": [
+          {
+            "service_binding": "context7:canonical",
+            "operation": "bind_verify_existing_shared_service",
+            "instantiation_class": "shared_canonical",
+            "required_consent_classes": [
+              "read_only_inspection"
+            ],
+            "effect_summary": {
+              "read_only": true,
+              "project_state_service_record": false,
+              "service_provision": false,
+              "contextforge_gateway": "existing_only"
+            },
+            "required_non_actions": [
+              "no per-project backend",
+              "no per-project server-instance directory"
+            ],
+            "required_verification_requirements": [
+              "verify ContextForge /mcp endpoint where exposed",
+              "verify ContextForge /sse endpoint where exposed"
+            ],
+            "requires_contract_card_ref": true,
+            "requires_capability_capsule_ref": true
+          }
+        ],
+        "stale_input_keys": [
+          "project_root",
+          "project_root_hash",
+          "base_project_state",
+          "catalog",
+          "selected_service_descriptors",
+          "target_client_digests",
+          "trust_state_digest",
+          "drift_findings"
+        ],
+        "expected_non_actions": [
+          "do not mutate project state during planning",
+          "do not create .project/context_forge_state.json during planning",
+          "do not promote catalog candidates during project init"
+        ]
+      }
+    },
+    {
+      "name": "serena_sticky_decline_fixture_only",
+      "description": "A sticky Serena decline remains fixture-only and produces no service plan or provision consent.",
+      "inputs": {
+        "state": {
+          "meta": {
+            "revision": 15
+          },
+          "project": {
+            "root": "/home/dgk/workspace/context-portal",
+            "name": "context-portal"
+          },
+          "status": "uninitialized",
+          "decisions": {
+            "serena": {
+              "decision_kind": "service",
+              "state": "declined",
+              "service_binding": "serena:project",
+              "contract_card_ref": null,
+              "decided_at": "2026-05-30T00:00:00Z",
+              "decided_by": "fixture",
+              "source_plan_id": null,
+              "reopened_at": null,
+              "notes": "fixture decline only"
+            }
+          },
+          "services": {},
+          "client_trust": {},
+          "open_items": []
+        },
+        "catalog": {
+          "revision": "catalog-r4"
+        },
+        "service_descriptors": [
+          {
+            "service_family": "serena",
+            "canonical_service": "serena-context-portal",
+            "service": "serena",
+            "name": "serena",
+            "instantiation_class": "instance_per_project",
+            "native_transports": [
+              "streamable_http"
+            ],
+            "scope": {
+              "scope_type": "single_workspace_code_intelligence",
+              "workspace_root": "/home/dgk/workspace/context-portal"
+            },
+            "contextforge": {
+              "gateway": {
+                "name": "serena-context-portal",
+                "transport": "STREAMABLEHTTP"
+              },
+              "virtual_server": {
+                "name": "serena_context_portal_server"
+              }
+            },
+            "registration": {
+              "status": "registered"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "status": "blocked_open_items",
+        "required_consent_classes": [],
+        "forbidden_consent_absent": [
+          "service_provision",
+          "project_state_write",
+          "user_global_client_trust"
+        ],
+        "plan_step_count": 0,
+        "handoff_count": 0,
+        "open_item_types": [
+          "service"
+        ],
+        "open_item_details": [
+          {
+            "status": "no_service",
+            "decision_state": "declined",
+            "sticky": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "disabled_project_state_no_service",
+      "description": "Disabled project state stops project-init planning with no service steps.",
+      "inputs": {
+        "state": {
+          "meta": {
+            "revision": 16
+          },
+          "project": {
+            "root": "/home/dgk/workspace/context-portal",
+            "name": "context-portal"
+          },
+          "status": "disabled",
+          "decisions": {},
+          "services": {},
+          "client_trust": {},
+          "open_items": []
+        },
+        "catalog": {
+          "revision": "catalog-r4"
+        },
+        "service_descriptors": [
+          {
+            "service_family": "context7",
+            "canonical_service": "context7",
+            "instantiation_class": "shared_canonical",
+            "native_transports": [
+              "streamable_http",
+              "sse"
+            ],
+            "scope": {
+              "shared_canonical": true,
+              "scope_type": "global_documentation_lookup"
+            },
+            "contextforge": {
+              "gateway": {
+                "name": "context7-local"
+              }
+            },
+            "registration": {
+              "status": "registered"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "status": "disabled_no_service",
+        "required_consent_classes": [],
+        "plan_step_count": 0,
+        "handoff_count": 0,
+        "open_item_types": [
+          "service"
+        ],
+        "open_item_ids": [
+          "project-init-disabled"
+        ]
+      }
+    },
+    {
+      "name": "catalog_candidate_pi_web_access_handoff",
+      "description": "A candidate descriptor emits a redacted typed service-management handoff and no durable project-state record.",
+      "inputs": {
+        "state": {
+          "meta": {
+            "revision": 17
+          },
+          "project": {
+            "root": "/home/dgk/workspace/context-portal",
+            "name": "context-portal"
+          },
+          "status": "uninitialized",
+          "decisions": {},
+          "services": {},
+          "client_trust": {},
+          "open_items": []
+        },
+        "catalog": {
+          "revision": "catalog-r4"
+        },
+        "service_descriptors": [
+          {
+            "candidate": true,
+            "service_family": "pi-web-access",
+            "canonical_service": "pi-web-access",
+            "service": "pi-web-access",
+            "name": "pi_web_access_candidate",
+            "client_config_names": [
+              "codex_pi_web_access",
+              "claude_pi_web_access"
+            ],
+            "backend": {
+              "transport": "stdio",
+              "package": "pi-web-access",
+              "command": "pi-web-access-mcp"
+            },
+            "scope": {
+              "runtime_scope": "host",
+              "resource_scope": {
+                "scope": "web-fetch-and-search"
+              }
+            },
+            "registration": {
+              "status": "candidate"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "status": "blocked_open_items",
+        "required_consent_classes": [],
+        "plan_step_count": 0,
+        "handoff_count": 1,
+        "open_item_types": [
+          "handoff_required"
+        ],
+        "handoff": {
+          "x_handoff_class": "catalog_candidate",
+          "required_next_workflow": "service_management_plan",
+          "redaction_status": "redacted",
+          "suspected_instantiation_class": "candidate_or_uncataloged_backend",
+          "forbidden_under_current_approval": [
+            "catalog_promotion",
+            "project_state_service_record",
+            "contextforge_registration",
+            "backend_provision"
+          ],
+          "dedupe_keys": {
+            "backend_package": "pi-web-access",
+            "runtime_scope": "host",
+            "resource_scope": "web-fetch-and-search",
+            "transport_scope": "stdio"
+          }
+        },
+        "expected_non_actions": [
+          "do not promote catalog candidates during project init"
+        ]
+      }
+    },
+    {
+      "name": "missing_trust_and_language_block_without_global_consent",
+      "description": "Missing client trust and language profile block initialization without bundling user-global trust consent.",
+      "inputs": {
+        "state": {
+          "meta": {
+            "revision": 18
+          },
+          "project": {
+            "root": "/home/dgk/workspace/context-portal",
+            "name": "context-portal"
+          },
+          "status": "uninitialized",
+          "decisions": {},
+          "services": {},
+          "client_trust": {},
+          "open_items": []
+        },
+        "catalog": {
+          "revision": "catalog-r4"
+        },
+        "service_descriptors": [
+          {
+            "service_family": "context7",
+            "canonical_service": "context7",
+            "instantiation_class": "shared_canonical",
+            "native_transports": [
+              "streamable_http",
+              "sse"
+            ],
+            "scope": {
+              "shared_canonical": true,
+              "scope_type": "global_documentation_lookup"
+            },
+            "contextforge": {
+              "gateway": {
+                "name": "context7-local"
+              }
+            },
+            "registration": {
+              "status": "registered"
+            }
+          }
+        ],
+        "missing_trust": [
+          {
+            "client": "codex",
+            "reason": "project trust not approved"
+          }
+        ],
+        "missing_language": [
+          "python"
+        ]
+      },
+      "expected": {
+        "status": "blocked_open_items",
+        "required_consent_classes": [
+          "read_only_inspection"
+        ],
+        "forbidden_consent_absent": [
+          "user_global_client_trust"
+        ],
+        "plan_step_count": 1,
+        "handoff_count": 0,
+        "open_item_types": [
+          "trust",
+          "language_profile_missing"
+        ]
+      }
+    },
+    {
+      "name": "stale_state_and_drift_inputs_represented",
+      "description": "State revision, root hash, catalog revision, descriptor digest, target-client digest, trust digest, and drift findings are represented for stale-plan checks.",
+      "inputs": {
+        "state": {
+          "meta": {
+            "revision": 19
+          },
+          "project": {
+            "root": "/home/dgk/workspace/context-portal",
+            "name": "context-portal"
+          },
+          "status": "uninitialized",
+          "decisions": {},
+          "services": {},
+          "client_trust": {
+            "codex": {
+              "state": "project-approved"
+            }
+          },
+          "open_items": []
+        },
+        "catalog": {
+          "etag": "catalog-etag-r5"
+        },
+        "service_descriptors": [
+          {
+            "service_family": "context7",
+            "canonical_service": "context7",
+            "instantiation_class": "shared_canonical",
+            "native_transports": [
+              "streamable_http",
+              "sse"
+            ],
+            "scope": {
+              "shared_canonical": true,
+              "scope_type": "global_documentation_lookup"
+            },
+            "contextforge": {
+              "gateway": {
+                "name": "context7-local"
+              }
+            },
+            "registration": {
+              "status": "registered"
+            }
+          }
+        ],
+        "target_client_digests": {
+          "codex": "sha256:fixture-target-client-digest",
+          "claude": "sha256:fixture-second-client-digest"
+        },
+        "trust_state_digest": "sha256:fixture-explicit-trust-digest",
+        "drift_findings": [
+          {
+            "id": "target-client-config-changed",
+            "severity": "warning",
+            "surface": "client_digest"
+          }
+        ]
+      },
+      "expected": {
+        "status": "planned_non_mutating",
+        "required_consent_classes": [
+          "read_only_inspection"
+        ],
+        "plan_step_count": 1,
+        "handoff_count": 0,
+        "open_item_types": [
+          "drift"
+        ],
+        "base_state_revision": 19,
+        "catalog_revision_or_etag": "catalog-etag-r5",
+        "target_client_digests": {
+          "codex": "sha256:fixture-target-client-digest",
+          "claude": "sha256:fixture-second-client-digest"
+        },
+        "trust_state_digest": "sha256:fixture-explicit-trust-digest",
+        "drift_finding_id": "target-client-config-changed",
+        "requires_descriptor_digest": true
+      }
+    }
+  ]
+}

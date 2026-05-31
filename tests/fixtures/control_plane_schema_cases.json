@@ -1,0 +1,833 @@
+{
+  "version": 1,
+  "project_state_cases": [
+    {
+      "name": "root_safety_denied_workspace_root",
+      "operation": "validate_root",
+      "root_ref": "workspace_root",
+      "require_workspace": true,
+      "expect": "fail",
+      "error": "RootValidationError"
+    },
+    {
+      "name": "root_safety_symlink_escape_rejected",
+      "operation": "load_symlink_escape",
+      "expect": "fail",
+      "error": "RootValidationError"
+    },
+    {
+      "name": "default_state_valid_without_repo_write",
+      "operation": "default_state_validate",
+      "expect": "pass",
+      "expected": {
+        "status": "uninitialized",
+        "revision": 0
+      }
+    },
+    {
+      "name": "migration_classifies_invalid_legacy_value_as_conflict",
+      "operation": "legacy_env_classification",
+      "values": {
+        "CONTEXTFORGE_SERENA_DECISION": "maybe"
+      },
+      "expect": "pass",
+      "expected": {
+        "disposition": "conflict",
+        "digest_present": true,
+        "conflict_reason": "malformed_or_conflicting_legacy_env",
+        "open_item_severity": "blocking"
+      }
+    },
+    {
+      "name": "sticky_decline_imports_from_legacy_env",
+      "operation": "apply_legacy_env_migration_validate",
+      "values": {
+        "CONTEXTFORGE_SERENA_DECISION": "declined"
+      },
+      "expect": "pass",
+      "expected": {
+        "disposition": "imported",
+        "decision_state": "declined",
+        "decision_notes_contains": "sticky_decline",
+        "status": "disabled",
+        "migration_seen": true,
+        "imported_at_present": true
+      }
+    },
+    {
+      "name": "disabled_no_service_imports_without_initialized_status",
+      "operation": "apply_legacy_env_migration_validate",
+      "values": {
+        "CONTEXTFORGE_SERENA_DECISION": "disabled"
+      },
+      "expect": "pass",
+      "expected": {
+        "disposition": "imported",
+        "decision_state": "disabled",
+        "status": "disabled",
+        "migration_seen": true,
+        "imported_at_present": true
+      }
+    },
+    {
+      "name": "secret_exclusion_rejects_secret_like_state_field",
+      "operation": "validate_state",
+      "mutations": [
+        {
+          "op": "set",
+          "path": ["x_api_token"],
+          "value": "plain-placeholder"
+        }
+      ],
+      "expect": "fail",
+      "error": "StateValidationError"
+    },
+    {
+      "name": "invalid_enum_rejects_project_status",
+      "operation": "validate_state",
+      "mutations": [
+        {
+          "op": "set",
+          "path": ["status"],
+          "value": "done"
+        }
+      ],
+      "expect": "fail",
+      "error": "StateValidationError"
+    },
+    {
+      "name": "schema_evolution_rejects_unsupported_major",
+      "operation": "validate_state",
+      "mutations": [
+        {
+          "op": "set",
+          "path": ["meta", "schema_version"],
+          "value": 2
+        }
+      ],
+      "expect": "fail",
+      "error": "StateValidationError"
+    },
+    {
+      "name": "stale_lock_recovers_on_temp_project",
+      "operation": "write_state_with_stale_lock",
+      "lock_age_seconds": 120,
+      "stale_after_seconds": 1,
+      "expect": "pass",
+      "expected": {
+        "revision": 1
+      }
+    }
+  ],
+  "contract_artifact_cases": [
+    {
+      "name": "service_binding_contract_card_happy_path",
+      "kind": "service_binding_contract_card",
+      "template": "service_binding_contract_card",
+      "expect": "pass"
+    },
+    {
+      "name": "shared_service_capability_capsule_happy_path",
+      "kind": "shared_service_capability_capsule",
+      "template": "shared_service_capability_capsule",
+      "expect": "pass"
+    },
+    {
+      "name": "semantic_tool_policy_happy_path",
+      "kind": "semantic_tool_policy",
+      "template": "semantic_tool_policy",
+      "expect": "pass"
+    },
+    {
+      "name": "service_memory_provider_happy_path",
+      "kind": "service_memory_provider",
+      "template": "service_memory_provider",
+      "expect": "pass"
+    },
+    {
+      "name": "service_management_handoff_redacted_happy_path",
+      "kind": "service_management_handoff",
+      "template": "service_management_handoff",
+      "expect": "pass"
+    },
+    {
+      "name": "service_management_result_happy_path",
+      "kind": "service_management_result",
+      "template": "service_management_result",
+      "expect": "pass"
+    },
+    {
+      "name": "service_provision_plan_happy_path",
+      "kind": "service_provision_plan",
+      "template": "service_provision_plan",
+      "expect": "pass"
+    },
+    {
+      "name": "consent_receipt_happy_path",
+      "kind": "consent_receipt",
+      "template": "consent_receipt",
+      "expect": "pass"
+    },
+    {
+      "name": "verification_trace_happy_path",
+      "kind": "verification_trace",
+      "template": "verification_trace",
+      "expect": "pass"
+    },
+    {
+      "name": "client_adapter_conformance_pack_happy_path",
+      "kind": "client_adapter_conformance_pack",
+      "template": "client_adapter_conformance_pack",
+      "expect": "pass"
+    },
+    {
+      "name": "requirement_scenario_happy_path",
+      "kind": "requirement_scenario",
+      "template": "requirement_scenario",
+      "expect": "pass"
+    },
+    {
+      "name": "evaluator_verdict_happy_path",
+      "kind": "evaluator_verdict",
+      "template": "evaluator_verdict",
+      "expect": "pass"
+    },
+    {
+      "name": "evidence_ledger_happy_path",
+      "kind": "evidence_ledger",
+      "template": "evidence_ledger",
+      "expect": "pass"
+    },
+    {
+      "name": "governance_reconciliation_pack_happy_path",
+      "kind": "governance_reconciliation_pack",
+      "template": "governance_reconciliation_pack",
+      "expect": "pass"
+    },
+    {
+      "name": "contract_artifact_redaction_rejects_unredacted_secret_field",
+      "kind": "service_management_handoff",
+      "template": "service_management_handoff",
+      "mutations": [
+        {
+          "op": "set",
+          "path": ["candidate_descriptor"],
+          "value": {
+            "api_key": "plain-placeholder"
+          }
+        }
+      ],
+      "expect": "fail",
+      "error": "RedactionValidationError"
+    },
+    {
+      "name": "scenario_isolation_rejects_visible_hidden_state_delta",
+      "kind": "requirement_scenario",
+      "template": "requirement_scenario",
+      "mutations": [
+        {
+          "op": "set",
+          "path": ["during_test_events", 0, "hidden_state_delta"],
+          "value": {
+            "project_state": {
+              "status": "initialized"
+            }
+          }
+        }
+      ],
+      "expect": "fail",
+      "error": "InferentialIsolationError"
+    },
+    {
+      "name": "contract_schema_rejects_invalid_consent_enum",
+      "kind": "consent_receipt",
+      "template": "consent_receipt",
+      "mutations": [
+        {
+          "op": "set",
+          "path": ["consent_class"],
+          "value": "generic_approval"
+        }
+      ],
+      "expect": "fail",
+      "error": "SchemaValidationError"
+    }
+  ],
+  "contract_artifact_templates": {
+    "service_binding_contract_card": {
+      "card_id": "card-context7",
+      "schema_uri": "contextforge://control-plane/schemas/service-binding-contract-card/v1",
+      "service_family": "context7",
+      "service_binding": "context7:canonical",
+      "instantiation_class": "shared_canonical",
+      "authority_boundary": "ContextForge catalog owns canonical service identity.",
+      "project_scope": {
+        "mode": "availability_only"
+      },
+      "credential_scope": {
+        "scope": "redacted"
+      },
+      "resource_scope": null,
+      "caller_or_session_scope": null,
+      "backend_instance_ref": null,
+      "contextforge_gateway": {
+        "canonical_name": "context7"
+      },
+      "virtual_server": {
+        "canonical_name": "context7_project_view"
+      },
+      "client_adapter_refs": [
+        {
+          "ref": "contextforge://control-plane/client-adapters/codex",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "semantic_tool_policy_ref": {
+        "ref": "contextforge://control-plane/tool-policies/context7",
+        "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "catalog_revision_or_etag": "rev-1",
+        "resolved_at": "2026-05-30T21:00:00Z"
+      },
+      "transport_profile": {
+        "native_transports": ["http"],
+        "required_client_transports": ["http", "sse"],
+        "bridge_mode": "none",
+        "package_bridge_ref": null,
+        "forbidden_bridge_effects": ["do_not_wrap_native_http"],
+        "required_endpoint_verification": ["/mcp", "/sse"]
+      },
+      "required_consent_classes": ["read_only_inspection"],
+      "verification_matrix": {
+        "required_layers": ["contextforge_gateway", "target_client", "redaction"]
+      },
+      "non_actions": ["no_project_backend"],
+      "evidence_requirements": ["gateway_readback", "client_list_tools"]
+    },
+    "shared_service_capability_capsule": {
+      "capsule_id": "capsule-context7",
+      "schema_uri": "contextforge://control-plane/schemas/shared-service-capability-capsule/v1",
+      "service_family": "context7",
+      "canonical_service": "context7",
+      "allowed_project_binding_modes": ["record_availability", "bind_existing", "verify_existing"],
+      "project_state_recording_policy": "record refs and traces only; do not claim backend ownership",
+      "verification_requirements": ["canonical gateway readback", "target client call-tool"],
+      "consent_requirements": ["read_only_inspection"],
+      "transport_profile": {
+        "native_transports": ["http"],
+        "required_client_transports": ["http", "sse"],
+        "bridge_mode": "none",
+        "package_bridge_ref": null,
+        "forbidden_bridge_effects": ["do_not_wrap_native_http"],
+        "required_endpoint_verification": ["/mcp", "/sse"]
+      },
+      "forbidden_project_init_effects": ["new_backend", "new_bridge", "server_instance_directory"],
+      "contract_card_refs": [
+        {
+          "ref": "contextforge://control-plane/service-bindings/context7",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ]
+    },
+    "semantic_tool_policy": {
+      "policy_id": "policy-context7",
+      "schema_uri": "contextforge://control-plane/schemas/semantic-tool-policy/v1",
+      "service_binding": "context7:canonical",
+      "risk_classes": ["read_only", "unknown"],
+      "scope_impacts": ["documentation_lookup"],
+      "approval_gates": [],
+      "allowed_tool_selectors": [
+        {
+          "selector_type": "tag",
+          "value": "docs",
+          "fail_closed": true
+        }
+      ],
+      "excluded_tool_selectors": [
+        {
+          "selector_type": "risk_class",
+          "value": "unknown",
+          "fail_closed": true
+        }
+      ],
+      "manual_overrides": [],
+      "compiled_tool_ids": [],
+      "negative_checks": [
+        {
+          "check": "unknown_tools_hidden"
+        }
+      ],
+      "last_compiled_at": null,
+      "last_readback_trace_ref": null
+    },
+    "service_memory_provider": {
+      "provider_id": "memory-provider-code-notes",
+      "schema_uri": "contextforge://control-plane/schemas/service-memory-provider/v1",
+      "provider_name": "code-notes",
+      "service_binding": "code-notes:project",
+      "provider_scope": "project",
+      "durability": "project_persistent",
+      "storage_location_class": "service_local_store",
+      "supported_operations": ["list", "read", "write", "update"],
+      "allowed_record_classes": [
+        "working_note",
+        "recall_hint",
+        "code_navigation_note",
+        "governance_reference",
+        "governance_proposal",
+        "conflict_flag"
+      ],
+      "governance_reference_policy": {
+        "reference_format": "ledger_id:<dec-*|oq-*|ai-*>",
+        "allowed_ledger_id_prefixes": ["ai-", "dec-", "oq-"],
+        "authoritative_source": "governance_ledgers",
+        "required_write_path": "mentality_or_governance_crud_after_user_approval",
+        "generated_governance_projection_allowed": false,
+        "bidirectional_sync_allowed": false
+      },
+      "conflict_flag_behavior": {
+        "on_conflict": "flag_and_prefer_governance_ledger",
+        "authority": "governance_ledger",
+        "memory_mutation": "none",
+        "proposal_allowed": true,
+        "warning_class": "service_memory_governance_conflict"
+      },
+      "verification_probe": {
+        "probe_type": "metadata_readback",
+        "expected_fields": [
+          "provider_name",
+          "service_binding",
+          "provider_scope",
+          "supported_operations",
+          "allowed_record_classes",
+          "governance_reference_policy"
+        ],
+        "mutation_allowed": false
+      },
+      "writes_require_approval": true,
+      "advisory_only": true,
+      "forbidden_effects": [
+        "settle_governance_decision",
+        "settle_open_question",
+        "settle_parked_intention",
+        "record_consent",
+        "change_project_policy",
+        "edit_governance_ledgers",
+        "generate_governance_projection",
+        "bidirectional_sync"
+      ],
+      "redaction_status": "passed"
+    },
+    "service_management_handoff": {
+      "handoff_id": "handoff-web-search",
+      "schema_uri": "contextforge://control-plane/schemas/service-management-handoff/v1",
+      "source": "project_init",
+      "project_root": "/home/dgk/workspace/context-portal",
+      "candidate_descriptor": {
+        "package": "redacted",
+        "argv": "redacted"
+      },
+      "redaction_status": "redacted",
+      "dedupe_keys": {
+        "backend_package": "web-search",
+        "runtime_scope": "host",
+        "credential_scope": "redacted",
+        "resource_scope": "web",
+        "transport_scope": "stdio"
+      },
+      "suspected_instantiation_class": "candidate_or_uncataloged_backend",
+      "required_next_workflow": "service_management_plan",
+      "forbidden_under_current_approval": ["catalog_promotion"]
+    },
+    "service_management_result": {
+      "result_id": "service-management-result-web-search",
+      "schema_uri": "contextforge://control-plane/schemas/service-management-result/v1",
+      "handoff_id": "handoff-web-search",
+      "status": "dedupe_existing",
+      "contract_card_refs": [
+        {
+          "ref": "contextforge://control-plane/service-bindings/web-search",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "capsule_refs": [],
+      "semantic_tool_policy_refs": [
+        {
+          "ref": "contextforge://control-plane/tool-policies/web-search",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "canonical_names": ["web_search"],
+      "catalog_revision": "rev-2",
+      "consent_receipt_refs": [],
+      "verification_trace_refs": [
+        {
+          "ref": "contextforge://control-plane/traces/web-search",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "redaction_status": "redacted",
+      "forbidden_follow_up_effects": ["project_init_catalog_mutation"]
+    },
+    "service_provision_plan": {
+      "provision_plan_id": "plan-serena",
+      "schema_uri": "contextforge://control-plane/schemas/service-provision-plan/v1",
+      "service_binding": "serena:project-root",
+      "service_provision_steps": [
+        {
+          "step_id": "write-project-state",
+          "preconditions": ["contract card resolved"],
+          "persistent_target": "project_state",
+          "operation_class": "project_state_write",
+          "expected_state_transition": "planned-to-pending",
+          "required_policy_refs": [
+            {
+              "ref": "contextforge://control-plane/tool-policies/serena",
+              "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "catalog_revision_or_etag": "rev-1",
+              "resolved_at": "2026-05-30T21:00:00Z"
+            }
+          ],
+          "required_conformance_refs": [
+            {
+              "ref": "contextforge://control-plane/client-adapters/codex",
+              "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "catalog_revision_or_etag": "rev-1",
+              "resolved_at": "2026-05-30T21:00:00Z"
+            }
+          ],
+          "negative_checks": [
+            {
+              "check": "no_catalog_promotion"
+            }
+          ]
+        }
+      ],
+      "stale_inputs": [
+        {
+          "ref": "contextforge://control-plane/service-bindings/serena",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "write_set": [".project/context_forge_state.json"],
+      "consent_receipt_refs": [
+        {
+          "ref": "contextforge://control-plane/receipts/serena",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "expected_readback": ["project_state_revision_incremented"],
+      "idempotency_mode": "idempotent",
+      "compensation_repair_mode": "forward_repair",
+      "produced_artifact_refs": [
+        {
+          "ref": "contextforge://control-plane/traces/serena",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "redaction_status": "redacted"
+    },
+    "consent_receipt": {
+      "receipt_id": "receipt-serena",
+      "schema_uri": "contextforge://control-plane/schemas/consent-receipt/v1",
+      "plan_id": "plan-serena",
+      "plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "plan_presented_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "consent_class": "service_provision",
+      "scope": {
+        "project_root": "/home/dgk/workspace/context-portal",
+        "service_binding": "serena:project-root",
+        "client": "codex",
+        "persistent_target": "systemd"
+      },
+      "actor": "user",
+      "source_client": "codex",
+      "source_client_auth_strength": "asserted",
+      "approval_nonce": "nonce-1",
+      "approval_channel": "interactive_user",
+      "approval_event_ref": "transcript:1",
+      "issued_by": "approve_plan",
+      "approved_at": "2026-05-30T21:00:00Z",
+      "approval_evidence": "redacted approval summary",
+      "expires_at": "2026-05-31T21:00:00Z",
+      "replay_policy": "same_plan_resume",
+      "redaction_status": "redacted"
+    },
+    "verification_trace": {
+      "trace_id": "trace-serena",
+      "schema_uri": "contextforge://control-plane/schemas/verification-trace/v1",
+      "plan_id": "plan-serena",
+      "service_binding": "serena:project-root",
+      "target_client": "codex",
+      "adapter_conformance_pack": {
+        "ref": "contextforge://control-plane/client-adapters/codex",
+        "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "catalog_revision_or_etag": "rev-1",
+        "resolved_at": "2026-05-30T21:00:00Z"
+      },
+      "probe_events": [
+        {
+          "probe_id": "probe-contextforge",
+          "layer": "contextforge_gateway",
+          "status": "passed",
+          "evidence_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "negative_checks": [
+        {
+          "check": "excluded_tool_absent",
+          "status": "passed"
+        }
+      ],
+      "redaction_checks": [
+        {
+          "check": "no_secret_values",
+          "status": "passed"
+        }
+      ],
+      "result": "passed",
+      "failed_layer": null,
+      "result_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "generated_at": "2026-05-30T21:00:00Z",
+      "redaction_status": "passed"
+    },
+    "client_adapter_conformance_pack": {
+      "pack_id": "codex-v1",
+      "schema_uri": "contextforge://control-plane/schemas/client-adapter-conformance-pack/v1",
+      "client_name": "codex",
+      "version_constraints": ["desktop>=2026.05"],
+      "config_surface_fixtures": [
+        {
+          "surface": ".codex/config.toml"
+        }
+      ],
+      "owned_block_classes": ["owned", "legacy_owned", "absent"],
+      "direct_http_header_support": true,
+      "stdio_wrapper_behavior": {
+        "required": false
+      },
+      "trust_requirements": {
+        "global_trust_required": true
+      },
+      "trust_broker_interface": {
+        "probe": "codex_trust_readback"
+      },
+      "restart_model": {
+        "restart_blocks_initialized": true
+      },
+      "stale_config_probes": [
+        {
+          "probe": "config_generation"
+        }
+      ],
+      "list_tools_probes": [
+        {
+          "probe": "list_tools"
+        }
+      ],
+      "call_tool_probes": [
+        {
+          "probe": "call_tool"
+        }
+      ],
+      "token_source_constraints": ["no tokens in argv or logs"],
+      "negative_tool_policy_visibility_checks": [
+        {
+          "probe": "forbidden_tool_hidden"
+        }
+      ],
+      "known_unsupported_behaviors": [],
+      "redaction_status": "passed"
+    },
+    "requirement_scenario": {
+      "scenario_id": "cfcp-scenario-001",
+      "schema_uri": "contextforge://control-plane/schemas/requirement-scenario/v1",
+      "requirement_ids": ["cfcp-req-0001"],
+      "tested_agent_view": {
+        "cwd": "/home/dgk/workspace/context-portal",
+        "user_prompt": "Initialize the project-local ContextForge service.",
+        "available_tools": [
+          {
+            "name": "shell"
+          }
+        ],
+        "visible_files": ["AGENTS.md"]
+      },
+      "hidden_initial_conditions": {
+        "filesystem": {},
+        "contextforge_catalog": {},
+        "client_configs": {},
+        "trust_state": {},
+        "ports_units": {},
+        "project_state": {}
+      },
+      "during_test_events": [
+        {
+          "event_id": "event-1",
+          "actor": "tool",
+          "visible_to": ["tested_agent"],
+          "payload": {
+            "stdout": "service not yet registered"
+          },
+          "hidden_state_delta": {},
+          "tool_output_visibility": "tested_agent",
+          "evaluator_only": false
+        }
+      ],
+      "allowed_mutations": [
+        {
+          "path": ".project/context_forge_state.json"
+        }
+      ],
+      "forbidden_mutations": [
+        {
+          "path": "DECISIONS.md"
+        }
+      ],
+      "expected_outcomes": {
+        "state": {
+          "status": "in_progress"
+        },
+        "open_items": [],
+        "non_actions": ["no catalog mutation"],
+        "required_traces": ["trace-serena"],
+        "required_receipts": ["receipt-serena"]
+      },
+      "deterministic_assertions": [
+        {
+          "assertion": "schema-valid"
+        }
+      ],
+      "inference_rubric": [
+        {
+          "requirement_id": "cfcp-req-0001"
+        }
+      ]
+    },
+    "evaluator_verdict": {
+      "verdict_id": "verdict-1",
+      "schema_uri": "contextforge://control-plane/schemas/evaluator-verdict/v1",
+      "created_at": "2026-05-30T21:00:00Z",
+      "evaluator_run": {
+        "model_or_agent": "eval-agent",
+        "prompt_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "verdict": "pass",
+      "scenario_id": "cfcp-scenario-001",
+      "requirement_ids": ["cfcp-req-0001"],
+      "evaluated_artifact_refs": [
+        {
+          "ref": "contextforge://control-plane/scenario/cfcp-scenario-001",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "deterministic_assertion_refs": [
+        {
+          "ref": "contextforge://control-plane/assertions/schema-valid",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "failed_requirements": [],
+      "evidence": [
+        {
+          "source": "trace",
+          "reference": "trace-serena",
+          "summary": "redacted trace passed",
+          "evidence_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "likely_cause": "flaky_environment",
+      "remediation_target": "code",
+      "redaction_status": "passed",
+      "evidence_hashes": ["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      "requirement_gap_proposal": null
+    },
+    "evidence_ledger": {
+      "ledger_id": "ledger-1",
+      "schema_uri": "contextforge://control-plane/schemas/evidence-ledger/v1",
+      "run_id": "run-1",
+      "requirement_ids": ["cfcp-req-0001"],
+      "scenario_ref": "cfcp-scenario-001",
+      "tested_agent_transcript_ref": "run/redacted/transcript.json",
+      "deterministic_assertion_results": [
+        {
+          "assertion": "schema-valid",
+          "result": "passed"
+        }
+      ],
+      "consent_receipt_refs": [
+        {
+          "ref": "contextforge://control-plane/receipts/serena",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "verification_trace_refs": [
+        {
+          "ref": "contextforge://control-plane/traces/serena",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "world_state_diff_ref": "run/redacted/world-state-diff.json",
+      "evaluator_verdict_refs": [
+        {
+          "ref": "contextforge://control-plane/verdicts/1",
+          "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalog_revision_or_etag": "rev-1",
+          "resolved_at": "2026-05-30T21:00:00Z"
+        }
+      ],
+      "remediation_refs": [],
+      "redaction_status": "passed",
+      "evidence_hashes": ["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+    },
+    "governance_reconciliation_pack": {
+      "pack_id": "gov-pack-1",
+      "schema_uri": "contextforge://control-plane/schemas/governance-reconciliation-pack/v1",
+      "rfc_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "ledger_digests": {
+        "DECISIONS.md": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "OPEN_QUESTIONS.md": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "decisions_missing_from_ledgers": [
+        {
+          "decision": "control-plane authority"
+        }
+      ],
+      "open_questions_answered_or_narrowed": [],
+      "abeyant_intentions_needing_updates": [],
+      "service_memory_conflicts": [],
+      "suggested_governance_crud_operations": [
+        {
+          "operation": "propose"
+        }
+      ],
+      "advisory_only": true,
+      "forbidden_effects": ["edit_ledgers", "bypass_governance_crud", "bypass_mentality"],
+      "redaction_status": "passed",
+      "evidence_hashes": ["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+    }
+  }
+}

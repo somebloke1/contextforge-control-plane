@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "generated_at": "2026-05-30T21:30:00Z",
+  "source": "fixture-control-plane-diagnostics",
+  "input": {
+    "catalog": {
+      "services": [
+        {
+          "canonical_name": "github",
+          "transport": ["http", "sse"],
+          "auth": {
+            "api_key": "fixture catalog credential value",
+            "downstream_credentials": {
+              "password": "fixture downstream password value"
+            }
+          },
+          "tools": [
+            {
+              "name": "list_issues",
+              "risk_class": "read_only"
+            }
+          ]
+        }
+      ]
+    },
+    "env": {
+      "CONTEXTFORGE_TOKEN": "fixture local auth material",
+      "PLAIN_SETTING": "fixture plain env value",
+      "DOWNSTREAM_PASSWORD": "fixture downstream env password"
+    },
+    "tokens": {
+      "local_client": {
+        "token_source": "ignored local file",
+        "token_path": "/home/dgk/workspace/context-portal/config/local-client-token",
+        "token_file_preview": "fixture token file body"
+      }
+    },
+    "audit": {
+      "event": "read_only_inspection",
+      "actor": "codex",
+      "request_headers": {
+        "Authorization": "Bearer <placeholder>"
+      },
+      "approval_evidence": "operator approved read-only inspection"
+    },
+    "traces": {
+      "probe_events": [
+        {
+          "probe_id": "wrapper-log",
+          "stdout": "tool list ok",
+          "auth_token": "fixture trace token value"
+        }
+      ],
+      "redaction_checks": [
+        {
+          "check": "no_secret_values",
+          "status": "passed"
+        }
+      ]
+    },
+    "metadata": {
+      "project_root": "/home/dgk/workspace/context-portal",
+      "source_client": "codex",
+      "source_client_auth_strength": "shared_token"
+    }
+  },
+  "expected_redacted_shape": {
+    "redaction_status": "redacted",
+    "sections": ["audit", "catalog", "env", "tokens", "traces"],
+    "env_variable_count": 3,
+    "catalog_secret_classification": "api_key",
+    "catalog_downstream_credentials_classification": "credential",
+    "token_path_classification": "token",
+    "audit_authorization_classification": "bearer_token",
+    "trace_auth_token_classification": "token",
+    "preserved_catalog_service": "github",
+    "preserved_audit_actor": "codex",
+    "raw_values_absent": [
+      "fixture catalog credential value",
+      "fixture downstream password value",
+      "fixture local auth material",
+      "fixture plain env value",
+      "fixture downstream env password",
+      "fixture token file body",
+      "Bearer <placeholder>",
+      "fixture trace token value"
+    ]
+  }
+}
