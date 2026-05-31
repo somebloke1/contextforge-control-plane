@@ -1,0 +1,627 @@
+{
+  "version": 1,
+  "run_id": "20260530T202154Z",
+  "generated_at": "2026-05-30T23:55:00Z",
+  "scope": "W12-A deterministic and fixture-backed integration MVS evidence only",
+  "non_goals": [
+    "no live ContextForge registry mutation",
+    "no token operations",
+    "no network or firewall changes",
+    "no project state writes",
+    "no client config writes",
+    "no server-instances mutation",
+    "no governance ledger edits",
+    "no inference-inclusive assistant or evaluator execution"
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "w12a-mvs-project-state-sticky-disabled-planning",
+      "requirement_ids": [
+        "cfcp-req-project-state-authority",
+        "cfcp-req-consent-boundaries",
+        "cfcp-req-trust-separation",
+        "cfcp-req-secret-exclusion"
+      ],
+      "scope_topics": [
+        "project-state",
+        "sticky declines",
+        "disabled/no-service state",
+        "planning",
+        "consent",
+        "Codex trust",
+        "language-profile behavior"
+      ],
+      "checks": [
+        {
+          "check_id": "w12a-state-harness-ledger",
+          "kind": "harness_scenario",
+          "scenario_ref": "cfcp-scenario-state-consent-trust",
+          "requirement_ids": [
+            "cfcp-req-project-state-authority",
+            "cfcp-req-consent-boundaries",
+            "cfcp-req-trust-separation",
+            "cfcp-req-secret-exclusion"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-state-consent-trust",
+            "scripts/control_plane_test_harness.py"
+          ],
+          "summary": "Requirement-linked harness ledger covers project-state authority, consent, trust separation, and secret exclusion."
+        },
+        {
+          "check_id": "w12a-planner-sticky-serena-decline",
+          "kind": "planner_case",
+          "case_name": "serena_sticky_decline_fixture_only",
+          "requirement_ids": [
+            "cfcp-req-project-state-authority",
+            "cfcp-req-service-instantiation-distinction"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_project_planner_cases.json#serena_sticky_decline_fixture_only",
+            "scripts/control_plane_project_planner.py"
+          ],
+          "summary": "Sticky Serena decline remains no-service fixture evidence with no provision consent."
+        },
+        {
+          "check_id": "w12a-planner-disabled-no-service",
+          "kind": "planner_case",
+          "case_name": "disabled_project_state_no_service",
+          "requirement_ids": [
+            "cfcp-req-project-state-authority"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_project_planner_cases.json#disabled_project_state_no_service",
+            "scripts/control_plane_project_planner.py"
+          ],
+          "summary": "Disabled project-init state stops service planning and is not treated as initialized."
+        },
+        {
+          "check_id": "w12a-language-profile-plan-first",
+          "kind": "language_profile_case",
+          "case_name": "explicit_selection_is_recorded_separately_from_acceptance",
+          "requirement_ids": [
+            "cfcp-req-consent-boundaries",
+            "cfcp-req-secret-exclusion"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_language_profiles_cases.json#explicit_selection_is_recorded_separately_from_acceptance",
+            "scripts/control_plane_language_profiles.py"
+          ],
+          "summary": "Language profile metadata is ContextForge resource-backed and does not imply service acceptance or install execution."
+        }
+      ]
+    },
+    {
+      "scenario_id": "w12a-mvs-contextforge-authority-shared-service-capsule",
+      "requirement_ids": [
+        "cfcp-req-contextforge-authority",
+        "cfcp-req-service-instantiation-distinction"
+      ],
+      "scope_topics": [
+        "ContextForge authority",
+        "shared-service capsule",
+        "client configs as discovery",
+        "preserve native transports"
+      ],
+      "checks": [
+        {
+          "check_id": "w12a-authority-harness-ledger",
+          "kind": "harness_scenario",
+          "scenario_ref": "cfcp-scenario-authority-shared-service",
+          "requirement_ids": [
+            "cfcp-req-contextforge-authority",
+            "cfcp-req-service-instantiation-distinction"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-authority-shared-service",
+            "scripts/control_plane_test_harness.py"
+          ],
+          "summary": "Harness ledger asserts client configs are discovery evidence and shared canonical service is not duplicated."
+        },
+        {
+          "check_id": "w12a-classifier-context7-capsule",
+          "kind": "classifier_case",
+          "case_name": "context7_real_shared_canonical_capsule",
+          "requirement_ids": [
+            "cfcp-req-contextforge-authority",
+            "cfcp-req-service-instantiation-distinction"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_service_classification_cases.json#context7_real_shared_canonical_capsule",
+            "scripts/control_plane_service_classifier.py"
+          ],
+          "summary": "Context7 is a shared canonical capability capsule rather than a per-project backend."
+        },
+        {
+          "check_id": "w12a-classifier-ssh-tmux-session-scope",
+          "kind": "classifier_case",
+          "case_name": "ssh_tmux_session_scoped_availability",
+          "requirement_ids": [
+            "cfcp-req-contextforge-authority",
+            "cfcp-req-service-instantiation-distinction"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_service_classification_cases.json#ssh_tmux_session_scoped_availability",
+            "scripts/control_plane_service_classifier.py"
+          ],
+          "summary": "Session-scoped ssh-tmux availability is not claimed as durable project ownership."
+        }
+      ]
+    },
+    {
+      "scenario_id": "w12a-mvs-apply-journal-recovery-consent",
+      "requirement_ids": [
+        "cfcp-req-consent-boundaries",
+        "cfcp-req-target-client-verification",
+        "cfcp-req-secret-exclusion"
+      ],
+      "scope_topics": [
+        "apply",
+        "journal recovery",
+        "consent receipts",
+        "verification traces",
+        "no live mutation"
+      ],
+      "checks": [
+        {
+          "check_id": "w12a-apply-interrupted-resume-journal",
+          "kind": "apply_journal_case",
+          "case_name": "interrupted_run_resume_records_recovery",
+          "requirement_ids": [
+            "cfcp-req-consent-boundaries",
+            "cfcp-req-secret-exclusion"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_apply_journal_cases.json#interrupted_run_resume_records_recovery",
+            "scripts/control_plane_authorization.py"
+          ],
+          "summary": "Same-plan interrupted apply can resume and produce a redacted journal entry."
+        },
+        {
+          "check_id": "w12a-provision-readiness-recovery",
+          "kind": "service_provision_case",
+          "case_name": "readiness_failure_forward_repair",
+          "requirement_ids": [
+            "cfcp-req-consent-boundaries",
+            "cfcp-req-target-client-verification"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_service_provision_cases.json#readiness_failure_forward_repair",
+            "scripts/control_plane_service_provision.py"
+          ],
+          "summary": "Fixture-backed provision readback classifies readiness failure as forward repair without applying."
+        }
+      ]
+    },
+    {
+      "scenario_id": "w12a-mvs-codex-trust-target-client",
+      "requirement_ids": [
+        "cfcp-req-trust-separation",
+        "cfcp-req-target-client-verification",
+        "cfcp-req-secret-exclusion"
+      ],
+      "scope_topics": [
+        "Codex trust",
+        "target-client verification",
+        "backend health is insufficient",
+        "owned config conflict"
+      ],
+      "checks": [
+        {
+          "check_id": "w12a-codex-trust-missing-blocks",
+          "kind": "codex_conformance_case",
+          "case_name": "codex_trust_missing_blocks_without_mutation",
+          "requirement_ids": [
+            "cfcp-req-trust-separation",
+            "cfcp-req-target-client-verification"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_codex_conformance_cases.json#codex_trust_missing_blocks_without_mutation",
+            "scripts/control_plane_codex_conformance.py"
+          ],
+          "summary": "Missing Codex root trust blocks proof and does not mutate user-global trust."
+        },
+        {
+          "check_id": "w12a-codex-backend-health-not-client-proof",
+          "kind": "codex_conformance_case",
+          "case_name": "codex_backend_health_without_target_client_proof_fails",
+          "requirement_ids": [
+            "cfcp-req-target-client-verification"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_codex_conformance_cases.json#codex_backend_health_without_target_client_proof_fails",
+            "scripts/control_plane_codex_conformance.py"
+          ],
+          "summary": "Backend health alone cannot satisfy Codex target-client list-tools/call-tool proof."
+        }
+      ]
+    },
+    {
+      "scenario_id": "w12a-mvs-semantic-tool-policy-adversarial",
+      "requirement_ids": [
+        "cfcp-req-tool-policy-negative-checks",
+        "cfcp-req-secret-exclusion",
+        "cfcp-req-inference-isolation"
+      ],
+      "scope_topics": [
+        "semantic tool policy",
+        "malicious metadata",
+        "prompt injection",
+        "secret exclusion",
+        "negative checks"
+      ],
+      "checks": [
+        {
+          "check_id": "w12a-tool-policy-negative-harness",
+          "kind": "harness_scenario",
+          "scenario_ref": "cfcp-scenario-target-client-tool-policy",
+          "requirement_ids": [
+            "cfcp-req-target-client-verification",
+            "cfcp-req-tool-policy-negative-checks"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-target-client-tool-policy",
+            "scripts/control_plane_test_harness.py"
+          ],
+          "summary": "Harness ledger requires negative tool-policy trace and target-client readback."
+        },
+        {
+          "check_id": "w12a-tool-policy-scope-admin-excluded",
+          "kind": "tool_policy_case",
+          "case_name": "semantic_scope_changing_and_admin_risks_are_excluded",
+          "requirement_ids": [
+            "cfcp-req-tool-policy-negative-checks",
+            "cfcp-req-secret-exclusion"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_tool_policy_cases.json#semantic_scope_changing_and_admin_risks_are_excluded",
+            "scripts/control_plane_tool_policy.py"
+          ],
+          "summary": "Scope-changing, admin, trust, and remote-exposure tools are excluded with virtual-server and target-client negative checks."
+        },
+        {
+          "check_id": "w12a-malicious-metadata-prompt-injection",
+          "kind": "malicious_tool_metadata_case",
+          "requirement_ids": [
+            "cfcp-req-tool-policy-negative-checks",
+            "cfcp-req-secret-exclusion",
+            "cfcp-req-inference-isolation"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "scripts/control_plane_tool_policy.py",
+            "docs/initiatives/contextforge-control-plane/design-rfc.md#Testing-Methodology"
+          ],
+          "summary": "Adversarial metadata is classified as blocked and requires absence checks rather than following embedded instructions."
+        }
+      ]
+    },
+    {
+      "scenario_id": "w12a-mvs-project-adapters-serena-inspector",
+      "requirement_ids": [
+        "cfcp-req-service-instantiation-distinction",
+        "cfcp-req-tool-policy-negative-checks",
+        "cfcp-req-target-client-verification"
+      ],
+      "scope_topics": [
+        "declined Serena",
+        "generic project adapter",
+        "project-inspector",
+        "scope-changing Serena tool",
+        "read-only proof service"
+      ],
+      "checks": [
+        {
+          "check_id": "w12a-adapter-serena-decline-no-mutation",
+          "kind": "project_adapter_case",
+          "case_name": "serena_current_run_declined_preserves_no_mutation",
+          "requirement_ids": [
+            "cfcp-req-service-instantiation-distinction"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_project_adapter_cases.json#serena_current_run_declined_preserves_no_mutation",
+            "scripts/control_plane_project_adapter.py"
+          ],
+          "summary": "Current-run Serena decline is preserved without backend, ContextForge, client, trust, or server-instance mutation."
+        },
+        {
+          "check_id": "w12a-adapter-serena-scope-tool-filtered",
+          "kind": "project_adapter_case",
+          "case_name": "serena_activate_project_semantic_scope_changing_filtered",
+          "mode": "policy_only",
+          "requirement_ids": [
+            "cfcp-req-tool-policy-negative-checks"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_project_adapter_cases.json#serena_activate_project_semantic_scope_changing_filtered",
+            "scripts/control_plane_project_adapter.py",
+            "scripts/control_plane_tool_policy.py"
+          ],
+          "summary": "Serena activate_project remains filtered as scope-changing with negative checks."
+        },
+        {
+          "check_id": "w12a-project-inspector-rfc-seed",
+          "kind": "project_inspector_seed",
+          "requirement_ids": [
+            "cfcp-req-service-instantiation-distinction",
+            "cfcp-req-target-client-verification",
+            "cfcp-req-tool-policy-negative-checks"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_project_inspector_cases.json#rfc_seeded_project_inspector_not_catalog_candidate",
+            "scripts/control_plane_project_inspector_seed.py"
+          ],
+          "summary": "Project-inspector is the RFC-named read-only project-scoped proof and not a catalog candidate."
+        }
+      ]
+    },
+    {
+      "scenario_id": "w12a-mvs-service-management-memory-governance",
+      "requirement_ids": [
+        "cfcp-req-contextforge-authority",
+        "cfcp-req-consent-boundaries",
+        "cfcp-req-service-instantiation-distinction"
+      ],
+      "scope_topics": [
+        "service-management handoff",
+        "catalog candidate",
+        "service-memory governance boundary",
+        "governance reconciliation"
+      ],
+      "checks": [
+        {
+          "check_id": "w12a-planner-catalog-candidate-handoff",
+          "kind": "planner_case",
+          "case_name": "catalog_candidate_pi_web_access_handoff",
+          "requirement_ids": [
+            "cfcp-req-contextforge-authority",
+            "cfcp-req-consent-boundaries",
+            "cfcp-req-service-instantiation-distinction"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_project_planner_cases.json#catalog_candidate_pi_web_access_handoff",
+            "scripts/control_plane_project_planner.py"
+          ],
+          "summary": "Catalog candidate emits a service-management handoff and no durable project-state record."
+        },
+        {
+          "check_id": "w12a-service-management-plan-only",
+          "kind": "service_management_case",
+          "requirement_ids": [
+            "cfcp-req-contextforge-authority",
+            "cfcp-req-consent-boundaries"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_service_management_cases.json",
+            "scripts/control_plane_service_management.py"
+          ],
+          "summary": "Service-management uses public ContextForge API plans without direct DB writes or unnecessary bridge wrapping."
+        },
+        {
+          "check_id": "w12a-service-memory-governance-boundary",
+          "kind": "service_memory_case",
+          "requirement_ids": [
+            "cfcp-req-contextforge-authority",
+            "cfcp-req-consent-boundaries"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "scripts/control_plane_service_memory.py"
+          ],
+          "summary": "Service memory records are advisory and cannot settle or mutate governance."
+        },
+        {
+          "check_id": "w12a-governance-reconciliation-proposal-only",
+          "kind": "governance_pack_case",
+          "requirement_ids": [
+            "cfcp-req-contextforge-authority",
+            "cfcp-req-consent-boundaries"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_service_management_cases.json#governance_reconciliation_pack"
+          ],
+          "summary": "Governance reconciliation pack is advisory and records no ledger mutation."
+        }
+      ]
+    },
+    {
+      "scenario_id": "w12a-mvs-auth-wrapper-profile-remote-gates",
+      "requirement_ids": [
+        "cfcp-req-secret-exclusion",
+        "cfcp-req-trust-separation",
+        "cfcp-req-consent-boundaries",
+        "cfcp-req-tool-policy-negative-checks"
+      ],
+      "scope_topics": [
+        "auth wrappers",
+        "auth profiles",
+        "remote exposure gates",
+        "token profile separation",
+        "network exposure consent"
+      ],
+      "checks": [
+        {
+          "check_id": "w12a-auth-wrapper-redacted-local-token-source",
+          "kind": "auth_wrapper_case",
+          "requirement_ids": [
+            "cfcp-req-secret-exclusion",
+            "cfcp-req-consent-boundaries"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "scripts/control_plane_auth_wrappers.py"
+          ],
+          "summary": "Wrapper auth evidence passes only with required leak surfaces and redacted token source metadata."
+        },
+        {
+          "check_id": "w12a-auth-profile-loopback-vs-public-bind",
+          "kind": "auth_profile_case",
+          "requirement_ids": [
+            "cfcp-req-secret-exclusion",
+            "cfcp-req-trust-separation"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "scripts/control_plane_auth_profiles.py"
+          ],
+          "summary": "Loopback authenticated HTTP is the active local profile; public binds require remote workflow."
+        },
+        {
+          "check_id": "w12a-remote-exposure-default-blocked",
+          "kind": "remote_exposure_case",
+          "case_name": "default_blocked_local_profile",
+          "requirement_ids": [
+            "cfcp-req-consent-boundaries",
+            "cfcp-req-trust-separation",
+            "cfcp-req-tool-policy-negative-checks"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_remote_exposure_cases.json#default_blocked_local_profile",
+            "scripts/control_plane_remote_exposure.py"
+          ],
+          "summary": "Remote exposure remains blocked by default and requires separate network exposure approval."
+        },
+        {
+          "check_id": "w12a-remote-exposure-denied-tools-negative-checks",
+          "kind": "remote_exposure_case",
+          "case_name": "denied_admin_token_secret_catalog_tools",
+          "requirement_ids": [
+            "cfcp-req-secret-exclusion",
+            "cfcp-req-tool-policy-negative-checks"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_remote_exposure_cases.json#denied_admin_token_secret_catalog_tools",
+            "scripts/control_plane_remote_exposure.py"
+          ],
+          "summary": "Admin, token, secret, trust, service-management, and control-plane mutation tools are denied for remote exposure."
+        }
+      ]
+    },
+    {
+      "scenario_id": "w12a-mvs-inference-isolation-delegation",
+      "requirement_ids": [
+        "cfcp-req-inference-isolation"
+      ],
+      "scope_topics": [
+        "inference isolation",
+        "tested-agent transcript boundary",
+        "W12-B delegation"
+      ],
+      "checks": [
+        {
+          "check_id": "w12a-inference-isolation-harness-ledger",
+          "kind": "harness_scenario",
+          "scenario_ref": "cfcp-scenario-inference-isolation",
+          "requirement_ids": [
+            "cfcp-req-inference-isolation"
+          ],
+          "layers": [
+            "deterministic",
+            "probe"
+          ],
+          "source_refs": [
+            "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-inference-isolation",
+            "scripts/control_plane_test_harness.py"
+          ],
+          "summary": "Deterministic harness evidence preserves tested-agent/evaluator/remediation role separation; W12-B owns inference-inclusive execution."
+        }
+      ]
+    }
+  ]
+}
