@@ -89,13 +89,13 @@ The remaining canonical service set has been registered and verified in controll
 ## ai-20260530-0001: ContextForge as host-wide assistant control plane
 
 - Ledger: abeyant-intentions
-- Status: parked
+- Status: honored
 - Repository: /home/dgk/workspace/context-portal
 - Created: 2026-05-29
-- Updated: 2026-05-29
-- Tags: contextforge,bootstrap,control-plane,project-init,governance,serena,lsp
+- Updated: 2026-05-30
+- Tags: contextforge,bootstrap,control-plane,project-init,governance,serena,lsp,rfc
 
-Develop ContextForge from a registered-service gateway into the host-wide assistant control plane. The working dialogue plan is tracked in docs/initiatives/contextforge-control-plane/dialogue-plan.md and must refine the project-state schema, cross-client bootstrap flow, ContextForge resource taxonomy, user-confirmed service selection, generalized language tooling across a user-confirmed common language set, instance-local LSP/tooling policy, Serena as the empirical proof of concept, and the intended relationship between Serena memory and the durable governance registry.
+The host-wide assistant control-plane intention is honored by the formal design RFC, implementation procedure, and Wave 0-12 outputs. Future continuity should cite docs/initiatives/contextforge-control-plane/design-rfc.md, docs/initiatives/contextforge-control-plane/design-rfc-procedure.md, implementation-runbook.md, acceptance-checklist.md, and the run evidence instead of treating the older dialogue plan as the active source of truth.
 <!-- governance-crud:end id=ai-20260530-0001 -->
 
 <!-- governance-crud:start id=ai-20260530-0002 -->

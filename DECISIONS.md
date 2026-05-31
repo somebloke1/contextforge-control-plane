@@ -675,3 +675,81 @@ Implemented empty-project Serena initialization improvements. The Serena manager
 
 Empty project initialization now uses manager status preflight before provisioning. Missing .env is represented as hook default state, not a mismatch. When language is needed, status returns recommended language examples, next_action, and a one-shot create --require-workspace --language LANGUAGE --verify --app-server command. Related ancestor or descendant Serena instances are diagnostics only and never satisfy the exact canonical project root.
 <!-- governance-crud:end id=dec-20260529-0050 -->
+
+<!-- governance-crud:start id=dec-20260530-0001 -->
+## dec-20260530-0001: Adopt the control-plane MVS, roadmap, and acceptance gates
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-30
+- Updated: 2026-05-30
+- Tags: contextforge,control-plane,mvs,acceptance,governance
+
+Adopt the ContextForge control-plane RFC minimal viable slice, roadmap, and acceptance gates as the implementation baseline. Accepted ledger changes must flow through governance CRUD or mentality. MVS work includes project-state schema and migration, contract/capsule/policy/receipt/trace/evidence schemas, Codex conformance and trust broker behavior, semantic tool-policy checks, language-profile metadata, Serena behind a generic project-scoped adapter, a read-only project-inspector proof, service-management handoff, requirement-linked deterministic and inference-inclusive scenarios, evaluator verdicts, and reviewed governance reconciliation. Acceptance is gated by must_pass_mvs, must_pass_before_remote_or_expansion, and deferrable_with_governance_waiver classifications.
+<!-- governance-crud:end id=dec-20260530-0001 -->
+
+<!-- governance-crud:start id=dec-20260530-0002 -->
+## dec-20260530-0002: Use .project/context_forge_state.json as sole project-init state authority
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-30
+- Updated: 2026-05-30
+- Tags: contextforge,project-state,migration,project-init
+
+Project initialization state belongs in .project/context_forge_state.json. Legacy .env project-init keys are migration input only and must be recorded as absent, ignored, imported, conflicted, declined, deferred, or disabled according to the RFC rules. They are not a parallel authority and cannot mark a service or project verified without current evidence. Writes must be locked, schema-validated, atomic, revision-aware, root-safe, and secret-free.
+<!-- governance-crud:end id=dec-20260530-0002 -->
+
+<!-- governance-crud:start id=dec-20260530-0003 -->
+## dec-20260530-0003: Require receipts, traces, and journals for mutating control-plane work
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-30
+- Updated: 2026-05-30
+- Tags: contextforge,consent,audit,verification,project-init
+
+Mutating control-plane operations require typed consent receipts, adapter-independent verification traces, and step journals. apply_approved_plan consumes existing approval receipts and must not mint the approval authorizing itself. Receipts are immutable and scoped by class, plan digest, target, actor, source client, and expiry. Trace and journal records carry per-layer verification and recovery evidence.
+<!-- governance-crud:end id=dec-20260530-0003 -->
+
+<!-- governance-crud:start id=dec-20260530-0004 -->
+## dec-20260530-0004: Require service-management handoff for host-wide catalog mutation
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-30
+- Updated: 2026-05-30
+- Tags: contextforge,catalog,service-management,control-plane
+
+Normal project initialization and the general control-plane MCP surface must not perform raw host-wide catalog CRUD or candidate promotion. When catalog promotion, catalog repair, duplicate resolution, or candidate canonicalization is required, project init emits a service-management handoff and stops. The dedicated service-management workflow must inspect, deduplicate, classify scope and transport, plan through stock ContextForge APIs and documented scripts, and require explicit approval before mutation.
+<!-- governance-crud:end id=dec-20260530-0004 -->
+
+<!-- governance-crud:start id=dec-20260530-0005 -->
+## dec-20260530-0005: Keep service memory reference-only for governance in v1
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-30
+- Updated: 2026-05-30
+- Tags: contextforge,governance,memory,serena,service-memory
+
+Governance ledgers remain authoritative for decisions, open questions, parked intentions, consent, and project policy. Serena is one instance of a generic service_memory_provider, not a special governance authority. Service-local memory may store working notes, recall hints, code-navigation context, governance references, and governance proposals, but v1 does not use generated governance projections or bidirectional sync. If service memory conflicts with a governance ledger, flag the conflict and continue using the ledger as authority.
+<!-- governance-crud:end id=dec-20260530-0005 -->
+
+<!-- governance-crud:start id=dec-20260530-0006 -->
+## dec-20260530-0006: Gate local auth, token material, trust, and remote exposure separately
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-30
+- Updated: 2026-05-30
+- Tags: contextforge,auth,tokens,trust,remote-exposure
+
+The v1 local profile uses loopback authenticated HTTP with wrapper fallback where needed, but local assistant tokens must be non-admin and least-privilege. User-global trust, user-global config writes, token material changes, secret value writes, and remote exposure require separate human approval and evidence. Remote exposure is non-default, opt-in, scoped, separately tokenized, and must deny control-plane mutation, catalog/admin, trust, token, and secret-value workflows unless a later approved RFC changes the model.
+<!-- governance-crud:end id=dec-20260530-0006 -->
