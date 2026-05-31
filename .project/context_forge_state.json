@@ -1,0 +1,197 @@
+{
+  "artifact_refs": {
+    "capability_capsules": [
+      {
+        "catalog_revision_or_etag": "contextforge-live-2026-05-30-context7",
+        "content_digest": "sha256:8e8bab6b0b07052e4d8c5222827f01229e5d93a9275921966c37bae437e97fa9",
+        "ref": "contextforge://control-plane/capability-capsules/capsule-context7/v1",
+        "resolved_at": "2026-05-31T00:51:00Z"
+      }
+    ],
+    "consent_receipts": [],
+    "contract_cards": [
+      {
+        "catalog_revision_or_etag": "contextforge-live-2026-05-30-context7",
+        "content_digest": "sha256:63d562565d28d9ca3089d3e07816eb785d65a04dc42c62efcb56b3f1fc4dd5e9",
+        "ref": "contextforge://control-plane/service-bindings/card-context7:canonical/v1",
+        "resolved_at": "2026-05-31T00:51:00Z"
+      }
+    ],
+    "evidence_ledgers": [],
+    "governance_reconciliation_packs": [],
+    "semantic_tool_policies": [],
+    "verification_traces": [
+      {
+        "catalog_revision_or_etag": "contextforge-live-2026-05-30-context7",
+        "content_digest": "sha256:14fc6285fc6f8f06c04d97a4f96581a853553f4a13f6b7a794bbf3f2aa39fa2d",
+        "ref": "contextforge://control-plane/verification-traces/trace-context7-existing-shared-service-20260530/v1",
+        "resolved_at": "2026-05-31T00:51:00Z"
+      }
+    ]
+  },
+  "client_trust": {},
+  "decisions": {},
+  "diagnostics": {
+    "related_instances": []
+  },
+  "drift": {
+    "findings": [],
+    "last_checked_at": "2026-05-31T00:51:00Z",
+    "reconciled_by_name": [
+      "context7"
+    ],
+    "stale_ids": [],
+    "status": "clean"
+  },
+  "memory_policy": {
+    "mode": "ledger_authoritative_references_only"
+  },
+  "meta": {
+    "created_at": "2026-05-31T00:52:51Z",
+    "last_audit_record": null,
+    "last_plan_id": "project-init-5f42fd8b2f46756b",
+    "revision": 1,
+    "schema_uri": "contextforge://control-plane/project-state/v1",
+    "schema_version": 1,
+    "updated_at": "2026-05-31T00:52:51Z",
+    "updated_by": "contextforge_project_initialization_assistant"
+  },
+  "migration": {
+    "client_config_migrations": {},
+    "conflicts": [],
+    "imported_at": null,
+    "legacy_env_digest": null,
+    "legacy_env_disposition": "not_present",
+    "legacy_env_seen": false
+  },
+  "open_items": [],
+  "project": {
+    "display_root": null,
+    "name": "context-portal",
+    "root": "/home/dgk/workspace/context-portal",
+    "root_hash": "42304ce73dad61a491e9a20d0825d060b606b0035737e60795bc2bf6eefb32f2"
+  },
+  "services": {
+    "context7": {
+      "backend_instance": "server-instances/context7",
+      "capability_capsule_ref": "contextforge://control-plane/capability-capsules/capsule-context7/v1",
+      "consent_receipt_refs": [],
+      "contract_card_ref": "contextforge://control-plane/service-bindings/card-context7:canonical/v1",
+      "evidence": [
+        {
+          "name": "systemd_contextforge_gateway",
+          "observed": "active",
+          "status": "passed"
+        },
+        {
+          "name": "systemd_context7_backend",
+          "observed": "active",
+          "status": "passed"
+        },
+        {
+          "name": "gateway_health",
+          "observed": "http://127.0.0.1:4444/health healthy",
+          "status": "passed"
+        },
+        {
+          "name": "contextforge_gateway_readback",
+          "observed": "context7-local STREAMABLEHTTP http://localhost:9103/mcp",
+          "status": "passed"
+        },
+        {
+          "name": "contextforge_virtual_server_readback",
+          "observed": "context7_local_server with 2 associated tools",
+          "status": "passed"
+        },
+        {
+          "name": "direct_streamable_http_tools",
+          "observed": [
+            "resolve-library-id",
+            "query-docs"
+          ],
+          "status": "passed"
+        },
+        {
+          "name": "direct_sse_tools",
+          "observed": [
+            "resolve-library-id",
+            "query-docs"
+          ],
+          "status": "passed"
+        },
+        {
+          "name": "contextforge_streamable_http_tools",
+          "observed": [
+            "context7-local-resolve-library-id",
+            "context7-local-query-docs"
+          ],
+          "status": "passed"
+        },
+        {
+          "name": "contextforge_sse_tools",
+          "observed": [
+            "context7-local-resolve-library-id",
+            "context7-local-query-docs"
+          ],
+          "status": "passed"
+        }
+      ],
+      "instantiation_class": "shared_canonical",
+      "language_profile": null,
+      "lifecycle": {
+        "binding_mode": "verify_existing",
+        "catalog_authority": "ContextForge",
+        "owned_by_project": false,
+        "server_instance_policy": "existing_shared_backend_home"
+      },
+      "provision_status": "verified",
+      "required_verification_layers": [
+        "contextforge_gateway",
+        "contextforge_virtual_server",
+        "direct_streamable_http",
+        "direct_sse",
+        "contextforge_streamable_http",
+        "contextforge_sse"
+      ],
+      "semantic_tool_policy_ref": "contextforge://control-plane/semantic-tool-policies/context7/v1",
+      "service_binding": "context7:canonical",
+      "service_family": "context7",
+      "target_clients": {
+        "claude": {
+          "identity_source": "discovery_only",
+          "mentions_service": true
+        },
+        "codex": {
+          "identity_source": "discovery_only",
+          "mentions_service": true
+        }
+      },
+      "verification_layers": {
+        "contextforge_gateway": "passed",
+        "contextforge_sse": "passed",
+        "contextforge_streamable_http": "passed",
+        "contextforge_virtual_server": "passed",
+        "direct_sse": "passed",
+        "direct_streamable_http": "passed"
+      },
+      "verification_trace_refs": [
+        "contextforge://control-plane/verification-traces/trace-context7-existing-shared-service-20260530/v1"
+      ],
+      "virtual_server": "context7_local_server",
+      "x_non_actions": [
+        "no client config promoted as service identity",
+        "no per-project backend for shared canonical service",
+        "no project-local bridge, wrapper, port, unit, or server-instance directory created",
+        "no ContextForge catalog mutation"
+      ]
+    }
+  },
+  "status": "in_progress",
+  "x_non_actions": [
+    "no client config promoted as service identity",
+    "no per-project backend for shared canonical service",
+    "no project-local bridge, wrapper, port, unit, or server-instance directory created",
+    "no ContextForge catalog mutation"
+  ],
+  "x_project_init_binding_mode": "verify_existing"
+}
