@@ -1,0 +1,789 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contextforge://control-plane/project-state/v1",
+  "title": "ContextForge Control Plane Project State",
+  "description": "Minimal v1 project initialization state. Project state is not a host catalog database and must not contain secret values. Unknown durable fields are rejected except explicitly namespaced x_ extension fields.",
+  "type": "object",
+  "required": [
+    "meta",
+    "project",
+    "diagnostics",
+    "migration",
+    "artifact_refs",
+    "status",
+    "decisions",
+    "services",
+    "client_trust",
+    "memory_policy",
+    "drift",
+    "open_items"
+  ],
+  "properties": {
+    "meta": {
+      "$ref": "#/$defs/meta"
+    },
+    "project": {
+      "$ref": "#/$defs/project"
+    },
+    "diagnostics": {
+      "$ref": "#/$defs/diagnostics"
+    },
+    "migration": {
+      "$ref": "#/$defs/migration"
+    },
+    "artifact_refs": {
+      "$ref": "#/$defs/artifactRefs"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "uninitialized",
+        "in_progress",
+        "initialized",
+        "disabled"
+      ]
+    },
+    "decisions": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/mapKey"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/decision"
+      }
+    },
+    "services": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/mapKey"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/service"
+      }
+    },
+    "client_trust": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/mapKey"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/clientTrust"
+      }
+    },
+    "memory_policy": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "const": "ledger_authoritative_references_only"
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "drift": {
+      "$ref": "#/$defs/drift"
+    },
+    "open_items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/openItem"
+      }
+    }
+  },
+  "patternProperties": {
+    "^x_[A-Za-z0-9_]+$": true
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "mapKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$"
+    },
+    "timestampOrNull": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stringOrNull": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "digestOrNull": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "meta": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "schema_uri",
+        "created_at",
+        "updated_at",
+        "updated_by",
+        "revision",
+        "last_plan_id",
+        "last_audit_record"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "schema_uri": {
+          "const": "contextforge://control-plane/project-state/v1"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_plan_id": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "last_audit_record": {
+          "$ref": "#/$defs/stringOrNull"
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "root",
+        "root_hash",
+        "name",
+        "display_root"
+      ],
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "root_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "display_root": {
+          "$ref": "#/$defs/stringOrNull"
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": [
+        "related_instances"
+      ],
+      "properties": {
+        "related_instances": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "relationship",
+              "service_family",
+              "canonical_name",
+              "root",
+              "root_hash",
+              "used_for_verification"
+            ],
+            "properties": {
+              "relationship": {
+                "type": "string",
+                "enum": [
+                  "ancestor",
+                  "descendant",
+                  "sibling",
+                  "same_root_alias"
+                ]
+              },
+              "service_family": {
+                "type": "string"
+              },
+              "canonical_name": {
+                "type": "string"
+              },
+              "root": {
+                "type": "string"
+              },
+              "root_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "used_for_verification": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "migration": {
+      "type": "object",
+      "required": [
+        "legacy_env_seen",
+        "legacy_env_disposition",
+        "legacy_env_digest",
+        "imported_at",
+        "conflicts",
+        "client_config_migrations"
+      ],
+      "properties": {
+        "legacy_env_seen": {
+          "type": "boolean"
+        },
+        "legacy_env_disposition": {
+          "type": "string",
+          "enum": [
+            "ignored",
+            "imported",
+            "conflict",
+            "not_present"
+          ]
+        },
+        "legacy_env_digest": {
+          "$ref": "#/$defs/digestOrNull"
+        },
+        "imported_at": {
+          "$ref": "#/$defs/timestampOrNull"
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "client_config_migrations": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/mapKey"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/clientConfigMigration"
+          }
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "clientConfigMigration": {
+      "type": "object",
+      "required": [
+        "source_path",
+        "ownership_class",
+        "source_digest",
+        "disposition",
+        "imported_binding_refs",
+        "conflicts",
+        "verification_trace_refs"
+      ],
+      "properties": {
+        "source_path": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "ownership_class": {
+          "type": "string",
+          "enum": [
+            "owned",
+            "legacy_owned",
+            "user_modified_owned",
+            "unmanaged_same_name",
+            "unsupported_schema",
+            "absent"
+          ]
+        },
+        "source_digest": {
+          "$ref": "#/$defs/digestOrNull"
+        },
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "ignored",
+            "imported",
+            "conflict",
+            "not_present"
+          ]
+        },
+        "imported_binding_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conflicts": {
+          "type": "array"
+        },
+        "verification_trace_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifactSnapshot": {
+      "type": "object",
+      "required": [
+        "ref",
+        "content_digest",
+        "catalog_revision_or_etag",
+        "resolved_at"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "catalog_revision_or_etag": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "resolved_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifactRefs": {
+      "type": "object",
+      "required": [
+        "contract_cards",
+        "capability_capsules",
+        "semantic_tool_policies",
+        "consent_receipts",
+        "verification_traces",
+        "evidence_ledgers",
+        "governance_reconciliation_packs"
+      ],
+      "properties": {
+        "contract_cards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactSnapshot"
+          }
+        },
+        "capability_capsules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactSnapshot"
+          }
+        },
+        "semantic_tool_policies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactSnapshot"
+          }
+        },
+        "consent_receipts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactSnapshot"
+          }
+        },
+        "verification_traces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactSnapshot"
+          }
+        },
+        "evidence_ledgers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactSnapshot"
+          }
+        },
+        "governance_reconciliation_packs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactSnapshot"
+          }
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "object",
+      "required": [
+        "decision_kind",
+        "state",
+        "service_binding",
+        "contract_card_ref",
+        "decided_at",
+        "decided_by",
+        "source_plan_id",
+        "reopened_at",
+        "notes"
+      ],
+      "properties": {
+        "decision_kind": {
+          "type": "string",
+          "enum": [
+            "service",
+            "language_profile",
+            "client_trust",
+            "project_init"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "unasked",
+            "accepted",
+            "declined",
+            "deferred",
+            "disabled"
+          ]
+        },
+        "service_binding": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "contract_card_ref": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "decided_at": {
+          "$ref": "#/$defs/timestampOrNull"
+        },
+        "decided_by": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "source_plan_id": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "reopened_at": {
+          "$ref": "#/$defs/timestampOrNull"
+        },
+        "notes": {
+          "$ref": "#/$defs/stringOrNull"
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "service": {
+      "type": "object",
+      "required": [
+        "service_family",
+        "service_binding",
+        "instantiation_class",
+        "contract_card_ref",
+        "capability_capsule_ref",
+        "semantic_tool_policy_ref",
+        "backend_instance",
+        "virtual_server",
+        "provision_status",
+        "lifecycle",
+        "language_profile",
+        "required_verification_layers",
+        "verification_layers",
+        "target_clients",
+        "verification_trace_refs",
+        "consent_receipt_refs",
+        "evidence"
+      ],
+      "properties": {
+        "service_family": {
+          "type": "string"
+        },
+        "service_binding": {
+          "type": "string"
+        },
+        "instantiation_class": {
+          "type": "string",
+          "enum": [
+            "instance_per_project",
+            "project_scoped_shared_backend",
+            "shared_canonical",
+            "credential_scoped",
+            "resource_scoped",
+            "caller_scoped",
+            "session_scoped",
+            "static_repo_local"
+          ]
+        },
+        "contract_card_ref": {
+          "type": "string"
+        },
+        "capability_capsule_ref": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "semantic_tool_policy_ref": {
+          "type": "string"
+        },
+        "backend_instance": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "virtual_server": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "provision_status": {
+          "type": "string",
+          "enum": [
+            "none",
+            "pending",
+            "created",
+            "degraded",
+            "failed",
+            "removed",
+            "verified"
+          ]
+        },
+        "lifecycle": {
+          "type": "object"
+        },
+        "language_profile": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "required_verification_layers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "verification_layers": {
+          "type": "object"
+        },
+        "target_clients": {
+          "type": "object"
+        },
+        "verification_trace_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "consent_receipt_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "array"
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "clientTrust": {
+      "type": "object",
+      "required": [
+        "state",
+        "root",
+        "trust_surface",
+        "approval_record",
+        "verified_at",
+        "last_probe"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "untrusted",
+            "trusted_but_not_loaded",
+            "trusted_requires_restart",
+            "trusted",
+            "declined",
+            "not_required"
+          ]
+        },
+        "root": {
+          "type": "string"
+        },
+        "trust_surface": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "approval_record": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "verified_at": {
+          "$ref": "#/$defs/timestampOrNull"
+        },
+        "last_probe": {
+          "$ref": "#/$defs/stringOrNull"
+        }
+      },
+      "additionalProperties": false
+    },
+    "drift": {
+      "type": "object",
+      "required": [
+        "last_checked_at",
+        "status",
+        "findings",
+        "reconciled_by_name",
+        "stale_ids"
+      ],
+      "properties": {
+        "last_checked_at": {
+          "$ref": "#/$defs/timestampOrNull"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "clean",
+            "drift_found"
+          ]
+        },
+        "findings": {
+          "type": "array"
+        },
+        "reconciled_by_name": {
+          "type": "array"
+        },
+        "stale_ids": {
+          "type": "array"
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "openItem": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "severity",
+        "blocks_initialized",
+        "resource",
+        "created_at",
+        "resolution_state",
+        "detail"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "trust",
+            "restart",
+            "secret",
+            "verification",
+            "drift",
+            "language",
+            "language_profile_missing",
+            "service",
+            "migration",
+            "config_conflict",
+            "catalog_candidate",
+            "port_conflict",
+            "runtime",
+            "security",
+            "remote_exposure",
+            "tool_policy",
+            "contract_missing",
+            "handoff_required",
+            "consent_required",
+            "trace_missing",
+            "client_conformance",
+            "trust_broker",
+            "scenario_evaluation",
+            "governance_reconciliation"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "blocking"
+          ]
+        },
+        "blocks_initialized": {
+          "type": "boolean"
+        },
+        "resource": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "resolution_state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "resolved",
+            "deferred"
+          ]
+        },
+        "detail": {
+          "type": "object"
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "requirements": [
+    {
+      "requirement_id": "cfcp-req-contextforge-authority",
+      "source_section": "Acceptance Strategy",
+      "summary": "ContextForge remains the canonical service and resource identity authority; client configs are discovery sources only.",
+      "evidence_types": ["deterministic_assertion", "integration_probe", "scenario_ledger", "evaluator_verdict"],
+      "required_layers": ["deterministic", "probe", "inference_inclusive"],
+      "mvs_required": true,
+      "deferrability": "non_deferrable",
+      "acceptance_gate": "must_pass_mvs"
+    },
+    {
+      "requirement_id": "cfcp-req-project-state-authority",
+      "source_section": "Acceptance Strategy",
+      "summary": ".project/context_forge_state.json is the sole project-init state authority and is schema-validated before claims are made.",
+      "evidence_types": ["unit_test", "deterministic_assertion", "scenario_ledger", "evaluator_verdict"],
+      "required_layers": ["deterministic", "probe", "inference_inclusive"],
+      "mvs_required": true,
+      "deferrability": "non_deferrable",
+      "acceptance_gate": "must_pass_mvs"
+    },
+    {
+      "requirement_id": "cfcp-req-consent-boundaries",
+      "source_section": "Acceptance Strategy",
+      "summary": "Each mutating operation is authorized by a consent receipt with the correct class, scope, digest, and target.",
+      "evidence_types": ["deterministic_assertion", "integration_probe", "scenario_ledger", "evaluator_verdict"],
+      "required_layers": ["deterministic", "probe", "inference_inclusive"],
+      "mvs_required": true,
+      "deferrability": "non_deferrable",
+      "acceptance_gate": "must_pass_mvs"
+    },
+    {
+      "requirement_id": "cfcp-req-trust-separation",
+      "source_section": "Acceptance Strategy",
+      "summary": "User-global trust and user-global config changes require separate human approval and receipt-backed verification.",
+      "evidence_types": ["deterministic_assertion", "integration_probe", "scenario_ledger", "evaluator_verdict"],
+      "required_layers": ["deterministic", "probe", "inference_inclusive"],
+      "mvs_required": true,
+      "deferrability": "non_deferrable",
+      "acceptance_gate": "must_pass_mvs"
+    },
+    {
+      "requirement_id": "cfcp-req-secret-exclusion",
+      "source_section": "Acceptance Strategy",
+      "summary": "Secret values are excluded from tracked state, normal audit records, shell arguments, transcripts, and fixture outputs.",
+      "evidence_types": ["unit_test", "deterministic_assertion", "integration_probe", "scenario_ledger", "evaluator_verdict"],
+      "required_layers": ["deterministic", "probe", "inference_inclusive"],
+      "mvs_required": true,
+      "deferrability": "non_deferrable",
+      "acceptance_gate": "must_pass_mvs"
+    },
+    {
+      "requirement_id": "cfcp-req-target-client-verification",
+      "source_section": "Acceptance Strategy",
+      "summary": "Accepted services cannot mark a project initialized until target-client verification succeeds.",
+      "evidence_types": ["deterministic_assertion", "integration_probe", "scenario_ledger", "evaluator_verdict"],
+      "required_layers": ["deterministic", "probe", "inference_inclusive"],
+      "mvs_required": true,
+      "deferrability": "non_deferrable",
+      "acceptance_gate": "must_pass_mvs"
+    },
+    {
+      "requirement_id": "cfcp-req-tool-policy-negative-checks",
+      "source_section": "Acceptance Strategy",
+      "summary": "Semantic tool-policy negative checks fail closed at ContextForge virtual-server and target-client layers.",
+      "evidence_types": ["deterministic_assertion", "integration_probe", "scenario_ledger", "evaluator_verdict"],
+      "required_layers": ["deterministic", "probe", "inference_inclusive"],
+      "mvs_required": true,
+      "deferrability": "non_deferrable",
+      "acceptance_gate": "must_pass_mvs"
+    },
+    {
+      "requirement_id": "cfcp-req-service-instantiation-distinction",
+      "source_section": "Control-Plane Minimal Viable Slice",
+      "summary": "Shared canonical services are bound or verified without per-project backend, wrapper, bridge, gateway, or server-instance creation.",
+      "evidence_types": ["deterministic_assertion", "integration_probe", "scenario_ledger", "evaluator_verdict"],
+      "required_layers": ["deterministic", "probe", "inference_inclusive"],
+      "mvs_required": true,
+      "deferrability": "non_deferrable",
+      "acceptance_gate": "must_pass_mvs"
+    },
+    {
+      "requirement_id": "cfcp-req-inference-isolation",
+      "source_section": "Testing Methodology",
+      "summary": "The tested assistant sees only tested-agent-visible scenario data, while evaluator and remediation context remain separated.",
+      "evidence_types": ["unit_test", "deterministic_assertion", "scenario_ledger", "evaluator_verdict"],
+      "required_layers": ["deterministic", "probe", "inference_inclusive"],
+      "mvs_required": true,
+      "deferrability": "non_deferrable",
+      "acceptance_gate": "must_pass_mvs"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "project_root": "/home/dgk/workspace/context-portal",
+  "resolved_at": "2026-05-30T22:30:00Z",
+  "client": "codex",
+  "trust_surface": "codex_project_root_trust",
+  "cases": [
+    {
+      "name": "trusted_codex_project_root",
+      "evidence": {
+        "state": "trusted",
+        "root": "/home/dgk/workspace/context-portal",
+        "client": "codex",
+        "trust_surface": "codex_project_root_trust",
+        "last_probe": "codex-trust-readback"
+      },
+      "expected": {
+        "state": "trusted",
+        "open_item_types": [],
+        "verify_decision": "allow"
+      }
+    },
+    {
+      "name": "untrusted_codex_project_root",
+      "evidence": {
+        "state": "untrusted",
+        "root": "/home/dgk/workspace/context-portal",
+        "client": "codex",
+        "trust_surface": "codex_project_root_trust",
+        "last_probe": "codex-trust-readback"
+      },
+      "expected": {
+        "state": "untrusted",
+        "open_item_types": ["trust"],
+        "verify_decision": "block"
+      }
+    },
+    {
+      "name": "declined_codex_project_root",
+      "evidence": {
+        "state": "declined",
+        "root": "/home/dgk/workspace/context-portal",
+        "client": "codex",
+        "trust_surface": "codex_project_root_trust",
+        "last_probe": "codex-trust-readback"
+      },
+      "expected": {
+        "state": "declined",
+        "open_item_types": ["trust"],
+        "verify_decision": "block"
+      }
+    },
+    {
+      "name": "pending_restart_codex_project_root",
+      "evidence": {
+        "state": "trusted_requires_restart",
+        "root": "/home/dgk/workspace/context-portal",
+        "client": "codex",
+        "trust_surface": "codex_project_root_trust",
+        "last_probe": "codex-trust-readback"
+      },
+      "expected": {
+        "state": "trusted_requires_restart",
+        "open_item_types": ["restart"],
+        "verify_decision": "block"
+      }
+    }
+  ]
+}

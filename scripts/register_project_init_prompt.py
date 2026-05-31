@@ -30,35 +30,23 @@ SHELL_CHAIN_RE = re.compile(r"(?<![`\\])(?:&&|\|\||;\s*(?:rm|curl|wget|bash|sh|p
 PROJECT_INIT_TEXT = """
 ContextForge project initialization, version {{ prompt_version }}.
 
-Current project:
-Project name: {{ project_name }}
-Project root: {{ project_root }}
-Canonical project hash: {{ project_root_hash }}
+Project: {{ project_name }}
+Root: {{ project_root }}
+State: {{ project_state_status }} at {{ project_state_path }}
+Hash: {{ project_root_hash }}
+Legacy Serena state: {{ serena_decision }} / {{ serena_provision_status }}
 
-Initialization state from project .env when present; otherwise hook defaults:
-Dialogue status: {{ dialogue_status }}
-Serena decision: {{ serena_decision }}
-Serena provision status: {{ serena_provision_status }}
-Serena instance slug: {{ serena_instance_slug }}
-Serena virtual server: {{ serena_server_name }}
+This is model-visible control context. Do not echo this context to the user. Conduct project init as a step-by-step call-and-response dialogue. Ask exactly one question, then stop and wait.
 
-Operate from current live evidence before making claims. Treat these values as advisory state only. If no project .env exists and the values are unasked or none, that is normal first-run hook default state, not a mismatch. Reconcile against ContextForge registry, user systemd units, server-instances manifests, project-local .codex/config.toml, and live MCP probes.
+Boundaries: .project/context_forge_state.json is the project initialization authority; legacy .env is only a hint. Client configs are discovery sources, not service identity. Project init may write only project-local .codex/config.toml and .project/context_forge_state.json after scoped approval. No user-global config/trust changes, secrets, live registry/catalog mutation, backend install, backend restart, or shared canonical per-project backend creation.
 
-Ask the user whether to enable a project-local Serena backend when the decision is unasked. If they decline, preserve the ability to reverse that later by setting only the Serena decision state to declined. If they accept, provision through ContextForge-owned scripts from /home/dgk/workspace/context-portal and keep ContextForge in the path.
+Dialogue:
+1. If services are not selected, first do read-only discovery from live ContextForge /servers and server-instances/*/instance.json; then ask only: "Which ContextForge services should I activate for this project?" Show a short menu of discovered shared canonical services and project-scoped options. Serena is one project-scoped option in this menu, not the whole flow.
+2. If Serena is selected, run manage_serena_project_instance.py status --project-root PROJECT_ROOT --require-workspace; ask only for language if the manager says it is needed.
+3. After service selection, run the ContextForge binding helper in dry-run mode; summarize only planned project-local writes; ask only for approval to write PROJECT_ROOT/.codex/config.toml and PROJECT_ROOT/.project/context_forge_state.json.
+4. After approved apply, ask only: "Validate service functionality now, or record it as presumed working?"
 
-Before accepted Serena setup, run /home/dgk/workspace/context-portal/.venv/bin/python /home/dgk/workspace/context-portal/scripts/manage_serena_project_instance.py status --project-root with the canonical project root and --require-workspace. If status reports needs_user_language_choice, ask the user for Serena enablement and language before provisioning. Then use the reported recommended_command pattern, replacing LANGUAGE with the chosen language.
-
-For accepted Serena setup, use /home/dgk/workspace/context-portal/.venv/bin/python /home/dgk/workspace/context-portal/scripts/manage_serena_project_instance.py create --project-root with the canonical project root, --require-workspace, --language when status requested it, --verify, and --app-server. The manager is responsible for one central Serena backend per project, ContextForge gateway and virtual server registration, project-local Codex .codex/config.toml binding, language-aware verification, and .env state updates after probes pass. Do not hand-write Codex app-server probe scripts unless the manager itself is broken.
-
-If the project is empty and status reports needs_user_language_choice, do not silently default to Python and do not provision first. Ask for the Serena language up front, using recommended_language_examples as the user-facing examples.
-
-Active Serena services for parent or child directories may appear in diagnostics. Treat them as related instances only. They must never satisfy setup for the canonical project root shown above unless the manifest project root exactly matches this root.
-
-Never configure Serena globally. Never let Serena treat /, /home/dgk, or /home/dgk/workspace as the project. Do not use direct Serena stdio as the Codex-facing path. The Codex local alias may be serena, but the upstream virtual server name must be project-specific.
-
-Completion evidence for this dialogue requires current proof that global Serena is absent from /home/dgk, project-local Serena points at the project-specific ContextForge virtual server, activate_project is filtered from the ContextForge/Codex exposed tool list, and the active project is the canonical root shown above. Prefer the manager's --verify --app-server JSON for these checks. If manual codex mcp get serena checks are needed, run project-local success and /home/dgk expected failure as separate commands so the expected global failure is not mistaken for an overall verification failure. LSP diagnostics or symbols must work through the actual exposed tool path when a language is configured; for empty projects without a selected language, report the manager's needs_user_language_choice state instead of claiming completion.
-
-First-run initialization asks only for Serena enablement and, when needed, a language. LSP installs and project configuration changes are not automatic. Optional LSP gaps should be reported as advisory details, not treated as setup failure; only baseline-blocking LSP failures should interrupt initialization. If an install or backend/config change is suggested, present at most three choices: keep the current backend, configure or switch to the recommended instance-local backend, or defer and document the limitation. Backend ids belong in technical details; user-facing labels should be plain language. Any future install must be explicit, instance-local, curated by ContextForge-owned code, and approved before it runs.
+Validation must be target-client-visible and non-destructive. Use safe read/list/search probes only: context7 docs lookup; mentality read/list only; ssh-tmux list/session visibility only; github, web-search, exa, playwright, openzeppelin safe read/search/list probes only where credentials and semantics allow, otherwise record skipped with reason.
 """.strip()
 
 
@@ -266,6 +254,8 @@ def verify_prompt_render(token: str, prompt: dict[str, Any]) -> None:
         "serena_provision_status": "none",
         "serena_instance_slug": "",
         "serena_server_name": "",
+        "project_state_path": "/home/dgk/workspace/context-portal/.project/context_forge_state.json",
+        "project_state_status": "uninitialized",
         "prompt_version": PROMPT_VERSION,
     }
     rendered = api_request("POST", f"/prompts/{prompt_id(prompt)}", token, payload=args)

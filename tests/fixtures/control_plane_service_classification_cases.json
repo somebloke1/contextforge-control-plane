@@ -1,0 +1,288 @@
+{
+  "version": 1,
+  "project_root": "/home/dgk/workspace/context-portal",
+  "resolved_at": "2026-05-30T00:00:00Z",
+  "cases": [
+    {
+      "name": "context7_real_shared_canonical_capsule",
+      "description": "Real canonical shared service evidence from the local context7 instance manifest.",
+      "expectation": "shared_canonical_capsule",
+      "evidence": {
+        "type": "real_local_manifest",
+        "source_paths": [
+          "server-instances/context7/instance.json",
+          "run/context7-registration.json"
+        ],
+        "notes": [
+          "manifest identifies context7 as canonical and registered",
+          "manifest records verified streamable HTTP and SSE exposure",
+          "client entries are discovery evidence only"
+        ]
+      },
+      "descriptor": {
+        "service_family": "context7",
+        "canonical_service": "context7",
+        "service": "context7",
+        "name": "codex_context7_alias",
+        "client_config_names": [
+          "codex_context7",
+          "gemini_context7",
+          "opencode_context7"
+        ],
+        "slug": "context7",
+        "instantiation_class": "shared_canonical",
+        "scope": {
+          "shared_canonical": true,
+          "scope_type": "global_documentation_lookup",
+          "configuration_signal": "library and topic tool arguments",
+          "requires_local_project_scope": false
+        },
+        "backend": {
+          "transport": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "@upstash/context7-mcp@latest"
+          ]
+        },
+        "bridge": {
+          "needed": true,
+          "provider": "mcpgateway.translate",
+          "streamable_http_url": "http://127.0.0.1:9103/mcp",
+          "sse_url": "http://127.0.0.1:9103/sse"
+        },
+        "contextforge": {
+          "gateway": {
+            "name": "context7-local",
+            "transport": "STREAMABLEHTTP"
+          },
+          "virtual_server": {
+            "name": "context7_local_server",
+            "grouping": "canonical"
+          }
+        },
+        "registration": {
+          "status": "registered",
+          "verified": {
+            "direct_streamable_http": "listed context7 tools",
+            "direct_sse": "listed context7 tools",
+            "contextforge_streamable_http": "listed context7-prefixed tools"
+          }
+        }
+      }
+    },
+    {
+      "name": "ssh_tmux_session_scoped_availability",
+      "description": "Canonical ssh-tmux backend is scoped by live session and remote target arguments, not project ownership.",
+      "expectation": "session_scoped",
+      "evidence": {
+        "type": "real_local_manifest",
+        "source_paths": [
+          "server-instances/ssh-tmux/instance.json",
+          "server-instances/ssh-tmux/README.md",
+          "run/ssh-tmux-registration.json"
+        ],
+        "notes": [
+          "manifest states ssh-tmux is scoped by explicit session and remote target arguments",
+          "manifest records canonical ContextForge registration"
+        ]
+      },
+      "descriptor": {
+        "service_family": "ssh-tmux",
+        "canonical_service": "ssh-tmux",
+        "service": "ssh-tmux",
+        "name": "claude_ssh_alias",
+        "client_config_names": [
+          "codex_ssh_mcp",
+          "claude_ssh_mcp",
+          "gemini_ssh_mcp",
+          "opencode_ssh_mcp"
+        ],
+        "slug": "ssh-tmux",
+        "instantiation_class": "session_scoped",
+        "native_transports": [
+          "streamable_http",
+          "sse"
+        ],
+        "scope": {
+          "session_scope": true,
+          "scope_type": "ssh_target_and_tmux_session",
+          "caller_or_session_scope": {
+            "scope": "session",
+            "authority": "active shell tmux session",
+            "resource_scope": "remote target and path arguments",
+            "host_scope": "local host tmux process"
+          }
+        },
+        "contextforge": {
+          "gateway": {
+            "name": "ssh-tmux",
+            "transport": "STREAMABLEHTTP"
+          },
+          "virtual_server": {
+            "name": "ssh_tmux_server",
+            "grouping": "canonical"
+          }
+        },
+        "registration": {
+          "status": "registered"
+        }
+      }
+    },
+    {
+      "name": "mentality_static_repo_local_governance",
+      "description": "Repo-local governance MCP remains static and authority-bound to governance ledgers.",
+      "expectation": "static_repo_local",
+      "evidence": {
+        "type": "real_local_manifest",
+        "source_paths": [
+          "server-instances/mentality/instance.json",
+          "scripts/governance_mcp.py",
+          "DECISIONS.md",
+          "ABEYANT_INTENTIONS.md",
+          "OPEN_QUESTIONS.md"
+        ],
+        "notes": [
+          "AGENTS.md requires mentality to stay repo-local and independent of client configs",
+          "manifest records governance tools and ContextForge registration"
+        ]
+      },
+      "descriptor": {
+        "service_family": "mentality",
+        "canonical_service": "mentality",
+        "service": "mentality",
+        "name": "repo_mentality",
+        "slug": "mentality",
+        "instantiation_class": "static_repo_local",
+        "native_transports": [
+          "streamable_http",
+          "sse"
+        ],
+        "scope": {
+          "static_repo_local": true,
+          "scope_type": "repo_governance",
+          "workspace_root": "/home/dgk/workspace/context-portal",
+          "governance_authority": [
+            "DECISIONS.md",
+            "ABEYANT_INTENTIONS.md",
+            "OPEN_QUESTIONS.md"
+          ]
+        },
+        "contextforge": {
+          "gateway": {
+            "name": "mentality",
+            "transport": "SSE"
+          },
+          "virtual_server": {
+            "name": "mentality_server"
+          }
+        },
+        "registration": {
+          "status": "registered"
+        }
+      }
+    },
+    {
+      "name": "serena_context_portal_instance_per_project_fixture_only",
+      "description": "Serena remains project-instance scoped, but this fixture must not provision or mutate anything.",
+      "expectation": "instance_per_project",
+      "evidence": {
+        "type": "real_local_manifest",
+        "source_paths": [
+          "server-instances/serena-context-portal/instance.json",
+          "CONTEXTFORGE_SERENA_PROJECT_INIT_HANDOFF.md"
+        ],
+        "notes": [
+          "manifest records Serena as scoped to one project root",
+          "this test is fixture-only and does not provision Serena"
+        ]
+      },
+      "descriptor": {
+        "service_family": "serena",
+        "canonical_service": "serena-context-portal",
+        "service": "serena",
+        "name": "serena",
+        "slug": "serena-context-portal",
+        "instantiation_class": "instance_per_project",
+        "native_transports": [
+          "streamable_http"
+        ],
+        "scope": {
+          "scope_type": "single_workspace_code_intelligence",
+          "workspace_root": "/home/dgk/workspace/context-portal"
+        },
+        "contextforge": {
+          "gateway": {
+            "name": "serena-context-portal",
+            "transport": "STREAMABLEHTTP"
+          },
+          "virtual_server": {
+            "name": "serena_context_portal_server",
+            "grouping": "canonical"
+          }
+        },
+        "registration": {
+          "status": "registered"
+        }
+      }
+    },
+    {
+      "name": "catalog_candidate_pi_web_access_handoff",
+      "description": "A discovered catalog candidate produces a service-management handoff and stops.",
+      "expectation": "candidate_handoff",
+      "evidence": {
+        "type": "catalog_candidate",
+        "source_paths": [
+          "OPEN_QUESTIONS.md"
+        ],
+        "notes": [
+          "candidate is not promoted by project initialization",
+          "dedupe and promotion belong to service management"
+        ]
+      },
+      "descriptor": {
+        "candidate": true,
+        "service_family": "pi-web-access",
+        "canonical_service": "pi-web-access",
+        "service": "pi-web-access",
+        "name": "pi_web_access_candidate",
+        "client_config_names": [
+          "pi_agent_web_access"
+        ],
+        "backend": {
+          "transport": "stdio",
+          "package": "pi-web-access",
+          "command": "pi-web-access-mcp"
+        },
+        "scope": {
+          "runtime_scope": "host",
+          "resource_scope": {
+            "scope": "web-fetch-and-search"
+          }
+        },
+        "registration": {
+          "status": "candidate"
+        }
+      }
+    },
+    {
+      "name": "ambiguous_docs_service_blocks_mutation",
+      "description": "A service descriptor without a narrow authority boundary blocks mutation.",
+      "expectation": "ambiguous_blocked",
+      "evidence": {
+        "type": "synthetic_negative_case",
+        "source_paths": [
+          "docs/initiatives/contextforge-control-plane/design-rfc.md"
+        ],
+        "notes": [
+          "ambiguous classification blocks mutation"
+        ]
+      },
+      "descriptor": {
+        "service_family": "unknown-docs",
+        "service": "unknown-docs",
+        "name": "codex_unknown_docs"
+      }
+    }
+  ]
+}

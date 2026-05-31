@@ -153,10 +153,10 @@ Answered locally by dec-20260528-0028. ContextForge has two token classes here: 
 - Status: open
 - Repository: /home/dgk/workspace/context-portal
 - Created: 2026-05-28
-- Updated: 2026-05-28
+- Updated: 2026-05-30
 - Tags: contextforge,content-security,upstream,prompts,resources
 
-Local registration showed that stock ContextForge 1.0.2 content-security patterns can flag benign tool documentation: Markdown code spans as command_injection and prose containing words like select, update, delete, drop, insert, or union followed by whitespace as sql_injection. The local project keeps validation enabled and shapes content before API writes. Track whether upstream narrows these patterns, adds word boundaries/context, or documents a safer admin documentation workflow so future guidance resources can preserve richer Markdown and examples without global validation relaxation.
+Local prompt/resource writes must keep stock ContextForge content-security validation enabled, preflight generated content, and shape benign Markdown or prose locally rather than disabling validation. The upstream false-positive policy question remains open: track whether IBM narrows those content-security patterns, adds context-aware validation, or documents a safer admin documentation workflow.
 <!-- governance-crud:end id=oq-20260528-0012 -->
 
 <!-- governance-crud:start id=oq-20260528-0013 -->
@@ -166,10 +166,10 @@ Local registration showed that stock ContextForge 1.0.2 content-security pattern
 - Status: open
 - Repository: /home/dgk/workspace/context-portal
 - Created: 2026-05-28
-- Updated: 2026-05-28
+- Updated: 2026-05-30
 - Tags: inventory,candidates,pi,workspace,scope
 
-Current expanded inventory still has candidate backends that are not yet registered as canonical ContextForge services: PI Coding Assistant package integrations pi-web-access and pi-claude-bridge across project .pi settings, project-local governance MCP services outside context-portal, and saeproj invoiceapi. OpenCode's GitHub MCP entry has been promoted to canonical github by dec-20260528-0034, /home/dgk/workspace/web_search standalone MCP has been promoted to canonical web-search by dec-20260528-0035, and AnythingLLM context7 now routes through canonical context7 by dec-20260528-0044. Active PI mcp-bridge sources for the global agent, noetic-pi, and phronesis were routed through ContextForge by dec-20260528-0036, but variant/prep/closure/worktree/archive bridge copies still contain direct @upstash/context7-mcp, @playwright/mcp, or @alolite/ssh-mcp references and need confirmation before bulk editing. Scope contracts are now explicit by dec-20260528-0039: only mentality is a centralized service requiring local-project scope, signaled by its required repo argument. External repo-local governance MCPs remain candidates because their repo-specific ledger scope has not been approved for consolidation. npm metadata shows pi-web-access 0.10.7 provides Pi-agent web search/fetch/GitHub/PDF/video functions, and pi-claude-bridge 0.4.0 provides a Claude Code/Agent SDK-backed AskClaude tool, but neither package integration has yet been proven as an MCP/HTTP backend suitable for ContextForge registration. Prior exclusions still apply to fetch, zai-mcp-server, gemini-tools, filesystem, code-index, desktop-commander, desktop automation, disabled open-computer-use, node_repl, and direct ssh-mcp; SSH should continue through canonical ssh-tmux.
+Noncanonical discovered backends stay candidates or handoffs until service-management deduplicates, plans, approves, and records canonical service identity. The RFC-named seed proof services are Serena and project-inspector; other discovered backends cannot become canonical ContextForge services merely because a client config mentions them.
 <!-- governance-crud:end id=oq-20260528-0013 -->
 
 <!-- governance-crud:start id=oq-20260528-0014 -->
@@ -231,21 +231,21 @@ Operationally answered by dec-20260528-0043. Gemini CLI direct HTTP MCP entries 
 - Status: open
 - Repository: /home/dgk/workspace/context-portal
 - Created: 2026-05-28
-- Updated: 2026-05-28
+- Updated: 2026-05-30
 - Tags: inventory,rest-api,workspace,scope
 
-A broader source-code scan for REST/API/tool-backend patterns found non-assistant project internals such as cognitive_embeddings/src/backend/server.js, semantic-lab FastAPI support code, noetic/phronesis/pi2 package HTTP routes, and PI web-fetch extensions. These are not current MCP client definitions and do not by themselves establish that the user wants them centralized through ContextForge. Current ContextForge promotion remains limited to assistant-facing MCP/API backends and documented candidates. Open question: should future passes include project application REST APIs that are not currently wired as coding-assistant tools, or should they remain outside this MCP consolidation scope unless explicitly requested?
+Non-assistant workspace REST APIs are not automatically promoted into ContextForge by the control-plane MVS. Explicit user or service-management intent is required, and unrelated discovered REST services cannot use the built-in seed path. They remain outside this MCP consolidation scope unless separately approved.
 <!-- governance-crud:end id=oq-20260528-0018 -->
 
 <!-- governance-crud:start id=oq-20260529-0001 -->
 ## oq-20260529-0001: Should project-init explicitly manage Codex project trust?
 
 - Ledger: open-questions
-- Status: open
+- Status: answered
 - Repository: /home/dgk/workspace/context-portal
 - Created: 2026-05-29
-- Updated: 2026-05-29
-- Tags: codex,project-init,trust,serena
+- Updated: 2026-05-30
+- Tags: codex,project-init,trust,serena,answered
 
-Codex ignores project-local .codex/config.toml until the project root is trusted in ~/.codex/config.toml. The per-project Serena association is deterministic after trust, and was verified with a temporary trusted CODEX_HOME during disposable-project tests. The remaining policy decision is whether ContextForge project initialization should only prompt the user to trust the project, or whether an explicit accepted Serena provisioning flow may also add a trusted project entry. Automatic trust would improve determinism but broadens the security surface because project-local hooks and exec policies would also become loadable.
+Codex project trust may be handled only through brokered, separate human approval with receipt-backed evidence and verification through actual config consumption. Generic project-init approval must not silently add trust. Project initialization may surface a trust gap, prepare a separate trust approval request, and wait for verified user-global trust evidence, but it must not bundle trust mutation into Serena provisioning or generic project setup.
 <!-- governance-crud:end id=oq-20260529-0001 -->
