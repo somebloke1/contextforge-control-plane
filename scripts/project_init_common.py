@@ -4,23 +4,28 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Iterable
 
 
 HOME = Path.home().resolve()
 WORKSPACE_ROOT = Path("/home/dgk/workspace").resolve()
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUN_ROOT = REPO_ROOT / "run"
+SERVER_INSTANCES_ROOT = REPO_ROOT / "server-instances"
+WRAPPER_PATH = REPO_ROOT / "scripts" / "contextforge_mcp_wrapper.py"
+PYTHON_PATH = REPO_ROOT / ".venv" / "bin" / "python"
 
 PROJECT_INIT_PROMPT_NAME = "project_init_prompt"
 PROJECT_INIT_RESOURCE_URI = "contextforge://context-portal/project-init/v1"
 SERENA_GUIDANCE_PROMPT_NAME = "serena_project_instance_guidance"
 SERENA_GUIDANCE_RESOURCE_URI = "contextforge://context-portal/serena-project-instance-guidance/v1"
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v4"
 
 ENV_PROJECT_INIT_STATUS = "CONTEXTFORGE_PROJECT_INIT_DIALOGUE_STATUS"
 ENV_SERENA_DECISION = "CONTEXTFORGE_SERENA_DECISION"
@@ -95,6 +100,11 @@ def normalize_slug(name: str) -> str:
     return slug or "project"
 
 
+def normalize_codex_alias(name: str) -> str:
+    alias = re.sub(r"[^A-Za-z0-9_]+", "_", name.strip()).strip("_").lower()
+    return alias or "contextforge_service"
+
+
 def project_root_hash(root: Path, uid: int | None = None) -> str:
     uid_value = os.getuid() if uid is None else uid
     return hashlib.sha256(f"{uid_value}:{root}".encode("utf-8")).hexdigest()
@@ -115,6 +125,155 @@ def project_identity(root: str | Path) -> ProjectIdentity:
         instance_slug=instance_slug,
         server_name=server_name,
         root_hash=root_hash,
+    )
+
+
+def stable_digest(value: Any) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def load_server_instance_manifest(path: str | Path) -> dict[str, Any]:
+    manifest_path = Path(path)
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"server instance manifest must be a JSON object: {manifest_path}")
+    return data
+
+
+def iter_server_instance_manifests(server_instances_root: str | Path = SERVER_INSTANCES_ROOT) -> Iterable[tuple[Path, dict[str, Any]]]:
+    root = Path(server_instances_root)
+    for manifest_path in sorted(root.glob("*/instance.json")):
+        try:
+            yield manifest_path, load_server_instance_manifest(manifest_path)
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+
+
+def discover_contextforge_hosted_services(
+    *,
+    project_root: str | Path | None = None,
+    contextforge_servers: Iterable[dict[str, Any]] | None = None,
+    server_instances_root: str | Path = SERVER_INSTANCES_ROOT,
+) -> list[dict[str, Any]]:
+    """Return service activation candidates from manifests plus optional live readback.
+
+    ContextForge live readback is the authority for whether a virtual server is
+    currently visible. Manifests provide the backend home, scope metadata, and
+    safe client alias. Missing live readback does not invent identity; it marks
+    the candidate as not checked so project-init can ask the assistant to probe
+    before applying.
+    """
+
+    canonical_project = canonical_path(project_root) if project_root is not None else None
+    readback_by_name = {
+        str(server.get("name")): server
+        for server in (contextforge_servers or [])
+        if isinstance(server, dict) and server.get("name")
+    }
+    services: list[dict[str, Any]] = []
+    for manifest_path, manifest in iter_server_instance_manifests(server_instances_root):
+        if manifest.get("enabled") is False:
+            continue
+        virtual_server = _manifest_virtual_server(manifest)
+        server_name = str(virtual_server.get("name") or manifest.get("server_name") or "")
+        if not server_name:
+            continue
+        service_family = str(manifest.get("service") or manifest.get("slug") or manifest.get("name") or manifest_path.parent.name)
+        canonical_project_root = manifest.get("canonical_project_root")
+        if canonical_project_root and canonical_project is not None:
+            if canonical_path(str(canonical_project_root)) != canonical_project:
+                continue
+        instantiation_class = _manifest_instantiation_class(manifest)
+        alias = normalize_codex_alias(str(manifest.get("codex_alias") or service_family))
+        live_server = readback_by_name.get(server_name)
+        registration = manifest.get("registration") if isinstance(manifest.get("registration"), dict) else {}
+        status = "matched" if live_server else ("not_checked" if contextforge_servers is None else "missing")
+        services.append(
+            {
+                "service_family": service_family,
+                "canonical_service": str(manifest.get("canonical_service") or service_family),
+                "service_binding": _manifest_service_binding(service_family, instantiation_class, canonical_project_root),
+                "codex_alias": alias,
+                "instantiation_class": instantiation_class,
+                "backend_instance": str(manifest_path.parent.relative_to(REPO_ROOT)),
+                "manifest_path": str(manifest_path.relative_to(REPO_ROOT)),
+                "virtual_server": server_name,
+                "gateway": _manifest_gateway_name(manifest),
+                "contextforge_readback_status": status,
+                "contextforge_server_id": str(live_server.get("id")) if live_server and live_server.get("id") else None,
+                "registered_tools": list(registration.get("registered_tools") or []),
+                "scope": manifest.get("scope") if isinstance(manifest.get("scope"), dict) else {},
+                "bridge": manifest.get("bridge") if isinstance(manifest.get("bridge"), dict) else {},
+                "non_actions": _activation_non_actions(instantiation_class),
+                "validation_policy": safe_validation_policy(service_family),
+                "descriptor_digest": stable_digest(_redacted_manifest_descriptor(manifest, server_name, instantiation_class)),
+            }
+        )
+    return services
+
+
+def safe_validation_policy(service_family: str) -> dict[str, Any]:
+    normalized = normalize_codex_alias(service_family)
+    policies: dict[str, dict[str, Any]] = {
+        "context7": {
+            "mode": "safe_call",
+            "description": "list tools and call a non-mutating docs lookup or library-id resolution",
+            "safe_operations": ["resolve-library-id", "query-docs"],
+            "requires_mutation_approval": False,
+        },
+        "mentality": {
+            "mode": "read_only",
+            "description": "list or read governance entries only",
+            "safe_operations": ["governance-list", "governance-read"],
+            "requires_mutation_approval": False,
+        },
+        "ssh_tmux": {
+            "mode": "read_only",
+            "description": "list sessions or read existing session visibility only",
+            "safe_operations": ["list-sessions", "get-snapshot"],
+            "requires_mutation_approval": True,
+            "mutation_boundary": "opening sessions or sending commands requires explicit approval",
+        },
+        "github": {
+            "mode": "read_only_if_credentials_available",
+            "description": "use list/search/read probes only where credentials allow",
+            "safe_operations": ["search-repositories", "list-issues", "get-file-contents"],
+            "requires_mutation_approval": False,
+        },
+        "web_search": {
+            "mode": "safe_call",
+            "description": "use search or fetch-like read probes only",
+            "safe_operations": ["web-search", "fetch-content"],
+            "requires_mutation_approval": False,
+        },
+        "exa_search": {
+            "mode": "safe_call",
+            "description": "use search or fetch-like read probes only",
+            "safe_operations": ["web-search-exa", "web-fetch-exa"],
+            "requires_mutation_approval": False,
+        },
+        "playwright": {
+            "mode": "read_only_if_semantics_allow",
+            "description": "list tools or inspect an inert page only; navigation/action probes may be skipped",
+            "safe_operations": ["list-tools", "browser-snapshot"],
+            "requires_mutation_approval": False,
+        },
+        "openzeppelin_solidity_contracts": {
+            "mode": "safe_call",
+            "description": "use documentation/template lookup or generation preview only when non-mutating",
+            "safe_operations": ["list-tools", "solidity-erc20"],
+            "requires_mutation_approval": False,
+        },
+    }
+    return policies.get(
+        normalized,
+        {
+            "mode": "skip_without_service_policy",
+            "description": "validation skipped until a service-specific non-destructive probe is defined",
+            "safe_operations": [],
+            "requires_mutation_approval": False,
+        },
     )
 
 
@@ -228,6 +387,75 @@ def read_project_env(project_root: str | Path) -> dict[str, str]:
             value = value[1:-1]
         values[key] = value
     return values
+
+
+def _manifest_virtual_server(manifest: dict[str, Any]) -> dict[str, Any]:
+    contextforge = manifest.get("contextforge") if isinstance(manifest.get("contextforge"), dict) else {}
+    virtual = contextforge.get("virtual_server") if isinstance(contextforge.get("virtual_server"), dict) else {}
+    return virtual
+
+
+def _manifest_gateway_name(manifest: dict[str, Any]) -> str | None:
+    contextforge = manifest.get("contextforge") if isinstance(manifest.get("contextforge"), dict) else {}
+    gateway = contextforge.get("gateway") if isinstance(contextforge.get("gateway"), dict) else {}
+    name = gateway.get("name")
+    return str(name) if name else None
+
+
+def _manifest_instantiation_class(manifest: dict[str, Any]) -> str:
+    if manifest.get("service") == "serena" or str(manifest.get("name") or "").startswith("serena-"):
+        return "instance_per_project"
+    scope = manifest.get("scope") if isinstance(manifest.get("scope"), dict) else {}
+    scope_type = str(scope.get("scope_type") or "")
+    if manifest.get("slug") == "mentality" or scope_type == "caller_supplied_local_repo":
+        return "static_repo_local"
+    if scope_type in {"ssh_target_and_tmux_session", "isolated_browser_runtime"}:
+        return "session_scoped"
+    if "credential" in scope_type:
+        return "credential_scoped"
+    if "resource" in scope_type:
+        return "resource_scoped"
+    if scope.get("requires_local_project_scope") is True:
+        return "instance_per_project"
+    return "shared_canonical"
+
+
+def _manifest_service_binding(service_family: str, instantiation_class: str, canonical_project_root: Any) -> str:
+    if instantiation_class == "instance_per_project" and canonical_project_root:
+        return f"{service_family}:{project_root_hash(canonical_path(str(canonical_project_root)))[:12]}"
+    if instantiation_class == "shared_canonical":
+        return f"{service_family}:canonical"
+    return f"{service_family}:{instantiation_class}"
+
+
+def _activation_non_actions(instantiation_class: str) -> list[str]:
+    actions = [
+        "do not mutate user-global Codex config or trust",
+        "do not write secrets or token material",
+        "do not mutate the live ContextForge registry or catalog",
+    ]
+    if instantiation_class == "shared_canonical":
+        actions.extend(
+            [
+                "do not create a per-project backend",
+                "do not create a per-project gateway, bridge, wrapper, port, unit, or server-instance directory",
+            ]
+        )
+    elif instantiation_class != "instance_per_project":
+        actions.append("do not duplicate the backend for client alias or project-name convenience")
+    return actions
+
+
+def _redacted_manifest_descriptor(manifest: dict[str, Any], server_name: str, instantiation_class: str) -> dict[str, Any]:
+    return {
+        "name": manifest.get("name"),
+        "slug": manifest.get("slug"),
+        "service": manifest.get("service"),
+        "instantiation_class": instantiation_class,
+        "virtual_server": server_name,
+        "scope": manifest.get("scope") if isinstance(manifest.get("scope"), dict) else {},
+        "backend_transport": (manifest.get("backend") or {}).get("transport") if isinstance(manifest.get("backend"), dict) else None,
+    }
 
 
 def write_project_env(project_root: str | Path, updates: dict[str, str]) -> None:

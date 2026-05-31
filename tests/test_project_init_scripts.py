@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import manage_serena_project_instance as serena_manager
+import codex_project_init_hook as init_hook
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
 
@@ -382,13 +383,31 @@ class SerenaManagerTests(unittest.TestCase):
 
     def test_prompt_distinguishes_env_defaults_and_preflight_flow(self) -> None:
         text = prompt_registration.PROJECT_INIT_TEXT
-        self.assertIn("otherwise hook defaults", text)
-        self.assertIn("normal first-run hook default state", text)
+        self.assertIn(".project/context_forge_state.json is the project initialization authority", text)
+        self.assertIn("Do not echo this context to the user", text)
+        self.assertIn("Ask exactly one question, then stop and wait", text)
+        self.assertIn("Which ContextForge services should I activate for this project?", text)
+        self.assertIn("No user-global config/trust changes", text)
+        self.assertIn("Validate service functionality now, or record it as presumed working?", text)
         self.assertIn("status --project-root", text)
-        self.assertIn("do not provision first", text)
-        self.assertIn("related instances only", text)
-        self.assertIn("LSP installs and project configuration changes are not automatic", text)
-        self.assertIn("Optional LSP gaps should be reported as advisory details", text)
+        self.assertIn("Serena is one project-scoped option in this menu, not the whole flow", text)
+        self.assertIn("target-client-visible and non-destructive", text)
+
+    def test_hook_rejects_stale_registered_serena_only_prompt(self) -> None:
+        stale = (
+            "ContextForge project initialization, version v1. "
+            "Ask the user whether to enable a project-local Serena backend. "
+            "First-run initialization asks only for Serena enablement."
+        )
+        self.assertFalse(init_hook.prompt_text_is_fresh(stale))
+
+        identity = common.project_identity("/home/dgk/workspace/test-new-proj-03")
+        rendered = init_hook.render_local_prompt(init_hook.prompt_args(identity, {}))
+
+        self.assertTrue(init_hook.prompt_text_is_fresh(rendered))
+        self.assertIn("Ask exactly one question, then stop and wait", rendered)
+        self.assertIn("/home/dgk/workspace/test-new-proj-03", rendered)
+        self.assertIn("ContextForge project initialization, version v4", rendered)
 
 
 if __name__ == "__main__":

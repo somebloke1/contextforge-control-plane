@@ -6,11 +6,23 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
+import argparse
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import control_plane_contracts as contracts
+import control_plane_project_state as project_state
+from project_init_common import (
+    PYTHON_PATH,
+    REPO_ROOT,
+    WRAPPER_PATH,
+    discover_contextforge_hosted_services,
+    normalize_codex_alias,
+    stable_digest as common_stable_digest,
+)
 
 
 SCHEMA_URI = "contextforge://control-plane/contextforge-binding-intent/v1"
@@ -57,10 +69,19 @@ REQUIRED_CLIENT_BINDING_TRACE_LAYERS = (
     "target_client",
     "redaction",
 )
+PROJECT_INIT_OWNER_MARKER = "# contextforge-project-init-owner = \"ContextForge\""
+PROJECT_INIT_BINDING_MARKER = "# contextforge-project-init-service-binding = \"{service_binding}\""
+PROJECT_INIT_SERVER_MARKER = "# contextforge-project-init-virtual-server = \"{virtual_server}\""
+VALIDATION_MODES = frozenset({"validate_now", "presume_working"})
+PROJECT_INIT_APPROVAL_SCOPE = "project-local-client-config-and-state"
 
 
 class ContextForgeBindingInputError(ValueError):
     """Raised when an intent request is missing required identity inputs."""
+
+
+class ProjectInitApplyError(RuntimeError):
+    """Raised when scoped project-init apply cannot safely write local files."""
 
 
 def now_timestamp() -> str:
@@ -70,6 +91,216 @@ def now_timestamp() -> str:
 def stable_digest(value: Any) -> str:
     encoded = json.dumps(_json_copy(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def build_project_init_codex_binding_block(service: Mapping[str, Any]) -> str:
+    """Return the managed project-local Codex TOML block for one service."""
+
+    alias = normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
+    virtual_server = str(service.get("virtual_server") or "")
+    service_binding = str(service.get("service_binding") or service.get("service_family") or alias)
+    _require("codex_alias", alias)
+    _require("virtual_server", virtual_server)
+    return (
+        f"{PROJECT_INIT_OWNER_MARKER}\n"
+        f"{PROJECT_INIT_BINDING_MARKER.format(service_binding=service_binding)}\n"
+        f"{PROJECT_INIT_SERVER_MARKER.format(virtual_server=virtual_server)}\n"
+        f"[mcp_servers.{alias}]\n"
+        f"command = \"{PYTHON_PATH}\"\n"
+        f"args = [\"{WRAPPER_PATH}\", \"{virtual_server}\"]\n"
+        f"cwd = \"{REPO_ROOT}\"\n"
+        "startup_timeout_ms = 60000\n"
+        "tool_timeout_ms = 120000\n"
+    )
+
+
+def plan_project_init_codex_config_write(
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    existing_text: str | None = None,
+    replace_existing_owned: bool = True,
+) -> dict[str, Any]:
+    """Build a deterministic project-local Codex config write plan.
+
+    The plan never targets user-global config. Unmanaged collisions block so a
+    developer must explicitly resolve local config they authored.
+    """
+
+    root = project_state.validate_project_root(project_root, require_workspace=False)
+    config_path = root / ".codex" / "config.toml"
+    text = existing_text if existing_text is not None else (config_path.read_text(encoding="utf-8") if config_path.exists() else "")
+    output = text.rstrip()
+    changes: list[dict[str, Any]] = []
+    blockers: list[dict[str, Any]] = []
+    seen_aliases: set[str] = set()
+
+    for service in selected_services:
+        alias = normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
+        if alias in seen_aliases:
+            blockers.append(_blocker("duplicate_codex_alias", f"duplicate Codex MCP alias selected: {alias}"))
+            continue
+        seen_aliases.add(alias)
+        block = build_project_init_codex_binding_block(service).rstrip()
+        section_re = _codex_section_re(alias)
+        match = section_re.search(output)
+        block_class = "absent"
+        operation = "append"
+        if match:
+            existing_block = match.group(0).rstrip()
+            if PROJECT_INIT_OWNER_MARKER in existing_block:
+                block_class = "owned"
+                operation = "replace"
+                if replace_existing_owned:
+                    output = output[: match.start()] + block + output[match.end() :]
+            else:
+                block_class = "unmanaged_same_name"
+                operation = "blocked"
+                blockers.append(_blocker("client_config_conflict", f"unmanaged [mcp_servers.{alias}] already exists."))
+        else:
+            output = (output + "\n\n" + block).strip() if output else block
+        changes.append(
+            {
+                "alias": alias,
+                "service_binding": service.get("service_binding"),
+                "virtual_server": service.get("virtual_server"),
+                "owned_block_class": block_class,
+                "operation": operation,
+            }
+        )
+
+    next_text = output.rstrip() + "\n" if output else ""
+    plan = {
+        "surface": ".codex/config.toml",
+        "scope": "project_local",
+        "config_path": str(config_path),
+        "decision": "block" if blockers else "allow_owned_project_local_write",
+        "write_allowed": not blockers,
+        "blockers": _dedupe_blockers(blockers),
+        "changes": changes,
+        "before_digest": common_stable_digest(text),
+        "after_digest": common_stable_digest(next_text),
+        "next_text": next_text,
+        "non_actions": [
+            "does not write user-global Codex config",
+            "does not mutate Codex trust",
+            "does not restart Codex",
+            "does not mutate ContextForge registry or service catalog",
+            "does not write secrets or token material",
+        ],
+        "redaction_status": "redacted",
+    }
+    contracts.validate_redacted(plan, require_status=True)
+    return plan
+
+
+def build_project_init_validation_plan(
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    validation_mode: str,
+    target_client: str = "codex",
+) -> dict[str, Any]:
+    if validation_mode not in VALIDATION_MODES:
+        raise ContextForgeBindingInputError(f"validation_mode must be one of {sorted(VALIDATION_MODES)}")
+    service_plans = []
+    for service in selected_services:
+        policy = service.get("validation_policy") if isinstance(service.get("validation_policy"), Mapping) else {}
+        service_plans.append(
+            {
+                "service_binding": service.get("service_binding"),
+                "service_family": service.get("service_family"),
+                "target_client": target_client,
+                "mode": validation_mode,
+                "required_proof": "target_client_visible_mcp" if validation_mode == "validate_now" else "deferred",
+                "safe_default": _json_copy(policy),
+                "status": "pending_target_client_probe" if validation_mode == "validate_now" else "presumed_working_without_probe",
+                "non_destructive": True,
+            }
+        )
+    return {
+        "validation_mode": validation_mode,
+        "target_client": target_client,
+        "service_plans": service_plans,
+        "asks_user_choice": True,
+        "non_actions": [
+            "does not use backend health alone as target-client proof",
+            "does not call mutating tools during default validation",
+            "does not mark target-client verification passed when validation is presumed",
+        ],
+    }
+
+
+def apply_project_init_service_activation(
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    validation_mode: str,
+    approval_scope: str,
+    target_client: str = "codex",
+    validation_results: Mapping[str, Mapping[str, Any]] | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Apply approved project-local service activation only.
+
+    Writes are limited to `<project>/.codex/config.toml` and
+    `<project>/.project/context_forge_state.json`. The caller must provide an
+    approval scope string so this helper cannot be mistaken for registry,
+    backend, trust, or secret mutation authorization.
+    """
+
+    if approval_scope != PROJECT_INIT_APPROVAL_SCOPE:
+        raise ProjectInitApplyError(f"approval_scope must be {PROJECT_INIT_APPROVAL_SCOPE!r}")
+    if validation_mode not in VALIDATION_MODES:
+        raise ProjectInitApplyError(f"unsupported validation mode: {validation_mode}")
+    root = project_state.validate_project_root(project_root, require_workspace=False)
+    services = [_json_copy(service) for service in selected_services]
+    if not services:
+        raise ProjectInitApplyError("at least one selected service is required")
+
+    config_plan = plan_project_init_codex_config_write(root, services)
+    validation_plan = build_project_init_validation_plan(services, validation_mode=validation_mode, target_client=target_client)
+    if config_plan["decision"] != "allow_owned_project_local_write":
+        raise ProjectInitApplyError(f"project-local Codex config write blocked: {config_plan['blockers']}")
+
+    base_state = project_state.read_or_default(root)
+    next_state = project_state.apply_project_init_activation_to_state(
+        base_state,
+        services,
+        target_client=target_client,
+        client_config_plan=config_plan,
+        validation_plan=validation_plan,
+        validation_results=validation_results or {},
+        updated_by="control_plane_contextforge_binding",
+    )
+    result = {
+        "project_root": str(root),
+        "dry_run": dry_run,
+        "approval_scope": approval_scope,
+        "config_plan": {key: value for key, value in config_plan.items() if key != "next_text"},
+        "validation_plan": validation_plan,
+        "state_status": next_state["status"],
+        "selected_service_bindings": [service.get("service_binding") for service in services],
+        "writes": [
+            str(root / ".codex" / "config.toml"),
+            str(project_state.project_state_path(root)),
+        ],
+        "non_actions": [
+            "no user-global config or trust mutation",
+            "no ContextForge registry or catalog mutation",
+            "no backend installation or restart",
+            "no secret or token material write",
+        ],
+    }
+    if dry_run:
+        result["planned_state"] = next_state
+        return result
+
+    config_path = root / ".codex" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(config_plan["next_text"], encoding="utf-8")
+    written_state = project_state.write_state_atomic(root, next_state, updated_by="control_plane_contextforge_binding")
+    result["state_revision"] = written_state["meta"]["revision"]
+    return result
 
 
 def build_contextforge_registration_intent(
@@ -422,6 +653,13 @@ def _base_scope_blockers(
     return blockers
 
 
+def _codex_section_re(alias: str) -> re.Pattern[str]:
+    escaped = re.escape(alias)
+    return re.compile(
+        rf"(?ms)^(?:# contextforge-project-init-[^\n]*\n)*\[mcp_servers\.{escaped}\]\n.*?(?=^(?:# contextforge-project-init-[^\n]*\n)*\[mcp_servers\.|\Z)"
+    )
+
+
 def _policy_blockers(
     policy: Mapping[str, Any],
     *,
@@ -585,3 +823,60 @@ def _require(name: str, value: str) -> None:
 
 def _json_copy(value: Any) -> Any:
     return copy.deepcopy(value)
+
+
+def _load_contextforge_readback(path: str | None) -> list[dict[str, Any]] | None:
+    if not path:
+        return None
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if isinstance(data, dict) and isinstance(data.get("items"), list):
+        return [item for item in data["items"] if isinstance(item, dict)]
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    raise ProjectInitApplyError("ContextForge readback JSON must be a list or an object with items")
+
+
+def _selected_services_from_args(args: argparse.Namespace) -> list[dict[str, Any]]:
+    readback = _load_contextforge_readback(args.contextforge_readback_json)
+    services = discover_contextforge_hosted_services(project_root=args.project_root, contextforge_servers=readback)
+    by_key = {}
+    for service in services:
+        for key in (service.get("codex_alias"), service.get("service_family"), service.get("service_binding")):
+            if key:
+                by_key[str(key)] = service
+    selected = []
+    for raw_name in args.service:
+        name = str(raw_name)
+        service = by_key.get(name) or by_key.get(normalize_codex_alias(name))
+        if service is None:
+            raise ProjectInitApplyError(f"selected service is not available from manifests/readback: {name}")
+        selected.append(service)
+    return selected
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Apply scoped ContextForge project-init service activation.")
+    parser.add_argument("--project-root", required=True)
+    parser.add_argument("--service", action="append", required=True, help="Service alias, family, or binding to activate. Repeatable.")
+    parser.add_argument("--validation-mode", required=True, choices=sorted(VALIDATION_MODES))
+    parser.add_argument("--approval-scope", required=True, choices=[PROJECT_INIT_APPROVAL_SCOPE])
+    parser.add_argument("--target-client", default="codex", choices=["codex"])
+    parser.add_argument("--contextforge-readback-json", help="Optional fixture/live readback of ContextForge /servers.")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+
+    selected = _selected_services_from_args(args)
+    result = apply_project_init_service_activation(
+        args.project_root,
+        selected,
+        validation_mode=args.validation_mode,
+        approval_scope=args.approval_scope,
+        target_client=args.target_client,
+        dry_run=args.dry_run,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

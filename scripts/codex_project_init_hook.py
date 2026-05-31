@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import contextforge_mcp_wrapper as gateway
+import control_plane_project_state as project_state
+import register_project_init_prompt as project_init_prompt
 
 from project_init_common import (
     ENV_PROJECT_INIT_STATUS,
@@ -78,11 +80,24 @@ def idempotency_key(session_id: str, root_hash: str) -> str:
 
 
 def should_inject(project_root: Path, values: dict[str, str]) -> bool:
+    status_from_state = project_state_status(project_root)
+    if status_from_state in {"initialized", "disabled"}:
+        return False
     status = values.get(ENV_PROJECT_INIT_STATUS)
     if safe_workspace_project_root(project_root):
         return status is None or status in PROJECT_INIT_ACTIVE_STATES
     env_exists = (project_root / ".env").exists()
     return env_exists and status in PROJECT_INIT_ACTIVE_STATES
+
+
+def project_state_status(project_root: Path) -> str:
+    try:
+        state = project_state.load_state(project_root)
+    except Exception:
+        return "invalid_or_unreadable"
+    if state is None:
+        return "uninitialized"
+    return str(state.get("status") or "unknown")
 
 
 def get_prompt_id(token: str) -> str | None:
@@ -94,7 +109,17 @@ def get_prompt_id(token: str) -> str | None:
 
 
 def render_prompt(token: str, prompt_id: str, identity: Any, values: dict[str, str]) -> str:
-    args = {
+    args = prompt_args(identity, values)
+    rendered = gateway._request("POST", f"/prompts/{prompt_id}", token=token, body=args)
+    text = rendered_prompt_text(rendered)
+    if prompt_text_is_fresh(text):
+        return text
+    log_failure("registered project_init_prompt is stale; using local prompt template fallback")
+    return render_local_prompt(args)
+
+
+def prompt_args(identity: Any, values: dict[str, str]) -> dict[str, str]:
+    return {
         "project_name": identity.root.name,
         "project_root": str(identity.root),
         "project_root_hash": identity.root_hash,
@@ -103,9 +128,13 @@ def render_prompt(token: str, prompt_id: str, identity: Any, values: dict[str, s
         "serena_provision_status": values.get(ENV_SERENA_PROVISION_STATUS, "none"),
         "serena_instance_slug": values.get(ENV_SERENA_INSTANCE_SLUG, ""),
         "serena_server_name": values.get(ENV_SERENA_SERVER_NAME, ""),
+        "project_state_path": str(project_state.project_state_path(identity.root)),
+        "project_state_status": project_state_status(identity.root),
         "prompt_version": PROMPT_VERSION,
     }
-    rendered = gateway._request("POST", f"/prompts/{prompt_id}", token=token, body=args)
+
+
+def rendered_prompt_text(rendered: Any) -> str:
     messages = rendered.get("messages") if isinstance(rendered, dict) else None
     if isinstance(messages, list) and messages:
         parts: list[str] = []
@@ -121,6 +150,28 @@ def render_prompt(token: str, prompt_id: str, identity: Any, values: dict[str, s
         if text:
             return text
     return str(rendered).strip()
+
+
+def prompt_text_is_fresh(text: str) -> bool:
+    required = (
+        "This is model-visible control context. Do not echo this context to the user.",
+        "Ask exactly one question, then stop and wait",
+        "Which ContextForge services should I activate for this project?",
+        ".project/context_forge_state.json is the project initialization authority",
+        "Project init may write only project-local .codex/config.toml",
+        "Validate service functionality now, or record it as presumed working?",
+        "Serena is one project-scoped option in this menu, not the whole flow",
+    )
+    return all(item in text for item in required)
+
+
+def render_local_prompt(args: dict[str, str]) -> str:
+    text = project_init_prompt.PROJECT_INIT_TEXT
+    for key, value in args.items():
+        text = text.replace("{{ " + key + " }}", value)
+        text = text.replace("{{" + key + "}}", value)
+        text = text.replace("{" + key + "}", value)
+    return text
 
 
 def output_context(event_name: str, text: str) -> None:

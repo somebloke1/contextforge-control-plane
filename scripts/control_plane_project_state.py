@@ -7,6 +7,7 @@ import errno
 import hashlib
 import json
 import os
+import re
 import stat
 import tempfile
 import time
@@ -293,6 +294,150 @@ def default_state(
     }
 
 
+def apply_project_init_activation_to_state(
+    state: dict[str, Any],
+    selected_services: list[dict[str, Any]],
+    *,
+    target_client: str,
+    client_config_plan: dict[str, Any],
+    validation_plan: dict[str, Any],
+    validation_results: dict[str, Any] | None = None,
+    updated_by: str = DEFAULT_UPDATED_BY,
+) -> dict[str, Any]:
+    """Return updated project-init state for approved local service activation.
+
+    This helper is intentionally limited to project-local state semantics. It
+    records selected ContextForge virtual-server bindings, the target-client
+    config write status, validation mode/results, and explicit non-actions. It
+    does not create backend ownership claims or treat client config as service
+    identity.
+    """
+
+    next_state = json.loads(json.dumps(state))
+    validate_supported_schema_version(next_state)
+    validation_results = validation_results or {}
+    now = now_timestamp()
+    next_state["meta"]["updated_at"] = now
+    next_state["meta"]["updated_by"] = updated_by
+    next_state["meta"]["last_plan_id"] = _activation_plan_id(selected_services, client_config_plan, validation_plan)
+    next_state.setdefault("decisions", {})
+    next_state.setdefault("services", {})
+    next_state.setdefault("client_trust", {})
+    next_state.setdefault("open_items", [])
+    next_state.setdefault("artifact_refs", empty_artifact_refs())
+
+    all_target_client_verified = bool(selected_services)
+    for service in selected_services:
+        binding = str(service.get("service_binding") or service.get("service_family") or "")
+        if not binding:
+            raise StateValidationError("selected service missing service_binding")
+        service_key = _state_map_key(binding)
+        result = _validation_result_for(validation_results, binding)
+        validation_status = _service_validation_status(validation_plan, binding, result)
+        if validation_status != "passed":
+            all_target_client_verified = False
+        contract_ref = _service_ref("service-bindings", binding)
+        capsule_ref = _service_ref("capability-capsules", binding) if service.get("instantiation_class") == "shared_canonical" else None
+        semantic_policy_ref = _service_ref("semantic-tool-policies", binding)
+        next_state["decisions"][service_key] = {
+            "decision_kind": "service",
+            "state": "accepted",
+            "service_binding": binding,
+            "contract_card_ref": contract_ref,
+            "decided_at": now,
+            "decided_by": updated_by,
+            "source_plan_id": next_state["meta"]["last_plan_id"],
+            "reopened_at": None,
+            "notes": "project-local ContextForge service activation approved",
+            "x_validation_mode": validation_plan.get("validation_mode"),
+            "x_non_actions": list(service.get("non_actions") or []),
+        }
+        next_state["services"][service_key] = {
+            "service_family": str(service.get("service_family") or service_key),
+            "service_binding": binding,
+            "instantiation_class": str(service.get("instantiation_class") or "shared_canonical"),
+            "contract_card_ref": contract_ref,
+            "capability_capsule_ref": capsule_ref,
+            "semantic_tool_policy_ref": semantic_policy_ref,
+            "backend_instance": service.get("backend_instance"),
+            "virtual_server": service.get("virtual_server"),
+            "provision_status": "verified" if validation_status == "passed" else "none",
+            "lifecycle": {
+                "activation": "project_local_client_binding",
+                "contextforge_readback_status": service.get("contextforge_readback_status"),
+                "gateway": service.get("gateway"),
+                "non_actions": list(service.get("non_actions") or []),
+            },
+            "language_profile": None,
+            "required_verification_layers": ["contextforge_gateway", "target_client", "tool_policy", "redaction"],
+            "verification_layers": {
+                "contextforge_gateway": {"status": service.get("contextforge_readback_status") or "not_checked"},
+                "target_client": {
+                    "status": validation_status,
+                    "mode": validation_plan.get("validation_mode"),
+                    "proof": "target-client-visible MCP proof" if validation_status == "passed" else None,
+                },
+                "tool_policy": {"status": "safe_default_selected", "policy": service.get("validation_policy")},
+                "redaction": {"status": "passed"},
+            },
+            "target_clients": {
+                target_client: {
+                    "status": "project_local_config_planned" if client_config_plan.get("write_allowed") else "blocked",
+                    "surface": client_config_plan.get("surface"),
+                    "alias": service.get("codex_alias"),
+                    "virtual_server": service.get("virtual_server"),
+                    "validation_status": validation_status,
+                }
+            },
+            "verification_trace_refs": list(result.get("verification_trace_refs") or []),
+            "consent_receipt_refs": [],
+            "evidence": [
+                {
+                    "kind": "project_init_activation",
+                    "target_client": target_client,
+                    "client_config_after_digest": client_config_plan.get("after_digest"),
+                    "validation_mode": validation_plan.get("validation_mode"),
+                    "validation_status": validation_status,
+                    "client_configs_are_service_identities": False,
+                }
+            ],
+            "x_non_actions": list(service.get("non_actions") or []),
+        }
+
+    next_state["client_trust"][target_client] = {
+        "state": "unknown",
+        "root": next_state["project"]["root"],
+        "trust_surface": "user-global Codex project trust",
+        "approval_record": None,
+        "verified_at": None,
+        "last_probe": None,
+    }
+    if all_target_client_verified:
+        next_state["status"] = "initialized"
+        _resolve_open_item(next_state, "project-init-validation")
+    else:
+        next_state["status"] = "in_progress"
+        _upsert_open_item(
+            next_state,
+            {
+                "id": "project-init-validation",
+                "type": "verification",
+                "severity": "warning",
+                "blocks_initialized": False,
+                "resource": "target-client-visible MCP proof",
+                "created_at": now,
+                "resolution_state": "deferred" if validation_plan.get("validation_mode") == "presume_working" else "open",
+                "detail": {
+                    "validation_mode": validation_plan.get("validation_mode"),
+                    "reason": "target-client validation was not completed during activation",
+                    "accepted_state": "bindings recorded but not verified as working",
+                },
+            },
+        )
+    validate_state(next_state)
+    return next_state
+
+
 def read_json_file(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -301,6 +446,71 @@ def read_json_file(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise StateValidationError(f"project state must be a JSON object: {path}")
     return data
+
+
+def _activation_plan_id(
+    selected_services: list[dict[str, Any]],
+    client_config_plan: dict[str, Any],
+    validation_plan: dict[str, Any],
+) -> str:
+    payload = {
+        "services": [
+            {
+                "service_binding": service.get("service_binding"),
+                "virtual_server": service.get("virtual_server"),
+                "target_alias": service.get("codex_alias"),
+            }
+            for service in selected_services
+        ],
+        "client_config_after_digest": client_config_plan.get("after_digest"),
+        "validation_mode": validation_plan.get("validation_mode"),
+    }
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    return f"project-init-activation-{digest[:16]}"
+
+
+def _state_map_key(value: str) -> str:
+    key = re.sub(r"[^A-Za-z0-9_.:-]+", "-", value).strip("-._:")
+    if not key:
+        return "service"
+    if not re.match(r"^[A-Za-z0-9]", key):
+        key = f"service-{key}"
+    return key[:192]
+
+
+def _service_ref(prefix: str, binding: str) -> str:
+    return f"contextforge://control-plane/{prefix}/{_state_map_key(binding)}"
+
+
+def _validation_result_for(validation_results: dict[str, Any], binding: str) -> dict[str, Any]:
+    result = validation_results.get(binding) or validation_results.get(_state_map_key(binding)) or {}
+    return result if isinstance(result, dict) else {}
+
+
+def _service_validation_status(validation_plan: dict[str, Any], binding: str, result: dict[str, Any]) -> str:
+    if validation_plan.get("validation_mode") == "presume_working":
+        return "presumed_working"
+    if result.get("target_client_visible") is True and result.get("status") in {"passed", "verified"}:
+        return "passed"
+    if result.get("status") == "skipped":
+        return "skipped"
+    return "pending"
+
+
+def _upsert_open_item(state: dict[str, Any], item: dict[str, Any]) -> None:
+    items = state.setdefault("open_items", [])
+    for index, existing in enumerate(items):
+        if existing.get("id") == item["id"]:
+            items[index] = item
+            return
+    items.append(item)
+
+
+def _resolve_open_item(state: dict[str, Any], item_id: str) -> None:
+    for item in state.setdefault("open_items", []):
+        if item.get("id") == item_id:
+            item["resolution_state"] = "resolved"
+            item["blocks_initialized"] = False
 
 
 def load_state(project_root: str | Path, *, require_workspace: bool = False) -> dict[str, Any] | None:
