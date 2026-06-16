@@ -42,6 +42,15 @@ disabled `desktop-automation`, disabled `desktop-commander`, disabled
 `semantic-lab`. They remain triage evidence, not automatic promotion
 evidence.
 
+## Candidate Follow-Up Debt
+
+| Candidate | Owner | Impact | Next evidence step | Review trigger | Retirement condition |
+| --- | --- | --- | --- | --- | --- |
+| `pi-web-access` and `pi-claude-bridge` | ContextForge service-management operator | Pi package rows dominate inventory volume; treating each worktree entry as a service would recreate client-config duplication. | Prove whether each package is a reusable MCP/HTTP backend, assistant-package-only integration, or project-local Pi capability; deduplicate by package/runtime/credential scope. | Pi global shim parity, Pi project-init activation, or explicit user request for centralized Pi web/Claude bridge capability. | Approved canonical service identity with backend home and probes, or explicit exclusion/project-local disposition recorded in service-management docs. |
+| `invoiceapi` | Owning project operator for `/home/dgk/workspace/profit-system-agent-currency` | May require project credentials or billing-domain scope; unsafe to promote from Claude project config alone. | Inspect backend package, credential requirements, runtime scope, and read-only probe options in the owning project. | Owning project asks for ContextForge exposure or cross-client use. | Classified as project-local/excluded, or promoted through an approved `server-instances/<service-slug>/` home with sanitized env template and probes. |
+| External repo-local governance MCPs | Owning repository maintainers plus ContextForge governance operator | Similar to `mentality`, but ledger scope is repository-local and may not be safe to centralize. | Decide whether cross-repo governance should consolidate into `mentality` or remain separate project-local MCPs. | Cross-repo governance workflow requires centralized access. | Consolidation decision plus migration/probes, or durable project-local classification in the owning repo. |
+| Non-assistant workspace REST/API source hints | ContextForge service-management operator | Application internals can look like tool backends but are not MCP client definitions. | Separate application API cataloging from MCP service inventory; identify any real reusable API/tool boundary. | A workspace API is requested as a ContextForge tool or service. | Promoted through approved REST/OpenAPI registration assets, or removed from MCP promotion consideration. |
+
 ## Canonical ContextForge Services
 
 | Client-facing name | ContextForge virtual server | Backend home | Status |
