@@ -1951,7 +1951,8 @@ def create(args: argparse.Namespace) -> int:
     registration = register_gateway_and_server(token, identity, port)
     scaffold = ensure_lsp_scaffold(instance_dir, language)
     write_manifest(instance_dir, identity, port, registration, lsp_metadata=lsp_manifest_metadata(language, scaffold))
-    merge_codex_config(identity, replace=args.replace_existing_serena_config)
+    if getattr(args, "write_codex_config", True):
+        merge_codex_config(identity, replace=args.replace_existing_serena_config)
     write_project_env(
         identity.root,
         {
@@ -2127,6 +2128,7 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--language", help="Explicit Serena language for empty-project LSP verification.")
     create_parser.add_argument("--verify", action="store_true", help="Run manager verification after create.")
     create_parser.add_argument("--app-server", action="store_true", help="With --verify, include Codex app-server MCP calls.")
+    create_parser.set_defaults(write_codex_config=True)
     create_parser.set_defaults(func=create)
 
     scaffold_parser = sub.add_parser("refresh-lsp-scaffold", help="Create or repair instance-local advisory LSP scaffolding.")

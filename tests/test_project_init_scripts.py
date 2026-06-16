@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -163,6 +164,55 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertIn(f'contextforge-project-init-owner = "{identity.server_name}"', config)
             self.assertIn(str(serena_manager.WRAPPER_PATH), config)
             self.assertIn(identity.server_name, config)
+
+    def test_create_respects_write_codex_config_flag(self) -> None:
+        for write_codex_config in (False, True):
+            with self.subTest(write_codex_config=write_codex_config):
+                with tempfile.TemporaryDirectory(dir=common.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as runtime:
+                    root = Path(tmp).resolve()
+                    runtime_root = Path(runtime)
+                    repo_root = runtime_root / "repo"
+                    repo_root.mkdir()
+                    run_root = runtime_root / "run"
+                    systemd_root = runtime_root / "systemd"
+                    args = Namespace(
+                        project_root=str(root),
+                        require_workspace=True,
+                        language=None,
+                        replace_existing_serena_config=False,
+                        verify=False,
+                        app_server=False,
+                        write_codex_config=write_codex_config,
+                    )
+                    with (
+                        mock.patch.object(serena_manager, "REPO_ROOT", repo_root),
+                        mock.patch.object(serena_manager, "RUN_ROOT", run_root),
+                        mock.patch.object(serena_manager, "LOCK_PATH", run_root / "serena.lock"),
+                        mock.patch.object(serena_manager, "SYSTEMD_USER_DIR", systemd_root),
+                        mock.patch.object(serena_manager, "reserve_port", return_value=9119),
+                        mock.patch.object(serena_manager, "verify_systemd_service"),
+                        mock.patch.object(serena_manager, "wait_for_port"),
+                        mock.patch.object(
+                            serena_manager.gateway,
+                            "_read_env",
+                            return_value={
+                                "PLATFORM_ADMIN_EMAIL": "admin@contextforge.dev",
+                                "PLATFORM_ADMIN_PASSWORD": "password",
+                            },
+                        ),
+                        mock.patch.object(serena_manager.gateway, "_token", return_value="token"),
+                        mock.patch.object(
+                            serena_manager,
+                            "register_gateway_and_server",
+                            return_value={"gateway_id": "gateway-1", "server_id": "server-1"},
+                        ),
+                        mock.patch.object(serena_manager, "merge_codex_config") as merge_codex_config,
+                        contextlib.redirect_stdout(io.StringIO()),
+                    ):
+                        result = serena_manager.create(args)
+
+                    self.assertEqual(0, result)
+                    self.assertEqual(write_codex_config, merge_codex_config.called)
 
     def test_legacy_manifest_project_root_is_detected(self) -> None:
         data = {
