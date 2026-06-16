@@ -1,0 +1,335 @@
+#!/usr/bin/env python3
+"""Read-only ContextForge project-init readiness reconciliation."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+import control_plane_project_init_helper as helper
+import control_plane_project_state as project_state
+
+
+REPORT_SCHEMA_URI = "contextforge://control-plane/project-init-readiness-report/v1"
+HELPER_PROCESS_SCRIPT_NAMES = (
+    "contextforge_helper_mcp.py",
+    "control_plane_project_init_helper.py",
+    "contextforge_mcp_wrapper.py",
+)
+
+
+def _canonical(path: str | Path) -> Path:
+    return Path(path).expanduser().resolve(strict=False)
+
+
+def _json_summary(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    if not path.exists():
+        return None, None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, f"{exc.__class__.__name__}: {exc}"
+    if not isinstance(data, dict):
+        return None, f"project state must be a JSON object: {path}"
+    return data, None
+
+
+def _status_counts(values: Sequence[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _activation_job_summary(job: Mapping[str, Any]) -> dict[str, Any]:
+    records = job.get("validation_records") if isinstance(job.get("validation_records"), Mapping) else {}
+    record_statuses = [
+        str(record.get("status") or "unknown")
+        for record in records.values()
+        if isinstance(record, Mapping)
+    ]
+    return {
+        "job_id": job.get("job_id"),
+        "client_type": job.get("client_type"),
+        "status": job.get("status"),
+        "recovery_state": job.get("recovery_state"),
+        "selected_service_ids": [str(value) for value in job.get("selected_service_ids") or []],
+        "selected_service_bindings": [str(value) for value in job.get("selected_service_bindings") or []],
+        "validation_status_counts": _status_counts(record_statuses),
+    }
+
+
+def _client_state_summary(state: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "client_type": state.get("client_type"),
+        "status": state.get("status"),
+        "current_job_id": state.get("current_job_id"),
+        "activation_surface": state.get("activation_surface"),
+        "validation_status": state.get("validation_status"),
+        "reload_status": state.get("reload_status"),
+        "selected_service_bindings": [str(value) for value in state.get("selected_service_bindings") or []],
+        "selected_service_ids": [str(value) for value in state.get("selected_service_ids") or []],
+        "local_client_config_digest": state.get("local_client_config_digest"),
+    }
+
+
+def _raw_state_summary(root: Path, raw_state: Mapping[str, Any] | None, read_error: str | None) -> dict[str, Any]:
+    path = project_state.project_state_path(root)
+    if raw_state is None:
+        return {
+            "state_path": str(path),
+            "exists": path.exists(),
+            "read_error": read_error,
+            "digest": project_state.state_file_artifact_digest(root),
+        }
+    project = raw_state.get("project") if isinstance(raw_state.get("project"), Mapping) else {}
+    project_init = raw_state.get("project_init") if isinstance(raw_state.get("project_init"), Mapping) else {}
+    jobs = project_init.get("activation_jobs") if isinstance(project_init.get("activation_jobs"), Mapping) else {}
+    client_states = project_init.get("client_states") if isinstance(project_init.get("client_states"), Mapping) else {}
+    job_summaries = [
+        _activation_job_summary(job)
+        for job in jobs.values()
+        if isinstance(job, Mapping)
+    ]
+    return {
+        "state_path": str(path),
+        "exists": True,
+        "digest": project_state.state_file_artifact_digest(root),
+        "read_error": None,
+        "raw_status": raw_state.get("status"),
+        "meta_revision": (raw_state.get("meta") or {}).get("revision") if isinstance(raw_state.get("meta"), Mapping) else None,
+        "project_root": project.get("root"),
+        "project_root_hash": project.get("root_hash"),
+        "root_match": project_state.root_match_details(dict(raw_state), root),
+        "project_init_present": bool(project_init),
+        "current_job_id": project_init.get("current_job_id"),
+        "client_states": {
+            str(client): _client_state_summary(state)
+            for client, state in sorted(client_states.items())
+            if isinstance(state, Mapping)
+        },
+        "activation_job_status_counts": _status_counts(
+            [str(summary.get("status") or "unknown") for summary in job_summaries]
+        ),
+        "activation_jobs": sorted(job_summaries, key=lambda item: str(item.get("job_id") or "")),
+    }
+
+
+def inspect_root(root: str | Path, *, label: str, client_types: Sequence[str]) -> dict[str, Any]:
+    canonical = _canonical(root)
+    raw_state, read_error = _json_summary(project_state.project_state_path(canonical))
+    inspections = {
+        client_type: project_state.inspect_project_init_state(
+            canonical,
+            require_workspace=True,
+            target_client=client_type,
+        )
+        for client_type in client_types
+    }
+    first = inspections[client_types[0]] if client_types else {}
+    return {
+        "label": label,
+        "project_root": str(canonical),
+        "readiness_status": first.get("lifecycle_status"),
+        "recommended_action": first.get("recommended_action"),
+        "inspections": inspections,
+        "state": _raw_state_summary(canonical, raw_state, read_error),
+    }
+
+
+def _script_source_root(script_path: str | Path) -> str | None:
+    path = Path(script_path).expanduser().resolve(strict=False)
+    if path.parent.name != "scripts":
+        return None
+    return str(path.parent.parent)
+
+
+def _process_cwd(pid: str) -> str | None:
+    try:
+        return str((Path("/proc") / pid / "cwd").resolve(strict=True))
+    except OSError:
+        return None
+
+
+def _extract_process_script(command: str, *, cwd: str | None = None) -> tuple[str | None, str | None]:
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        parts = command.split()
+    for part in parts:
+        candidate = Path(part)
+        if candidate.name in HELPER_PROCESS_SCRIPT_NAMES:
+            if candidate.is_absolute():
+                script_path = candidate
+            elif cwd:
+                script_path = Path(cwd) / candidate
+            else:
+                return str(candidate), None
+            script = str(script_path.expanduser().resolve(strict=False))
+            source_root = _script_source_root(script)
+            return script, source_root
+    return None, None
+
+
+def list_helper_processes() -> list[dict[str, Any]]:
+    try:
+        result = subprocess.run(
+            ["ps", "-eo", "pid=,args="],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    processes: list[dict[str, Any]] = []
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped or not any(name in stripped for name in HELPER_PROCESS_SCRIPT_NAMES):
+            continue
+        try:
+            pid_text, command = stripped.split(maxsplit=1)
+        except ValueError:
+            continue
+        cwd = _process_cwd(pid_text)
+        script, source_root = _extract_process_script(command, cwd=cwd)
+        processes.append(
+            {
+                "pid": int(pid_text) if pid_text.isdigit() else pid_text,
+                "cwd": cwd,
+                "script": script,
+                "source_root": source_root,
+                "command": command,
+            }
+        )
+    return processes
+
+
+def _readiness_findings(roots: Sequence[Mapping[str, Any]], helper_processes: Sequence[Mapping[str, Any]]) -> tuple[str, list[str], list[str], list[str]]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    next_actions: list[str] = []
+    primary = roots[0] if roots else {}
+    primary_root = str(primary.get("project_root") or "")
+    primary_status = str(primary.get("readiness_status") or "")
+    state = primary.get("state") if isinstance(primary.get("state"), Mapping) else {}
+    root_match = state.get("root_match") if isinstance(state.get("root_match"), Mapping) else {}
+
+    if primary_status == "invalid_blocked":
+        blockers.append("primary_project_state_invalid_blocked")
+        if root_match.get("root_matches") is False or root_match.get("root_hash_matches") is False:
+            blockers.append("primary_project_state_root_mismatch")
+        next_actions.append("Do not hand-edit .project/context_forge_state.json; use helper-approved repair or an approved rebind plan.")
+    elif primary_status == "missing":
+        warnings.append("primary_project_state_missing")
+    elif primary_status != "valid":
+        warnings.append(f"primary_project_state_{primary_status or 'unknown'}")
+
+    compare_roots = roots[1:]
+    if any(str(root.get("readiness_status") or "") == "valid" for root in compare_roots):
+        warnings.append("comparison_root_has_valid_project_state")
+        next_actions.append("Treat the comparison root as potentially live state until dirty-checkout retirement explicitly moves or retires it.")
+
+    source_roots = sorted(
+        {
+            str(process.get("source_root"))
+            for process in helper_processes
+            if process.get("source_root")
+        }
+    )
+    unknown_source_processes = [
+        process
+        for process in helper_processes
+        if process.get("script") and not process.get("source_root")
+    ]
+    foreign_source_roots = [source_root for source_root in source_roots if source_root != primary_root]
+    if unknown_source_processes:
+        blockers.append("helper_process_source_unknown")
+        next_actions.append("Do not treat helper readiness as proven while any helper process source root is unknown.")
+    if foreign_source_roots:
+        blockers.append("helper_process_source_mismatch")
+        next_actions.append("Do not terminate helper processes implicitly; rebind or retire the legacy helper source only after explicit approval.")
+
+    if blockers:
+        status = "blocked"
+    elif warnings:
+        status = "attention_required"
+    else:
+        status = "ready"
+    return status, blockers, warnings, list(dict.fromkeys(next_actions))
+
+
+def build_report(
+    *,
+    project_root: str | Path,
+    compare_roots: Sequence[str | Path] = (),
+    client_types: Sequence[str] = ("codex", "pi", "gemini", "opencode"),
+    include_processes: bool = True,
+    process_snapshot: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    roots = [inspect_root(project_root, label="primary", client_types=client_types)]
+    roots.extend(
+        inspect_root(root, label=f"comparison:{index}", client_types=client_types)
+        for index, root in enumerate(compare_roots, start=1)
+    )
+    helper_processes = list(process_snapshot) if process_snapshot is not None else (list_helper_processes() if include_processes else [])
+    status, blockers, warnings, next_actions = _readiness_findings(roots, helper_processes)
+    return {
+        "schema_uri": REPORT_SCHEMA_URI,
+        "project_name": "ContextForge",
+        "status": status,
+        "blockers": blockers,
+        "warnings": warnings,
+        "roots": roots,
+        "helper_processes": helper_processes,
+        "next_actions": next_actions,
+        "non_actions": [
+            "read-only inspection; no project files are written",
+            "no helper approval/apply workflow is invoked",
+            "no client config, trust, registry, catalog, service, or process state is mutated",
+        ],
+    }
+
+
+def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--project-root", default=str(Path.cwd()), help="Primary project root to inspect.")
+    parser.add_argument(
+        "--compare-root",
+        action="append",
+        default=[],
+        help="Additional project root to compare against the primary root. May be repeated.",
+    )
+    parser.add_argument(
+        "--client-type",
+        action="append",
+        choices=sorted(helper.SUPPORTED_CLIENTS),
+        help="Target client type to inspect. May be repeated. Defaults to all supported clients.",
+    )
+    parser.add_argument("--no-processes", action="store_true", help="Skip read-only helper process source inspection.")
+    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON.")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    client_types = tuple(args.client_type or ("codex", "pi", "gemini", "opencode"))
+    report = build_report(
+        project_root=args.project_root,
+        compare_roots=tuple(args.compare_root),
+        client_types=client_types,
+        include_processes=not args.no_processes,
+    )
+    print(json.dumps(report, indent=2 if args.pretty else None, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
