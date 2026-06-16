@@ -36,10 +36,10 @@ Clean local server proof passed on 2026-05-28 using ignored config/contextforge.
 - Status: answered
 - Repository: /home/dgk/workspace/context-portal
 - Created: 2026-05-28
-- Updated: 2026-05-28
+- Updated: 2026-06-16
 - Tags: inventory,mcp,clients,registration,deduplication,answered
 
-Read-only inventory is implemented in scripts/inventory_mcp.py and writes ignored report inventory/contextforge-services.local.json. The expanded host inventory currently finds 200 entries, 183 enabled, across AnythingLLM, Claude Code, Claude Desktop, Codex Terminal/project configs, Gemini CLI, OpenCode, PI Coding Assistant package settings, and workspace-local configs under /home/dgk/workspace*. Project-root .claude.json files are included. The current canonical registered service set is mentality, ssh-tmux, context7, playwright, Exa Search, OpenZeppelin Solidity Contracts, GitHub, and web-search. Native transport preservation and bridge requirements are validated in service manifests and by direct plus ContextForge virtual endpoint probes.
+Read-only inventory is implemented in scripts/inventory_mcp.py and writes ignored report inventory/contextforge-services.local.json. A 2026-06-16 refresh from clean branch `codex/service-inventory-triage` finds 207 entries, 203 enabled, across AnythingLLM, Claude Code, Claude Desktop, Codex Terminal/project configs, Gemini CLI, OpenCode, Pi Coding Assistant package settings, and workspace-local configs under /home/dgk/workspace*. Project-root .claude.json files are included. Older 191/187, 197/193, and 200/183 counts are historical snapshots only. The current canonical registered service set is mentality, ssh-tmux, context7, playwright, Exa Search, OpenZeppelin Solidity Contracts, GitHub, and web-search. Native transport preservation and bridge requirements are validated in service manifests and by direct plus ContextForge virtual endpoint probes.
 <!-- governance-crud:end id=oq-20260528-0003 -->
 
 <!-- governance-crud:start id=oq-20260528-0004 -->

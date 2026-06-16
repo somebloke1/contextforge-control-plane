@@ -3,22 +3,53 @@
 Generated from the current ignored inventory report:
 `inventory/contextforge-services.local.json`.
 
+Last refreshed: 2026-06-16 from clean branch
+`codex/service-inventory-triage`.
+
 ## Inventory Summary
 
-- Total entries: 200
-- Enabled entries: 183
-- Transport classes: 124 assistant package, 46 stdio, 19 streamable HTTP,
-  11 unknown
+- Total entries: 207
+- Enabled entries: 203
+- Transport classes: 125 assistant package, 72 stdio, 6 streamable HTTP,
+  4 unknown
 - Clients/projects covered:
   - AnythingLLM: 1
   - Claude Code: 9 global, 2 project-local
   - Claude Desktop: 7
-  - Codex Terminal: 10
-  - Codex project-local configs: 17
-  - Context Portal repo-local service: 1
-  - Gemini CLI: 9
-  - OpenCode: 14 global, 6 project-local
-  - PI Coding Assistant package settings: 124
+  - Codex Terminal: 2
+  - Codex project-local configs: 52
+  - ContextForge repo-local service: 1 (`context-portal` inventory label)
+  - Gemini CLI: 1
+  - OpenCode: 1 global, 6 project-local
+  - Pi Coding Assistant package settings: 125
+
+The generated report is local and drift-prone. Older roadmap, issue, and
+ledger counts of 191/187, 197/193, and 200/183 are historical snapshots, not
+the current clean-worktree state.
+
+## Current Classification Buckets
+
+| Bucket | Current examples | Disposition |
+| --- | --- | --- |
+| Already covered by canonical ContextForge services | `mentality`, `ssh_tmux`, `context7`, `playwright`, `exa_search`, `openzeppelin_solidity_contracts`, `github`, `web_search` | Keep deduplicated through the existing `server-instances/<service-slug>/` homes and ContextForge virtual servers. Current inventory has 62 direct canonical-name rows, 60 enabled. |
+| Exclude unless scope changes | `desktop-commander`, `desktop-automation`, `filesystem`, `filesystem-project`, `gemini-mcp`, `zai-mcp-server`, `node_repl`, `qwen_delegate` | Do not promote from client config presence alone. Keep out of ContextForge until a new service-management decision changes scope and security posture. |
+| Project-local only | `serena`, repo-local `governance_crud`, `mtga_builder_governance` | Preserve local project ownership. These entries carry repo or workspace scope that is not a gateway-wide service identity by default. |
+| Service-management candidates | `pi-web-access`, `pi-claude-bridge`, `invoiceapi`, non-assistant workspace REST/API source hints | Keep as handoff candidates requiring backend identity, runtime scope, credential scope, approval, and a concrete `server-instances/<service-slug>/` home or documented equivalent before promotion. |
+
+The four current `unknown` transport rows are OpenCode project rows:
+disabled `desktop-automation`, disabled `desktop-commander`, disabled
+`playwright` in `saeproj`, and enabled shape-less `playwright` in
+`semantic-lab`. They remain triage evidence, not automatic promotion
+evidence.
+
+## Candidate Follow-Up Debt
+
+| Candidate | Owner | Impact | Next evidence step | Review trigger | Retirement condition |
+| --- | --- | --- | --- | --- | --- |
+| `pi-web-access` and `pi-claude-bridge` | ContextForge service-management operator | Pi package rows dominate inventory volume; treating each worktree entry as a service would recreate client-config duplication. | Prove whether each package is a reusable MCP/HTTP backend, assistant-package-only integration, or project-local Pi capability; deduplicate by package/runtime/credential scope. | Pi global shim parity, Pi project-init activation, or explicit user request for centralized Pi web/Claude bridge capability. | Approved canonical service identity with backend home and probes, or explicit exclusion/project-local disposition recorded in service-management docs. |
+| `invoiceapi` | Owning project operator for `/home/dgk/workspace/profit-system-agent-currency` | May require project credentials or billing-domain scope; unsafe to promote from Claude project config alone. | Inspect backend package, credential requirements, runtime scope, and read-only probe options in the owning project. | Owning project asks for ContextForge exposure or cross-client use. | Classified as project-local/excluded, or promoted through an approved `server-instances/<service-slug>/` home with sanitized env template and probes. |
+| External repo-local governance MCPs | Owning repository maintainers plus ContextForge governance operator | Similar to `mentality`, but ledger scope is repository-local and may not be safe to centralize. | Decide whether cross-repo governance should consolidate into `mentality` or remain separate project-local MCPs. | Cross-repo governance workflow requires centralized access. | Consolidation decision plus migration/probes, or durable project-local classification in the owning repo. |
+| Non-assistant workspace REST/API source hints | ContextForge service-management operator | Application internals can look like tool backends but are not MCP client definitions. | Separate application API cataloging from MCP service inventory; identify any real reusable API/tool boundary. | A workspace API is requested as a ContextForge tool or service. | Promoted through approved REST/OpenAPI registration assets, or removed from MCP promotion consideration. |
 
 ## Canonical ContextForge Services
 
