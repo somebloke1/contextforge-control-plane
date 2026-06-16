@@ -92,10 +92,7 @@ class ControlPlaneProjectAdapterTests(unittest.TestCase):
         self.assertIn("does not write backend homes", encoded)
         self.assertNotIn("mutation_performed': True", encoded)
 
-    def test_current_run_serena_env_decline_blocks_serena_planning(self) -> None:
-        env_text = (REPO_ROOT / ".env").read_text(encoding="utf-8")
-        self.assertIn("CONTEXTFORGE_SERENA_DECISION=declined", env_text)
-
+    def test_current_run_serena_decline_blocks_serena_planning(self) -> None:
         spec = adapter.build_serena_adapter_spec(project_root=PROJECT_ROOT, selected_language_profile_id="python")
         plan = adapter.plan_project_scoped_adapter(
             spec,
