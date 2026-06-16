@@ -221,7 +221,7 @@ work.
   preserved, checksum verification passed, and byte comparison against
   `dev-root` found 14 tracked dirty files plus 17 untracked paths already
   represented there. Remaining deltas classify as live path-local config/state,
-  approval-gated network exposure, future #2/#3/#4/#5/#6 slices, and local
+  approval-gated network exposure, future #2/#3/#4/#5 slices, and local
   scratch/runtime assets. Cleanup remains open until `/home/dgk/workspace/context-portal`
   is either explicitly archival-only or safely rebound/retired without losing
   preserved local work.
@@ -240,16 +240,17 @@ The immediate problem is integration hygiene:
 - GitHub now reflects the accepted integration baseline and the fast-tracked
   foundation merges: `dev-root` and `origin/dev-root` include PR #8 at
   `f8a1aab`, PR #9 at `eb97c66`, PR #13 at `c6fb551`, PR #10 at `f530dda`,
-  PR #16 at `f1a6404`, and PR #17 at `0539d50`; post-merge roadmap updates
-  include `6054319`.
+  PR #16 at `f1a6404`, PR #17 at `0539d50`, and PR #18 at `d130027`;
+  post-merge roadmap updates include `6054319`.
 - The clean controller worktree is `dev-root`; the legacy
   `/home/dgk/workspace/context-portal` checkout still carries a very large dirty
   worktree and should be treated as archival until explicitly rebound or retired.
-- GitHub has tracking issues #2-#6 for the remaining original active fronts,
-  plus issue #15 for dirty checkout retirement. Issue #1, issue #11, issue #12,
-  and issue #14 are closed after wrapper lifecycle cleanup, post-restart hook
-  activation, precompact hardening, and clean-worktree test hermeticity were
-  verified. PR #7, PR #8, PR #9, PR #10, PR #13, PR #16, and PR #17 are merged
+- GitHub has tracking issues #2-#5 for the remaining original active fronts,
+  plus issue #15 for dirty checkout retirement. Issue #1, issue #6, issue #11,
+  issue #12, and issue #14 are closed after wrapper lifecycle cleanup,
+  inventory/service-management triage, post-restart hook activation,
+  precompact hardening, and clean-worktree test hermeticity were verified. PR
+  #7, PR #8, PR #9, PR #10, PR #13, PR #16, PR #17, and PR #18 are merged
   foundational/runtime slices.
 - Runtime reliability cleanup is retired through PR #7 and post-merge evidence.
   Dirty holding checkout retirement is now the current execution subgoal.
@@ -528,8 +529,10 @@ Prognosis: close. Treat as a small approved cleanup PR/run.
 
 ### 6. Inventory And Service Identity
 
-Status: broad inventory coverage exists; classification remains an ongoing
-catalog-management task.
+Status: current noncanonical inventory triage is complete through merged PR
+[#18](https://github.com/somebloke1/contextforge-control-plane/pull/18) and
+closed issue [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6).
+Future catalog expansion remains approval-gated service-management work.
 
 Current evidence:
 
@@ -537,6 +540,10 @@ Current evidence:
   `inventory/contextforge-services.local.json`.
 - Current inventory summary refreshed on 2026-06-16 from clean branch
   `codex/service-inventory-triage`: 207 entries, 203 enabled.
+- `inventory/classification.md` now records already-covered, excluded,
+  project-local, and service-management candidate buckets plus candidate
+  follow-up debt with owner, impact, next evidence step, review trigger, and
+  retirement condition.
 - Coverage includes AnythingLLM, Claude Desktop, Claude Code, Codex
   Terminal/project configs, Gemini CLI, OpenCode, Pi Coding Assistant, and
   workspace-local configs.
@@ -565,8 +572,8 @@ Risks:
 - Service promotion too early will recreate the old client-config-driven
   duplication problem.
 
-Prognosis: good as an inventory/discovery substrate. Catalog expansion should
-remain gated by service-management handoff and explicit approval.
+Prognosis: closed for this triage loop. Catalog expansion remains gated by
+service-management handoff and explicit approval.
 
 ### 7. Serena Project-Scoped Services
 
@@ -634,12 +641,12 @@ Current GitHub state:
   - [#3: Deploy and verify Pi global ContextForge shim prompt/resource parity](https://github.com/somebloke1/contextforge-control-plane/issues/3)
   - [#4: Polish project-init operator state reconciliation and readiness](https://github.com/somebloke1/contextforge-control-plane/issues/4)
   - [#5: Perform approved ContextForge registry orphan prompt/resource cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/5)
-  - [#6: Triage noncanonical inventory entries and service-management handoffs](https://github.com/somebloke1/contextforge-control-plane/issues/6)
-  - [#14: Make clean-worktree test suite independent of ignored local evidence](https://github.com/somebloke1/contextforge-control-plane/issues/14)
   - [#15: Retire dirty holding checkout as agent operating surface debt](https://github.com/somebloke1/contextforge-control-plane/issues/15)
 - Closed coordination issues:
   - [#1: Control Codex ContextForge wrapper lifecycle and stale process cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/1)
+  - [#6: Triage noncanonical inventory entries and service-management handoffs](https://github.com/somebloke1/contextforge-control-plane/issues/6)
   - [#11: Reconcile project-local precompact hook visibility across active worktrees](https://github.com/somebloke1/contextforge-control-plane/issues/11)
+  - [#14: Make clean-worktree test suite independent of ignored local evidence](https://github.com/somebloke1/contextforge-control-plane/issues/14)
   - [#12: Prevent ad-hoc compactions from replacing conductor continuity pointer](https://github.com/somebloke1/contextforge-control-plane/issues/12)
 - Local `dev-root` and `origin/dev-root` are synchronized after the
   fast-tracked foundation merges and follow-up status-only roadmap updates.
@@ -768,7 +775,7 @@ extraction if current evidence proves a better review boundary.
 | `codex/helper-multiclient-project-init` | [#4](https://github.com/somebloke1/contextforge-control-plane/issues/4) / [PR #10](https://github.com/somebloke1/contextforge-control-plane/pull/10) | `scripts/contextforge_helper_mcp.py`, `scripts/control_plane_project_init_helper.py`, project-state/schema updates, Codex/OpenCode/Gemini project-init hooks, project-init docs, and activation workflow tests. | `test_project_init_activation_workflow.py`; `test_project_init_scripts.py`; control-plane discovery |
 | `codex/pi-global-shim-parity` | [#3](https://github.com/somebloke1/contextforge-control-plane/issues/3) | `pi-extensions/contextforge-global-shim/`, `scripts/manage_pi_global_shim.py`, Pi dry-run/CLI helpers, Pi prompt/resource parity docs/tests. | TypeScript `tsc`; focused Pi regression; `manage_pi_global_shim.py status/plan` |
 | `codex/live-validation-and-registry-cleanup-tools` | [#5](https://github.com/somebloke1/contextforge-control-plane/issues/5) | `scripts/inspect_contextforge_cleanup.py`, `scripts/apply_contextforge_stale_tool_cleanup.py`, `scripts/run_live_inference_validation.py`, live staged fixtures if they are sanitized and intended to be tracked. | cleanup inspector dry-run; inference harness tests; secret scan by review |
-| `codex/service-inventory-triage` | [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6) | inventory classification docs or scripts only; no generated `*.local.json`; any service-management handoff documentation. | inventory script; no generated/local files tracked |
+| `codex/service-inventory-triage` | closed [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6) / merged [PR #18](https://github.com/somebloke1/contextforge-control-plane/pull/18) | Current inventory classification and candidate handoff debt recorded without committing generated `*.local.json` or promoting services. | inventory script; no generated/local files tracked; delegated PR review |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/clean-worktree-test-hermeticity` | closed [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) / merged [PR #17](https://github.com/somebloke1/contextforge-control-plane/pull/17) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
@@ -1016,29 +1023,34 @@ extraction if current evidence proves a better review boundary.
   client-config-driven service duplication.
 - Beneficiary: maintainers deciding which backends should become ContextForge
   services.
-- Current state: inventory finds 207 entries, 203 enabled; local report is
+- Current state: complete through merged PR
+  [#18](https://github.com/somebloke1/contextforge-control-plane/pull/18) and
+  closed issue
+  [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6).
+  Inventory finds 207 entries, 203 enabled; local report is
   ignored; `by_client.context-portal` is a deprecated label signal for the
   repo-local ContextForge service.
 - Desired state: each noncanonical direct entry is classified as exclude,
   already covered, project-local only, or service-management candidate with a
-  stable identity rationale.
+  stable identity rationale. Achieved for the current inventory snapshot.
 - Invariants: client config names are discovery metadata only; no service
   promotion, registry mutation, backend install, or secret write without
   explicit service-management approval.
 - Dependencies: fresh inventory, service map, open questions on noncanonical
   backends, and naming decision `dec-20260616-0001`.
-- Hidden work: issue #6 body has stale 191/187 counts and older ledger/doc
-  snapshots cite 197/193 or 200/183; refresh public tracking to 207/203 and
-  preserve older counts as historical only.
+- Hidden work: issue #6 body was refreshed from stale 191/187 counts, and older
+  ledger/doc snapshots that cited 197/193 or 200/183 are now documented as
+  historical only.
 - Acceptance: classification artifact or script is tracked; generated
   `*.local.json` remains ignored; repeated inventory yields the same bucket
   decisions for unchanged inputs.
 - Evidence: `scripts/inventory_mcp.py`, ignored
   `inventory/contextforge-services.local.json`,
-  `inventory/classification.md`, classification review output, no
-  generated/local files tracked.
-- Debt policy: every unresolved candidate keeps owner, impact, next evidence
-  step, trigger, and retirement condition.
+  `inventory/classification.md`, PR #18, issue #6 close comment, delegated
+  PR review output, no generated/local files tracked.
+- Debt policy: every unresolved candidate now keeps owner, impact, next
+  evidence step, trigger, and retirement condition in
+  `inventory/classification.md`.
 
 #### Repo-local skills and governance -> cross-cutting
 
@@ -1113,7 +1125,7 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    - `codex/helper-multiclient-project-init`
    - `codex/pi-global-shim-parity`
    - `codex/live-validation-and-registry-cleanup-tools`
-   - `codex/service-inventory-triage`
+   - `codex/service-inventory-triage` (complete through PR #18)
    - `codex/serena-stale-unit-cleanup`
    - `codex/repo-local-skills-and-governance`
    - `codex/precompact-continuity-hook`
