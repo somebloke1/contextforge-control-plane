@@ -196,15 +196,13 @@ work.
   merge commit `9d6b539`; post-merge wrapper tests, process report, and
   `mentality_server` timing evidence passed without process termination,
   service restart, or registry/database mutation.
-- Active but not current project-init readiness status: issue #4 is represented
-  by draft PR #10 from `codex/helper-multiclient-project-init` to `dev-root`.
-  The PR branch was merged forward to current `origin/dev-root` at
-  `f285f89`, then advanced to `e38c5df` with two idempotency fixes for
-  helper-mediated recovery resume. Focused compile checks, 165 focused unit
-  tests, and `git diff --check origin/dev-root...HEAD` pass; the broader
-  clean-worktree control-plane suite is blocked only by issue #14 local evidence
-  gaps. It remains draft pending final readiness review because issue #4 still
-  carries broader reconciliation acceptance.
+- Landed project-init readiness slice: PR #10 merged to `dev-root` as merge
+  commit `f530dda`. It advanced issue #4 with helper-mediated multi-client
+  project-init support and recovery-resume idempotency fixes, backed by focused
+  compile checks, 165 focused unit tests, changed-diff review, and diff hygiene.
+  Issue #4 remains open because live project-state reconciliation and broad
+  clean-worktree acceptance are still unproven; issue #14 tracks the known local
+  evidence gaps blocking the broad control-plane suite in clean worktrees.
 - Active but not current test-portability debt: issue #14 records that clean
   slice worktrees cannot run the full suite without ignored local `.env` and
   `run/*registration.json` evidence, while the operational checkout currently
@@ -588,16 +586,16 @@ Current GitHub state:
 - `gh auth status` is authenticated as `somebloke1`.
 - Merged PR [#7: ContextForge: wrapper lifecycle cleanup](https://github.com/somebloke1/contextforge-control-plane/pull/7)
   landed as merge commit `9d6b539`.
-- Draft PR [#10: ContextForge: helper-mediated project init readiness](https://github.com/somebloke1/contextforge-control-plane/pull/10)
-  is open from `codex/helper-multiclient-project-init` to `dev-root`. The
-  branch was merged forward to current `origin/dev-root` and pushed at
-  `f285f89`, then advanced to `e38c5df` for recovery-resume idempotency.
+- Merged PR [#10: ContextForge: helper-mediated project init readiness](https://github.com/somebloke1/contextforge-control-plane/pull/10)
+  landed as merge commit `f530dda`. The branch was merged forward to current
+  `origin/dev-root` at `f285f89`, then advanced to `e38c5df` for
+  recovery-resume idempotency before merge.
   Evidence was recorded in PR comments
   `https://github.com/somebloke1/contextforge-control-plane/pull/10#issuecomment-4717222163`,
   `https://github.com/somebloke1/contextforge-control-plane/pull/10#issuecomment-4717512657`,
   and
   `https://github.com/somebloke1/contextforge-control-plane/pull/10#issuecomment-4717661173`.
-  GitHub still reports no status checks for the PR branch.
+  No GitHub status checks were configured for the PR branch.
 - Merged PR [#8: ContextForge: roadmap and governance operating discipline](https://github.com/somebloke1/contextforge-control-plane/pull/8)
   landed as merge commit `f8a1aab`.
 - Merged PR [#9: ContextForge: project-local precompact continuity hook](https://github.com/somebloke1/contextforge-control-plane/pull/9)
@@ -893,13 +891,12 @@ extraction if current evidence proves a better review boundary.
   consistent with helper-mediated consent.
 - Beneficiary: maintainers activating ContextForge services in this repo and
   future project worktrees.
-- Current state: draft PR #10 contains the helper-mediated multi-client
-  project-init slice and was merged forward to current `origin/dev-root` at
-  `f285f89`, then advanced to `e38c5df` with recovery-resume idempotency fixes;
-  focused compile checks, 165 focused unit tests, and diff hygiene pass. The
-  broader clean-worktree control-plane suite still fails only on issue #14 local
-  evidence gaps. The live project state still requires final
-  reconciliation/readiness acceptance before issue #4 can close.
+- Current state: PR #10 merged the helper-mediated multi-client project-init
+  slice to `dev-root` at `f530dda`, including recovery-resume idempotency fixes;
+  focused compile checks, 165 focused unit tests, sidecar changed-diff review,
+  and diff hygiene passed. The broader clean-worktree control-plane suite still
+  fails only on issue #14 local evidence gaps. The live project state still
+  requires final reconciliation/readiness acceptance before issue #4 can close.
 - Desired state: project-state labels, readback fields, helper prompts, reload
   guidance, and state reconciliation tell the current truth without stale job
   assumptions.
@@ -1083,10 +1080,8 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    inward-facing work, because stale active-tree state degrades the operating
    agent itself.
 7. Review and clean stale Serena test units.
-8. Finish readiness review for PR #10, then land the helper/project-init
-   multi-client slice if review finds no blocking issue. Keep issue #4 open
-   afterward if final live project-state reconciliation or broad-suite
-   acceptance remains unproven.
+8. Treat PR #10 as landed and continue issue #4 only for final live
+   project-state reconciliation and readiness acceptance.
 9. Resolve issue #14 clean-worktree evidence gaps so broad control-plane checks
    do not depend on ignored local `.env` or `run/*registration.json` files.
 10. Land Pi shim source and perform approved global install/reload verification.
