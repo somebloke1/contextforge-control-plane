@@ -164,9 +164,10 @@ work.
 - Current protocol subgoal: install the goal-loop and model-aware delegation
   discipline into live agent state and repo-local skills/governance artifacts,
   with draft PR #8 carrying the roadmap/skill updates.
-- Recently chained subgoal: add a project-local Codex `PreCompact` continuity
-  hook that preserves agent goal state without replacing Codex's default
-  compaction prompt, now isolated in draft PR #9.
+- Recently chained subgoal: add project-local Codex compaction continuity hooks:
+  `PreCompact` preserves local state before compaction and `SessionStart`
+  after `compact` restores the continuity pointer without replacing Codex's
+  default compaction prompt, now isolated in draft PR #9.
 - Next likely execution subgoal after protocol closeout: continue issue #4
   project-init readiness extraction from `dev-root`, unless GitHub/CI/runtime
   evidence shows a higher-risk blocker first.
@@ -541,15 +542,16 @@ Current GitHub state:
   - [#5: Perform approved ContextForge registry orphan prompt/resource cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/5)
   - [#6: Triage noncanonical inventory entries and service-management handoffs](https://github.com/somebloke1/contextforge-control-plane/issues/6)
 - Local `dev-root` and `origin/dev-root` are synchronized at `b4db351`.
-- Current branch `codex/contextforge-wrapper-lifecycle` has one commit beyond
-  `dev-root`.
+- Holding worktree `/home/dgk/workspace/context-portal` is on
+  `codex/contextforge-wrapper-lifecycle`, one commit beyond `dev-root`, and
+  remains the intentionally dirty source for not-yet-extracted slices.
 - Branch `codex/wrapper-lifecycle-cleanup` has been extracted and pushed with
   draft PR #7.
 - Branch `codex/repo-local-skills-and-governance` has been extracted and
-  pushed with draft PR #8.
+  pushed with draft PR #8; its slice worktree is clean and five commits ahead
+  of `dev-root`.
 - Branch `codex/precompact-continuity-hook` has been extracted and pushed with
   draft PR #9.
-- The working tree contains many tracked modifications and untracked files.
 
 ### Desired GitHub State
 
@@ -577,22 +579,30 @@ origin/dev-root and dev-root
   b4db351 Merge ContextForge project-local activation state
 
 open draft PR worktrees
-  codex/wrapper-lifecycle-cleanup -> PR #7
-  codex/repo-local-skills-and-governance -> PR #8
-  codex/precompact-continuity-hook -> PR #9
+  /home/dgk/workspace/contextforge-slices/wrapper-lifecycle-cleanup
+    codex/wrapper-lifecycle-cleanup -> PR #7
+  /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
+    codex/repo-local-skills-and-governance -> PR #8
+  /home/dgk/workspace/contextforge-slices/precompact-continuity-hook
+    codex/precompact-continuity-hook -> PR #9
 
 historical baseline shown before synchronization
   9d41c6b Add ContextForge control plane initiative plan
 
+holding worktree
+  /home/dgk/workspace/context-portal
+  codex/contextforge-wrapper-lifecycle
+    ae5a434 Implement ContextForge helper project init workflow
+    one commit beyond dev-root with many tracked modifications and untracked files
+
+duplicate local branch with no separate worktree
 codex/contextforge-helper-project-init
-codex/contextforge-wrapper-lifecycle
   ae5a434 Implement ContextForge helper project init workflow
-  one commit beyond dev-root
 ```
 
-The two local feature branches currently point at the same commit. The active
-worktree is on `codex/contextforge-wrapper-lifecycle` and contains a large
-uncommitted mix of newer fronts.
+The two holding feature branches currently point at the same commit. The dirty
+holding worktree is on `codex/contextforge-wrapper-lifecycle` and contains a
+large uncommitted mix of newer fronts.
 
 ### GitHub Migration Plan
 
@@ -621,7 +631,9 @@ Phase 1: publish the accepted integration baseline. Status: completed.
 
 Phase 2: create branch/PR slices from `dev-root`.
 
-Recommended PR slices:
+Recommended PR slices. Rows with PR links are already extracted; rows without
+PR links are planned slices whose branch names can still be adjusted during
+extraction if current evidence proves a better review boundary.
 
 | Branch | Issue | Intended contents | First checks |
 | --- | --- | --- | --- |
@@ -632,7 +644,7 @@ Recommended PR slices:
 | `codex/service-inventory-triage` | [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6) | inventory classification docs or scripts only; no generated `*.local.json`; any service-management handoff documentation. | inventory script; no generated/local files tracked |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/repo-local-skills-and-governance` | cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
-| `codex/precompact-continuity-hook` | cross-cutting continuity slice / [PR #9](https://github.com/somebloke1/contextforge-control-plane/pull/9) | Project-local Codex `PreCompact` hook, ignored continuity snapshots, hook tests, and operator documentation. Does not override Codex's default compaction prompt. | precompact hook unit tests; hook smoke invocation; config guardrail check |
+| `codex/precompact-continuity-hook` | cross-cutting continuity slice / [PR #9](https://github.com/somebloke1/contextforge-control-plane/pull/9) | Project-local Codex `PreCompact` and `SessionStart`/`compact` hooks, ignored continuity snapshots, hook tests, and operator documentation. Does not override Codex's default compaction prompt. | precompact/session-start hook unit tests; hook smoke invocation; config guardrail check |
 
 ### Executable Slice Contracts
 
