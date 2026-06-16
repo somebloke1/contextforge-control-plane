@@ -47,6 +47,7 @@ Runtime model:
 Environment overrides for installation packaging:
 
 - `CONTEXTFORGE_PI_SHIM_PORTAL_ROOT`
+- `CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT`
 - `CONTEXTFORGE_PI_SHIM_PYTHON`
 - `CONTEXTFORGE_PI_SHIM_WRAPPER`
 

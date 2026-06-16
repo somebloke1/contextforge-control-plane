@@ -27,6 +27,8 @@ type ExtensionAPI = {
   on(event: string, handler: (...args: any[]) => unknown): void;
 };
 
+type ToolDefinition = Parameters<ExtensionAPI["registerTool"]>[0];
+
 type ProjectService = {
   serviceBinding: string;
   serviceFamily: string;
@@ -155,6 +157,14 @@ function portalRootConfig(): JsonObject {
   } catch {
     return {};
   }
+}
+
+function registerToolOnce(pi: ExtensionAPI, definition: ToolDefinition): boolean {
+  const name = String(definition.name || "");
+  if (!name || registeredToolNames.has(name)) return false;
+  registeredToolNames.add(name);
+  pi.registerTool(definition);
+  return true;
 }
 
 class JsonRpcStdioClient {
@@ -316,7 +326,7 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
     return injectProjectInitPrompt(event, ctx);
   });
 
-  pi.registerTool({
+  registerToolOnce(pi, {
     name: "cf_contextforge_pi_readback",
     label: "ContextForge / Pi Shim Readback",
     description: "Return the ContextForge services and imported MCP tools currently visible through the Pi global extension shim.",
@@ -330,7 +340,7 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerToolOnce(pi, {
     name: "cf_contextforge_guidance_lookup",
     label: "ContextForge / Guidance Lookup",
     description: "Fetch ContextForge MCP prompt/resource guidance for an approved Pi service without registering every prompt or resource as a separate Pi tool.",
@@ -352,7 +362,7 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerToolOnce(pi, {
     name: "cf_contextforge_pi_validate",
     label: "ContextForge / Pi Validate",
     description: "Run compact, non-mutating Pi-visible ContextForge validation probes and return recordable validation results.",
@@ -368,7 +378,7 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerToolOnce(pi, {
     name: "cf_project_init_validate",
     label: "ContextForge / Project Init Validate",
     description: "Compatibility alias for cf_contextforge_pi_validate. Runs compact, non-mutating Pi-visible ContextForge validation probes.",
@@ -422,12 +432,11 @@ async function injectProjectInitPrompt(event: BeforeAgentStartEvent, ctx?: Exten
 }
 
 function shouldInjectProjectInitPrompt(projectRoot: string): boolean {
-  const workspaceRoot = "/home/dgk/workspace";
   const root = resolve(projectRoot);
+  const workspaceRoot = projectInitWorkspaceRoot();
   if (root === workspaceRoot || root === process.env.HOME || root === "/") return false;
-  if (!root.startsWith(`${workspaceRoot}/`)) return existsSync(join(root, ".env"));
   const statePath = join(root, ".project", "context_forge_state.json");
-  if (!existsSync(statePath)) return true;
+  if (!existsSync(statePath)) return projectRootLooksInitializable(root, workspaceRoot);
   try {
     const state = JSON.parse(readFileSync(statePath, "utf8")) as JsonObject;
     const status = String(state.status || "");
@@ -437,6 +446,19 @@ function shouldInjectProjectInitPrompt(projectRoot: string): boolean {
   } catch {
     return true;
   }
+}
+
+function projectInitWorkspaceRoot(): string | undefined {
+  const override = process.env.CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT;
+  if (override) return resolve(override);
+  const root = portalRoot();
+  const parent = dirname(root);
+  return parent !== root ? parent : undefined;
+}
+
+function projectRootLooksInitializable(root: string, workspaceRoot?: string): boolean {
+  if (workspaceRoot && root.startsWith(`${workspaceRoot}/`)) return true;
+  return [".project", ".git", ".env", "AGENTS.md", "pyproject.toml", "package.json"].some((marker) => existsSync(join(root, marker)));
 }
 
 function projectInitHookPromptState(state: JsonObject): string {
@@ -549,9 +571,7 @@ function registerImportedTool(pi: ExtensionAPI, client: JsonRpcStdioClient, serv
     blockedByDefault,
     inputSchema: asObject(mcpTool.inputSchema),
   });
-  if (registeredToolNames.has(piName)) return;
-  registeredToolNames.add(piName);
-  pi.registerTool({
+  registerToolOnce(pi, {
     name: piName,
     label: `ContextForge / ${service.serviceFamily} / ${mcpName}`,
     description: String(mcpTool.description || `Call ContextForge MCP tool ${mcpName}.`),
@@ -773,7 +793,7 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
   ];
 
   for (const item of operations) {
-    pi.registerTool({
+    registerToolOnce(pi, {
       name: item.name,
       label: `ContextForge / ${item.name.replace(/^cf_/, "").replaceAll("_", " ")}`,
       description: item.description,

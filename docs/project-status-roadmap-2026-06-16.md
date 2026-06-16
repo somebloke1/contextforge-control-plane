@@ -472,7 +472,7 @@ Current evidence:
   the repo source digest differs from
   `/home/dgk/.pi/agent/extensions/contextforge-global-shim`. Current source
   digest is
-  `sha256:84afeb8c97bd8ecfb1e862b8ea96636ad55b9bb0afd7180e2d7026b9d094f1f6`;
+  `sha256:cfc44e45e59d5768e80c3edec52300deaabad5ab8c88364a9996fba08735ecac`;
   target digest is
   `sha256:3b06621969821cff5f0e23eb03979a5c41426c3b3f309b31446d300e1296edff`.
 - Status readback shows no installed `contextforge-root.json` manifest yet.
@@ -495,13 +495,19 @@ Dependencies:
 - The installed shim resolves its helper repo root from
   `CONTEXTFORGE_PI_SHIM_PORTAL_ROOT` first, then installed
   `contextforge-root.json`, then process cwd as a last-resort diagnostic
-  fallback. There is no hard-coded `context-portal` root default.
+  fallback. The project-init prompt gate uses
+  `CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT` or the approved repo-root parent rather
+  than a hard-coded host workspace path. There is no hard-coded
+  `context-portal` root default.
 - Installing/reloading the Pi global extension is user-global mutation and
   requires explicit approval.
 - Pi global shim status/plan/install must be idempotent. Re-running install
   after approval should converge on the same target extension files and
   activation metadata, and reloading Pi should not duplicate imported tools,
   prompt/resource caches, or guidance lookup registrations.
+- Static Pi helper/readback/guidance/validation tools and imported MCP tools
+  use the same `globalThis` registration guard so repeated extension entrypoint
+  invocation in one Pi runtime does not duplicate tool registrations.
 
 Risks:
 
