@@ -22,6 +22,7 @@ import opencode_project_init_hook
 import control_plane_contextforge_binding as binding
 import control_plane_project_state as project_state
 import inspect_project_init_readiness as readiness
+import plan_codex_global_config_migration as codex_global_plan
 import plan_dirty_checkout_rebind as dirty_rebind
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
@@ -447,6 +448,145 @@ cwd = "{legacy}"
         self.assertEqual(dirty_rebind.REPORT_SCHEMA_URI, parsed["schema_uri"])
         self.assertEqual("blocked", parsed["status"])
         self.assertEqual([], parsed["helper_processes"])
+
+
+class CodexGlobalConfigMigrationPlannerTests(unittest.TestCase):
+    def _write_global_config(self, path: Path, legacy: Path) -> None:
+        path.write_text(
+            f"""
+[mcp_servers.contextforge-helper]
+command = "{legacy}/.venv/bin/python"
+args = ["{legacy}/scripts/contextforge_helper_mcp.py"]
+
+[projects."{legacy}"]
+trust_level = "trusted"
+
+[hooks]
+
+[[hooks.SessionStart]]
+matcher = "startup"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "{legacy}/.venv/bin/python {legacy}/scripts/codex_project_init_hook.py"
+timeout = 10
+
+[[hooks.UserPromptSubmit]]
+
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = "{legacy}/.venv/bin/python {legacy}/scripts/codex_project_init_hook.py"
+timeout = 10
+
+[hooks.state."{legacy}/.codex/config.toml:pre_compact:0:0"]
+trusted_hash = "sha256:precompact"
+
+[hooks.state."{legacy}/.codex/config.toml:session_start:0:0"]
+trusted_hash = "sha256:sessionstart"
+""".lstrip(),
+            encoding="utf-8",
+        )
+
+    def test_global_config_plan_classifies_stale_legacy_entries_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+            before = config.read_text(encoding="utf-8")
+
+            report = codex_global_plan.build_report(
+                config_path=config,
+                target_root=target,
+                legacy_root=legacy,
+            )
+
+            after = config.read_text(encoding="utf-8")
+        self.assertEqual(before, after)
+        self.assertEqual(codex_global_plan.REPORT_SCHEMA_URI, report["schema_uri"])
+        self.assertEqual("blocked", report["status"])
+        self.assertTrue(report["approval_required"])
+        self.assertIn("approval_required_before_user_global_codex_config_or_trust_mutation", report["blockers"])
+        self.assertIn("clean_root_project_trust_missing", report["warnings"])
+        self.assertIn("clean_root_project_local_hook_state_missing", report["warnings"])
+        entries = {entry["entry_id"]: entry for entry in report["entries"]}
+        self.assertEqual("replace_with_clean_root", entries["global_mcp_contextforge_helper"]["bucket"])
+        self.assertEqual(str(target / ".venv/bin/python"), entries["global_mcp_contextforge_helper"]["target_value"]["command"])
+        self.assertEqual("replace_with_clean_root", entries["legacy_project_trust"]["bucket"])
+        self.assertEqual(str(target), entries["legacy_project_trust"]["target_value"]["project"])
+        self.assertEqual(
+            "preserve_or_prune_decision_required",
+            entries["legacy_project_local_hook_state"]["bucket"],
+        )
+        self.assertIn("read-only plan; no user-global config or trust file is written", report["non_actions"])
+
+    def test_global_config_plan_reports_clean_root_presence_after_approval(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+            with config.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    f'\n[projects."{target}"]\ntrust_level = "trusted"\n'
+                    f'\n[hooks.state."{target}/.codex/config.toml:pre_compact:0:0"]\n'
+                    'trusted_hash = "sha256:cleanprecompact"\n'
+                )
+
+            report = codex_global_plan.build_report(
+                config_path=config,
+                target_root=target,
+                legacy_root=legacy,
+                approval_acknowledged=True,
+                approval_ref="test approval",
+            )
+
+        self.assertEqual("ready", report["status"])
+        self.assertFalse(report["approval_required"])
+        self.assertEqual("test approval", report["approval"]["ref"])
+        self.assertTrue(report["clean_root_presence"]["project_trust_present"])
+        self.assertEqual(1, report["clean_root_presence"]["project_local_hook_state_count"])
+        self.assertNotIn("clean_root_project_trust_missing", report["warnings"])
+        self.assertNotIn("clean_root_project_local_hook_state_missing", report["warnings"])
+
+    def test_global_config_plan_cli_emits_clean_json(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "plan_codex_global_config_migration.py"),
+                    "--config-path",
+                    str(config),
+                    "--target-root",
+                    str(target),
+                    "--legacy-root",
+                    str(legacy),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                cwd=REPO_ROOT,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", result.stderr)
+        parsed = json.loads(result.stdout)
+        self.assertEqual(codex_global_plan.REPORT_SCHEMA_URI, parsed["schema_uri"])
+        self.assertEqual("blocked", parsed["status"])
 
 
 class SerenaManagerTests(unittest.TestCase):
