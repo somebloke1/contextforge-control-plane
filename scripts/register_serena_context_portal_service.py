@@ -41,7 +41,7 @@ def gateway_body() -> dict[str, Any]:
     return {
         "name": GATEWAY_NAME,
         "url": GATEWAY_URL,
-        "description": "Serena MCP code-intelligence backend scoped to /home/dgk/workspace/context-portal.",
+        "description": "Serena MCP code-intelligence backend scoped to /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance.",
         "transport": "STREAMABLEHTTP",
         "tags": ["contextforge", "serena", "context-portal", "local-backend"],
         "visibility": "public",

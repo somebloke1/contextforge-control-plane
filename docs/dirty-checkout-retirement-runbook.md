@@ -1,10 +1,12 @@
 # ContextForge Dirty Checkout Retirement Runbook
 
-This runbook makes issue #15 executable without performing the retirement.
-It is a planning and approval artifact only until the user explicitly approves
-a rebind strategy. Do not use it to justify reset, clean, delete, rename,
-service restart, registry mutation, hook trust changes, or global config writes
-without a fresh approval and readback evidence.
+This runbook makes issue #15 executable without hiding the retirement boundary.
+The user approved Strategy 1 as a first source-only compatibility rebind pass:
+project-local/source operating surfaces may be rebound from the legacy checkout
+to the clean worktree, while reset, clean, delete, rename, service restart,
+registry mutation, hook trust changes, global config writes, Pi install/reload,
+and ContextForge runtime mutations still require fresh explicit approval and
+readback evidence.
 
 Proper project naming is ContextForge. `context-portal` is a legacy path,
 runtime slug, and compatibility identifier where exact paths, service names,
@@ -16,9 +18,9 @@ Clean operating tree:
 
 ```text
 /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
-branch: dev-root
-head: 854df61a8bb90f013faeb4556d94e24b203746ac
-status: synchronized with origin/dev-root
+branch: codex/issue-15-strategy1-source-rebind
+base: 726d7cf7510b4c4385e29e01518f743474176a73
+base status: synchronized with origin/dev-root
 ```
 
 Legacy dirty checkout:
@@ -42,8 +44,11 @@ Current GitHub state:
 
 - Issue #15 tracks retirement of the dirty holding checkout.
 - Issue #4 has read-only readiness reconciliation on `dev-root` through PR
-  #21, but remains open because the clean source state is root-mismatched and
-  helper/wrapper processes still source from the legacy checkout.
+  #21. Before the Strategy 1 source rebind branch, the clean source state was
+  root-mismatched and helper/wrapper processes still sourced from the legacy
+  checkout. The source branch repairs the clean root state, but issue #4 still
+  requires target-client validation and any separately approved runtime reload
+  or service readback.
 - Issue #3 source parity is merged through PR #20, but the user-global Pi
   install/reload/validation is not approved or complete.
 - Issue #6 is closed; inventory/service-management triage is no longer hidden
@@ -76,10 +81,16 @@ Current read-only issue #15 evidence:
     contextforge wrapper tests;
   - scratch/runtime candidates: `.tmp/*` and
     `temp/roadmap-conductor-skill-design-20260616/*`.
-- `scripts/inspect_project_init_readiness.py` reports the clean root as
-  `invalid_blocked` due to project-state root mismatch and the legacy root as
-  valid with Codex `verified`/`passed` and Pi
+- Before Strategy 1 source rebind, `scripts/inspect_project_init_readiness.py`
+  reported the clean root as `invalid_blocked` due to project-state root
+  mismatch and the legacy root as valid with Codex `verified`/`passed` and Pi
   `validation_pending`/`mixed`.
+- On branch `codex/issue-15-strategy1-source-rebind`, the first approved
+  source-only pass retargets project-local active surfaces to
+  `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`.
+  The corrected readiness report now classifies the primary root as `valid`
+  with recommended action `resume_validation` and the comparison legacy root as
+  `valid` with recommended action `suppress`.
 
 ## Approval Boundary
 
@@ -91,11 +102,23 @@ Without explicit approval, only these actions are allowed:
 - open a draft PR for the planning artifact;
 - update GitHub issue comments with evidence.
 
-These actions require explicit approval:
+The user has explicitly approved the first Strategy 1 source-only compatibility
+rebind pass on a scoped branch. That approval covers project-local/source
+retargeting only:
 
-- changing `.codex/config.toml`, `.project/context_forge_state.json`, hook
-  trust, user-global Codex config, Pi global config, Claude/OpenCode/Gemini
-  config, systemd units, service registry, or local tokens;
+- `.codex/config.toml` command/argument/cwd references;
+- `.project/context_forge_state.json` repair through helper-owned project-init
+  state semantics;
+- Serena and mentality local manifests, launcher, and LSP paths;
+- project-local skill references and project-init registration examples;
+- planner/readiness evidence, focused tests, docs, issue comments, and a PR.
+
+These actions still require separate explicit approval outside this scoped
+source-only branch:
+
+- changing hook trust, user-global Codex config, Pi global config,
+  Claude/OpenCode/Gemini config, systemd units, service registry, local tokens,
+  or additional project-local state beyond the approved Strategy 1 source pass;
 - stopping/restarting services or killing processes;
 - renaming, deleting, cleaning, resetting, or rebasing
   `/home/dgk/workspace/context-portal`;
@@ -140,8 +163,10 @@ The current parent-owned approval question is:
 > global trust change, registry mutation, or Pi install/reload in the first
 > pass?
 
-If the answer is no, issue #15 should be marked explicitly archival-only for
-now and all new work should continue from clean `dev-root`.
+The user selected Strategy 1 for the next subgoal and approved the first
+source-only pass. Issue #15 is still open because this does not approve runtime
+reload, service restart, registry read/write, hook trust mutation, Pi
+install/reload, checkout deletion, checkout rename, or final retirement.
 
 ### Strategy 1: Compatibility Rebind
 
@@ -165,6 +190,19 @@ Required approval scope:
 - reinstall/reload affected user systemd units and restart Serena only after
   approval;
 - refresh ContextForge registration readback if manifest changes imply it.
+
+First-pass source status:
+
+- `codex/issue-15-strategy1-source-rebind` retargets the source/project-local
+  surfaces listed above and preserves compatibility identifiers such as
+  `serena-context-portal`, `serena_context_portal_server`, and project name
+  `context-portal`.
+- Helper-owned repair updated `.project/context_forge_state.json` to the clean
+  root and left target-client validation pending. It did not overwrite
+  unmanaged `.codex/config.toml`, mutate user-global trust, mutate ContextForge
+  registry/catalog state, write secrets, or restart services.
+- The remaining issue #15 work is the operator-path validation/reload and
+  legacy-checkout disposition, not more blind path rewriting.
 
 Risk:
 
@@ -210,7 +248,7 @@ Required approval scope:
 - no local mutation beyond issue/roadmap documentation;
 - issue #15 remains open with owner, impact, trigger, and retirement condition;
 - issue #4 remains blocked on root mismatch until Strategy 1 or Strategy 2 is
-  approved.
+  approved and applied.
 
 Risk:
 
@@ -267,8 +305,11 @@ Before any approved mutation:
    ```
 
 5. Confirm the user selected Strategy 1 or Strategy 2 and approved the exact
-   mutation set. If Strategy 3 is selected, update issue #15 and stop without
-   local mutation.
+   mutation set. Strategy 1 first-pass source retargeting is already approved
+   for `codex/issue-15-strategy1-source-rebind`; runtime reload, service
+   restart, registry readback/write, hook trust mutation, Pi install/reload, and
+   legacy-checkout disposition still need separate approval. If Strategy 3 is
+   selected for a future loop, update issue #15 and stop without local mutation.
 
 6. Run the read-only readiness reconciler:
 

@@ -53,23 +53,164 @@
     "revision": 1,
     "schema_uri": "contextforge://control-plane/project-state/v1",
     "schema_version": 1,
-    "updated_at": "2026-05-31T00:52:51Z",
-    "updated_by": "contextforge_project_initialization_assistant"
+    "updated_at": "2026-06-16T18:55:50Z",
+    "updated_by": "control_plane_project_init_helper"
   },
   "migration": {
-    "client_config_migrations": {},
+    "client_config_migrations": {
+      "codex": {
+        "conflicts": [
+          {
+            "message": "unmanaged [mcp_servers.context7] already exists.",
+            "recovery": "helper_mediated_recovery",
+            "type": "client_config_conflict"
+          }
+        ],
+        "disposition": "conflict",
+        "imported_binding_refs": [
+          "contextforge://control-plane/service-bindings/context7:canonical"
+        ],
+        "ownership_class": "unmanaged_same_name",
+        "source_digest": "8936e001261dc82555c847dec46d7a8650fb4a27b0309632df0006efe605f91c",
+        "source_path": ".codex/config.toml",
+        "verification_trace_refs": []
+      }
+    },
     "conflicts": [],
     "imported_at": null,
     "legacy_env_digest": null,
     "legacy_env_disposition": "not_present",
     "legacy_env_seen": false
   },
-  "open_items": [],
+  "open_items": [
+    {
+      "blocks_initialized": false,
+      "created_at": "2026-06-16T18:55:50Z",
+      "detail": {
+        "accepted_state": "bindings imported but not verified as working",
+        "reason": "project-init metadata was repaired from existing service records and still needs target-client validation or presumed-working confirmation",
+        "validation_mode": "pending_choice"
+      },
+      "id": "project-init-validation",
+      "resolution_state": "open",
+      "resource": "target-client-visible MCP proof",
+      "severity": "warning",
+      "type": "verification"
+    }
+  ],
   "project": {
     "display_root": null,
     "name": "context-portal",
-    "root": "/home/dgk/workspace/context-portal",
-    "root_hash": "42304ce73dad61a491e9a20d0825d060b606b0035737e60795bc2bf6eefb32f2"
+    "root": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance",
+    "root_hash": "06493d30d268e6d91df08e746ea2dd8c65205d4544412d3dc47c375658a1c312"
+  },
+  "project_init": {
+    "activation_jobs": {
+      "job-project-init-repair-547d1a4fb3bd448f": {
+        "client_type": "codex",
+        "consent_receipt_refs": [
+          "run/project-init-repair/imported-existing-state.json"
+        ],
+        "job_id": "job-project-init-repair-547d1a4fb3bd448f",
+        "local_client_config_digest": "sha256:8936e001261dc82555c847dec46d7a8650fb4a27b0309632df0006efe605f91c",
+        "non_actions": [
+          "preserved existing service records",
+          "did not overwrite unmanaged target-client config",
+          "no user-global Codex config or trust mutation",
+          "no ContextForge registry or catalog mutation",
+          "no secret or token material write"
+        ],
+        "plan_digest": "sha256:3bb832758a1bce8a7c428caf8e11c6970c7f5c43b7ef74116d105ae2762e4f5d",
+        "plan_id": "project-init-repair-547d1a4fb3bd448f",
+        "recovery_state": "local_written_validation_pending",
+        "selected_service_bindings": [
+          "context7:canonical"
+        ],
+        "selected_service_ids": [
+          "contextforge-service-bf7a7592f3abab76b64cae9d"
+        ],
+        "stale_plan_inputs": {
+          "base_project_state": {
+            "artifact_status": "invalid_repairable",
+            "digest": "sha256:2fcf87583df6cb8f1adc66cec896c7d1757bf903a9ec9ff4922fbac88ccbe1d1",
+            "message": "invalid project state: 'project_init' is a required property",
+            "recovery": "repair_missing_project_init_state"
+          }
+        },
+        "status": "applied_validation_choice_pending",
+        "step_statuses": [
+          {
+            "idempotency_key": "e7e9ecaab0e81de5d13b3b9a17cb3ba1",
+            "operation_id": "import-existing-project-init-state",
+            "operation_type": "repair_missing_project_init_state",
+            "post_digest": null,
+            "pre_digest": "sha256:2fcf87583df6cb8f1adc66cec896c7d1757bf903a9ec9ff4922fbac88ccbe1d1",
+            "recovery_state": null,
+            "status": "completed"
+          },
+          {
+            "idempotency_key": "49b2f732f290d0dbb832eb2127e8d7bf",
+            "operation_id": "repair-managed-client-config",
+            "operation_type": "repair_managed_client_config",
+            "post_digest": "sha256:8936e001261dc82555c847dec46d7a8650fb4a27b0309632df0006efe605f91c",
+            "pre_digest": "sha256:8936e001261dc82555c847dec46d7a8650fb4a27b0309632df0006efe605f91c",
+            "recovery_state": null,
+            "status": "skipped"
+          }
+        ],
+        "validation_records": {
+          "contextforge-service-bf7a7592f3abab76b64cae9d": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "context7:canonical",
+            "x_service_identity_id": "contextforge-service-bf7a7592f3abab76b64cae9d"
+          }
+        },
+        "x_repair_kind": "missing_project_init"
+      }
+    },
+    "client_states": {
+      "claude": {
+        "activation_surface": null,
+        "client_type": "claude",
+        "current_job_id": null,
+        "last_plan_id": null,
+        "local_client_config_digest": null,
+        "reload_status": "unknown",
+        "selected_service_bindings": [
+          "context7:canonical"
+        ],
+        "selected_service_ids": [
+          "contextforge-service-bf7a7592f3abab76b64cae9d"
+        ],
+        "status": "validation_pending",
+        "updated_at": "2026-06-16T18:55:50Z",
+        "validation_status": "pending"
+      },
+      "codex": {
+        "activation_surface": ".codex/config.toml",
+        "client_type": "codex",
+        "current_job_id": "job-project-init-repair-547d1a4fb3bd448f",
+        "last_plan_id": "project-init-repair-547d1a4fb3bd448f",
+        "local_client_config_digest": "sha256:8936e001261dc82555c847dec46d7a8650fb4a27b0309632df0006efe605f91c",
+        "reload_status": "required",
+        "selected_service_bindings": [
+          "context7:canonical"
+        ],
+        "selected_service_ids": [
+          "contextforge-service-bf7a7592f3abab76b64cae9d"
+        ],
+        "status": "reload_required",
+        "updated_at": "2026-06-16T18:55:50Z",
+        "validation_status": "pending"
+      }
+    },
+    "current_job_id": "job-project-init-repair-547d1a4fb3bd448f",
+    "x_hook_prompt_state": "active"
   },
   "services": {
     "context7": {
@@ -139,8 +280,10 @@
       "instantiation_class": "shared_canonical",
       "language_profile": null,
       "lifecycle": {
+        "activation": "shared_contextforge_service",
         "binding_mode": "verify_existing",
         "catalog_authority": "ContextForge",
+        "non_actions": [],
         "owned_by_project": false,
         "server_instance_policy": "existing_shared_backend_home"
       },
@@ -159,11 +302,13 @@
       "target_clients": {
         "claude": {
           "identity_source": "discovery_only",
-          "mentions_service": true
+          "mentions_service": true,
+          "service_identity_id": "contextforge-service-bf7a7592f3abab76b64cae9d"
         },
         "codex": {
           "identity_source": "discovery_only",
-          "mentions_service": true
+          "mentions_service": true,
+          "service_identity_id": "contextforge-service-bf7a7592f3abab76b64cae9d"
         }
       },
       "verification_layers": {
@@ -178,12 +323,20 @@
         "contextforge://control-plane/verification-traces/trace-context7-existing-shared-service-20260530/v1"
       ],
       "virtual_server": "context7_local_server",
+      "x_descriptor_digest": "sha256:94a882a071da51548aad9facc40ae8a57fbc2f5f8d983a8d904c74be109b49ec",
       "x_non_actions": [
         "no client config promoted as service identity",
         "no per-project backend for shared canonical service",
         "no project-local bridge, wrapper, port, unit, or server-instance directory created",
         "no ContextForge catalog mutation"
-      ]
+      ],
+      "x_service_identity": {
+        "contextforge_server_id": null,
+        "descriptor_digest": "sha256:94a882a071da51548aad9facc40ae8a57fbc2f5f8d983a8d904c74be109b49ec",
+        "id": "contextforge-service-bf7a7592f3abab76b64cae9d",
+        "source": "project_state_service_record"
+      },
+      "x_service_identity_id": "contextforge-service-bf7a7592f3abab76b64cae9d"
     }
   },
   "status": "in_progress",

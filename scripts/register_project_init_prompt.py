@@ -63,7 +63,7 @@ Skipped-service follow-up: if the user later asks to manually verify skipped ser
 SERENA_GUIDANCE_TEXT = """
 Serena project instance guidance, version {{ prompt_version }}.
 
-This guidance applies only to real ContextForge Serena virtual servers. Each unrelated project gets one ContextForge-owned backend under /home/dgk/workspace/context-portal/server-instances/serena-<slug>-<hash>. Multiple Codex sessions in the same project may share that backend; unrelated projects must not share it.
+This guidance applies only to real ContextForge Serena virtual servers. Each unrelated project gets one ContextForge-owned backend under /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/server-instances/serena-<slug>-<hash>. Multiple Codex sessions in the same project may share that backend; unrelated projects must not share it.
 
 The deterministic identity is:
 slug = normalized project basename
@@ -257,14 +257,14 @@ def associate_serena_guidance(token: str, prompt: dict[str, Any], resource: dict
 def verify_prompt_render(token: str, prompt: dict[str, Any]) -> None:
     args = {
         "project_name": "context-portal",
-        "project_root": "/home/dgk/workspace/context-portal",
+        "project_root": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance",
         "project_root_hash": "verification",
         "dialogue_status": "unasked",
         "serena_decision": "unasked",
         "serena_provision_status": "none",
         "serena_instance_slug": "",
         "serena_server_name": "",
-        "project_state_path": "/home/dgk/workspace/context-portal/.project/context_forge_state.json",
+        "project_state_path": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.project/context_forge_state.json",
         "project_state_status": "uninitialized",
         "project_state_lifecycle_status": "missing",
         "project_state_recommended_action": "start_project_init",
