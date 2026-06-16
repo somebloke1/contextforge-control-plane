@@ -161,13 +161,13 @@ work.
 - Active meta-goal: operate as ContextForge roadmap conductor inside a
   persistent dynamic goal loop until the roadmap reaches verified no-debt
   state.
-- Current protocol subgoal: install the goal-loop and model-aware delegation
-  discipline into live agent state and repo-local skills/governance artifacts,
-  with draft PR #8 carrying the roadmap/skill updates.
-- Recently chained subgoal: add project-local Codex compaction continuity hooks:
+- Retired protocol subgoal: goal-loop and model-aware delegation discipline are
+  merged to `dev-root` through PR #8.
+- Retired continuity subgoal: project-local Codex compaction continuity hooks are
+  merged to `dev-root` through PR #9:
   `PreCompact` preserves local state before compaction and `SessionStart`
   after `compact` restores the continuity pointer without replacing Codex's
-  default compaction prompt, now isolated in draft PR #9.
+  default compaction prompt.
 - Next likely execution subgoal after protocol closeout: continue issue #4
   project-init readiness extraction from `dev-root`, unless GitHub/CI/runtime
   evidence shows a higher-risk blocker first.
@@ -183,13 +183,14 @@ project activation should flow through helper-mediated consent and state.
 
 The immediate problem is integration hygiene:
 
-- GitHub now reflects the accepted integration baseline: `dev-root` and
-  `origin/dev-root` both point at `b4db351`.
+- GitHub now reflects the accepted integration baseline and the fast-tracked
+  foundation merges: `dev-root` and `origin/dev-root` include PR #8 at
+  `f8a1aab` and PR #9 at `eb97c66`.
 - The current branch has one extra committed feature and a very large dirty
   worktree.
-- GitHub has tracking issues #1-#6 for the active fronts, draft PRs #7 and #8
-  for the first extracted slices, and draft PR #9 for the cross-cutting
-  pre-compaction continuity hook.
+- GitHub has tracking issues #1-#6 for the active fronts. PR #7 remains open
+  for wrapper lifecycle cleanup; PR #8 and PR #9 are merged foundational
+  slices.
 - Runtime reliability cleanup is isolated in PR #7; final retirement still
   requires merge-readiness checks and current operator-path evidence.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
@@ -530,10 +531,10 @@ Current GitHub state:
 - `gh auth status` is authenticated as `somebloke1`.
 - Draft PR [#7: ContextForge: wrapper lifecycle cleanup](https://github.com/somebloke1/contextforge-control-plane/pull/7)
   is open from `codex/wrapper-lifecycle-cleanup` to `dev-root`.
-- Draft PR [#8: ContextForge: roadmap and governance operating discipline](https://github.com/somebloke1/contextforge-control-plane/pull/8)
-  is open from `codex/repo-local-skills-and-governance` to `dev-root`.
-- Draft PR [#9: ContextForge: project-local precompact continuity hook](https://github.com/somebloke1/contextforge-control-plane/pull/9)
-  is open from `codex/precompact-continuity-hook` to `dev-root`.
+- Merged PR [#8: ContextForge: roadmap and governance operating discipline](https://github.com/somebloke1/contextforge-control-plane/pull/8)
+  landed as merge commit `f8a1aab`.
+- Merged PR [#9: ContextForge: project-local precompact continuity hook](https://github.com/somebloke1/contextforge-control-plane/pull/9)
+  landed as merge commit `eb97c66`.
 - Six GitHub tracking issues now hold the active cleanup fronts:
   - [#1: Control Codex ContextForge wrapper lifecycle and stale process cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/1)
   - [#2: Review and clean stale Serena test project units](https://github.com/somebloke1/contextforge-control-plane/issues/2)
@@ -541,17 +542,16 @@ Current GitHub state:
   - [#4: Polish project-init operator state reconciliation and readiness](https://github.com/somebloke1/contextforge-control-plane/issues/4)
   - [#5: Perform approved ContextForge registry orphan prompt/resource cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/5)
   - [#6: Triage noncanonical inventory entries and service-management handoffs](https://github.com/somebloke1/contextforge-control-plane/issues/6)
-- Local `dev-root` and `origin/dev-root` are synchronized at `b4db351`.
+- Local `dev-root` and `origin/dev-root` are synchronized after the
+  fast-tracked foundation merges.
 - Holding worktree `/home/dgk/workspace/context-portal` is on
   `codex/contextforge-wrapper-lifecycle`, one commit beyond `dev-root`, and
   remains the intentionally dirty source for not-yet-extracted slices.
 - Branch `codex/wrapper-lifecycle-cleanup` has been extracted and pushed with
   draft PR #7.
-- Branch `codex/repo-local-skills-and-governance` has been extracted and
-  pushed with draft PR #8; its slice worktree is clean and five commits ahead
-  of `dev-root`.
-- Branch `codex/precompact-continuity-hook` has been extracted and pushed with
-  draft PR #9.
+- PR #8 is merged; its former slice worktree now checks out clean `dev-root`.
+- PR #9 is merged; its remote branch is deleted, while the local merged worktree
+  remains until local worktree cleanup is approved or performed deliberately.
 
 ### Desired GitHub State
 
@@ -576,15 +576,18 @@ main / origin/main
   7572018 Bootstrap repository branch policy
 
 origin/dev-root and dev-root
-  b4db351 Merge ContextForge project-local activation state
+  include f8a1aab Merge pull request #8
+  include eb97c66 Merge pull request #9
 
 open draft PR worktrees
   /home/dgk/workspace/contextforge-slices/wrapper-lifecycle-cleanup
     codex/wrapper-lifecycle-cleanup -> PR #7
+
+merged foundation worktrees
   /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
-    codex/repo-local-skills-and-governance -> PR #8
+    dev-root -> PR #8 and PR #9 merged
   /home/dgk/workspace/contextforge-slices/precompact-continuity-hook
-    codex/precompact-continuity-hook -> PR #9
+    codex/precompact-continuity-hook -> PR #9 merged, remote branch deleted
 
 historical baseline shown before synchronization
   9d41c6b Add ContextForge control plane initiative plan
@@ -621,11 +624,14 @@ Phase 0: preserve local state.
 - Keep `codex/contextforge-wrapper-lifecycle` as the temporary holding branch
   until all slices are extracted.
 
-Phase 1: publish the accepted integration baseline. Status: completed.
+Phase 1: publish the accepted integration baseline and fast-track foundation.
+Status: completed.
 
-- Evidence: local `dev-root` and `origin/dev-root` both resolve to `b4db351`.
+- Evidence: local `dev-root` and `origin/dev-root` are synchronized and include
+  merge commit `eb97c66`.
 - The former 11-commit local lead has been synchronized to GitHub without a
   baseline PR because `dev-root` is the integration branch.
+- PR #8 and PR #9 were marked ready and merged to `dev-root`.
 - Re-run focused tests before merging dependent slices, but do not repeat
   baseline push work unless evidence shows the refs diverged again.
 
@@ -643,8 +649,8 @@ extraction if current evidence proves a better review boundary.
 | `codex/live-validation-and-registry-cleanup-tools` | [#5](https://github.com/somebloke1/contextforge-control-plane/issues/5) | `scripts/inspect_contextforge_cleanup.py`, `scripts/apply_contextforge_stale_tool_cleanup.py`, `scripts/run_live_inference_validation.py`, live staged fixtures if they are sanitized and intended to be tracked. | cleanup inspector dry-run; inference harness tests; secret scan by review |
 | `codex/service-inventory-triage` | [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6) | inventory classification docs or scripts only; no generated `*.local.json`; any service-management handoff documentation. | inventory script; no generated/local files tracked |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
-| `codex/repo-local-skills-and-governance` | cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
-| `codex/precompact-continuity-hook` | cross-cutting continuity slice / [PR #9](https://github.com/somebloke1/contextforge-control-plane/pull/9) | Project-local Codex `PreCompact` and `SessionStart`/`compact` hooks, ignored continuity snapshots, hook tests, and operator documentation. Does not override Codex's default compaction prompt. | precompact/session-start hook unit tests; hook smoke invocation; config guardrail check |
+| `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
+| `codex/precompact-continuity-hook` | merged cross-cutting continuity slice / [PR #9](https://github.com/somebloke1/contextforge-control-plane/pull/9) | Project-local Codex `PreCompact` and `SessionStart`/`compact` hooks, ignored continuity snapshots, hook tests, and operator documentation. Does not override Codex's default compaction prompt. | precompact/session-start hook unit tests; hook smoke invocation; config guardrail check |
 
 ### Executable Slice Contracts
 
@@ -913,7 +919,7 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    the ref before dependent PR work.
 3. Preserve the current dirty branch as-is, then continue splitting it into
    small branches rather than piling new changes onto it.
-4. Keep PRs #7, #8, and #9 current while extracting the remaining issue slices.
+4. Keep PR #7 current while extracting the remaining issue slices.
 5. Land wrapper lifecycle changes first because they affect day-to-day tool
    reliability.
 6. Clean stale wrapper processes through Codex Desktop relaunch or exact-match
