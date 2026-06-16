@@ -168,10 +168,10 @@ work.
   `PreCompact` preserves local state before compaction and `SessionStart`
   after `compact` restores additive continuity evidence without replacing
   Codex's default compaction prompt.
-- Active continuity hardening subgoal: issue #12 is represented by draft PR #13
-  from `codex/precompact-conductor-pointer` to `dev-root`. The slice removes
-  repo-global latest pointer semantics, adds session-scoped restore, adds
-  event-only fallback when no session id is available, and bounds ignored
+- Retired continuity hardening subgoal: issue #12 is closed by merged PR #13:
+  the hook no longer maintains repo-global latest pointers, restores only
+  session-scoped continuity evidence, falls back to event-only evidence when no
+  session id is available, removes stale root latest files, and bounds ignored
   snapshot retention.
 - Current project-init readiness status: issue #4 is represented by draft PR
   #10 from `codex/helper-multiclient-project-init` to `dev-root`; focused
@@ -179,9 +179,9 @@ work.
 - New operational coordination item: issue #11 tracks that PR #9's precompact
   hook was not initially visible from the dirty
   `codex/contextforge-wrapper-lifecycle` holding worktree. The hook has now been
-  deliberately propagated into that worktree without replacing existing MCP
-  config; direct hook smoke passed, but user-visible Codex hooks-table readback
-  is still pending.
+  deliberately propagated into that worktree again after PR #13 without
+  replacing existing MCP config; direct hook smoke passed, but user-visible
+  Codex hooks-table readback is still pending.
 
 ## Executive Summary
 
@@ -196,15 +196,14 @@ The immediate problem is integration hygiene:
 
 - GitHub now reflects the accepted integration baseline and the fast-tracked
   foundation merges: `dev-root` and `origin/dev-root` include PR #8 at
-  `f8a1aab` and PR #9 at `eb97c66`.
+  `f8a1aab`, PR #9 at `eb97c66`, and PR #13 at `c6fb551`.
 - The current branch has one extra committed feature and a very large dirty
   worktree.
 - GitHub has tracking issues #1-#6 for the original active fronts plus issue
-  #11 for precompact hook visibility across active worktrees and issue #12 for
-  precompact continuity pointer hardening. PR #7 remains open for wrapper
-  lifecycle cleanup; PR #10 is open for issue #4 project-init readiness; PR #13
-  is open for issue #12 precompact hardening; PR #8 and PR #9 are merged
-  foundational slices.
+  #11 for precompact hook visibility across active worktrees. Issue #12 is
+  closed by merged PR #13. PR #7 remains open for wrapper lifecycle cleanup; PR
+  #10 is open for issue #4 project-init readiness; PR #8, PR #9, and PR #13 are
+  merged foundational slices.
 - Runtime reliability cleanup is isolated in PR #7; final retirement still
   requires merge-readiness checks and current operator-path evidence.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
@@ -548,13 +547,12 @@ Current GitHub state:
 - Draft PR [#10: ContextForge: helper-mediated project init readiness](https://github.com/somebloke1/contextforge-control-plane/pull/10)
   is open from `codex/helper-multiclient-project-init` to `dev-root` and has
   clean merge state with no status checks reported.
-- Draft PR [#13: ContextForge: harden precompact continuity retention](https://github.com/somebloke1/contextforge-control-plane/pull/13)
-  is open from `codex/precompact-conductor-pointer` to `dev-root` and links
-  issue #12.
 - Merged PR [#8: ContextForge: roadmap and governance operating discipline](https://github.com/somebloke1/contextforge-control-plane/pull/8)
   landed as merge commit `f8a1aab`.
 - Merged PR [#9: ContextForge: project-local precompact continuity hook](https://github.com/somebloke1/contextforge-control-plane/pull/9)
   landed as merge commit `eb97c66`.
+- Merged PR [#13: ContextForge: harden precompact continuity retention](https://github.com/somebloke1/contextforge-control-plane/pull/13)
+  landed as merge commit `c6fb551`.
 - Six GitHub tracking issues now hold the active cleanup fronts:
   - [#1: Control Codex ContextForge wrapper lifecycle and stale process cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/1)
   - [#2: Review and clean stale Serena test project units](https://github.com/somebloke1/contextforge-control-plane/issues/2)
@@ -564,9 +562,10 @@ Current GitHub state:
   - [#6: Triage noncanonical inventory entries and service-management handoffs](https://github.com/somebloke1/contextforge-control-plane/issues/6)
 - Additional coordination issue:
   - [#11: Reconcile project-local precompact hook visibility across active worktrees](https://github.com/somebloke1/contextforge-control-plane/issues/11)
+- Closed coordination issue:
   - [#12: Prevent ad-hoc compactions from replacing conductor continuity pointer](https://github.com/somebloke1/contextforge-control-plane/issues/12)
 - Local `dev-root` and `origin/dev-root` are synchronized after the
-  fast-tracked foundation merges.
+  fast-tracked foundation merges at `c6fb551`.
 - Holding worktree `/home/dgk/workspace/context-portal` is on
   `codex/contextforge-wrapper-lifecycle`, one commit beyond `dev-root`, and
   remains the intentionally dirty source for not-yet-extracted slices.
@@ -581,10 +580,10 @@ Current GitHub state:
   file and hook block, with TOML parse plus direct hook smoke passing. Keep the
   issue open until a new Codex terminal/session launched from that worktree
   shows installed/active `PreCompact` and `SessionStart` hooks.
-- Issue #12 captures the ad-hoc compaction continuity risk. PR #13 updates the
-  hook contract to session-scoped latest pointers, event-only fallback without a
-  shared unknown pointer, stale global latest cleanup, and bounded retention of
-  ignored local snapshots.
+- Issue #12 captured the ad-hoc compaction continuity risk and is closed by PR
+  #13. The hook contract is now session-scoped latest pointers, event-only
+  fallback without a shared unknown pointer, stale global latest cleanup, and
+  bounded retention of ignored local snapshots.
 
 ### Desired GitHub State
 
@@ -611,20 +610,21 @@ main / origin/main
 origin/dev-root and dev-root
   include f8a1aab Merge pull request #8
   include eb97c66 Merge pull request #9
+  include c6fb551 Merge pull request #13
 
 open draft PR worktrees
   /home/dgk/workspace/contextforge-slices/wrapper-lifecycle-cleanup
     codex/wrapper-lifecycle-cleanup -> PR #7
   /home/dgk/workspace/contextforge-slices/helper-multiclient-project-init
     codex/helper-multiclient-project-init -> PR #10
-  /home/dgk/workspace/contextforge-slices/precompact-conductor-pointer
-    codex/precompact-conductor-pointer -> PR #13
 
 merged foundation worktrees
   /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
-    dev-root -> PR #8 and PR #9 merged
+    dev-root -> PR #8, PR #9, and PR #13 merged
   /home/dgk/workspace/contextforge-slices/precompact-continuity-hook
     codex/precompact-continuity-hook -> PR #9 merged, remote branch deleted
+  /home/dgk/workspace/contextforge-slices/precompact-conductor-pointer
+    codex/precompact-conductor-pointer -> PR #13 merged, remote branch deleted
 
 historical baseline shown before synchronization
   9d41c6b Add ContextForge control plane initiative plan
@@ -665,10 +665,10 @@ Phase 1: publish the accepted integration baseline and fast-track foundation.
 Status: completed.
 
 - Evidence: local `dev-root` and `origin/dev-root` are synchronized and include
-  merge commit `eb97c66`.
+  merge commit `c6fb551`.
 - The former 11-commit local lead has been synchronized to GitHub without a
   baseline PR because `dev-root` is the integration branch.
-- PR #8 and PR #9 were marked ready and merged to `dev-root`.
+- PR #8, PR #9, and PR #13 were marked ready and merged to `dev-root`.
 - Re-run focused tests before merging dependent slices, but do not repeat
   baseline push work unless evidence shows the refs diverged again.
 
@@ -688,7 +688,7 @@ extraction if current evidence proves a better review boundary.
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
 | `codex/precompact-continuity-hook` | merged cross-cutting continuity slice / [PR #9](https://github.com/somebloke1/contextforge-control-plane/pull/9) | Project-local Codex `PreCompact` and `SessionStart`/`compact` hooks, ignored continuity snapshots, hook tests, and operator documentation. Does not override Codex's default compaction prompt. | precompact/session-start hook unit tests; hook smoke invocation; config guardrail check |
-| `codex/precompact-conductor-pointer` | [#12](https://github.com/somebloke1/contextforge-control-plane/issues/12) / [PR #13](https://github.com/somebloke1/contextforge-control-plane/pull/13) | Session-scoped continuity latest pointers, event-only fallback without a shared unknown pointer, stale root latest cleanup, bounded snapshot/session retention, hook tests, and hook documentation. | precompact/session-start hook unit tests; `py_compile`; TOML config parse; `git diff --check` |
+| `codex/precompact-conductor-pointer` | closed [#12](https://github.com/somebloke1/contextforge-control-plane/issues/12) / merged [PR #13](https://github.com/somebloke1/contextforge-control-plane/pull/13) | Session-scoped continuity latest pointers, event-only fallback without a shared unknown pointer, stale root latest cleanup, bounded snapshot/session retention, hook tests, and hook documentation. | precompact/session-start hook unit tests; `py_compile`; TOML config parse; `git diff --check` |
 
 ### Executable Slice Contracts
 
@@ -699,32 +699,32 @@ extraction if current evidence proves a better review boundary.
   state indefinitely.
 - Beneficiary: operators and future agents resuming ContextForge work after
   compaction, especially when multiple Codex sessions are active.
-- Current state: PR #9 installed the first `PreCompact`/`SessionStart` hook,
-  but the initial design used root-level `latest.json` and `latest.md` pointer
-  files. Issue #11 separately tracks user-visible hook activation/readback.
-- Desired state: PR #13 stores session latest snapshots under
-  `sessions/<session-key>/`, stores event-only evidence when no session id is
-  available, removes stale root-level latest files, and enforces bounded event
-  and session retention.
+- Current state: closed. PR #13 is merged to `dev-root` and issue #12 is
+  closed. Issue #11 separately tracks user-visible hook activation/readback.
+- Desired state: achieved in tracked source. PR #13 stores session latest
+  snapshots under `sessions/<session-key>/`, stores event-only evidence when no
+  session id is available, removes stale root-level latest files, and enforces
+  bounded event and session retention.
 - Invariants: do not set `compact_prompt`, `experimental_compact_prompt_file`,
   or `model_auto_compact_token_limit`; do not make hook output authoritative
   over Codex's default compaction summary or the active user-selected goal; do
   not write tracked runtime snapshots.
 - Dependencies: PR #9 baseline, issue #11 visibility follow-up, current Codex
   hook payload identity fields or `CODEX_THREAD_ID`, and ignored `run/` state.
-- Hidden work: after PR #13 lands, propagate the hardened hook into the dirty
-  `codex/contextforge-wrapper-lifecycle` holding worktree and re-run direct
-  smoke/TOML checks before asking for fresh Codex `/hooks` table readback.
-- Acceptance: hook tests prove session isolation, no-session event-only
+- Hidden work: the hardened hook was propagated into the dirty
+  `codex/contextforge-wrapper-lifecycle` holding worktree and direct smoke/TOML
+  checks passed. Fresh Codex `/hooks` table readback remains issue #11.
+- Acceptance: completed. Hook tests prove session isolation, no-session event-only
   fallback, bounded event retention, bounded session retention, stale root
   latest cleanup, idempotent event ids, and sensitive value redaction; docs
   explain non-commandeering semantics and retention.
-- Evidence: `tests.test_codex_precompact_continuity_hook`, `py_compile` for the
-  hook and tests, TOML parse of `.codex/config.toml`, `git diff --check`, and
-  fresh user-visible `codex hooks` readback for issue #11 after propagation.
-- Debt policy: issue #12 closes only after PR #13 lands; issue #11 remains open
-  until the active dirty checkout shows installed/active `PreCompact` and
-  `SessionStart` hooks in a new Codex terminal/session.
+- Evidence: `tests.test_codex_precompact_continuity_hook` passed with 14 tests
+  on both the PR branch and merged `dev-root`; `py_compile` for the hook and
+  tests passed; TOML parse of `.codex/config.toml` passed; `git diff --check`
+  passed; direct dirty-checkout hook smoke passed.
+- Debt policy: issue #12 is retired. Issue #11 remains open until the active
+  dirty checkout shows installed/active `PreCompact` and `SessionStart` hooks
+  in a new Codex terminal/session.
 
 #### Wrapper lifecycle cleanup -> issue #1
 
@@ -943,13 +943,12 @@ Phase 3: PR discipline.
   - remaining manual approvals.
 - Merge order should be:
   1. roadmap/governance skills if they are needed to guide review;
-  2. precompact continuity hardening if still unmerged;
-  3. wrapper lifecycle cleanup;
-  4. helper multi-client/project-init;
-  5. Pi shim parity;
-  6. cleanup/live validation tools;
-  7. inventory/service-management triage;
-  8. Serena stale-unit cleanup docs or manager fixes.
+  2. wrapper lifecycle cleanup;
+  3. helper multi-client/project-init;
+  4. Pi shim parity;
+  5. cleanup/live validation tools;
+  6. inventory/service-management triage;
+  7. Serena stale-unit cleanup docs or manager fixes.
 
 Phase 4: post-merge hygiene.
 
@@ -979,7 +978,7 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    - `codex/serena-stale-unit-cleanup`
    - `codex/repo-local-skills-and-governance`
    - `codex/precompact-continuity-hook`
-   - `codex/precompact-conductor-pointer`
+   - `codex/precompact-conductor-pointer` (complete through PR #13)
 4. For each branch, include only one front, run focused tests, then open a draft
    PR against `dev-root`.
 5. Only after PRs exist, decide whether each issue closes through a PR,
@@ -993,22 +992,24 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    the ref before dependent PR work.
 3. Preserve the current dirty branch as-is, then continue splitting it into
    small branches rather than piling new changes onto it.
-4. Keep PR #7 current while extracting the remaining issue slices.
-5. Land wrapper lifecycle changes first because they affect day-to-day tool
+4. Close issue #11 only after a fresh Codex terminal/session launched from the
+   dirty checkout shows installed/active `PreCompact` and `SessionStart` hooks.
+5. Keep PR #7 current while extracting the remaining issue slices.
+6. Land wrapper lifecycle changes first because they affect day-to-day tool
    reliability.
-6. Clean stale wrapper processes through Codex Desktop relaunch or exact-match
+7. Clean stale wrapper processes through Codex Desktop relaunch or exact-match
    process cleanup from the runbook; the cleanup must be dry-run first,
    exact-PID scoped, and safe to repeat.
-7. Review and clean stale Serena test units.
-8. Land helper/project-init multi-client support and reconcile project-state
+8. Review and clean stale Serena test units.
+9. Land helper/project-init multi-client support and reconcile project-state
    historical jobs into terminal, verified, or explicitly non-blocking states
    without duplicating activation records.
-9. Land Pi shim source and perform approved global install/reload verification.
-10. Perform approved registry orphan cleanup using exact ids from a fresh
+10. Land Pi shim source and perform approved global install/reload verification.
+11. Perform approved registry orphan cleanup using exact ids from a fresh
    dry-run report and verify a second dry run is empty for those candidates.
-11. Re-run full tests, inventory, gateway health, service unit status,
+12. Re-run full tests, inventory, gateway health, service unit status,
     protocol-aware MCP probes, and selected client-visible validation.
-12. Run goal maintenance/refinement: update the meta-goal/sub-goal map,
+13. Run goal maintenance/refinement: update the meta-goal/sub-goal map,
     reprioritize the next slice from current evidence, and record the next best
     move in this roadmap or the relevant issue/PR.
 
