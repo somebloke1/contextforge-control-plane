@@ -205,13 +205,12 @@ work.
   the Serena manager still wrote `.codex/config.toml` directly.
   Issue #4 remains open because live project-state reconciliation and readiness
   acceptance are still unproven.
-- Active test-portability slice: issue #14 is on
-  `codex/clean-worktree-test-hermeticity`. The branch removes unit-test
-  dependence on ignored local `.env` and `run/*registration.json` files; focused
-  adapter/classification tests, broad control-plane discovery, and full
-  `unittest discover` now pass from a clean slice worktree when run with the
-  project `.venv` interpreter. A default system `python` without `mcp` /
-  `mcpgateway` remains outside that claim.
+- Retired test-portability slice: issue #14 is closed by merged PR #17 at merge
+  commit `0539d50`. The slice removed unit-test dependence on ignored local
+  `.env` and `run/*registration.json` files; focused adapter/classification
+  tests, broad control-plane discovery, and full `unittest discover` pass from a
+  clean slice worktree when run with the project `.venv` interpreter. A default
+  system `python` without `mcp` / `mcpgateway` remains outside that claim.
 - Current execution subgoal: issue #15 tracks retiring the dirty
   `/home/dgk/workspace/context-portal` holding checkout as a hidden source of
   truth. This is now part of the current execution priority because stale
@@ -755,7 +754,7 @@ extraction if current evidence proves a better review boundary.
 | `codex/live-validation-and-registry-cleanup-tools` | [#5](https://github.com/somebloke1/contextforge-control-plane/issues/5) | `scripts/inspect_contextforge_cleanup.py`, `scripts/apply_contextforge_stale_tool_cleanup.py`, `scripts/run_live_inference_validation.py`, live staged fixtures if they are sanitized and intended to be tracked. | cleanup inspector dry-run; inference harness tests; secret scan by review |
 | `codex/service-inventory-triage` | [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6) | inventory classification docs or scripts only; no generated `*.local.json`; any service-management handoff documentation. | inventory script; no generated/local files tracked |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
-| `codex/clean-worktree-test-hermeticity` | [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
+| `codex/clean-worktree-test-hermeticity` | closed [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) / merged [PR #17](https://github.com/somebloke1/contextforge-control-plane/pull/17) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
 | `codex/precompact-continuity-hook` | merged cross-cutting continuity slice / [PR #9](https://github.com/somebloke1/contextforge-control-plane/pull/9) | Project-local Codex `PreCompact` and `SessionStart`/`compact` hooks, ignored continuity snapshots, hook tests, and operator documentation. Does not override Codex's default compaction prompt. | precompact/session-start hook unit tests; hook smoke invocation; config guardrail check |
 | `codex/precompact-conductor-pointer` | closed [#12](https://github.com/somebloke1/contextforge-control-plane/issues/12) / merged [PR #13](https://github.com/somebloke1/contextforge-control-plane/pull/13) | Session-scoped continuity latest pointers, event-only fallback without a shared unknown pointer, stale root latest cleanup, bounded snapshot/session retention, hook tests, and hook documentation. | precompact/session-start hook unit tests; `py_compile`; TOML config parse; `git diff --check` |
@@ -917,8 +916,8 @@ extraction if current evidence proves a better review boundary.
   PR #16 merged the follow-on Serena config-write suppression guard at
   `f1a6404`. Focused compile checks, 166 focused unit tests before PR #16 merge,
   post-merge compile checks, and 3 post-merge regression tests passed. Issue #14
-  now has a green clean-worktree branch for the broad test-suite evidence gap
-  under the project `.venv` interpreter.
+  is now closed by PR #17, eliminating the known broad test-suite evidence gap in
+  clean worktrees under the project `.venv` interpreter.
   The live project state still requires final reconciliation/readiness acceptance
   before issue #4 can close.
 - Desired state: project-state labels, readback fields, helper prompts, reload
@@ -1111,9 +1110,8 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
 7. Review and clean stale Serena test units.
 8. Treat PR #10 as landed and continue issue #4 only for final live
    project-state reconciliation and readiness acceptance.
-9. Merge issue #14 clean-worktree evidence-gap fix after review; its branch is
-   green under the project `.venv` interpreter and removes ignored local `.env`
-   / `run/*registration.json` dependencies.
+9. Treat issue #14 as retired unless new clean-worktree evidence proves a fresh
+   hermeticity regression.
 10. Land Pi shim source and perform approved global install/reload verification.
 11. Perform approved registry orphan cleanup using exact ids from a fresh
    dry-run report and verify a second dry run is empty for those candidates.
