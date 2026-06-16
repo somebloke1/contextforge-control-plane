@@ -27,6 +27,14 @@ print(json.dumps({
 PY
 ```
 
+New wrapper launches can appear in short bursts when Codex Desktop opens or
+reloads MCP sessions. Treat immediate wrapper and `CLOSE-WAIT` counts as a
+point-in-time snapshot, not as the terminal state. Re-run the process report
+after the configured idle window, default 300 seconds, before deciding whether
+wrappers are leaking. Healthy lifecycle evidence is bounded drain to zero stale
+wrappers and zero wrapper-owned `CLOSE-WAIT` sockets without service restarts
+or broad process cleanup.
+
 Time the `mentality_governance_list` path without mutating ledgers:
 
 ```sh
@@ -66,6 +74,12 @@ does not have a process idle timeout. New launches through
 - default stdin idle shutdown after 300 seconds;
 - streamable-HTTP session header preservation;
 - response-id-aware return from SSE/NDJSON streams.
+
+Some Linux `/proc/<pid>/environ` views do not show environment updates made
+after process start. The diagnostic script therefore reports wrapper
+`server_name` from `CONTEXTFORGE_WRAPPER_SERVER_NAME` when visible and falls
+back to the `scripts/contextforge_mcp_wrapper.py <server-name>` command-line
+argument for current wrappers.
 
 ## Safe Cleanup
 

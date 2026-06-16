@@ -53,6 +53,13 @@ def _proc_environ(pid: int) -> dict[str, str]:
     return env
 
 
+def _wrapper_server_name_from_cmdline(cmdline: list[str]) -> str | None:
+    for index, part in enumerate(cmdline):
+        if part.endswith("contextforge_mcp_wrapper.py") and index + 1 < len(cmdline):
+            return cmdline[index + 1]
+    return None
+
+
 def _proc_stat(pid: int) -> dict[str, Any]:
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
@@ -138,6 +145,7 @@ def process_report() -> dict[str, Any]:
         ):
             continue
         env = _proc_environ(pid)
+        server_name = env.get("CONTEXTFORGE_WRAPPER_SERVER_NAME") or _wrapper_server_name_from_cmdline(cmdline)
         stat = _proc_stat(pid)
         socket_rows = sockets.get(pid, [])
         rows.append(
@@ -146,7 +154,7 @@ def process_report() -> dict[str, Any]:
                 "ppid": stat.get("ppid"),
                 "state": stat.get("state"),
                 "kind": _classify_process(joined),
-                "server_name": env.get("CONTEXTFORGE_WRAPPER_SERVER_NAME"),
+                "server_name": server_name,
                 "mcp_server_url": env.get("MCP_SERVER_URL"),
                 "cmdline": cmdline,
                 "fd": _fd_summary(pid),
