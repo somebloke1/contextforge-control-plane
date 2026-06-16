@@ -52,10 +52,70 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
             self.assertEqual("session", snapshot["authority_scope"])
             self.assertEqual(continuity_hook.session_key(payload, root), snapshot["session_key"])
             self.assertIn("docs/project-status-roadmap-2026-06-16.md", snapshot["roadmap_refs"])
+            self.assertIn("promotion_boundary", snapshot)
+            self.assertIn("raw_snapshot_policy", snapshot["promotion_boundary"])
+            self.assertIn("transition_policy", snapshot["promotion_boundary"])
 
             markdown = session_latest_md.read_text(encoding="utf-8")
             self.assertIn("ContextForge Pre-Compaction Continuity Snapshot", markdown)
+            self.assertIn("Promotion Boundary", markdown)
+            self.assertIn("point-in-time evidence", markdown)
             self.assertIn("Codex's default compaction prompt remains authoritative", markdown)
+
+    def test_snapshot_points_to_standard_repo_assets_and_schema(self) -> None:
+        snapshot = continuity_hook.build_snapshot(
+            {"hook_event_name": "PreCompact", "trigger": "manual", "thread_id": "thread-1"},
+            cwd=REPO_ROOT,
+            now="2026-06-16T12:00:00-0500",
+        )
+
+        self.assertEqual("schemas/codex-precompact-continuity.schema.json", snapshot["schema_ref"])
+        standard_refs = snapshot["standard_repo_refs"]
+        self.assertIn(".codex/hooks/contextforge_precompact_continuity.py", standard_refs)
+        self.assertIn("docs/codex-precompact-continuity-hook.md", standard_refs)
+        self.assertIn("schemas/codex-precompact-continuity.schema.json", standard_refs)
+        self.assertIn("tests/test_codex_precompact_continuity_hook.py", standard_refs)
+        self.assertIn("target operating architecture", snapshot["promotion_boundary"]["transition_policy"])
+        self.assertIn(
+            "Call get_goal, reconcile the formal goal with the live user mission",
+            "\n".join(snapshot["continuity_protocol"]),
+        )
+
+        markdown = continuity_hook.render_markdown(snapshot)
+        self.assertIn("## Standard Repo Assets", markdown)
+        self.assertIn("schemas/codex-precompact-continuity.schema.json", markdown)
+
+    def test_snapshot_schema_file_declares_standard_repo_contract(self) -> None:
+        schema = json.loads((REPO_ROOT / "schemas/codex-precompact-continuity.schema.json").read_text(encoding="utf-8"))
+
+        self.assertIn("standard_repo_refs", schema["required"])
+        self.assertIn("promotion_boundary", schema["required"])
+        self.assertIn("transition_policy", schema["properties"]["promotion_boundary"]["required"])
+        self.assertEqual("ContextForge", schema["properties"]["project_name"]["const"])
+        self.assertEqual(
+            "contextforge-precompact-continuity/v1",
+            schema["properties"]["schema"]["const"],
+        )
+
+    def test_generated_continuity_state_remains_ignored_runtime_evidence(self) -> None:
+        result = subprocess.run(
+            [
+                "git",
+                "check-ignore",
+                "run/codex-precompact-continuity/sessions/example/latest.json",
+                "run/codex-precompact-continuity/events/example.json",
+                "run/codex-precompact-continuity/contextforge-precompact-continuity.local.lock",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("run/codex-precompact-continuity/sessions/example/latest.json", result.stdout)
+        self.assertIn("run/codex-precompact-continuity/events/example.json", result.stdout)
+        self.assertIn("run/codex-precompact-continuity/contextforge-precompact-continuity.local.lock", result.stdout)
 
     def test_precompact_hook_is_idempotent_for_same_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

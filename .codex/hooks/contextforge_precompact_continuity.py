@@ -16,9 +16,11 @@ from typing import Any
 
 
 SNAPSHOT_SCHEMA = "contextforge-precompact-continuity/v1"
+SNAPSHOT_SCHEMA_PATH = "schemas/codex-precompact-continuity.schema.json"
 STATE_DIR_PARTS = ("run", "codex-precompact-continuity")
 SENSITIVE_KEY_FRAGMENTS = ("api_key", "apikey", "authorization", "bearer", "password", "secret", "token")
 PROJECT_ROADMAP = "docs/project-status-roadmap-2026-06-16.md"
+CONTINUITY_RUNBOOK = "docs/codex-precompact-continuity-hook.md"
 MAX_EVENT_SNAPSHOTS = 100
 MAX_SESSION_SNAPSHOTS = 50
 
@@ -180,10 +182,23 @@ def roadmap_refs(repo_root: Path) -> list[str]:
         "AGENTS.md",
         "README.md",
         PROJECT_ROADMAP,
+        CONTINUITY_RUNBOOK,
         "docs/contextforge-wrapper-lifecycle-runbook.md",
         "DECISIONS.md",
         "ABEYANT_INTENTIONS.md",
         "OPEN_QUESTIONS.md",
+    ]
+    return [ref for ref in refs if (repo_root / ref).exists()]
+
+
+def standard_repo_refs(repo_root: Path) -> list[str]:
+    refs = [
+        ".codex/config.toml",
+        ".codex/hooks/contextforge_precompact_continuity.py",
+        CONTINUITY_RUNBOOK,
+        SNAPSHOT_SCHEMA_PATH,
+        "tests/test_codex_precompact_continuity_hook.py",
+        PROJECT_ROADMAP,
     ]
     return [ref for ref in refs if (repo_root / ref).exists()]
 
@@ -195,6 +210,7 @@ def build_snapshot(payload: dict[str, Any], *, cwd: Path | None = None, now: str
     key = session_key(payload, repo_root)
     snapshot = {
         "schema": SNAPSHOT_SCHEMA,
+        "schema_ref": SNAPSHOT_SCHEMA_PATH if (repo_root / SNAPSHOT_SCHEMA_PATH).exists() else None,
         "event_id": event_id,
         "created_at": now or time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "event_name": event_name(payload) or "unknown",
@@ -216,9 +232,32 @@ def build_snapshot(payload: dict[str, Any], *, cwd: Path | None = None, now: str
             "Preserve unrelated dirty work and keep branch/PR slices isolated from dev-root.",
             "Keep the default Codex compaction prompt intact; this hook is additive continuity state only.",
             "Continue the active session's task; do not let another session's compaction snapshot redefine the mission.",
+            "Call get_goal, reconcile the formal goal with the live user mission, and activate any refined successor goal before continuing roadmap work.",
             "When operating as roadmap conductor, complete a goal-maintenance/refinement pass before moving to the next roadmap loop.",
         ],
         "roadmap_refs": roadmap_refs(repo_root),
+        "standard_repo_refs": standard_repo_refs(repo_root),
+        "promotion_boundary": {
+            "tracked_standard_assets": [
+                "hook source",
+                "hook config",
+                "snapshot schema",
+                "operator runbook",
+                "tests",
+                "roadmap goal-loop contract",
+            ],
+            "ignored_runtime_state": [
+                "run/codex-precompact-continuity/events/*.json",
+                "run/codex-precompact-continuity/sessions/*/latest.json",
+                "run/codex-precompact-continuity/sessions/*/latest.md",
+                "run/codex-precompact-continuity/*.local.lock",
+            ],
+            "raw_snapshot_policy": "generated session evidence remains ignored unless a sanitized artifact is deliberately promoted",
+            "transition_policy": (
+                "snapshot repo_root values are point-in-time evidence only; do not treat a transitional checkout path "
+                "as the target operating architecture"
+            ),
+        },
         "git": git_snapshot(repo_root),
         "payload_keys": redacted_payload_keys(payload),
     }
@@ -229,12 +268,15 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     git_info = snapshot.get("git") if isinstance(snapshot.get("git"), dict) else {}
     status_lines = git_info.get("status_short") if isinstance(git_info.get("status_short"), list) else []
     refs = snapshot.get("roadmap_refs") if isinstance(snapshot.get("roadmap_refs"), list) else []
+    standard_refs = snapshot.get("standard_repo_refs") if isinstance(snapshot.get("standard_repo_refs"), list) else []
+    promotion_boundary = snapshot.get("promotion_boundary") if isinstance(snapshot.get("promotion_boundary"), dict) else {}
     protocol = snapshot.get("continuity_protocol") if isinstance(snapshot.get("continuity_protocol"), list) else []
     lines = [
         "# ContextForge Pre-Compaction Continuity Snapshot",
         "",
         f"- created_at: `{snapshot.get('created_at')}`",
         f"- event_id: `{snapshot.get('event_id')}`",
+        f"- schema_ref: `{snapshot.get('schema_ref')}`",
         f"- compaction_trigger: `{snapshot.get('compaction_trigger')}`",
         f"- authority_scope: `{snapshot.get('authority_scope')}`",
         f"- session_key: `{snapshot.get('session_key')}`",
@@ -252,6 +294,27 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     lines.extend(f"{index}. {item}" for index, item in enumerate(protocol, start=1))
     lines.extend(["", "## Roadmap Refs", ""])
     lines.extend(f"- `{ref}`" for ref in refs)
+    lines.extend(["", "## Standard Repo Assets", ""])
+    if standard_refs:
+        lines.extend(f"- `{ref}`" for ref in standard_refs)
+    else:
+        lines.append("- unavailable")
+    lines.extend(["", "## Promotion Boundary", ""])
+    tracked_assets = promotion_boundary.get("tracked_standard_assets")
+    ignored_state = promotion_boundary.get("ignored_runtime_state")
+    raw_policy = promotion_boundary.get("raw_snapshot_policy")
+    transition_policy = promotion_boundary.get("transition_policy")
+    if isinstance(tracked_assets, list):
+        lines.append("Tracked standard assets:")
+        lines.extend(f"- {item}" for item in tracked_assets)
+    if isinstance(ignored_state, list):
+        lines.append("")
+        lines.append("Ignored runtime state:")
+        lines.extend(f"- `{item}`" for item in ignored_state)
+    if raw_policy:
+        lines.extend(["", str(raw_policy)])
+    if transition_policy:
+        lines.extend(["", str(transition_policy)])
     lines.extend(["", "## Git Status", ""])
     if status_lines:
         lines.extend(f"- `{line}`" for line in status_lines)

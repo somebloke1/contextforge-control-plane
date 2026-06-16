@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contextforge://codex/precompact-continuity/v1",
+  "title": "ContextForge Codex Pre-Compaction Continuity Snapshot",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema",
+    "event_id",
+    "created_at",
+    "event_name",
+    "compaction_trigger",
+    "authority_scope",
+    "repo_root",
+    "project_name",
+    "continuity_protocol",
+    "roadmap_refs",
+    "standard_repo_refs",
+    "promotion_boundary",
+    "git",
+    "payload_keys"
+  ],
+  "properties": {
+    "schema": {
+      "const": "contextforge-precompact-continuity/v1"
+    },
+    "schema_ref": {
+      "type": ["string", "null"],
+      "description": "Repo-relative path to this schema when the active checkout has it."
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,96}$"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "event_name": {
+      "type": "string"
+    },
+    "compaction_trigger": {
+      "enum": ["manual", "auto", "unknown"]
+    },
+    "session_id_present": {
+      "type": "boolean"
+    },
+    "session_key": {
+      "type": ["string", "null"]
+    },
+    "authority_scope": {
+      "enum": ["session", "event-only"]
+    },
+    "repo_root": {
+      "type": "string"
+    },
+    "cwd": {
+      "type": "string"
+    },
+    "project_name": {
+      "const": "ContextForge"
+    },
+    "legacy_path_name": {
+      "type": "string",
+      "description": "Deprecated compatibility/path label when present. This is evidence, not target architecture."
+    },
+    "mission": {
+      "type": "string"
+    },
+    "continuity_protocol": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "roadmap_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "standard_repo_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "promotion_boundary": {
+      "type": "object",
+      "required": [
+        "tracked_standard_assets",
+        "ignored_runtime_state",
+        "raw_snapshot_policy",
+        "transition_policy"
+      ],
+      "properties": {
+        "tracked_standard_assets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignored_runtime_state": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "raw_snapshot_policy": {
+          "type": "string"
+        },
+        "transition_policy": {
+          "type": "string"
+        }
+      }
+    },
+    "git": {
+      "type": "object"
+    },
+    "payload_keys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
