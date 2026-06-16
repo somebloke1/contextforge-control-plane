@@ -919,7 +919,7 @@ extraction if current evidence proves a better review boundary.
 | `codex/issue-15-strategy1-source-rebind` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #24](https://github.com/somebloke1/contextforge-control-plane/pull/24) | User-approved Strategy 1 first pass: retarget source/project-local path-bound operating surfaces from `/home/dgk/workspace/context-portal` to the clean worktree while preserving compatibility names and making no runtime/global/process/registry/Pi/checkout-disposition mutations. | planner with `--approval-acknowledged`; readiness with `--no-processes`; targeted legacy-root `rg`; `tests.test_project_init_scripts`; TOML parse; `git diff --check`; delegated source-surface audit |
 | `codex/issue-15-clean-helper-binding` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #27](https://github.com/somebloke1/contextforge-control-plane/pull/27) | Project-local `contextforge-helper` MCP binding and regression test so clean-root Codex sessions shadow the stale global helper entry instead of depending on the legacy checkout. Does not edit user-global config/trust or reload clients. | `codex -C ... mcp list --json`; `tests.test_codex_precompact_continuity_hook`; readiness with `--no-processes`; delegated legacy-binding audit |
 | `codex/issue-15-global-codex-migration-plan` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #28](https://github.com/somebloke1/contextforge-control-plane/pull/28) | Read-only user-global Codex config/trust migration planner for stale `~/.codex/config.toml` entries. Classifies active replacements, historical hook-state provenance, clean-root trust/hook-state absence, target values, readback commands, and non-actions. Does not edit global config/trust or reload clients. | `scripts/plan_codex_global_config_migration.py`; focused planner tests; real global-config planner readback; `git diff --check` |
-| `codex/issue-29-global-codex-apply-rollback` | [#29](https://github.com/somebloke1/contextforge-control-plane/issues/29) | Idempotent apply/rollback tooling for the user-global Codex config/trust migration. Keeps planning read-only by default, requires explicit approval for writes/restores, creates pre-change backups, preserves legacy trust and hook-state provenance by default, de-duplicates partial migrations, and reports `pending_restart` after writes. | focused global config migration tests; temp-config apply/rollback smoke; real read-only planner readback; `git diff --check` |
+| `codex/issue-29-global-codex-apply-rollback` | closed [#29](https://github.com/somebloke1/contextforge-control-plane/issues/29) / merged [PR #32](https://github.com/somebloke1/contextforge-control-plane/pull/32) | Idempotent apply/rollback tooling for the user-global Codex config/trust migration. Keeps planning read-only by default, requires explicit approval for writes/restores, creates pre-change backups, preserves legacy trust and hook-state provenance by default, de-duplicates partial migrations, requires separate paired approval for legacy trust removal or hook-state pruning, and reports `pending_restart` after writes. | 13 focused global config migration tests; 69 project-init tests; temp-config apply/plan/rollback smoke; real read-only planner readback; `git diff --check`; delegated read-only review |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/clean-worktree-test-hermeticity` | closed [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) / merged [PR #17](https://github.com/somebloke1/contextforge-control-plane/pull/17) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
@@ -1375,14 +1375,16 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    first source-only compatibility rebind pass, and PR #27 completed the
    clean-root `contextforge-helper` shadow so Codex MCP readback no longer
    depends on the legacy helper binding. PR #28 completed the read-only global
-   Codex config/trust migration planner. Issue #29 is the next safety slice:
-   make that global migration idempotent and rollback-capable before any
-   user-global config/trust write. After #29, choose the next separately
-   approved operator-path step: apply the approved user-global Codex
-   config/trust migration, systemd/Serena reload/readback, ContextForge
-   registration readback, or explicit archival disposition of the legacy
-   checkout. Do not bundle those runtime/global/check-out actions into ordinary
-   source work.
+   Codex config/trust migration planner. Issue #29 is retired through merged PR
+   #32, so the global migration is now idempotent and rollback-capable as source
+   tooling, but no live user-global write has occurred. Choose the next
+   separately approved operator-path step: address #30 hook retarget
+   trust/first-run side effects before hook-command migration, apply the
+   approved user-global Codex config/trust migration with #29 tooling,
+   perform #31 runtime `pending_restart` verification after an approved write,
+   perform systemd/Serena reload/readback, perform ContextForge registration
+   readback, or decide explicit archival disposition of the legacy checkout. Do
+   not bundle those runtime/global/check-out actions into ordinary source work.
 8. Review and clean stale Serena test units after explicit approval for
    stop/disable/remove actions.
 9. Treat PR #10 as landed and continue issue #4 only for final live
