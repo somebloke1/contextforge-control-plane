@@ -753,3 +753,55 @@ Governance ledgers remain authoritative for decisions, open questions, parked in
 
 The v1 local profile uses loopback authenticated HTTP with wrapper fallback where needed, but local assistant tokens must be non-admin and least-privilege. User-global trust, user-global config writes, token material changes, secret value writes, and remote exposure require separate human approval and evidence. Remote exposure is non-default, opt-in, scoped, separately tokenized, and must deny control-plane mutation, catalog/admin, trust, token, and secret-value workflows unless a later approved RFC changes the model.
 <!-- governance-crud:end id=dec-20260530-0006 -->
+
+<!-- governance-crud:start id=dec-20260531-0001 -->
+## dec-20260531-0001: Use stable service identity IDs for project-init service state
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-31
+- Updated: 2026-05-31
+- Tags: contextforge,project-init,idempotency,service-identity,cleanup
+
+Project-init service selection, approval, application, readback, validation, cleanup, and state reconciliation must identify services by stable ContextForge service identity IDs rather than descriptive service names, client labels, virtual server names, tool prefixes, or binding strings alone. serviceBinding, serviceFamily, virtualServer, piToolPrefix, descriptors, and display names are routing or presentation metadata only. During reconciliation, any persisted service ID that is absent from the current ContextForge catalog must be removed from .project/context_forge_state.json regardless of label matches or older descriptor artifacts. Stale, mismatched, or no-longer-existing service IDs cannot satisfy selection, idempotency, or validation. Project-state writes remain locked, schema-validated, atomic, revision-aware, root-safe, and secret-free.
+<!-- governance-crud:end id=dec-20260531-0001 -->
+
+<!-- governance-crud:start id=dec-20260531-0002 -->
+## dec-20260531-0002: Keep project-init validation evaluator-led and target-client-visible
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-31
+- Updated: 2026-05-31
+- Tags: contextforge,project-init,inference-testing,validation,evaluator
+
+Project-init validation must prove the target client can see and call the expected ContextForge route. Built-in tools, direct shell commands, direct SSH or tmux checks, backend-only reachability, helper scripts, and Python module invocations are not valid substitutes for Pi-visible or Codex-visible ContextForge tool routes. If a skipped-service follow-up cannot exercise the imported ContextForge route, the assistant must say so and must not record the substitute as ContextForge proof. Inference-inclusive validation remains evaluator-led: do not add deterministic transcript keyword guards, semantic verdict overrides, or hard-coded failure signatures. The only deterministic evaluation step may parse the structured evaluator result and fail or pass from the evaluator verdict. Evaluator prompts must catch tool-not-found false completion, role confusion, proxy validation, skipped-service proof substitution, missing cleanup, and stale service-ID handling.
+<!-- governance-crud:end id=dec-20260531-0002 -->
+
+<!-- governance-crud:start id=dec-20260531-0003 -->
+## dec-20260531-0003: Number project-init choices and make reload instructions explicit
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-31
+- Updated: 2026-05-31
+- Tags: contextforge,project-init,ux,reload,options
+
+Every project-init prompt that presents user options must number the options and accept selection numbers as well as option IDs. Where the client supports a selectable form, prefer the form over free-text-only option lists. Reload or restart-required copy must give explicit next responses, for example: after restarting, respond validate to run validation or skip validation to record presumed working without verification. Do not leave the user with vague phrasing such as choose whether to validate, and do not require users to answer with only descriptive service names.
+<!-- governance-crud:end id=dec-20260531-0003 -->
+
+<!-- governance-crud:start id=dec-20260616-0001 -->
+## dec-20260616-0001: Use ContextForge naming for the project
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-06-16
+- Updated: 2026-06-16
+- Tags: contextforge,naming,documentation,governance
+
+Use ContextForge, Context Forge, or contextforge as the project name in human-facing documentation and coordination artifacts. Treat context-portal as a legacy filesystem path, historical slug, or current runtime identifier only where exact paths, service names, project hashes, registry ids, or compatibility surfaces require it. Do not rename live services, project-state identities, Serena slugs, GitHub repository names, or filesystem paths as part of ordinary cleanup; any such migration requires a separate explicit plan, approval, rollback story, and runtime readback evidence.
+<!-- governance-crud:end id=dec-20260616-0001 -->

@@ -1,0 +1,6 @@
+interface:
+  display_name: "ContextForge Control Plane"
+  short_description: "Develop control-plane contracts and tests"
+  default_prompt: "Use $contextforge-control-plane to work on the ContextForge control-plane implementation."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+interface:
+  display_name: "ContextForge Project Init"
+  short_description: "Activate project ContextForge bindings"
+  default_prompt: "Use $contextforge-project-init to initialize or validate this project's ContextForge services."
+policy:
+  allow_implicit_invocation: true
