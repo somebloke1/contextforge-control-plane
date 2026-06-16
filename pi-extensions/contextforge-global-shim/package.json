@@ -1,0 +1,10 @@
+{
+  "name": "contextforge-global-shim",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

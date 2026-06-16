@@ -21,6 +21,9 @@ import control_plane_authorization as authorization
 import control_plane_project_init_helper as helper
 import contextforge_helper_mcp
 import control_plane_project_state as project_state
+import manage_pi_global_shim
+import pi_contextforge_shim_dry_run
+import pi_project_init_helper_cli
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
 
@@ -762,6 +765,66 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("shared_contextforge_service", service["lifecycle"]["activation"])
         self.assertEqual("shim_activation_planned", service["target_clients"]["pi"]["status"])
 
+    def test_pi_shim_dry_run_imports_project_state_bindings_and_blocks_mutating_defaults(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7"), service_descriptor("github")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            project_state.write_state_atomic(root, state)
+            result = pi_contextforge_shim_dry_run.dry_run(
+                root,
+                {
+                    "context7_server": [{"name": "context7-local-resolve-library-id"}],
+                    "github_server": [{"name": "github-search-repositories"}, {"name": "github-create-issue"}],
+                },
+            )
+
+        names = {tool["pi_name"] for tool in result["registered_tools"]}
+        blocked = {tool["mcp_name"] for tool in result["registered_tools"] if tool["blocked_by_default"]}
+        validation_by_service = {item["service_binding"]: item for item in result["validation_signals"]}
+        self.assertTrue(any(name.startswith("cf_context7_s") and name.endswith("__context7-local-resolve-library-id") for name in names))
+        self.assertTrue(any(name.startswith("cf_github_s") and name.endswith("__github-search-repositories") for name in names))
+        self.assertIn("github-create-issue", blocked)
+        self.assertEqual("safe_probe_available", validation_by_service["context7:canonical"]["status"])
+        self.assertEqual("context7-local-resolve-library-id", validation_by_service["context7:canonical"]["mcp_name"])
+        self.assertEqual("safe_probe_available", validation_by_service["github:canonical"]["status"])
+        self.assertEqual("github-search-repositories", validation_by_service["github:canonical"]["mcp_name"])
+        self.assertTrue(result["target_client_visible"])
+
+    def test_pi_shim_dry_run_reports_explicit_validation_skip_when_no_safe_tool_matches(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            project_state.write_state_atomic(root, state)
+            result = pi_contextforge_shim_dry_run.dry_run(
+                root,
+                {"context7_server": [{"name": "context7-local-dangerous-write"}]},
+            )
+
+        self.assertEqual("skipped", result["validation_signals"][0]["status"])
+        self.assertEqual("no_matching_safe_pi_tool", result["validation_signals"][0]["skipped_reason"])
+
     def test_pi_helper_resumes_pending_validation_when_shim_metadata_is_current(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -992,6 +1055,131 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         job = written["project_init"]["activation_jobs"][written["project_init"]["current_job_id"]]
         self.assertNotEqual("sha256:" + ("0" * 64), job["local_client_config_digest"])
         self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+
+    def test_pi_global_shim_install_plan_is_explicit_and_non_mutating_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            target = Path(tmp) / "target"
+            source.mkdir()
+            (source / "index.ts").write_text("export default function shim() {}\n", encoding="utf-8")
+            (source / "README.md").write_text("# shim\n", encoding="utf-8")
+            (source / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
+            plan = manage_pi_global_shim.install_plan(source, target)
+            status = manage_pi_global_shim.directory_status(source, target)
+            with self.assertRaisesRegex(ValueError, "refusing user-global Pi extension write"):
+                manage_pi_global_shim.apply_install(source, target, confirmation=None)
+            installed = manage_pi_global_shim.apply_install(
+                source,
+                target,
+                confirmation=manage_pi_global_shim.CONFIRM_FLAG,
+            )
+            root_config = json.loads((target / "contextforge-root.json").read_text(encoding="utf-8"))
+
+        self.assertEqual("not_installed", status["status"])
+        self.assertEqual("install_or_upgrade_user_global_pi_extension", plan["operation"])
+        self.assertIn("I_APPROVE_USER_GLOBAL_PI_EXTENSION_WRITE", plan["requires_explicit_confirmation"])
+        self.assertIn(str(target / "contextforge-root.json"), plan["planned_writes"])
+        self.assertIn(str(Path.home() / ".pi" / "agent" / "extensions" / "mcp-bridge"), plan["planned_non_writes"])
+        self.assertEqual(str(REPO_ROOT), root_config["portalRoot"])
+        self.assertEqual("/reload", plan["client_reload"]["command"])
+        self.assertEqual("pi-client-reload-before-validation", plan["next_turn"]["question_id"])
+        self.assertIn("After the reload", plan["next_turn"]["prompt"])
+        self.assertIn('choose 1 or reply "validate"', plan["next_turn"]["allowed_response_shape"])
+        self.assertEqual(1, plan["next_turn"]["choices"][0]["number"])
+        self.assertEqual("installed_current", installed["status"])
+        self.assertEqual("/reload", installed["client_reload"]["command"])
+        self.assertIn("Before validating", installed["next_action"])
+
+    def test_pi_extension_source_registers_bootstrap_helper_tools_without_bridge_reuse(self) -> None:
+        text = (REPO_ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
+
+        self.assertIn("cf_project_init_list_capabilities", text)
+        self.assertIn("cf_project_init_approve", text)
+        self.assertIn("cf_project_init_record_client_reload", text)
+        self.assertIn("pi_project_init_helper_cli.py", text)
+        self.assertIn('pi.on("before_agent_start"', text)
+        self.assertIn("injectProjectInitPrompt", text)
+        self.assertIn("runHelperOperationJson", text)
+        self.assertIn("projectInitCache", text)
+        self.assertIn("resolveCachedPlan", text)
+        self.assertIn("status: \"already_approved_from_pi_shim_cache\"", text)
+        self.assertIn("status: \"already_applied_from_pi_shim_cache\"", text)
+        self.assertIn("Supplying the full plan is optional", text)
+        self.assertIn('renderShell: "self"', text)
+        self.assertIn("renderNothing", text)
+        self.assertIn("new Container()", text)
+        self.assertIn("cf_project_init_prompt", text)
+        self.assertIn("Diagnostic only", text)
+        self.assertIn("cf_contextforge_pi_readback", text)
+        self.assertIn("cf_contextforge_guidance_lookup", text)
+        self.assertIn("listPrompts", text)
+        self.assertIn("getPrompt", text)
+        self.assertIn("listResources", text)
+        self.assertIn("readResource", text)
+        self.assertIn("prompts/list", text)
+        self.assertIn("prompts/get", text)
+        self.assertIn("resources/list", text)
+        self.assertIn("resources/read", text)
+        self.assertIn("readback.prompts", text)
+        self.assertIn("readback.resources", text)
+        self.assertIn("lookupGuidance", text)
+        self.assertIn("guidanceLookupKeys", text)
+        self.assertIn("cf_contextforge_pi_validate", text)
+        self.assertIn("cf_project_init_validate", text)
+        self.assertIn("Compatibility alias for cf_contextforge_pi_validate", text)
+        self.assertIn("runPiValidation", text)
+        self.assertIn('proof_kind: "pi_safe_probe_result"', text)
+        self.assertIn("safe_probe_result", text)
+        self.assertIn("safe_probe_available", text)
+        self.assertIn("Call cf_project_init_record_validation", text)
+        self.assertIn("await activateProject(pi, projectRootFromParams(params, ctx), clients)", text)
+        self.assertIn("routeNamesByKey", text)
+        self.assertIn("stableRouteToolName", text)
+        self.assertIn("routeKeyFor(service, mcpTool)", text)
+        self.assertIn("service.contextforgeServerId", text)
+        self.assertIn("GLOBAL_STATE_KEY", text)
+        self.assertIn("globalThis", text)
+        self.assertIn("projectInitHookPromptState", text)
+        self.assertIn("completed_unverified", text)
+        self.assertIn("serviceIdentityToolSegment", text)
+        self.assertIn("shouldRefreshAfterHelperOperation", text)
+        self.assertIn("defaultSafeOperationsFor", text)
+        self.assertIn("safeProbeArgs", text)
+        self.assertIn("fitArgsToSchema", text)
+        self.assertIn('base.libraryName = "React"', text)
+        self.assertIn('base.query = "modelcontextprotocol"', text)
+        self.assertIn('base.ledger = "decisions"', text)
+        self.assertIn("probeArgsAvailable", text)
+        self.assertIn("acceptStderr(chunk)", text)
+        self.assertIn("contextforge-root.json", text)
+        self.assertNotIn("DEFAULT_PORTAL_ROOT", text)
+        self.assertNotIn("console.error", text)
+        self.assertNotIn("mcp-bridge", text)
+        self.assertNotIn("registerContext7Tools", text)
+
+    def test_pi_helper_cli_stdout_is_clean_json(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/pi_project_init_helper_cli.py"),
+                    "--operation",
+                    "get_project_context",
+                    "--payload-json",
+                    json.dumps({"project_root": str(root)}),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=REPO_ROOT,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(result.stdout.startswith("{"), result.stdout[:200])
+        parsed = json.loads(result.stdout)
+        self.assertTrue(parsed["ok"])
+        self.assertEqual("pi", parsed["client_type"])
 
     def test_contextforge_helper_mcp_exposes_cached_project_init_id_digest_tools(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
