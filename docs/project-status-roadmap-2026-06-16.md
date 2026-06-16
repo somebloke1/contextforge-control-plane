@@ -273,13 +273,15 @@ work.
   then completed the user-approved Strategy 1 first source-only compatibility
   rebind at merge commit `9aa732b`: source/project-local launch, project-state,
   Serena, mentality, skill, and registration-example surfaces are retargeted to
-  the clean worktree. Active branch `codex/issue-15-clean-helper-binding`
-  follows up on clean-root operator readback: `codex -C ... mcp list --json`
-  originally showed `contextforge-helper` inherited from user-global
-  `~/.codex/config.toml` and still bound to
-  `/home/dgk/workspace/context-portal`; the branch adds a project-local
+  the clean worktree. Merged PR
+  [#27](https://github.com/somebloke1/contextforge-control-plane/pull/27)
+  followed up on clean-root operator readback at merge commit `6cccd0d`:
+  `codex -C ... mcp list --json` originally showed `contextforge-helper`
+  inherited from user-global `~/.codex/config.toml` and still bound to
+  `/home/dgk/workspace/context-portal`; PR #27 adds a project-local
   `contextforge-helper` binding so the clean root shadows that stale global
-  entry without editing global config.
+  entry without editing global config. Post-merge readback reported 11 MCP
+  entries and zero legacy-bound items.
   Compatibility slugs remain intact. Cleanup remains open until
   `/home/dgk/workspace/context-portal` is either explicitly archival-only or
   safely rebound/retired without losing preserved local work. Merged PR
@@ -441,12 +443,12 @@ Current evidence:
   project state is repaired to the clean worktree and readiness reports primary
   `valid`/`resume_validation`; target-client validation and live process/runtime
   rebind are still pending.
-- Clean-root Codex MCP readback now has a source-side fix in progress. On
-  `codex/issue-15-clean-helper-binding`, `codex -C
+- Clean-root Codex MCP readback now passes through merged PR #27. On
+  `dev-root` at `6cccd0d`, `codex -C
   /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp
   list --json` reports `contextforge-helper`, `context7`, `mentality`, and
-  `serena` sourced from the clean worktree path. The same check before the
-  branch fix showed `contextforge-helper` inherited from global
+  `serena` sourced from the clean worktree path, with zero legacy-bound MCP
+  items. The same check before PR #27 showed `contextforge-helper` inherited from global
   `~/.codex/config.toml` and still sourced from the legacy checkout.
 - The legacy live `/home/dgk/workspace/context-portal/.project/context_forge_state.json`
   is schema-valid, revision 10, and `initialized`; its current Codex client
@@ -907,7 +909,7 @@ extraction if current evidence proves a better review boundary.
 | `codex/issue-15-current-rebind-contract` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #22](https://github.com/somebloke1/contextforge-control-plane/pull/22) | Post-PR #21 update to the dirty-checkout retirement contract: current `dev-root` evidence, read-only readiness evidence, Strategy 1 compatibility rebind approval question, Strategy 2 new-root identity, and Strategy 3 archival-only deferral. | `git diff --check`; preservation checksum verification; current dirty-vs-dev-root classification; readiness reconciler readback |
 | `codex/issue-15-rebind-preflight-planner` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #23](https://github.com/somebloke1/contextforge-control-plane/pull/23) | Read-only source planner for Strategy 1/2/3 approval: inventories path-bound local surfaces, embeds readiness reconciliation, and reports non-actions before any live rebind mutation. | focused planner/readiness tests; live planner JSON readback; `git diff --check`; no runtime mutation |
 | `codex/issue-15-strategy1-source-rebind` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #24](https://github.com/somebloke1/contextforge-control-plane/pull/24) | User-approved Strategy 1 first pass: retarget source/project-local path-bound operating surfaces from `/home/dgk/workspace/context-portal` to the clean worktree while preserving compatibility names and making no runtime/global/process/registry/Pi/checkout-disposition mutations. | planner with `--approval-acknowledged`; readiness with `--no-processes`; targeted legacy-root `rg`; `tests.test_project_init_scripts`; TOML parse; `git diff --check`; delegated source-surface audit |
-| `codex/issue-15-clean-helper-binding` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / active | Project-local `contextforge-helper` MCP binding and regression test so clean-root Codex sessions shadow the stale global helper entry instead of depending on the legacy checkout. Does not edit user-global config/trust or reload clients. | `codex -C ... mcp list --json`; `tests.test_codex_precompact_continuity_hook`; readiness with `--no-processes`; delegated legacy-binding audit |
+| `codex/issue-15-clean-helper-binding` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #27](https://github.com/somebloke1/contextforge-control-plane/pull/27) | Project-local `contextforge-helper` MCP binding and regression test so clean-root Codex sessions shadow the stale global helper entry instead of depending on the legacy checkout. Does not edit user-global config/trust or reload clients. | `codex -C ... mcp list --json`; `tests.test_codex_precompact_continuity_hook`; readiness with `--no-processes`; delegated legacy-binding audit |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/clean-worktree-test-hermeticity` | closed [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) / merged [PR #17](https://github.com/somebloke1/contextforge-control-plane/pull/17) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
@@ -1360,13 +1362,13 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    raw transitional snapshots are being normalized as target architecture.
 7. Continue issue #15 dirty-checkout retirement before starting new
    inward-facing work. The user selected Strategy 1 and PR #24 completed the
-   first source-only compatibility rebind pass. Complete the active
-   `codex/issue-15-clean-helper-binding` branch so clean-root Codex MCP readback
-   no longer depends on the legacy helper binding. After that, choose the next
-   separately approved operator-path step: user-global Codex config/trust
-   migration, systemd/Serena reload/readback, ContextForge registration
-   readback, or explicit archival disposition of the legacy checkout. Do not
-   bundle those runtime/global/check-out actions into ordinary source work.
+   first source-only compatibility rebind pass, and PR #27 completed the
+   clean-root `contextforge-helper` shadow so Codex MCP readback no longer
+   depends on the legacy helper binding. Choose the next separately approved
+   operator-path step: user-global Codex config/trust migration, systemd/Serena
+   reload/readback, ContextForge registration readback, or explicit archival
+   disposition of the legacy checkout. Do not bundle those
+   runtime/global/check-out actions into ordinary source work.
 8. Review and clean stale Serena test units after explicit approval for
    stop/disable/remove actions.
 9. Treat PR #10 as landed and continue issue #4 only for final live
