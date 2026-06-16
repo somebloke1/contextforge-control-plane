@@ -192,10 +192,10 @@ work.
   `/home/dgk/workspace/context-portal`. This is the intended non-global scope;
   separate worktrees remain independently trusted by their `.codex/config.toml`
   path if they are actively used.
-- Current execution subgoal: wrapper lifecycle reliability is represented by
-  issue #1 and ready-for-review PR #7 from `codex/wrapper-lifecycle-cleanup`
-  to `dev-root`; refreshed runtime evidence and issue synchronization are done,
-  with post-merge verification still required before closing issue #1.
+- Retired wrapper lifecycle subgoal: issue #1 is closed by merged PR #7 at
+  merge commit `9d6b539`; post-merge wrapper tests, process report, and
+  `mentality_server` timing evidence passed without process termination,
+  service restart, or registry/database mutation.
 - Active but not current project-init readiness status: issue #4 is represented
   by draft PR #10 from `codex/helper-multiclient-project-init` to `dev-root`;
   focused acceptance evidence is green.
@@ -203,7 +203,7 @@ work.
   slice worktrees cannot run the full suite without ignored local `.env` and
   `run/*registration.json` evidence, while the operational checkout currently
   passes 436 tests. This is cross-cutting review hygiene debt, not PR #7 scope.
-- Current agent-operating-surface debt: issue #15 tracks retiring the dirty
+- Current execution subgoal: issue #15 tracks retiring the dirty
   `/home/dgk/workspace/context-portal` holding checkout as a hidden source of
   truth. This is now part of the current execution priority because stale
   worktree state directly degrades skill discovery, hook trust, formal goal
@@ -225,14 +225,14 @@ The immediate problem is integration hygiene:
   `f8a1aab`, PR #9 at `eb97c66`, and PR #13 at `c6fb551`.
 - The current branch has one extra committed feature and a very large dirty
   worktree.
-- GitHub has tracking issues #1-#6 for the original active fronts. Issue #11
-  and issue #12 are closed after post-restart hook activation and precompact
-  hardening were verified. PR #7 remains open for wrapper lifecycle cleanup;
-  PR #10 is open for issue #4 project-init readiness; PR #8, PR #9, and PR #13
-  are merged foundational slices.
-- Runtime reliability cleanup is the current execution subgoal and is isolated
-  in PR #7; the PR is now ready for review, but final retirement still requires
-  merge plus post-merge operator-path evidence before closing issue #1.
+- GitHub has tracking issues #2-#6 for the remaining original active fronts,
+  issue #14 for clean-worktree test hermeticity, and issue #15 for dirty
+  checkout retirement. Issue #1, issue #11, and issue #12 are closed after
+  wrapper lifecycle cleanup, post-restart hook activation, and precompact
+  hardening were verified. PR #10 is open for issue #4 project-init readiness;
+  PR #7, PR #8, PR #9, and PR #13 are merged foundational/runtime slices.
+- Runtime reliability cleanup is retired through PR #7 and post-merge evidence.
+  Dirty holding checkout retirement is now the current execution subgoal.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
   and matching project/instance directories remain live and should be reviewed
   separately before cleanup.
@@ -371,9 +371,7 @@ operator UX and state reconciliation are tightened.
 
 ### 3. Client Bootstrap And Wrapper Lifecycle
 
-Status: active cleanup slice; current runtime evidence is healthy and PR #7 is
-ready for review. Issue #1 should remain open until merge plus post-merge
-runtime verification.
+Status: retired through merged PR #7 and post-merge verification.
 
 Current evidence:
 
@@ -422,10 +420,8 @@ Risks:
 - The current wrapper fix affects new launches, not already-running stale
   wrappers.
 
-Prognosis: good, but not complete. The runtime has converged without process
-termination; PR #7 has focused tests, runbook, issue comment, and
-ready-for-review PR state closed out. The remaining loop is merge and
-post-merge runtime verification before issue #1 retirement.
+Prognosis: retired. Continue monitoring through normal runtime probes, but
+wrapper lifecycle is no longer the current execution front.
 
 ### 4. Pi Global Shim And Prompt/Resource Parity
 
@@ -580,9 +576,8 @@ Current GitHub state:
 - Remote: `https://github.com/somebloke1/contextforge-control-plane.git`
 - Default branch: `dev-root`
 - `gh auth status` is authenticated as `somebloke1`.
-- Ready PR [#7: ContextForge: wrapper lifecycle cleanup](https://github.com/somebloke1/contextforge-control-plane/pull/7)
-  is open from `codex/wrapper-lifecycle-cleanup` to `dev-root` with clean merge
-  state and no status checks reported.
+- Merged PR [#7: ContextForge: wrapper lifecycle cleanup](https://github.com/somebloke1/contextforge-control-plane/pull/7)
+  landed as merge commit `9d6b539`.
 - Draft PR [#10: ContextForge: helper-mediated project init readiness](https://github.com/somebloke1/contextforge-control-plane/pull/10)
   is open from `codex/helper-multiclient-project-init` to `dev-root` and has
   clean merge state with no status checks reported.
@@ -594,7 +589,6 @@ Current GitHub state:
   landed as merge commit `c6fb551`.
 - GitHub tracking issues now hold the active cleanup fronts and operating
   protocol debt:
-  - [#1: Control Codex ContextForge wrapper lifecycle and stale process cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/1)
   - [#2: Review and clean stale Serena test project units](https://github.com/somebloke1/contextforge-control-plane/issues/2)
   - [#3: Deploy and verify Pi global ContextForge shim prompt/resource parity](https://github.com/somebloke1/contextforge-control-plane/issues/3)
   - [#4: Polish project-init operator state reconciliation and readiness](https://github.com/somebloke1/contextforge-control-plane/issues/4)
@@ -603,6 +597,7 @@ Current GitHub state:
   - [#14: Make clean-worktree test suite independent of ignored local evidence](https://github.com/somebloke1/contextforge-control-plane/issues/14)
   - [#15: Retire dirty holding checkout as agent operating surface debt](https://github.com/somebloke1/contextforge-control-plane/issues/15)
 - Closed coordination issues:
+  - [#1: Control Codex ContextForge wrapper lifecycle and stale process cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/1)
   - [#11: Reconcile project-local precompact hook visibility across active worktrees](https://github.com/somebloke1/contextforge-control-plane/issues/11)
   - [#12: Prevent ad-hoc compactions from replacing conductor continuity pointer](https://github.com/somebloke1/contextforge-control-plane/issues/12)
 - Local `dev-root` and `origin/dev-root` are synchronized after the
@@ -610,8 +605,10 @@ Current GitHub state:
 - Holding worktree `/home/dgk/workspace/context-portal` is on
   `codex/contextforge-wrapper-lifecycle`, one commit beyond `dev-root`, and
   remains the intentionally dirty source for not-yet-extracted slices.
-- Branch `codex/wrapper-lifecycle-cleanup` has been extracted and pushed with
-  ready-for-review PR #7.
+- Branch `codex/wrapper-lifecycle-cleanup` was merged through PR #7; the remote
+  branch was deleted after merge. The local slice worktree remains only as a
+  temporary readback artifact until local worktree cleanup is performed
+  deliberately.
 - PR #8 is merged; its former slice worktree now checks out clean `dev-root`.
 - PR #9 is merged; its remote branch is deleted, while the local merged worktree
   remains until local worktree cleanup is approved or performed deliberately.
@@ -654,10 +651,13 @@ origin/dev-root and dev-root
   include f8a1aab Merge pull request #8
   include eb97c66 Merge pull request #9
   include c6fb551 Merge pull request #13
+  include 9d6b539 Merge pull request #7
+
+merged runtime worktrees
+  /home/dgk/workspace/contextforge-slices/wrapper-lifecycle-cleanup
+    codex/wrapper-lifecycle-cleanup -> PR #7 merged, remote branch deleted
 
 open draft PR worktrees
-  /home/dgk/workspace/contextforge-slices/wrapper-lifecycle-cleanup
-    codex/wrapper-lifecycle-cleanup -> PR #7
   /home/dgk/workspace/contextforge-slices/helper-multiclient-project-init
     codex/helper-multiclient-project-init -> PR #10
 
@@ -776,13 +776,14 @@ extraction if current evidence proves a better review boundary.
 - Outcome: Codex-facing ContextForge wrappers stop accumulating duplicate
   long-lived sessions and stale `CLOSE-WAIT` sockets.
 - Beneficiary: operators using Codex Desktop MCP tools through ContextForge.
-- Current state: post-restart and idle-window evidence is healthy. The compact
-  wrapper process report at `2026-06-16T09:34:40Z` showed no
-  `codex_contextforge_wrapper` processes and `close_wait_total: 0`, with
-  twelve `contextforge_helper` and twelve `node_repl` processes. The
-  `mentality_server` path still succeeds in under a second, including the
-  stdio wrapper route at about 356 ms. Live audit also observed transient
-  wrappers drain 45 -> 18 -> 0 without process termination.
+- Current state: closed. PR #7 is merged to `dev-root` at `9d6b539`; issue #1
+  is closed; the remote wrapper branch is deleted. The compact wrapper process
+  report at `2026-06-16T09:41:00Z` showed no `codex_contextforge_wrapper`
+  processes and `close_wait_total: 0`, with nine `contextforge_helper` and
+  nine `node_repl` processes. The `mentality_server` path still succeeds in
+  under a second, including the stdio wrapper route at about 357 ms. Live audit
+  also observed transient wrappers drain 45 -> 18 -> 0 without process
+  termination.
 - Desired state: new wrapper launches carry attribution, idle/parent shutdown,
   session handling, and diagnostics; existing stale wrappers are cleared only by
   Codex relaunch or approved exact-match PID cleanup.
@@ -791,23 +792,22 @@ extraction if current evidence proves a better review boundary.
   health.
 - Dependencies: Phase 0 preservation, pushed `dev-root`, wrapper code/tests,
   current diagnostic report, and explicit approval before process termination.
-- Hidden work: issue #1 body still has historical 165-count context, but the
-  issue now has a current comment with zero-wrapper/zero-`CLOSE-WAIT` evidence,
-  transient 45 -> 18 -> 0 drain evidence, and the diagnostic attribution
-  fallback. Socket ownership should remain part of the evidence model.
+- Hidden work: none accepted for this slice. Issue #1 body still has historical
+  165-count context, but current comments record zero-wrapper/zero-`CLOSE-WAIT`
+  evidence, transient 45 -> 18 -> 0 drain evidence, the diagnostic attribution
+  fallback, and post-merge verification. Socket ownership remains part of the
+  evidence model for future regressions.
 - Acceptance: wrapper unit tests pass; process report after cleanup or idle
   retirement shows no unbounded duplicate growth; mentality path remains fast;
   cleanup is dry-run and exact-PID scoped if process termination is used. The
   current evidence satisfies the no-stale-wrapper runtime check without process
-  termination. PR #7 is ready for review; issue #1 remains open until merge and
-  post-merge runtime readback.
+  termination. PR #7 is merged and issue #1 is closed.
 - Evidence: `tests/test_contextforge_mcp_wrapper.py`,
   `scripts/diagnose_contextforge_wrappers.py process-report`,
   `scripts/diagnose_contextforge_wrappers.py time-mentality-path --repo
   /home/dgk/workspace/context-portal --timeout 20`, `codex mcp list`.
-- Debt policy: no residual stale wrapper growth may be waved away; if Codex
-  Desktop lifecycle behavior cannot be fixed in repo code, track the required
-  user relaunch or upstream/client limitation explicitly on issue #1.
+- Debt policy: retired. Future wrapper regressions should open a new issue with
+  fresh runtime evidence rather than reopening stale pre-merge counts.
 
 #### Stale Serena test units -> issue #2
 
@@ -997,7 +997,7 @@ Phase 3: PR discipline.
   - remaining manual approvals.
 - Merge order should be:
   1. roadmap/governance skills if they are needed to guide review;
-  2. wrapper lifecycle cleanup;
+  2. wrapper lifecycle cleanup (complete through PR #7);
   3. helper multi-client/project-init;
   4. Pi shim parity;
   5. cleanup/live validation tools;
@@ -1024,7 +1024,7 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
 2. Use the tracking issues above as the GitHub coordination layer for active
    work.
 3. Split current dirty work into reviewable branches:
-   - `codex/wrapper-lifecycle-cleanup`
+   - `codex/wrapper-lifecycle-cleanup` (complete through PR #7)
    - `codex/helper-multiclient-project-init`
    - `codex/pi-global-shim-parity`
    - `codex/live-validation-and-registry-cleanup-tools`
@@ -1049,14 +1049,13 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
 4. Treat issue #11 as retired. If a different worktree is actively used and
    prompts for project-local hook trust, approve or diagnose that worktree
    explicitly rather than converting the hooks to global user scope.
-5. Keep PR #7 current while extracting the remaining issue slices.
-6. Land wrapper lifecycle changes first because they affect day-to-day tool
-   reliability.
-7. Clean stale wrapper processes through Codex Desktop relaunch or exact-match
-   process cleanup from the runbook; the cleanup must be dry-run first,
-   exact-PID scoped, and safe to repeat.
-8. Review and clean stale Serena test units.
-9. Land helper/project-init multi-client support and reconcile project-state
+5. Treat PR #7 / issue #1 as retired unless new runtime evidence proves a fresh
+   wrapper regression.
+6. Continue issue #15 dirty-checkout retirement before starting new
+   inward-facing work, because stale active-tree state degrades the operating
+   agent itself.
+7. Review and clean stale Serena test units.
+8. Land helper/project-init multi-client support and reconcile project-state
    historical jobs into terminal, verified, or explicitly non-blocking states
    without duplicating activation records.
 10. Land Pi shim source and perform approved global install/reload verification.
