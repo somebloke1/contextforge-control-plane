@@ -173,17 +173,18 @@ work.
   session-scoped continuity evidence, falls back to event-only evidence when no
   session id is available, removes stale root latest files, and bounds ignored
   snapshot retention.
+- Retired hook activation coordination subgoal: issue #11 is closed after
+  post-Codex Desktop-restart user-visible readback showed `PreCompact` and
+  `SessionStart` enabled at the project level for
+  `/home/dgk/workspace/context-portal`. This is the intended non-global scope;
+  separate worktrees remain independently trusted by their `.codex/config.toml`
+  path if they are actively used.
 - Current execution subgoal: wrapper lifecycle reliability is represented by
   issue #1 and draft PR #7 from `codex/wrapper-lifecycle-cleanup` to
   `dev-root`; refreshed runtime evidence is the next required closeout input.
 - Active but not current project-init readiness status: issue #4 is represented
   by draft PR #10 from `codex/helper-multiclient-project-init` to `dev-root`;
   focused acceptance evidence is green.
-- Active hook activation coordination item: issue #11 remains open for
-  post-Codex Desktop-restart readback. Pre-restart user-visible Codex `/hooks`
-  output showed `PreCompact` installed/active and `SessionStart`
-  installed/active from the `dev-root` worktree context, but the user restarted
-  Codex Desktop and noted the visible hook state may have changed.
 
 ## Executive Summary
 
@@ -201,11 +202,11 @@ The immediate problem is integration hygiene:
   `f8a1aab`, PR #9 at `eb97c66`, and PR #13 at `c6fb551`.
 - The current branch has one extra committed feature and a very large dirty
   worktree.
-- GitHub has tracking issues #1-#6 for the original active fronts plus issue
-  #11 for post-restart hook activation readback. Issue #12 is closed after
-  precompact hardening was verified. PR #7 remains open for wrapper lifecycle
-  cleanup; PR #10 is open for issue #4 project-init readiness; PR #8, PR #9,
-  and PR #13 are merged foundational slices.
+- GitHub has tracking issues #1-#6 for the original active fronts. Issue #11
+  and issue #12 are closed after post-restart hook activation and precompact
+  hardening were verified. PR #7 remains open for wrapper lifecycle cleanup;
+  PR #10 is open for issue #4 project-init readiness; PR #8, PR #9, and PR #13
+  are merged foundational slices.
 - Runtime reliability cleanup is the current execution subgoal and is isolated
   in PR #7; final retirement still requires merge-readiness checks and current
   operator-path evidence.
@@ -347,7 +348,8 @@ operator UX and state reconciliation are tightened.
 
 ### 3. Client Bootstrap And Wrapper Lifecycle
 
-Status: the highest-priority reliability risk.
+Status: active cleanup slice; current runtime evidence is healthy, but PR #7
+still needs merge/readiness closeout and issue synchronization.
 
 Current evidence:
 
@@ -358,13 +360,15 @@ Current evidence:
 - The mentality path is fast across all layers:
   local registry, stdio backend, direct bridge, ContextForge virtual server,
   and wrapper route all returned successfully in under a second.
-- Current wrapper diagnostics still report:
-  - `codex_contextforge_wrapper`: 36
-  - `contextforge_helper`: 24
-  - `node_repl`: 24
-  - all 36 wrappers are under Codex Desktop parent PID 1631530
-  - wrappers are evenly duplicated four times per configured server route
-  - total wrapper `CLOSE-WAIT` count is 37
+- Current wrapper diagnostics after Codex Desktop restart and the wrapper idle
+  window report:
+  - `codex_contextforge_wrapper`: 0
+  - `contextforge_helper`: 9
+  - `node_repl`: 9
+  - total wrapper `CLOSE-WAIT` count is 0
+  - filtered port-4444 socket readback shows no `CLOSE-WAIT` or `TIME-WAIT`
+    sockets and one established Chrome network-service connection to
+    `mcpgateway`, not a stale Codex Desktop wrapper connection
 
 Dependencies:
 
@@ -382,15 +386,17 @@ Dependencies:
 
 Risks:
 
-- Future tool timeouts may be caused by stale Codex-facing wrappers even when
-  ContextForge backend services are healthy.
+- Future tool timeouts may still be caused by stale Codex-facing wrappers even
+  when ContextForge backend services are healthy; current evidence shows this
+  condition is not present now.
 - Broad process killing or service restarts are unsafe; cleanup must target
   exact wrapper process shapes after evidence capture.
 - The current wrapper fix affects new launches, not already-running stale
   wrappers.
 
-Prognosis: fixable, but not complete. This should be the first runtime cleanup
-front after GitHub normalization.
+Prognosis: good, but not complete. The runtime has converged without process
+termination; PR #7 should stay the first runtime cleanup front until its tests,
+runbook, issue comment, and PR state are closed out.
 
 ### 4. Pi Global Shim And Prompt/Resource Parity
 
@@ -563,9 +569,8 @@ Current GitHub state:
   - [#4: Polish project-init operator state reconciliation and readiness](https://github.com/somebloke1/contextforge-control-plane/issues/4)
   - [#5: Perform approved ContextForge registry orphan prompt/resource cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/5)
   - [#6: Triage noncanonical inventory entries and service-management handoffs](https://github.com/somebloke1/contextforge-control-plane/issues/6)
-- Additional coordination issue:
+- Closed coordination issues:
   - [#11: Reconcile project-local precompact hook visibility across active worktrees](https://github.com/somebloke1/contextforge-control-plane/issues/11)
-- Closed coordination issue:
   - [#12: Prevent ad-hoc compactions from replacing conductor continuity pointer](https://github.com/somebloke1/contextforge-control-plane/issues/12)
 - Local `dev-root` and `origin/dev-root` are synchronized after the
   fast-tracked foundation merges and follow-up status-only roadmap updates.
@@ -577,13 +582,14 @@ Current GitHub state:
 - PR #8 is merged; its former slice worktree now checks out clean `dev-root`.
 - PR #9 is merged; its remote branch is deleted, while the local merged worktree
   remains until local worktree cleanup is approved or performed deliberately.
-- Issue #11 captures hook activation by worktree path. The dirty
-  `codex/contextforge-wrapper-lifecycle` worktree has received the hardened hook
-  and config, passed TOML/direct hook smoke checks, and has been user-approved
-  in Codex. A pre-restart `dev-root` `/hooks` table showed `PreCompact` 1
-  installed / 1 active and `SessionStart` 3 installed / 3 active, but Codex
-  Desktop was restarted afterward; keep issue #11 open until post-restart
-  readback confirms the same active hook state.
+- Issue #11 is closed. The dirty `codex/contextforge-wrapper-lifecycle`
+  worktree has received the hardened hook and config, passed TOML/direct hook
+  smoke checks, and has been user-approved in Codex. After a Codex Desktop
+  restart, the user-visible project-level hook view for
+  `/home/dgk/workspace/context-portal` showed `PreCompact` and `SessionStart`
+  enabled. That is the intended non-global scope; separate worktrees remain
+  independently keyed by their own `.codex/config.toml` path and may require
+  separate approval when actively used.
 - Issue #12 captured the ad-hoc compaction continuity risk and is closed by PR
   #13. The hook contract is now session-scoped latest pointers, event-only
   fallback without a shared unknown pointer, stale global latest cleanup, and
@@ -703,8 +709,8 @@ extraction if current evidence proves a better review boundary.
   state indefinitely.
 - Beneficiary: operators and future agents resuming ContextForge work after
   compaction, especially when multiple Codex sessions are active.
-- Current state: closed. PR #13 is merged to `dev-root` and issue #12 is
-  closed. Issue #11 separately tracks user-visible hook activation/readback.
+- Current state: closed. PR #13 is merged to `dev-root`; issue #12 is closed;
+  issue #11 is also closed after post-restart project-level hook readback.
 - Desired state: achieved in tracked source. PR #13 stores session latest
   snapshots under `sessions/<session-key>/`, stores event-only evidence when no
   session id is available, removes stale root-level latest files, and enforces
@@ -717,9 +723,9 @@ extraction if current evidence proves a better review boundary.
   `CODEX_THREAD_ID`, and ignored `run/` state.
 - Hidden work: the hardened hook was propagated into the dirty
   `codex/contextforge-wrapper-lifecycle` holding worktree and direct smoke/TOML
-  checks passed; the user subsequently approved those hooks and they are active
-  there. Dev-root worktree hook readback was confirmed before a Codex Desktop
-  restart; post-restart readback remains issue #11.
+  checks passed; the user subsequently approved those hooks. Post-restart
+  Codex Desktop readback now confirms project-level `PreCompact` and
+  `SessionStart` activation for `/home/dgk/workspace/context-portal`.
 - Acceptance: completed. Hook tests prove session isolation, no-session event-only
   fallback, bounded event retention, bounded session retention, stale root
   latest cleanup, idempotent event ids, and sensitive value redaction; docs
@@ -728,18 +734,21 @@ extraction if current evidence proves a better review boundary.
   on both the PR branch and merged `dev-root`; `py_compile` for the hook and
   tests passed; TOML parse of `.codex/config.toml` passed; `git diff --check`
   passed; direct dirty-checkout hook smoke passed.
-- Debt policy: issue #12 is retired. Issue #11 remains open until post-restart
-  user-visible readback confirms `PreCompact` and `SessionStart` are still
-  active in the relevant Codex worktree context.
+- Debt policy: issue #12 and issue #11 are retired. Future worktree-specific
+  hook trust prompts are expected Codex behavior unless a new active worktree
+  needs approval and fails to show installed project-local hooks.
 
 #### Wrapper lifecycle cleanup -> issue #1
 
 - Outcome: Codex-facing ContextForge wrappers stop accumulating duplicate
   long-lived sessions and stale `CLOSE-WAIT` sockets.
 - Beneficiary: operators using Codex Desktop MCP tools through ContextForge.
-- Current state: 36 `scripts/contextforge_mcp_wrapper.py` processes, four per
-  configured server route, under Codex Desktop PID 1631530; 37 total
-  `CLOSE-WAIT` sockets; mentality path still succeeds in under a second.
+- Current state: post-restart and idle-window evidence is healthy. The compact
+  wrapper process report at `2026-06-16T09:04:13Z` showed no
+  `codex_contextforge_wrapper` processes and `close_wait_total: 0`, with only
+  nine `contextforge_helper` and nine `node_repl` processes. The
+  `mentality_server` path still succeeds in under a second, including the
+  stdio wrapper route at about 356 ms.
 - Desired state: new wrapper launches carry attribution, idle/parent shutdown,
   session handling, and diagnostics; existing stale wrappers are cleared only by
   Codex relaunch or approved exact-match PID cleanup.
@@ -748,11 +757,17 @@ extraction if current evidence proves a better review boundary.
   health.
 - Dependencies: Phase 0 preservation, pushed `dev-root`, wrapper code/tests,
   current diagnostic report, and explicit approval before process termination.
-- Hidden work: issue #1 body has stale 165-count evidence and should be updated
-  or commented with refreshed counts before PR closeout.
-- Acceptance: wrapper unit tests pass; process report after cleanup shows no
-  unbounded duplicate growth; mentality path remains fast; cleanup is dry-run
-  and exact-PID scoped if process termination is used.
+- Hidden work: issue #1 body has stale 165-count evidence and should be
+  commented with the current zero-wrapper/zero-`CLOSE-WAIT` evidence before PR
+  closeout. Socket ownership should remain part of the evidence model: the
+  current port-4444 check showed no `CLOSE-WAIT` or `TIME-WAIT` sockets and one
+  unrelated established Chrome-to-`mcpgateway` connection.
+- Acceptance: wrapper unit tests pass; process report after cleanup or idle
+  retirement shows no unbounded duplicate growth; mentality path remains fast;
+  cleanup is dry-run and exact-PID scoped if process termination is used. The
+  current evidence satisfies the no-stale-wrapper runtime check without process
+  termination, but PR #7 still needs merge/readiness closeout and issue #1
+  comment synchronization.
 - Evidence: `tests/test_contextforge_mcp_wrapper.py`,
   `scripts/diagnose_contextforge_wrappers.py process-report`,
   `scripts/diagnose_contextforge_wrappers.py time-mentality-path --repo
@@ -998,8 +1013,9 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    the ref before dependent PR work.
 3. Preserve the current dirty branch as-is, then continue splitting it into
    small branches rather than piling new changes onto it.
-4. Keep issue #11 open until post-restart hook readback confirms the active
-   state; this is a narrow coordination item unless a regression appears.
+4. Treat issue #11 as retired. If a different worktree is actively used and
+   prompts for project-local hook trust, approve or diagnose that worktree
+   explicitly rather than converting the hooks to global user scope.
 5. Keep PR #7 current while extracting the remaining issue slices.
 6. Land wrapper lifecycle changes first because they affect day-to-day tool
    reliability.
