@@ -73,6 +73,29 @@ delegation contracts, acceptance claims, idempotency enforcement, prognosis,
 and no-debt closeout. Specialized skills own domain execution inside those
 boundaries.
 
+## Dynamic Goal Loop
+
+The durable meta-goal is to move ContextForge from mixed local/roadmap state to
+a verified, GitHub-legible, idempotent operating state with no hidden
+technical, operational, documentation, or coordination debt.
+
+Every roadmap slice must run as a sub-goal loop:
+
+1. Refresh current evidence for the slice.
+2. Reconcile stale roadmap, GitHub, runtime, and governance claims.
+3. Define or confirm the slice contract and acceptance evidence.
+4. Extract or update the isolated branch/PR.
+5. Verify the real operator path and focused tests/probes.
+6. Document evidence, non-actions, residual risk, and approvals.
+7. Perform goal maintenance/refinement before selecting the next slice.
+
+The final step is mandatory. At the end of each loop, update the active
+meta-goal and sub-goal map: mark completed value, retire or reclassify stale
+goals, add newly discovered sub-goals, reprioritize by dependency/risk/value,
+and record the next best move in the roadmap, governance ledger, or GitHub
+issue/PR where future operators will look. This keeps the roadmap as a dynamic
+goal system rather than a static task list.
+
 ## Executive Summary
 
 The project is not directionally confused; it is overloaded with several
@@ -806,6 +829,9 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    dry-run report and verify a second dry run is empty for those candidates.
 10. Re-run full tests, inventory, gateway health, service unit status,
     protocol-aware MCP probes, and selected client-visible validation.
+11. Run goal maintenance/refinement: update the meta-goal/sub-goal map,
+    reprioritize the next slice from current evidence, and record the next best
+    move in this roadmap or the relevant issue/PR.
 
 ## Definition Of Done For The Current Project Phase
 
