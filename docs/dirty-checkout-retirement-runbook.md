@@ -125,6 +125,46 @@ source-only branch:
 - installing a new Serena backend or changing the existing Serena service
   registration.
 
+## User-Global Codex Config/Trust Planner
+
+Use `scripts/plan_codex_global_config_migration.py` before asking for or
+applying any user-global Codex config/trust migration. The planner is
+read-only: it parses `~/.codex/config.toml`, classifies remaining legacy
+`/home/dgk/workspace/context-portal` entries, and emits target values plus
+readback commands without writing global config, granting hook trust, reloading
+Codex, or mutating services.
+
+Current read-only evidence after PR #27:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
+  scripts/plan_codex_global_config_migration.py \
+  --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
+  --legacy-root /home/dgk/workspace/context-portal \
+  --pretty
+```
+
+The current plan is blocked until explicit user-global approval and reports:
+
+- active replacement candidates:
+  - global `contextforge-helper` MCP server, lines 31-33;
+  - legacy project trust stanza, lines 131-132;
+  - global `SessionStart` project-init hook command, line 386;
+  - global `UserPromptSubmit` project-init hook command, line 422;
+- legacy project-local hook-state provenance at lines 444 and 447, which should
+  be preserved by default and pruned only with explicit cleanup approval;
+- no clean-root project trust stanza yet;
+- no clean-root project-local hook-state entries yet.
+
+The intended active-target migration, if approved, is to replace active global
+helper/hook paths with
+`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`,
+migrate project trust deliberately to that clean root, and verify by readback.
+Do not treat approval for active global entries as approval to prune historical
+hook-state provenance, reload clients, restart services, mutate ContextForge
+registry/catalog state, change Pi global state, or delete/rename/reset the
+legacy checkout.
+
 ## Path-Bound Operating Surfaces
 
 These tracked clean-tree files currently bind operational behavior to
@@ -355,13 +395,29 @@ only the intended stable surface, and verifies by readback.
    In the new session, inspect `/hooks` and approve only the clean-root
    project-local hooks if prompted. Do not edit Codex trust files directly.
 
-5. Verify MCP startup from the clean root:
+5. Before any user-global Codex config/trust migration, generate and review the
+   read-only global plan:
+
+   ```sh
+   PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
+     scripts/plan_codex_global_config_migration.py \
+     --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
+     --legacy-root /home/dgk/workspace/context-portal \
+     --pretty
+   ```
+
+   If the user approves the global migration, edit only the approved global
+   entries, then verify by rereading `~/.codex/config.toml` and running
+   clean-root `codex mcp list --json`. Preserve legacy hook-state entries unless
+   pruning is separately approved.
+
+6. Verify MCP startup from the clean root:
 
    ```sh
    codex -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp list
    ```
 
-6. Verify ContextForge and canonical service health before retiring anything:
+7. Verify ContextForge and canonical service health before retiring anything:
 
    ```sh
    curl -fsS http://127.0.0.1:4444/health
@@ -369,12 +425,12 @@ only the intended stable surface, and verifies by readback.
    systemctl --user --no-pager --plain status contextforge-serena-context-portal.service
    ```
 
-7. Verify target-client-visible project behavior. For Codex, a clean-root
+8. Verify target-client-visible project behavior. For Codex, a clean-root
    session must see the intended MCP entries and the continuity hooks. Serena
    validation must prove the target client sees the clean-root scoped service;
    backend-only probes are not sufficient.
 
-8. Verify the operating-agent surface:
+9. Verify the operating-agent surface:
 
    ```sh
    rg -n "/home/dgk/workspace/context-portal" \
@@ -387,7 +443,7 @@ only the intended stable surface, and verifies by readback.
    Remaining matches must be intentional historical compatibility references,
    not active launch paths or agent instructions.
 
-9. Only after readback succeeds, archive or rename the legacy checkout. Do not
+10. Only after readback succeeds, archive or rename the legacy checkout. Do not
    delete it as part of the first successful rebind.
 
 ## Rollback
