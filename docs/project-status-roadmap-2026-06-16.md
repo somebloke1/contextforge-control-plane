@@ -67,6 +67,9 @@ This roadmap uses project-specific ContextForge skills as specialized lanes:
   consent, local client binding, and reload guidance.
 - Use `contextforge-governance` for `DECISIONS.md`, `ABEYANT_INTENTIONS.md`,
   `OPEN_QUESTIONS.md`, and `mentality` ledger continuity.
+- Use `sub-agent-delegator` for model-aware subagent selection, fork-scope
+  decisions, sealed delegation contracts, integration criteria, and keeping
+  delegated work subordinate to the dynamic goal loop.
 
 The conductor owns sequencing, integration, GitHub topology, issue/PR hygiene,
 delegation contracts, acceptance claims, idempotency enforcement, prognosis,
@@ -79,7 +82,15 @@ The durable meta-goal is to move ContextForge from mixed local/roadmap state to
 a verified, GitHub-legible, idempotent operating state with no hidden
 technical, operational, documentation, or coordination debt.
 
-Every roadmap slice must run as a sub-goal loop:
+The root Codex instance is the operating agent and must operate from inside
+this persistent goal state. The goal is not only a checklist; it is the control
+object that binds the agent's attention, delegation, evidence, and next-action
+selection across compaction, interruption, branch switching, and subagent
+fan-out. A resumed operating agent should first re-enter the current goal
+state, then refresh evidence, then continue the current subgoal or retire it
+explicitly.
+
+Every roadmap slice must run as a chained sub-goal loop:
 
 1. Refresh current evidence for the slice.
 2. Reconcile stale roadmap, GitHub, runtime, and governance claims.
@@ -95,6 +106,69 @@ goals, add newly discovered sub-goals, reprioritize by dependency/risk/value,
 and record the next best move in the roadmap, governance ledger, or GitHub
 issue/PR where future operators will look. This keeps the roadmap as a dynamic
 goal system rather than a static task list.
+
+### Operating-Agent Goal Residency Protocol
+
+The active root agent should maintain four goal layers:
+
+- Meta-goal: verified, idempotent, GitHub-legible ContextForge roadmap
+  completion with no hidden debt.
+- Current subgoal: the one bounded state transition now being executed.
+- Candidate subgoals: queued slices discovered through evidence, roadmap drift,
+  subagent audits, and GitHub/runtime state.
+- Retired subgoals: completed, superseded, blocked, or deliberately deferred
+  goals with evidence and retirement condition.
+
+Each loop must preserve this state explicitly inside the operating agent:
+
+1. Re-enter: after compaction, interruption, or resume, restate the meta-goal,
+   current subgoal, evidence authority, and current branch/PR topology.
+2. Execute: make only the state transition owned by the current subgoal.
+3. Integrate: fold subagent outputs, tests, runtime probes, docs, GitHub, and
+   governance into one current truth.
+4. Refine: update the goal chain by completing, splitting, blocking, deferring,
+   or promoting subgoals.
+5. Rebind: choose the next current subgoal and record why it is next by
+   dependency, risk, user value, and verification readiness.
+
+### Lossless Goal Chaining
+
+When a major subgoal is met, the operating agent must refine and re-initialize
+the goal chain without unchosen loss. "Done" for a subgoal means its value,
+evidence, non-actions, residual risks, approvals, branch/PR/GitHub state,
+documentation state, delegated outputs, and follow-up triggers have been
+settled somewhere durable or explicitly rejected.
+
+The transition to the next subgoal must preserve:
+
+- completed value and verification evidence;
+- decisions made and options intentionally not taken;
+- residual risk with owner, impact, trigger, and retirement condition;
+- queued candidate subgoals and dependencies;
+- active branch/worktree/PR/issue topology;
+- user approvals still required or explicitly absent;
+- compaction continuity state needed for the next operating agent turn.
+
+After that settlement, initialize the next subgoal as a fresh bounded state
+transition with its own outcome, beneficiary, current state, desired state,
+invariants, dependencies, acceptance criteria, evidence plan, and debt policy.
+If any information would be dropped merely because attention moved on, the
+subgoal is not closed; it is split, deferred, or recorded as tracked residual
+work.
+
+### Current Goal Chain
+
+- Active meta-goal: operate as ContextForge roadmap conductor inside a
+  persistent dynamic goal loop until the roadmap reaches verified no-debt
+  state.
+- Current protocol subgoal: install the goal-loop and model-aware delegation
+  discipline into live agent state and repo-local skills/governance artifacts.
+- Recently chained subgoal: add a project-local Codex `PreCompact` continuity
+  hook that preserves agent goal state without replacing Codex's default
+  compaction prompt.
+- Next likely execution subgoal after protocol closeout: continue issue #4
+  project-init readiness extraction from `dev-root`, unless GitHub/CI/runtime
+  evidence shows a higher-risk blocker first.
 
 ## Executive Summary
 
