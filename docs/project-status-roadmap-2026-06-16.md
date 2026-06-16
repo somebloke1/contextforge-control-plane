@@ -90,6 +90,16 @@ fan-out. A resumed operating agent should first re-enter the current goal
 state, then refresh evidence, then continue the current subgoal or retire it
 explicitly.
 
+Formal Codex goal state is part of that operating surface, and the user is the
+ultimate authority over goal intent and completion. The user has persistently
+authorized and instructed a self-referential goal-maintenance method across
+goal iterations: when the current formal goal carries this directive, the
+operating agent must preserve it, recognize future user refinements as
+authoritative, retire stale dynamic-loop formal goals as complete when
+replacement is the goal-maintenance act, and immediately instantiate the
+refined formal goal without stale-goal lock-in. This protocol is recorded in
+decision `dec-20260616-0002`.
+
 Every roadmap slice must run as a chained sub-goal loop:
 
 1. Refresh current evidence for the slice.
@@ -113,6 +123,8 @@ The active root agent should maintain four goal layers:
 
 - Meta-goal: verified, idempotent, GitHub-legible ContextForge roadmap
   completion with no hidden debt.
+- Formal goal state: the active Codex goal object, including the persistent
+  user-authorized interrupt protocol for goal refinement/replacement.
 - Current subgoal: the one bounded state transition now being executed.
 - Candidate subgoals: queued slices discovered through evidence, roadmap drift,
   subagent audits, and GitHub/runtime state.
@@ -122,7 +134,8 @@ The active root agent should maintain four goal layers:
 Each loop must preserve this state explicitly inside the operating agent:
 
 1. Re-enter: after compaction, interruption, or resume, restate the meta-goal,
-   current subgoal, evidence authority, and current branch/PR topology.
+   current formal goal, current subgoal, evidence authority, and current
+   branch/PR topology.
 2. Execute: make only the state transition owned by the current subgoal.
 3. Integrate: fold subagent outputs, tests, runtime probes, docs, GitHub, and
    governance into one current truth.
@@ -185,6 +198,15 @@ work.
 - Active but not current project-init readiness status: issue #4 is represented
   by draft PR #10 from `codex/helper-multiclient-project-init` to `dev-root`;
   focused acceptance evidence is green.
+- Active but not current test-portability debt: issue #14 records that clean
+  slice worktrees cannot run the full suite without ignored local `.env` and
+  `run/*registration.json` evidence, while the operational checkout currently
+  passes 436 tests. This is cross-cutting review hygiene debt, not PR #7 scope.
+- Current agent-operating-surface debt: issue #15 tracks retiring the dirty
+  `/home/dgk/workspace/context-portal` holding checkout as a hidden source of
+  truth. This is now part of the current execution priority because stale
+  worktree state directly degrades skill discovery, hook trust, formal goal
+  continuity, and delegation discipline.
 
 ## Executive Summary
 
@@ -562,13 +584,16 @@ Current GitHub state:
   landed as merge commit `eb97c66`.
 - Merged PR [#13: ContextForge: harden precompact continuity retention](https://github.com/somebloke1/contextforge-control-plane/pull/13)
   landed as merge commit `c6fb551`.
-- Six GitHub tracking issues now hold the active cleanup fronts:
+- GitHub tracking issues now hold the active cleanup fronts and operating
+  protocol debt:
   - [#1: Control Codex ContextForge wrapper lifecycle and stale process cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/1)
   - [#2: Review and clean stale Serena test project units](https://github.com/somebloke1/contextforge-control-plane/issues/2)
   - [#3: Deploy and verify Pi global ContextForge shim prompt/resource parity](https://github.com/somebloke1/contextforge-control-plane/issues/3)
   - [#4: Polish project-init operator state reconciliation and readiness](https://github.com/somebloke1/contextforge-control-plane/issues/4)
   - [#5: Perform approved ContextForge registry orphan prompt/resource cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/5)
   - [#6: Triage noncanonical inventory entries and service-management handoffs](https://github.com/somebloke1/contextforge-control-plane/issues/6)
+  - [#14: Make clean-worktree test suite independent of ignored local evidence](https://github.com/somebloke1/contextforge-control-plane/issues/14)
+  - [#15: Retire dirty holding checkout as agent operating surface debt](https://github.com/somebloke1/contextforge-control-plane/issues/15)
 - Closed coordination issues:
   - [#11: Reconcile project-local precompact hook visibility across active worktrees](https://github.com/somebloke1/contextforge-control-plane/issues/11)
   - [#12: Prevent ad-hoc compactions from replacing conductor continuity pointer](https://github.com/somebloke1/contextforge-control-plane/issues/12)

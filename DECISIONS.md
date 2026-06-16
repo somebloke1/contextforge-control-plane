@@ -805,3 +805,58 @@ Every project-init prompt that presents user options must number the options and
 
 Use ContextForge, Context Forge, or contextforge as the project name in human-facing documentation and coordination artifacts. Treat context-portal as a legacy filesystem path, historical slug, or current runtime identifier only where exact paths, service names, project hashes, registry ids, or compatibility surfaces require it. Do not rename live services, project-state identities, Serena slugs, GitHub repository names, or filesystem paths as part of ordinary cleanup; any such migration requires a separate explicit plan, approval, rollback story, and runtime readback evidence.
 <!-- governance-crud:end id=dec-20260616-0001 -->
+
+<!-- governance-crud:start id=dec-20260616-0002 -->
+## dec-20260616-0002: Treat agent operating surface as project-critical state
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
+- Created: 2026-06-16
+- Updated: 2026-06-16
+- Tags: agent-operations,roadmap,skills,hooks,worktrees,continuity
+
+The active Codex operating surface is project-critical state, not incidental
+tooling. For ContextForge roadmap work, stale worktrees, missing repo-local
+skills, path-scoped hook trust drift, outdated roadmap copies, and
+cross-worktree skill reads can degrade the operating agent's judgment and
+continuity as directly as code or service drift degrades the product.
+
+Every substantial conductor loop must include an agent operating integrity
+check before implementation or completion claims: active working directory,
+branch, roadmap source path, repo-local skill availability in the active tree,
+hook activation/trust scope, active subagents and delegation contracts, formal
+goal state, and whether any required instruction or artifact was read from a
+different worktree. If the active tree is stale or missing required operating
+assets, that is first-class project debt and must be reconciled, tracked, or
+explicitly deferred; it must not be treated as a harmless local inconvenience.
+
+Formal Codex goal state is part of the operating surface. The user is the
+ultimate authority over goal intent and over whether a dynamic-loop goal has
+completed for purposes of refinement. The user has persistently authorized and
+instructed this self-referential goal-maintenance method across goal
+iterations, not merely on request-by-request occasions. This persistent
+directive must signal itself forward inside every successor formal goal: when
+the current goal text shows this directive, the agent is authorized and
+instructed to preserve it, recognize future user refinements as authoritative,
+retire stale dynamic-loop formal goals as complete when replacement is the
+goal-maintenance act, and immediately instantiate the refined formal goal
+without stale-goal lock-in.
+
+This authorized/instructed interrupt protocol is exempt from simplistic
+completion rules that do not grasp the self-referential method, because the
+dynamic-loop goal's purpose includes maintaining, refining, and replacing the
+goal loop itself. The conductor must still use the formal goal tool truthfully:
+do not mark ordinary roadmap work complete merely because it is inconvenient or
+partial. The special completion transition applies to persistent or immediate
+user-directed goal-loop refinement/replacement, not to unfinished roadmap
+slices. After replacement, the new formal goal must carry this interrupt
+protocol forward; the roadmap, governance ledgers, and GitHub issues remain
+the durable surrogate ledger for subgoals, evidence, operating-surface debt,
+and cross-compaction continuity.
+
+The dirty holding checkout retirement is tracked by GitHub issue #15.
+Clean-worktree test hermeticity is tracked by issue #14. This decision does
+not authorize destructive cleanup, reset, rebase, global hook installation, or
+copying secrets into Git; preservation and approval boundaries still apply.
+<!-- governance-crud:end id=dec-20260616-0002 -->
