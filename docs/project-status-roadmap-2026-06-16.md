@@ -215,11 +215,16 @@ work.
   `/home/dgk/workspace/context-portal` holding checkout as a hidden source of
   truth. This is now part of the current execution priority because stale
   worktree state directly degrades skill discovery, hook trust, formal goal
-  continuity, and delegation discipline. A read-only sidecar audit classified
-  the remaining dirty checkout state into already-extracted PR #10 files,
-  already-merged baseline files, unextracted future slices, and local
-  runtime/scratch state; cleanup remains open until those classes are reconciled
-  without losing preserved local work.
+  continuity, and delegation discipline. The current authority snapshot is
+  `run/dirty-state-preservation/20260616T114116Z/` in the clean `dev-root`
+  controller worktree: 35 tracked dirty files and 41 untracked paths were
+  preserved, checksum verification passed, and byte comparison against
+  `dev-root` found 14 tracked dirty files plus 17 untracked paths already
+  represented there. Remaining deltas classify as live path-local config/state,
+  approval-gated network exposure, future #2/#3/#4/#5/#6 slices, and local
+  scratch/runtime assets. Cleanup remains open until `/home/dgk/workspace/context-portal`
+  is either explicitly archival-only or safely rebound/retired without losing
+  preserved local work.
 
 ## Executive Summary
 
@@ -234,15 +239,18 @@ The immediate problem is integration hygiene:
 
 - GitHub now reflects the accepted integration baseline and the fast-tracked
   foundation merges: `dev-root` and `origin/dev-root` include PR #8 at
-  `f8a1aab`, PR #9 at `eb97c66`, and PR #13 at `c6fb551`.
-- The current branch has one extra committed feature and a very large dirty
-  worktree.
+  `f8a1aab`, PR #9 at `eb97c66`, PR #13 at `c6fb551`, PR #10 at `f530dda`,
+  PR #16 at `f1a6404`, and PR #17 at `0539d50`; post-merge roadmap updates
+  include `6054319`.
+- The clean controller worktree is `dev-root`; the legacy
+  `/home/dgk/workspace/context-portal` checkout still carries a very large dirty
+  worktree and should be treated as archival until explicitly rebound or retired.
 - GitHub has tracking issues #2-#6 for the remaining original active fronts,
-  issue #14 for clean-worktree test hermeticity, and issue #15 for dirty
-  checkout retirement. Issue #1, issue #11, and issue #12 are closed after
-  wrapper lifecycle cleanup, post-restart hook activation, and precompact
-  hardening were verified. PR #10 is open for issue #4 project-init readiness;
-  PR #7, PR #8, PR #9, and PR #13 are merged foundational/runtime slices.
+  plus issue #15 for dirty checkout retirement. Issue #1, issue #11, issue #12,
+  and issue #14 are closed after wrapper lifecycle cleanup, post-restart hook
+  activation, precompact hardening, and clean-worktree test hermeticity were
+  verified. PR #7, PR #8, PR #9, PR #10, PR #13, PR #16, and PR #17 are merged
+  foundational/runtime slices.
 - Runtime reliability cleanup is retired through PR #7 and post-merge evidence.
   Dirty holding checkout retirement is now the current execution subgoal.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
@@ -1105,9 +1113,11 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
 5. Treat PR #7 / issue #1 as retired unless new runtime evidence proves a fresh
    wrapper regression.
 6. Continue issue #15 dirty-checkout retirement before starting new
-   inward-facing work, because stale active-tree state degrades the operating
-   agent itself.
-7. Review and clean stale Serena test units.
+   inward-facing work: either approve a rebind/retirement plan for
+   `/home/dgk/workspace/context-portal`, or keep it explicitly archival while all
+   new work happens from clean `dev-root`.
+7. Review and clean stale Serena test units after explicit approval for
+   stop/disable/remove actions.
 8. Treat PR #10 as landed and continue issue #4 only for final live
    project-state reconciliation and readiness acceptance.
 9. Treat issue #14 as retired unless new clean-worktree evidence proves a fresh
