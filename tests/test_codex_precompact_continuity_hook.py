@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -316,6 +317,7 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
 
     def test_project_config_uses_precompact_without_prompt_overrides(self) -> None:
         config = (REPO_ROOT / ".codex/config.toml").read_text(encoding="utf-8")
+        parsed = tomllib.loads(config)
         self.assertIn("[[hooks.PreCompact]]", config)
         self.assertIn('matcher = "manual|auto"', config)
         self.assertIn("[[hooks.SessionStart]]", config)
@@ -324,6 +326,9 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
         self.assertNotIn("compact_prompt", config)
         self.assertNotIn("experimental_compact_prompt_file", config)
         self.assertNotIn("model_auto_compact_token_limit", config)
+        helper = parsed["mcp_servers"]["contextforge-helper"]
+        self.assertEqual(str(REPO_ROOT / ".venv/bin/python"), helper["command"])
+        self.assertEqual([str(REPO_ROOT / "scripts/contextforge_helper_mcp.py")], helper["args"])
 
     def _init_repo(self, root: Path) -> Path:
         (root / "AGENTS.md").write_text("# Agent Instructions\n", encoding="utf-8")

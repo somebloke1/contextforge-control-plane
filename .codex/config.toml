@@ -1,3 +1,7 @@
+[mcp_servers.contextforge-helper]
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_helper_mcp.py"]
+
 [mcp_servers.serena]
 command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
 args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "serena_context_portal_server"]
