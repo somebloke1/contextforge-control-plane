@@ -535,7 +535,8 @@ Current evidence:
 
 - `scripts/inventory_mcp.py` wrote the ignored local report
   `inventory/contextforge-services.local.json`.
-- Current inventory summary: 197 entries, 193 enabled.
+- Current inventory summary refreshed on 2026-06-16 from clean branch
+  `codex/service-inventory-triage`: 207 entries, 203 enabled.
 - Coverage includes AnythingLLM, Claude Desktop, Claude Code, Codex
   Terminal/project configs, Gemini CLI, OpenCode, Pi Coding Assistant, and
   workspace-local configs.
@@ -1015,8 +1016,9 @@ extraction if current evidence proves a better review boundary.
   client-config-driven service duplication.
 - Beneficiary: maintainers deciding which backends should become ContextForge
   services.
-- Current state: inventory finds 197 entries, 193 enabled; local report is
-  ignored; `by_client.context-portal` is a deprecated label signal.
+- Current state: inventory finds 207 entries, 203 enabled; local report is
+  ignored; `by_client.context-portal` is a deprecated label signal for the
+  repo-local ContextForge service.
 - Desired state: each noncanonical direct entry is classified as exclude,
   already covered, project-local only, or service-management candidate with a
   stable identity rationale.
@@ -1025,13 +1027,16 @@ extraction if current evidence proves a better review boundary.
   explicit service-management approval.
 - Dependencies: fresh inventory, service map, open questions on noncanonical
   backends, and naming decision `dec-20260616-0001`.
-- Hidden work: issue #6 body has stale 191/187 counts and should be refreshed.
+- Hidden work: issue #6 body has stale 191/187 counts and older ledger/doc
+  snapshots cite 197/193 or 200/183; refresh public tracking to 207/203 and
+  preserve older counts as historical only.
 - Acceptance: classification artifact or script is tracked; generated
   `*.local.json` remains ignored; repeated inventory yields the same bucket
   decisions for unchanged inputs.
 - Evidence: `scripts/inventory_mcp.py`, ignored
-  `inventory/contextforge-services.local.json`, classification tests or review
-  output, no generated/local files tracked.
+  `inventory/contextforge-services.local.json`,
+  `inventory/classification.md`, classification review output, no
+  generated/local files tracked.
 - Debt policy: every unresolved candidate keeps owner, impact, next evidence
   step, trigger, and retirement condition.
 

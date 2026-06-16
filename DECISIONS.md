@@ -601,10 +601,10 @@ The expanded global inventory found AnythingLLM configured with a context7 MCP s
 - Status: accepted
 - Repository: /home/dgk/workspace/context-portal
 - Created: 2026-05-28
-- Updated: 2026-05-28
+- Updated: 2026-06-16
 - Tags: inventory,claude-code,workspace,filesystem,exclusion
 
-The workspace inventory now treats project-root .claude.json files as Claude Code project configs, not generic workspace files. This added /home/dgk/workspace/home_tech_assistant/.claude.json to the inventory as a claude-code-project entry. Its filesystem-project MCP server is classified under the existing filesystem exclusion, matching the paired home_tech_assistant opencode filesystem entry. The inventory report now totals 200 entries, 183 enabled, with 46 stdio and 19 streamable HTTP transports.
+The workspace inventory now treats project-root .claude.json files as Claude Code project configs, not generic workspace files. This added /home/dgk/workspace/home_tech_assistant/.claude.json to the inventory as a claude-code-project entry. Its filesystem-project MCP server is classified under the existing filesystem exclusion, matching the paired home_tech_assistant opencode filesystem entry. The 2026-05-28 inventory report totaled 200 entries, 183 enabled, with 46 stdio and 19 streamable HTTP transports. A 2026-06-16 refresh from clean branch `codex/service-inventory-triage` now finds 207 entries, 203 enabled, with 72 stdio and 6 streamable HTTP transports; the classification remains exclusion/project-local/candidate based rather than client-name based.
 <!-- governance-crud:end id=dec-20260528-0045 -->
 
 <!-- governance-crud:start id=dec-20260529-0046 -->
