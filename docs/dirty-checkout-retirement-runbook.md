@@ -16,8 +16,9 @@ Clean operating tree:
 
 ```text
 /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
-branch: codex/dirty-checkout-retirement-runbook
-base: dev-root at f04cfa3
+branch: dev-root
+head: 854df61a8bb90f013faeb4556d94e24b203746ac
+status: synchronized with origin/dev-root
 ```
 
 Legacy dirty checkout:
@@ -34,15 +35,51 @@ Latest preservation snapshot:
 run/dirty-state-preservation/20260616T114116Z/
 tracked_file_count=35
 untracked_path_count=41
-checksum verification passed at creation time
+checksum verification passed at creation time and was rechecked after PR #21
 ```
 
 Current GitHub state:
 
 - Issue #15 tracks retirement of the dirty holding checkout.
+- Issue #4 has read-only readiness reconciliation on `dev-root` through PR
+  #21, but remains open because the clean source state is root-mismatched and
+  helper/wrapper processes still source from the legacy checkout.
+- Issue #3 source parity is merged through PR #20, but the user-global Pi
+  install/reload/validation is not approved or complete.
 - Issue #6 is closed; inventory/service-management triage is no longer hidden
   dirty-checkout work.
 - Remaining open roadmap issues are #2, #3, #4, #5, and #15.
+
+Current read-only issue #15 evidence:
+
+- The latest clean preservation bundle `SHA256SUMS` verifies.
+- Current legacy status still has 35 tracked modified files and 41 untracked
+  paths. `git status --short` may collapse untracked directories such as
+  `.codex/skills/`, `.codex/hooks/`, `pi-extensions/`, and `temp/`, but the
+  untracked inventory count remains 41.
+- Against current `dev-root`, tracked dirty files classify as:
+  - already represented unchanged on current `dev-root`: governance shape,
+    project-state schema/state helpers, wrapper source, prompt registration,
+    several fixtures/tests;
+  - still different and not safe to discard blindly: `.codex/config.toml`,
+    `.project/context_forge_state.json`, helper/project-init/control-plane
+    work, systemd/Serena helpers, server launch scripts, inference harness
+    files, and selected tests;
+  - path-bound operational state: `.codex/config.toml`,
+    `.project/context_forge_state.json`, `server-instances/*/run-*`,
+    Serena/mentality manifests, project-local skills, and hook trust.
+- Against current `dev-root`, untracked dirty files classify as:
+  - now represented on `dev-root`: project-local hooks/skills, Gemini/OpenCode
+    hooks, Pi dry-run/CLI helpers, and parts of the Pi extension source;
+  - still unique issue-slice candidates: stale cleanup/apply scripts,
+    live-inference validation, latency diagnostics, live staged fixtures, and
+    contextforge wrapper tests;
+  - scratch/runtime candidates: `.tmp/*` and
+    `temp/roadmap-conductor-skill-design-20260616/*`.
+- `scripts/inspect_project_init_readiness.py` reports the clean root as
+  `invalid_blocked` due to project-state root mismatch and the legacy root as
+  valid with Codex `verified`/`passed` and Pi
+  `validation_pending`/`mixed`.
 
 ## Approval Boundary
 
@@ -94,6 +131,18 @@ intentional historical evidence, compatibility slugs, or fixed-fixture roots.
 
 An approved retirement must choose one strategy before mutation.
 
+The current parent-owned approval question is:
+
+> Approve a compatibility rebind of the path-bound local surfaces from
+> `/home/dgk/workspace/context-portal` to
+> `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`,
+> with verification only and no reset, delete, rename, service/process restart,
+> global trust change, registry mutation, or Pi install/reload in the first
+> pass?
+
+If the answer is no, issue #15 should be marked explicitly archival-only for
+now and all new work should continue from clean `dev-root`.
+
 ### Strategy 1: Compatibility Rebind
 
 Keep existing compatibility service names such as `serena-context-portal` and
@@ -106,8 +155,8 @@ some runtime identifiers retain the legacy slug.
 Required approval scope:
 
 - update project-local `.codex/config.toml` to launch from the clean root;
-- update project-init state/root hash or regenerate it through helper-owned
-  flows if available;
+- update project-init state/root hash only through helper-owned repair,
+  regeneration, or an explicitly approved compatibility migration plan;
 - update Serena run script/manifest/LSP local paths for the clean root;
 - update project-local skill references that currently instruct agents to use
   `/home/dgk/workspace/context-portal`;
@@ -121,6 +170,8 @@ Risk:
 
 - The service name remains historically `context-portal` while the active
   project root becomes the clean ContextForge worktree.
+- Because `.project/context_forge_state.json` encodes a root hash, direct
+  path-string replacement is not a safe implementation strategy.
 
 ### Strategy 2: New Root Identity
 
@@ -143,6 +194,28 @@ Required approval scope:
 Risk:
 
 - More moving pieces, more registry/systemd work, and a larger approval surface.
+- Slower than compatibility rebind, but cleaner if root-scoped service identity
+  must not retain the historical slug.
+
+### Strategy 3: Archival-Only Deferral
+
+Keep `/home/dgk/workspace/context-portal` as the live compatibility root for
+now, but declare it archival/compatibility debt and require all new source work
+to continue from clean `dev-root`.
+
+Use when the user wants to avoid root-identity mutation in the current loop.
+
+Required approval scope:
+
+- no local mutation beyond issue/roadmap documentation;
+- issue #15 remains open with owner, impact, trigger, and retirement condition;
+- issue #4 remains blocked on root mismatch until Strategy 1 or Strategy 2 is
+  approved.
+
+Risk:
+
+- This avoids immediate operational risk but preserves the agent-operating
+  surface debt that issue #15 was created to eliminate.
 
 ## Pre-Apply Checklist
 
@@ -179,7 +252,18 @@ Before any approved mutation:
    ```
 
 4. Confirm the user selected Strategy 1 or Strategy 2 and approved the exact
-   mutation set.
+   mutation set. If Strategy 3 is selected, update issue #15 and stop without
+   local mutation.
+
+5. Run the read-only readiness reconciler:
+
+   ```sh
+   PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python \
+     scripts/inspect_project_init_readiness.py \
+     --project-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
+     --compare-root /home/dgk/workspace/context-portal \
+     --client-type codex --client-type pi
+   ```
 
 Stop if any of these checks fail or if the dirty checkout changed since the
 latest preservation snapshot in a way that is not classified.
@@ -192,6 +276,11 @@ only the intended stable surface, and verifies by readback.
 1. Preserve the legacy checkout again and verify checksums.
 2. Apply the chosen rebind strategy to a focused branch or local approved state,
    not directly inside the legacy dirty branch.
+   - For Strategy 1, prefer helper-owned project-state repair/regeneration or a
+     purpose-built compatibility migration with root-hash readback; do not
+     hand-edit only the root string.
+   - For Strategy 2, provision or migrate the clean root as a distinct project
+     identity before retiring any legacy service.
 3. Validate static config:
 
    ```sh
