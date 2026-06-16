@@ -146,7 +146,7 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
   --pretty
 ```
 
-The current plan is blocked until explicit user-global approval and reports:
+Pre-write evidence before the approved user-global migration reported:
 
 - active replacement candidates:
   - global `contextforge-helper` MCP server, lines 31-33;
@@ -157,6 +157,25 @@ The current plan is blocked until explicit user-global approval and reports:
   be preserved by default and pruned only with explicit cleanup approval;
 - no clean-root project trust stanza yet;
 - no clean-root project-local hook-state entries yet.
+
+On 2026-06-16, the operator approved the write-only global Codex migration:
+
+> Approved: write-only global Codex migration, preserve legacy trust and
+> hook-state, no restart or hook execution.
+
+The migration was applied with `scripts/plan_codex_global_config_migration.py`
+using the #29/#30 tooling. It created backup
+`/home/dgk/.codex/config.toml.contextforge-backup-20260616T221842Z`, replaced
+the global `contextforge-helper` command/args, added clean-root project trust,
+and retargeted the global `SessionStart` and `UserPromptSubmit` project-init
+hook commands to the clean root. It preserved legacy project trust and legacy
+hook-state provenance by default.
+
+Post-write readback reported `status=ready` for the file plan, with only
+`legacy_project_trust` and `legacy_project_local_hook_state` remaining as
+intentional preserved provenance. The apply result status is
+`pending_restart`, not `verified`, until issue #31 runtime readback is
+performed after an explicit Codex restart or fresh-session validation.
 
 The same report includes `hook_retarget_preflight`, which must be reviewed
 before any retargeted `SessionStart` or `UserPromptSubmit` hook is allowed to
