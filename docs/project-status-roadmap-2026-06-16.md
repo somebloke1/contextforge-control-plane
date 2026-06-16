@@ -431,6 +431,8 @@ Current GitHub state:
 - `gh auth status` is authenticated as `somebloke1`.
 - Draft PR [#7: ContextForge: wrapper lifecycle cleanup](https://github.com/somebloke1/contextforge-control-plane/pull/7)
   is open from `codex/wrapper-lifecycle-cleanup` to `dev-root`.
+- Draft PR [#8: ContextForge: roadmap and governance operating discipline](https://github.com/somebloke1/contextforge-control-plane/pull/8)
+  is open from `codex/repo-local-skills-and-governance` to `dev-root`.
 - Six GitHub tracking issues now hold the active cleanup fronts:
   - [#1: Control Codex ContextForge wrapper lifecycle and stale process cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/1)
   - [#2: Review and clean stale Serena test project units](https://github.com/somebloke1/contextforge-control-plane/issues/2)
@@ -443,6 +445,8 @@ Current GitHub state:
   `dev-root`.
 - Branch `codex/wrapper-lifecycle-cleanup` has been extracted and pushed with
   draft PR #7.
+- Branch `codex/repo-local-skills-and-governance` has been extracted and
+  pushed with draft PR #8.
 - The working tree contains many tracked modifications and untracked files.
 
 ### Desired GitHub State
@@ -521,7 +525,7 @@ Recommended PR slices:
 | `codex/live-validation-and-registry-cleanup-tools` | [#5](https://github.com/somebloke1/contextforge-control-plane/issues/5) | `scripts/inspect_contextforge_cleanup.py`, `scripts/apply_contextforge_stale_tool_cleanup.py`, `scripts/run_live_inference_validation.py`, live staged fixtures if they are sanitized and intended to be tracked. | cleanup inspector dry-run; inference harness tests; secret scan by review |
 | `codex/service-inventory-triage` | [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6) | inventory classification docs or scripts only; no generated `*.local.json`; any service-management handoff documentation. | inventory script; no generated/local files tracked |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
-| `codex/repo-local-skills-and-governance` | cross-links #1-#6 as needed | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
+| `codex/repo-local-skills-and-governance` | cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
 
 ### Executable Slice Contracts
 
