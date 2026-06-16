@@ -1,0 +1,6 @@
+interface:
+  display_name: "ContextForge Service Ops"
+  short_description: "Operate gateway services and probes"
+  default_prompt: "Use $contextforge-service-ops to inspect or repair the ContextForge service fleet."
+policy:
+  allow_implicit_invocation: true
