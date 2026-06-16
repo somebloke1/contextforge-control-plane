@@ -42,3 +42,15 @@ cwd = "/home/dgk/workspace/context-portal"
 command = "/home/dgk/workspace/context-portal/.venv/bin/python"
 args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "web_search_server"]
 cwd = "/home/dgk/workspace/context-portal"
+
+[hooks]
+
+[[hooks.PreCompact]]
+matcher = "manual|auto"
+
+[[hooks.PreCompact.hooks]]
+type = "command"
+command = '/usr/bin/env python3 "$(git rev-parse --show-toplevel)/.codex/hooks/contextforge_precompact_continuity.py"'
+timeout = 10
+statusMessage = "Preserving ContextForge continuity"
+suppressOutput = true
