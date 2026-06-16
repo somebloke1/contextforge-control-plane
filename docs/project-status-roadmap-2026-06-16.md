@@ -203,6 +203,14 @@ work.
   session-scoped continuity evidence, falls back to event-only evidence when no
   session id is available, removes stale root latest files, and bounds ignored
   snapshot retention.
+- Active continuity standardization subgoal: issue
+  [#25](https://github.com/somebloke1/contextforge-control-plane/issues/25)
+  promotes the reusable continuity and goal-loop process into tracked repo
+  assets without committing raw generated snapshots. The slice adds a tracked
+  precompact snapshot schema, makes generated snapshots point back to standard
+  repo assets and the formal goal-loop protocol, documents the promotion
+  boundary and transition policy, and tests that
+  `run/codex-precompact-continuity` remains ignored runtime evidence.
 - Retired hook activation coordination subgoal: issue #11 is closed after
   post-Codex Desktop-restart user-visible readback showed `PreCompact` and
   `SessionStart` enabled at the project level for
@@ -744,6 +752,7 @@ Current GitHub state:
   - [#11: Reconcile project-local precompact hook visibility across active worktrees](https://github.com/somebloke1/contextforge-control-plane/issues/11)
   - [#14: Make clean-worktree test suite independent of ignored local evidence](https://github.com/somebloke1/contextforge-control-plane/issues/14)
   - [#12: Prevent ad-hoc compactions from replacing conductor continuity pointer](https://github.com/somebloke1/contextforge-control-plane/issues/12)
+  - [#25: Standardize continuity and goal-loop artifacts as repo assets](https://github.com/somebloke1/contextforge-control-plane/issues/25)
 - Local `dev-root` and `origin/dev-root` are synchronized after the
   fast-tracked foundation merges and follow-up status-only roadmap updates.
 - Holding worktree `/home/dgk/workspace/context-portal` is on
@@ -883,6 +892,7 @@ extraction if current evidence proves a better review boundary.
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
 | `codex/precompact-continuity-hook` | merged cross-cutting continuity slice / [PR #9](https://github.com/somebloke1/contextforge-control-plane/pull/9) | Project-local Codex `PreCompact` and `SessionStart`/`compact` hooks, ignored continuity snapshots, hook tests, and operator documentation. Does not override Codex's default compaction prompt. | precompact/session-start hook unit tests; hook smoke invocation; config guardrail check |
 | `codex/precompact-conductor-pointer` | closed [#12](https://github.com/somebloke1/contextforge-control-plane/issues/12) / merged [PR #13](https://github.com/somebloke1/contextforge-control-plane/pull/13) | Session-scoped continuity latest pointers, event-only fallback without a shared unknown pointer, stale root latest cleanup, bounded snapshot/session retention, hook tests, and hook documentation. | precompact/session-start hook unit tests; `py_compile`; TOML config parse; `git diff --check` |
+| `codex/continuity-standard-assets` | [#25](https://github.com/somebloke1/contextforge-control-plane/issues/25) / active | Standardize continuity and goal-loop artifacts as tracked repo assets: schema, snapshot standard-repo refs, promotion-boundary docs, and tests proving generated `run/codex-precompact-continuity` state remains ignored. | hook py_compile; `tests.test_codex_precompact_continuity_hook`; schema/readback checks; `git diff --check`; delegated read-only audit |
 
 ### Executable Slice Contracts
 
@@ -921,6 +931,52 @@ extraction if current evidence proves a better review boundary.
 - Debt policy: issue #12 and issue #11 are retired. Future worktree-specific
   hook trust prompts are expected Codex behavior unless a new active worktree
   needs approval and fails to show installed project-local hooks.
+
+#### Continuity standard assets -> issue #25
+
+- Outcome: continuity snapshots and goal-loop support are backed by tracked
+  repo-standard process assets wherever they are currently active, without
+  promoting raw private runtime evidence into source or codifying dependence on
+  a transitional checkout path.
+- Beneficiary: operating agents and maintainers resuming ContextForge after
+  compaction, branch changes, or goal-loop transitions.
+- Current state: active on branch `codex/continuity-standard-assets`. The
+  existing hook, config, docs, and tests are tracked; the currently active raw
+  snapshot evidence was found under ignored
+  `/home/dgk/workspace/context-portal/run/codex-precompact-continuity/`.
+  Turing's read-only sidecar audit confirmed this is the right split: repo
+  tracks the contract and commands, while per-run evidence stays ignored.
+- Desired state: generated snapshots identify their schema, standard repo
+  assets, promotion boundary, and formal goal-loop activation protocol; docs
+  explain which continuity artifacts are source versus ignored runtime evidence
+  and state that snapshot `repo_root` values are point-in-time evidence, not
+  target architecture; tests prove raw `run/codex-precompact-continuity`
+  evidence remains ignored.
+- Invariants: do not commit raw session snapshots, transcript paths,
+  dirty-state captures, local locks, generated inventories, logs, secrets, or
+  checkout-specific diagnostics; do not replace Codex's default compaction
+  prompt; do not let a session snapshot override the active formal goal or the
+  user's current instruction.
+- Dependencies: PR #9 hook baseline, PR #13 session-scoped hardening, active
+  formal goal-loop protocol, `.gitignore` runtime-state boundaries, and current
+  clean `dev-root` source.
+- Hidden work: the legacy dirty checkout still contains the live raw continuity
+  evidence until operator-path work fully moves active sessions to clean
+  `dev-root`; this is transitional evidence to retire, not a dependency to
+  normalize. Issue #15 remains the checkout disposition tracker.
+- Acceptance: schema tracked; hook snapshots include `schema_ref`,
+  `standard_repo_refs`, `promotion_boundary`, `transition_policy`, and explicit
+  formal goal reconciliation/activation language; docs record standard assets,
+  promotion boundary, and transition safety; tests pass and prove ignored
+  runtime state stays ignored; issue #25 and the PR body record non-actions and
+  residual risk.
+- Evidence: `py_compile` for the hook/tests, `tests.test_codex_precompact_continuity_hook`
+  with 17 tests OK, delegated read-only audit, `git check-ignore` coverage for
+  generated continuity paths, and `git diff --check`.
+- Debt policy: after merge, issue #25 can close only if the repo-standard
+  assets are on `dev-root` and raw snapshot promotion remains explicitly
+  rejected unless separately sanitized. Operator-path validation then returns to
+  issue #15.
 
 #### Wrapper lifecycle cleanup -> issue #1
 
@@ -1278,26 +1334,31 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    explicitly rather than converting the hooks to global user scope.
 5. Treat PR #7 / issue #1 as retired unless new runtime evidence proves a fresh
    wrapper regression.
-6. Continue issue #15 dirty-checkout retirement before starting new
+6. Complete issue #25 continuity standardization before further inward-facing
+   roadmap work. This slice supports the goal loop itself: promote reusable
+   continuity schemas, runbooks, validation commands, and tests into tracked
+   source while keeping raw session snapshots and local runtime evidence
+   ignored unless deliberately sanitized and promoted.
+7. Continue issue #15 dirty-checkout retirement before starting new
    inward-facing work. The user selected Strategy 1 and PR #24 completed the
    first source-only compatibility rebind pass. Perform only the next separately
    approved operator-path step: clean-root Codex/hook/MCP validation,
    systemd/Serena reload/readback, ContextForge registration readback, or
    explicit archival disposition of the legacy checkout. Do not bundle those
    runtime/global/check-out actions into ordinary source work.
-7. Review and clean stale Serena test units after explicit approval for
+8. Review and clean stale Serena test units after explicit approval for
    stop/disable/remove actions.
-8. Treat PR #10 as landed and continue issue #4 only for final live
+9. Treat PR #10 as landed and continue issue #4 only for final live
    project-state reconciliation and readiness acceptance.
-9. Treat issue #14 as retired unless new clean-worktree evidence proves a fresh
+10. Treat issue #14 as retired unless new clean-worktree evidence proves a fresh
    hermeticity regression.
-10. Treat Pi shim source as landed through PR #20; perform approved global
+11. Treat Pi shim source as landed through PR #20; perform approved global
     install/reload verification only after explicit user approval.
-11. Perform approved registry orphan cleanup using exact ids from a fresh
+12. Perform approved registry orphan cleanup using exact ids from a fresh
    dry-run report and verify a second dry run is empty for those candidates.
-12. Re-run full tests, inventory, gateway health, service unit status,
+13. Re-run full tests, inventory, gateway health, service unit status,
     protocol-aware MCP probes, and selected client-visible validation.
-13. Run goal maintenance/refinement: update the meta-goal/sub-goal map,
+14. Run goal maintenance/refinement: update the meta-goal/sub-goal map,
     reprioritize the next slice from current evidence, and record the next best
     move in this roadmap or the relevant issue/PR.
 
