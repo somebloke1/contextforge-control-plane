@@ -356,11 +356,18 @@ Current evidence:
   interpreter: 437 tests OK.
 - Focused control-plane discovery passes from the issue #14 clean slice with
   the project `.venv` interpreter: 301 tests OK.
-- `.project/context_forge_state.json` currently has `status: initialized`.
-- The current `.project/context_forge_state.json` shape has service records
-  and no top-level activation job list. Recorded Codex target-client validation
-  is `passed`, but ContextForge gateway readback fields are still
-  `not_checked`.
+- Issue #4 source mechanics are green after PR #10/#16: a post-compaction
+  focused check compiled project-init/helper/state/Serena scripts and ran 150
+  project-init/project-state tests OK.
+- Live helper readback is not yet a close signal: the visible helper processes
+  still launch from `/home/dgk/workspace/context-portal`, and that checkout's
+  helper file differs from clean `dev-root` for recovery-continuation fixes.
+- The clean tracked `.project/context_forge_state.json` remains old and
+  `in_progress`; the legacy live
+  `/home/dgk/workspace/context-portal/.project/context_forge_state.json` is
+  `initialized` with service records and latest Codex target-client validation
+  `passed`, but it also carries Pi validation-pending/mixed state and stale
+  ContextForge readback fields.
 - The project state still carries deprecated project label `context-portal`;
   per `dec-20260616-0001`, that is naming debt unless a compatibility-safe
   migration is planned and approved.
@@ -925,9 +932,14 @@ extraction if current evidence proves a better review boundary.
   `f1a6404`. Focused compile checks, 166 focused unit tests before PR #16 merge,
   post-merge compile checks, and 3 post-merge regression tests passed. Issue #14
   is now closed by PR #17, eliminating the known broad test-suite evidence gap in
-  clean worktrees under the project `.venv` interpreter.
-  The live project state still requires final reconciliation/readiness acceptance
-  before issue #4 can close.
+  clean worktrees under the project `.venv` interpreter. A post-compaction
+  focused check compiled the project-init/helper/state/Serena scripts and ran
+  150 project-init/project-state tests OK. Live readiness still cannot close:
+  tracked `dev-root` project state is old/in-progress, the legacy live
+  `/home/dgk/workspace/context-portal/.project/context_forge_state.json` is
+  initialized but includes Pi validation-pending/mixed state, and currently
+  running helper MCP processes are served from the legacy dirty checkout rather
+  than clean `dev-root`.
 - Desired state: project-state labels, readback fields, helper prompts, reload
   guidance, and state reconciliation tell the current truth without stale job
   assumptions.
@@ -937,9 +949,12 @@ extraction if current evidence proves a better review boundary.
 - Dependencies: helper context/list evidence, schema/test updates, naming
   decision `dec-20260616-0001`, and explicit approval before any compatibility
   migration of live names or service identities.
-- Hidden work: issue #4 body still refers to historical
-  `validation_pending` jobs that are no longer present in the current state
-  shape.
+- Hidden work: issue #4's live-state wording must distinguish clean tracked
+  source state, legacy live state, per-client activation jobs, and helper
+  process source. A prior roadmap claim that `validation_pending` jobs were no
+  longer present is stale; the legacy live state still includes a Pi
+  `validation_pending`/mixed validation job even though the latest Codex job is
+  verified and not repair-pending.
 - Acceptance: schema-valid state, no stale activation-job claims, clear
   `not_checked`/verified/presumed-working semantics, numbered choices, explicit
   reload text, and full tests pass.
@@ -958,7 +973,11 @@ extraction if current evidence proves a better review boundary.
   tests/test_project_init_scripts.py`, focused flag regression, full
   `tests.test_project_init_scripts -v`, targeted helper-mediated Serena
   provisioning regressions, expanded 166-test focused suite before merge, and
-  post-merge compile plus 3-regression check on `dev-root`.
+  post-merge compile plus 3-regression check on `dev-root`. Current
+  post-compaction issue #4 audit evidence: `cf_project_init_get_context`,
+  `cf_project_init_list_capabilities`, repair/reload dry-run readbacks,
+  live/clean `.project/context_forge_state.json` comparison, helper process
+  source-path inspection, and 150 focused tests OK.
 - Debt policy: any remaining deprecated label or unchecked readback must be
   tracked with owner, impact, migration trigger, and retirement condition.
 
