@@ -482,8 +482,10 @@ Risks:
   SessionStart/UserPromptSubmit project-init hook commands, project trust, and
   hook trust-state records for `/home/dgk/workspace/context-portal`; changing
   those remains a separate user-approved global config/trust migration.
-- Active branch `codex/issue-15-global-codex-migration-plan` adds a read-only
-  planner for that global boundary. Current real-config readback reports
+- Merged PR
+  [#28](https://github.com/somebloke1/contextforge-control-plane/pull/28)
+  adds a read-only planner for that global boundary at merge commit `fb8df1e`.
+  Current real-config readback reports
   `approval_required_before_user_global_codex_config_or_trust_mutation`,
   replacement candidates for the global helper, project trust, and global
   project-init hooks, historical hook-state provenance to preserve by default,
@@ -916,7 +918,7 @@ extraction if current evidence proves a better review boundary.
 | `codex/issue-15-rebind-preflight-planner` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #23](https://github.com/somebloke1/contextforge-control-plane/pull/23) | Read-only source planner for Strategy 1/2/3 approval: inventories path-bound local surfaces, embeds readiness reconciliation, and reports non-actions before any live rebind mutation. | focused planner/readiness tests; live planner JSON readback; `git diff --check`; no runtime mutation |
 | `codex/issue-15-strategy1-source-rebind` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #24](https://github.com/somebloke1/contextforge-control-plane/pull/24) | User-approved Strategy 1 first pass: retarget source/project-local path-bound operating surfaces from `/home/dgk/workspace/context-portal` to the clean worktree while preserving compatibility names and making no runtime/global/process/registry/Pi/checkout-disposition mutations. | planner with `--approval-acknowledged`; readiness with `--no-processes`; targeted legacy-root `rg`; `tests.test_project_init_scripts`; TOML parse; `git diff --check`; delegated source-surface audit |
 | `codex/issue-15-clean-helper-binding` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #27](https://github.com/somebloke1/contextforge-control-plane/pull/27) | Project-local `contextforge-helper` MCP binding and regression test so clean-root Codex sessions shadow the stale global helper entry instead of depending on the legacy checkout. Does not edit user-global config/trust or reload clients. | `codex -C ... mcp list --json`; `tests.test_codex_precompact_continuity_hook`; readiness with `--no-processes`; delegated legacy-binding audit |
-| `codex/issue-15-global-codex-migration-plan` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / active | Read-only user-global Codex config/trust migration planner for stale `~/.codex/config.toml` entries. Classifies active replacements, historical hook-state provenance, clean-root trust/hook-state absence, target values, readback commands, and non-actions. Does not edit global config/trust or reload clients. | `scripts/plan_codex_global_config_migration.py`; focused planner tests; real global-config planner readback; `git diff --check` |
+| `codex/issue-15-global-codex-migration-plan` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #28](https://github.com/somebloke1/contextforge-control-plane/pull/28) | Read-only user-global Codex config/trust migration planner for stale `~/.codex/config.toml` entries. Classifies active replacements, historical hook-state provenance, clean-root trust/hook-state absence, target values, readback commands, and non-actions. Does not edit global config/trust or reload clients. | `scripts/plan_codex_global_config_migration.py`; focused planner tests; real global-config planner readback; `git diff --check` |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/clean-worktree-test-hermeticity` | closed [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) / merged [PR #17](https://github.com/somebloke1/contextforge-control-plane/pull/17) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
@@ -1371,9 +1373,8 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    inward-facing work. The user selected Strategy 1 and PR #24 completed the
    first source-only compatibility rebind pass, and PR #27 completed the
    clean-root `contextforge-helper` shadow so Codex MCP readback no longer
-   depends on the legacy helper binding. Complete the active
-   `codex/issue-15-global-codex-migration-plan` branch before asking for a
-   global config/trust write. Then choose the next separately approved
+   depends on the legacy helper binding. PR #28 completed the read-only global
+   Codex config/trust migration planner. Choose the next separately approved
    operator-path step: apply the approved user-global Codex config/trust
    migration, systemd/Serena reload/readback, ContextForge registration
    readback, or explicit archival disposition of the legacy checkout. Do not
