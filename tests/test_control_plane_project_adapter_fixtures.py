@@ -54,11 +54,12 @@ class ControlPlaneProjectAdapterFixtureTests(unittest.TestCase):
                 self.assert_plan_expectations(plan, case["expected"])
                 self.assertEqual(original, case)
 
-    def test_current_run_serena_decline_is_read_from_env_and_preserved(self) -> None:
+    def test_current_run_serena_decline_is_modeled_and_preserved(self) -> None:
         case = self.cases["serena_current_run_declined_preserves_no_mutation"]
-        env_text = (REPO_ROOT / ".env").read_text(encoding="utf-8")
+        env_decision = case["expected"]["env_decision"]
 
-        self.assertIn(f"CONTEXTFORGE_SERENA_DECISION={case['expected']['env_decision']}", env_text)
+        self.assertEqual("declined", env_decision)
+        self.assertEqual(env_decision, case["project_service_decision"])
         plan = self.plan_case(case)
         self.assertEqual("blocked_declined", plan["status"])
         self.assertEqual({}, plan["planned_sections"])

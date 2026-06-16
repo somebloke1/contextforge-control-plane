@@ -11,7 +11,7 @@
         "type": "real_local_manifest",
         "source_paths": [
           "server-instances/context7/instance.json",
-          "run/context7-registration.json"
+          "server-instances/context7/README.md"
         ],
         "notes": [
           "manifest identifies context7 as canonical and registered",
@@ -79,8 +79,7 @@
         "type": "real_local_manifest",
         "source_paths": [
           "server-instances/ssh-tmux/instance.json",
-          "server-instances/ssh-tmux/README.md",
-          "run/ssh-tmux-registration.json"
+          "server-instances/ssh-tmux/README.md"
         ],
         "notes": [
           "manifest states ssh-tmux is scoped by explicit session and remote target arguments",
