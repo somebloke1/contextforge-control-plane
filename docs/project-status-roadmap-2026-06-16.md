@@ -172,9 +172,11 @@ work.
   is represented by draft PR #10 from `codex/helper-multiclient-project-init`
   to `dev-root`; focused acceptance evidence is green.
 - New operational coordination item: issue #11 tracks that PR #9's precompact
-  hook is visible from clean `dev-root` worktrees but not from the dirty
-  `codex/contextforge-wrapper-lifecycle` holding worktree until that branch is
-  reconciled or the hook block is deliberately propagated.
+  hook was not initially visible from the dirty
+  `codex/contextforge-wrapper-lifecycle` holding worktree. The hook has now been
+  deliberately propagated into that worktree without replacing existing MCP
+  config; direct hook smoke passed, but user-visible Codex hooks-table readback
+  is still pending.
 
 ## Executive Summary
 
@@ -562,9 +564,12 @@ Current GitHub state:
 - PR #8 is merged; its former slice worktree now checks out clean `dev-root`.
 - PR #9 is merged; its remote branch is deleted, while the local merged worktree
   remains until local worktree cleanup is approved or performed deliberately.
-- Issue #11 captures the hook visibility mismatch: clean `dev-root` contains the
-  hook file and `[hooks]` config, while the dirty `codex/contextforge-wrapper-lifecycle`
-  worktree still lacks them until reconciled.
+- Issue #11 captures the hook visibility mismatch and partial local repair:
+  clean `dev-root` contains the hook file and `[hooks]` config; the dirty
+  `codex/contextforge-wrapper-lifecycle` worktree has now received the same hook
+  file and hook block, with TOML parse plus direct hook smoke passing. Keep the
+  issue open until a new Codex terminal/session launched from that worktree
+  shows installed/active `PreCompact` and `SessionStart` hooks.
 
 ### Desired GitHub State
 
