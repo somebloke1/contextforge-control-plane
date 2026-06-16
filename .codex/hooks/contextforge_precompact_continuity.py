@@ -83,19 +83,17 @@ def session_id(payload: dict[str, Any]) -> str | None:
     return value if isinstance(value, str) and value.strip() else os.environ.get("CODEX_THREAD_ID")
 
 
-def hook_run_id(payload: dict[str, Any]) -> str | None:
-    value = pick_nested(payload, (("hook_run_id",), ("hookRunId",), ("run_id",), ("runId",)))
+def turn_id(payload: dict[str, Any]) -> str | None:
+    value = pick_nested(payload, (("turn_id",), ("turnId",)))
     return value if isinstance(value, str) and value.strip() else None
 
 
 def stable_event_id(payload: dict[str, Any], repo_root: Path) -> str:
-    explicit = hook_run_id(payload)
-    if explicit:
-        return safe_identifier(explicit)
     fingerprint = {
         "event": event_name(payload),
         "trigger": compaction_trigger(payload),
         "session_id": session_id(payload),
+        "turn_id": turn_id(payload),
         "repo_root": str(repo_root),
         "payload_keys": sorted(redacted_payload_keys(payload)),
     }
@@ -297,17 +295,40 @@ def additional_context(paths: dict[str, str]) -> str:
     )
 
 
-def run(payload: dict[str, Any], *, cwd: Path | None = None, now: str | None = None) -> dict[str, Any] | None:
-    if event_name(payload) and event_name(payload) != "PreCompact":
+def session_start_context(repo_root: Path) -> dict[str, Any] | None:
+    latest_md = repo_root.joinpath(*STATE_DIR_PARTS, "latest.md")
+    if not latest_md.exists():
         return None
-    snapshot = build_snapshot(payload, cwd=cwd, now=now)
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": (
+                "ContextForge compaction just completed. Read "
+                "`run/codex-precompact-continuity/latest.md` as additive continuity evidence; "
+                "keep Codex's default compaction summary authoritative and resume the roadmap "
+                "conductor goal loop without unchosen loss."
+            ),
+        }
+    }
+
+
+def run(payload: dict[str, Any], *, cwd: Path | None = None, now: str | None = None) -> dict[str, Any] | None:
+    actual_cwd = (cwd or Path.cwd()).resolve()
+    repo_root = find_repo_root(actual_cwd)
+    name = event_name(payload)
+    if name == "SessionStart":
+        source = pick_nested(payload, (("source",),))
+        if source == "compact":
+            return session_start_context(repo_root)
+        return None
+    if name and name != "PreCompact":
+        return None
+    snapshot = build_snapshot(payload, cwd=actual_cwd, now=now)
     repo_root = Path(str(snapshot["repo_root"]))
     paths = persist_snapshot(snapshot, repo_root)
     return {
-        "hookSpecificOutput": {
-            "hookEventName": "PreCompact",
-            "additionalContext": additional_context(paths),
-        }
+        "systemMessage": additional_context(paths),
+        "suppressOutput": True,
     }
 
 

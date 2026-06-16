@@ -54,3 +54,13 @@ command = '/usr/bin/env python3 "$(git rev-parse --show-toplevel)/.codex/hooks/c
 timeout = 10
 statusMessage = "Preserving ContextForge continuity"
 suppressOutput = true
+
+[[hooks.SessionStart]]
+matcher = "compact"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = '/usr/bin/env python3 "$(git rev-parse --show-toplevel)/.codex/hooks/contextforge_precompact_continuity.py"'
+timeout = 10
+statusMessage = "Restoring ContextForge continuity"
+suppressOutput = true

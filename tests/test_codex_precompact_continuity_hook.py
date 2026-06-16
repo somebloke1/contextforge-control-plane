@@ -31,7 +31,8 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
 
             self.assertIsNotNone(output)
             assert output is not None
-            context = output["hookSpecificOutput"]["additionalContext"]
+            self.assertNotIn("hookSpecificOutput", output)
+            context = output["systemMessage"]
             self.assertIn("run/codex-precompact-continuity/latest.md", context)
             self.assertIn("default compaction prompt authoritative", context)
 
@@ -74,6 +75,28 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
             self.assertIsNone(output)
             self.assertFalse((root / "run/codex-precompact-continuity").exists())
 
+    def test_session_start_compact_returns_documented_additional_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._init_repo(Path(tmp))
+            continuity_hook.run({"hook_event_name": "PreCompact", "trigger": "manual"}, cwd=root)
+
+            output = continuity_hook.run({"hook_event_name": "SessionStart", "source": "compact"}, cwd=root)
+
+            self.assertIsNotNone(output)
+            assert output is not None
+            hook_output = output["hookSpecificOutput"]
+            self.assertEqual("SessionStart", hook_output["hookEventName"])
+            self.assertIn("run/codex-precompact-continuity/latest.md", hook_output["additionalContext"])
+            self.assertIn("without unchosen loss", hook_output["additionalContext"])
+
+    def test_session_start_compact_without_snapshot_is_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._init_repo(Path(tmp))
+
+            output = continuity_hook.run({"hook_event_name": "SessionStart", "source": "compact"}, cwd=root)
+
+            self.assertIsNone(output)
+
     def test_payload_values_are_not_persisted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self._init_repo(Path(tmp))
@@ -90,6 +113,30 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
             self.assertNotIn("sk-secret-value", snapshot_text)
             self.assertIn("OPENAI_API_KEY:redacted", snapshot_text)
 
+    def test_run_identifier_values_are_not_persisted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._init_repo(Path(tmp))
+            payload = {
+                "hook_event_name": "PreCompact",
+                "trigger": "manual",
+                "hook_run_id": "secret-hook-run-id",
+                "hookRunId": "secret-camel-run-id",
+                "run_id": "secret-run-id",
+                "runId": "secret-run-id-2",
+            }
+
+            continuity_hook.run(payload, cwd=root)
+
+            state_dir = root / "run/codex-precompact-continuity"
+            snapshot_text = (state_dir / "latest.json").read_text(encoding="utf-8")
+            event_names = "\n".join(path.name for path in (state_dir / "events").glob("*.json"))
+            self.assertNotIn("secret-hook-run-id", snapshot_text)
+            self.assertNotIn("secret-camel-run-id", snapshot_text)
+            self.assertNotIn("secret-run-id", snapshot_text)
+            self.assertNotIn("secret-hook-run-id", event_names)
+            self.assertNotIn("secret-camel-run-id", event_names)
+            self.assertNotIn("secret-run-id", event_names)
+
     def test_main_returns_zero_on_persistence_failure(self) -> None:
         payload = json.dumps({"hook_event_name": "PreCompact", "trigger": "manual"})
         with mock.patch.object(sys, "stdin", io.StringIO(payload)), mock.patch.object(
@@ -103,6 +150,8 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
         config = (REPO_ROOT / ".codex/config.toml").read_text(encoding="utf-8")
         self.assertIn("[[hooks.PreCompact]]", config)
         self.assertIn('matcher = "manual|auto"', config)
+        self.assertIn("[[hooks.SessionStart]]", config)
+        self.assertIn('matcher = "compact"', config)
         self.assertIn("contextforge_precompact_continuity.py", config)
         self.assertNotIn("compact_prompt", config)
         self.assertNotIn("experimental_compact_prompt_file", config)
