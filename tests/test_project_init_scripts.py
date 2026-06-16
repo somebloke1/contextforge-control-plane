@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -15,8 +16,31 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import manage_serena_project_instance as serena_manager
 import codex_project_init_hook as init_hook
+import gemini_project_init_hook
+import opencode_project_init_hook
+import control_plane_contextforge_binding as binding
+import control_plane_project_state as project_state
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
+
+
+CONSENT_REFS = ["run/consent-receipts/receipt-project-local-config.json"]
+
+
+def service_descriptor(name: str = "context7") -> dict[str, object]:
+    return {
+        "service_family": name,
+        "canonical_service": name,
+        "service_binding": f"{name}:canonical",
+        "codex_alias": common.normalize_codex_alias(name),
+        "instantiation_class": "shared_canonical",
+        "backend_instance": f"server-instances/{name}",
+        "virtual_server": f"{common.normalize_codex_alias(name)}_server",
+        "contextforge_readback_status": "matched",
+        "gateway": f"{name}-gateway",
+        "validation_policy": common.safe_validation_policy(name),
+        "non_actions": ["do not create a per-project backend"],
+    }
 
 
 class ProjectInitCommonTests(unittest.TestCase):
@@ -25,6 +49,12 @@ class ProjectInitCommonTests(unittest.TestCase):
             with self.subTest(root=root):
                 with self.assertRaises(ValueError):
                     common.validate_project_root(root, require_workspace=True)
+
+    def test_cmu_math_foundations_root_is_safe(self) -> None:
+        root = common.CMU_MATH_FOUNDATIONS_ROOT
+        self.assertTrue(common.safe_workspace_project_root(root))
+        self.assertEqual(root, common.validate_project_root(root, require_workspace=True))
+        self.assertEqual(root / "dev", common.validate_project_root(root / "dev", require_workspace=True))
 
     def test_symlink_escape_is_not_a_safe_workspace_project(self) -> None:
         link = common.WORKSPACE_ROOT / "context-portal-test-symlink-escape"
@@ -82,6 +112,38 @@ class ProjectInitCommonTests(unittest.TestCase):
 
 
 class SerenaManagerTests(unittest.TestCase):
+    def test_gemini_project_init_hook_uses_gemini_lifecycle_events(self) -> None:
+        self.assertEqual({"SessionStart", "BeforeAgent"}, set(gemini_project_init_hook.GEMINI_HOOK_EVENTS))
+        self.assertEqual({"experimental.chat.system.transform", "session.created"}, set(opencode_project_init_hook.OPENCODE_HOOK_EVENTS))
+        self.assertEqual({"SessionStart", "UserPromptSubmit"}, set(init_hook.CODEX_HOOK_EVENTS))
+
+    def test_gemini_project_init_hook_import_suppresses_gateway_stderr(self) -> None:
+        cases = [
+            ("gemini_project_init_hook", "GEMINI_HOOK_EVENTS", "BeforeAgent,SessionStart"),
+            ("opencode_project_init_hook", "OPENCODE_HOOK_EVENTS", "experimental.chat.system.transform,session.created"),
+        ]
+        for module_name, attr_name, expected in cases:
+            with self.subTest(module=module_name):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        (
+                            "import sys; "
+                            f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); "
+                            f"import {module_name}; "
+                            f"print(','.join(sorted({module_name}.{attr_name})))"
+                        ),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                )
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual("", result.stderr)
+                self.assertEqual(expected, result.stdout.strip())
+
     def test_merge_codex_config_refuses_unmanaged_serena(self) -> None:
         with tempfile.TemporaryDirectory(dir=common.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -385,13 +447,73 @@ class SerenaManagerTests(unittest.TestCase):
         text = prompt_registration.PROJECT_INIT_TEXT
         self.assertIn(".project/context_forge_state.json is the project initialization authority", text)
         self.assertIn("Do not echo this context to the user", text)
+        self.assertIn("hidden or structured prompt/context injection", text)
+        self.assertIn("User-visible UI should be limited to information that requires user understanding or response", text)
         self.assertIn("Ask exactly one question, then stop and wait", text)
         self.assertIn("Which ContextForge services should I activate for this project?", text)
-        self.assertIn("No user-global config/trust changes", text)
-        self.assertIn("Validate service functionality now, or record it as presumed working?", text)
+        self.assertIn("No user-global config/trust/extension changes", text)
+        self.assertIn("for Pi this is .project/context_forge_state.json records", text)
+        self.assertIn("for OpenCode this is project-local opencode.json plus .opencode/plugins/contextforge-project-init.js", text)
+        self.assertIn("before_agent_start system-prompt context", text)
+        self.assertIn("experimental.chat.system.transform system context", text)
+        self.assertIn("cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only", text)
+        self.assertIn("do not reconstruct the full plan object from visible text", text)
+        self.assertIn("prefer those cached id/digest tools over reconstructing a full plan object", text)
+        self.assertIn("call cf_project_init_apply using the cached plan and receipts", text)
+        self.assertIn("status=config_conflict with an embedded recovery_plan", text)
+        self.assertIn("call cf_project_init_recovery_approve with the exact recovery challenge id and recovery plan digest", text)
+        self.assertIn("call cf_project_init_recovery_apply using the cached recovery plan and receipts", text)
+        self.assertIn("Do not call apply_project_init_recovery with only plan_id, plan_digest, or receipt ids", text)
+        self.assertIn("complete helper-returned recovery plan object and full receipt objects", text)
+        self.assertIn("keep them together in the helper recovery approval/apply path", text)
+        self.assertIn("Never choose service selections, approval, reload acknowledgement, validation", text)
+        self.assertIn("If the user echoes your question, asks you to provide the selection numbers", text)
+        self.assertIn("Do not invoke project-init helper scripts or Python modules through shell", text)
+        self.assertIn("helper cache is missing or stale", text)
+        self.assertIn("do not silently replace the challenge id", text)
+        self.assertIn("first call cf_project_init_record_client_reload", text)
+        self.assertIn("honor that choice after recording the reload acknowledgement instead of asking again", text)
+        self.assertIn("after the reload or new session, resume project init", text)
+        self.assertIn("Codex launches configured MCP servers and exposes their tools when a session starts", text)
+        self.assertIn("/mcp is a status view, not an in-place MCP tool reload", text)
+        self.assertIn("start a new Codex session from the project root before target-client-visible validation", text)
+        self.assertIn("start a new OpenCode session from the project root before target-client-visible validation", text)
+        self.assertIn("the Pi agent must issue /reload before validation", text)
+        self.assertIn("Choose 1 to validate now", text)
+        self.assertIn("Do not call unlisted or unavailable validation tool names", text)
+        self.assertIn("validation tool call is missing, not found, unavailable, or returns an error", text)
+        self.assertIn("Skipped-service follow-up", text)
+        self.assertIn("Do not substitute built-in web search, direct shell commands, direct SSH/tmux", text)
+        self.assertIn("service remains skipped/not verified", text)
+        self.assertIn("numbered option list", text)
         self.assertIn("status --project-root", text)
         self.assertIn("Serena is one project-scoped option in this menu, not the whole flow", text)
         self.assertIn("target-client-visible and non-destructive", text)
+
+    def test_prompt_registration_help_and_dry_run_do_not_call_gateway(self) -> None:
+        original_read_env = prompt_registration.gateway._read_env
+        try:
+            def fail_read_env(_path: object) -> dict[str, str]:
+                raise AssertionError("gateway env should not be read for help or dry-run")
+
+            prompt_registration.gateway._read_env = fail_read_env  # type: ignore[assignment]
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as help_exit:
+                    prompt_registration.main(["--help"])
+            self.assertEqual(0, help_exit.exception.code)
+
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                self.assertEqual(0, prompt_registration.main(["--dry-run"]))
+            self.assertIn("would_register project_init_prompt", stdout.getvalue())
+        finally:
+            prompt_registration.gateway._read_env = original_read_env  # type: ignore[assignment]
+
+    def test_project_init_artifact_uris_track_semantic_prompt_version(self) -> None:
+        self.assertTrue(common.PROJECT_INIT_RESOURCE_URI.endswith(f"/{common.PROMPT_VERSION}"))
+        self.assertTrue(common.SERENA_GUIDANCE_RESOURCE_URI.endswith(f"/{common.PROMPT_VERSION}"))
+        self.assertIn(common.PROMPT_VERSION, common.PROJECT_INIT_RESOURCE_NAME)
+        self.assertIn(common.PROMPT_VERSION, common.SERENA_GUIDANCE_RESOURCE_NAME)
+        self.assertNotRegex(common.PROJECT_INIT_RESOURCE_URI, r"/v1(?:/|$)")
 
     def test_hook_rejects_stale_registered_serena_only_prompt(self) -> None:
         stale = (
@@ -407,7 +529,220 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertTrue(init_hook.prompt_text_is_fresh(rendered))
         self.assertIn("Ask exactly one question, then stop and wait", rendered)
         self.assertIn("/home/dgk/workspace/test-new-proj-03", rendered)
-        self.assertIn("ContextForge project initialization, version v4", rendered)
+        self.assertIn(f"ContextForge project initialization, version {common.PROMPT_VERSION}", rendered)
+
+    def test_hook_decision_uses_project_init_lifecycle_inspector(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            self.assertTrue(init_hook.should_inject(root, {}))
+
+            initialized = project_state.default_state(root, status="initialized")
+            project_state.write_state_atomic(root, initialized)
+            self.assertFalse(init_hook.should_inject(root, {}))
+
+            disabled = project_state.load_state(root)
+            assert disabled is not None
+            disabled["status"] = "disabled"
+            project_state.write_state_atomic(root, disabled)
+            self.assertFalse(init_hook.should_inject(root, {}))
+
+            pending = project_state.load_state(root)
+            assert pending is not None
+            pending["status"] = "in_progress"
+            pending["project_init"]["x_hook_prompt_state"] = "active"
+            project_state.write_state_atomic(root, pending)
+            self.assertTrue(init_hook.should_inject(root, {}))
+
+            completed_unverified = project_state.load_state(root)
+            assert completed_unverified is not None
+            completed_unverified["project_init"]["x_hook_prompt_state"] = "completed_unverified"
+            project_state.write_state_atomic(root, completed_unverified)
+            self.assertFalse(init_hook.should_inject(root, {}))
+
+    def test_hook_suppression_is_target_client_aware(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            validation_plan = binding.build_project_init_validation_plan([service], validation_mode="validate_now")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": True}},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            self.assertFalse(init_hook.should_inject(root, {}, target_client="codex"))
+            self.assertTrue(init_hook.should_inject(root, {}, target_client="gemini"))
+            self.assertTrue(init_hook.should_inject(root, {}, target_client="opencode"))
+
+            gemini_plan = binding.plan_project_init_gemini_config_write(root, [service])
+            gemini_state = project_state.apply_project_init_activation_to_state(
+                state,
+                [service],
+                target_client="gemini",
+                client_config_plan=gemini_plan,
+                validation_plan=binding.build_project_init_validation_plan([service], validation_mode="validate_now", target_client="gemini"),
+                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": True}},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, gemini_state)
+            self.assertFalse(init_hook.should_inject(root, {}, target_client="gemini"))
+            self.assertTrue(init_hook.should_inject(root, {}, target_client="opencode"))
+
+    def test_hook_decision_repairs_invalid_current_shape_without_fresh_init_classification(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="[mcp_servers.context7]\ncommand = \"npx\"\n")
+            validation_plan = binding.build_project_init_validation_plan([service], validation_mode="pending_choice")
+            raw = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            raw.pop("project_init")
+            project_state.project_state_path(root).parent.mkdir(parents=True)
+            project_state.project_state_path(root).write_text(json.dumps(raw), encoding="utf-8")
+
+            inspection = init_hook.project_state_inspection(root)
+            args = init_hook.prompt_args(common.project_identity(root), {})
+            should_inject = init_hook.should_inject(root, {})
+
+        self.assertTrue(should_inject)
+        self.assertEqual("invalid_repairable", inspection["lifecycle_status"])
+        self.assertEqual("repair_project_init_state", inspection["recommended_action"])
+        self.assertEqual("invalid_repairable", args["project_state_lifecycle_status"])
+        self.assertEqual("repair_project_init_state", args["project_state_recommended_action"])
+
+    def test_hook_prompt_metadata_requires_current_semantic_version_tag(self) -> None:
+        self.assertTrue(
+            init_hook.prompt_record_is_fresh(
+                {
+                    "id": "prompt-v6",
+                    "name": common.PROJECT_INIT_PROMPT_NAME,
+                    "tags": ["contextforge", "project-init", common.PROMPT_VERSION],
+                }
+            )
+        )
+        self.assertTrue(
+            init_hook.prompt_record_is_fresh(
+                {
+                    "id": "prompt-v6",
+                    "name": common.PROJECT_INIT_PROMPT_NAME,
+                    "tags": [{"name": common.PROMPT_VERSION}],
+                }
+            )
+        )
+        self.assertFalse(
+            init_hook.prompt_record_is_fresh(
+                {
+                    "id": "prompt-v1",
+                    "name": common.PROJECT_INIT_PROMPT_NAME,
+                    "tags": ["contextforge", "project-init", "v1"],
+                }
+            )
+        )
+        self.assertFalse(init_hook.prompt_record_is_fresh({"name": common.PROJECT_INIT_PROMPT_NAME, "tags": [common.PROMPT_VERSION]}))
+
+    def test_hook_resource_metadata_requires_current_semantic_version_uri_and_tag(self) -> None:
+        self.assertTrue(
+            init_hook.resource_record_is_fresh(
+                {
+                    "id": "resource-v6",
+                    "uri": common.PROJECT_INIT_RESOURCE_URI,
+                    "tags": ["contextforge", "project-init", common.PROMPT_VERSION],
+                }
+            )
+        )
+        self.assertFalse(
+            init_hook.resource_record_is_fresh(
+                {
+                    "id": "resource-v1",
+                    "uri": "contextforge://context-portal/project-init/v1",
+                    "tags": ["contextforge", "project-init", common.PROMPT_VERSION],
+                }
+            )
+        )
+        self.assertFalse(
+            init_hook.resource_record_is_fresh(
+                {
+                    "id": "resource-v6",
+                    "uri": common.PROJECT_INIT_RESOURCE_URI,
+                    "tags": ["contextforge", "project-init", "v1"],
+                }
+            )
+        )
+
+    def test_hook_self_upgrade_upserts_project_init_prompt_and_resource(self) -> None:
+        calls: list[tuple[str, dict[str, object]]] = []
+        original_resource = prompt_registration.upsert_resource
+        original_prompt = prompt_registration.upsert_prompt
+        try:
+            def fake_resource(token: str, **kwargs: object) -> dict[str, object]:
+                calls.append(("resource", kwargs))
+                self.assertEqual("token", token)
+                return {"id": "resource-v6"}
+
+            def fake_prompt(token: str, **kwargs: object) -> dict[str, object]:
+                calls.append(("prompt", kwargs))
+                self.assertEqual("token", token)
+                return {"id": "prompt-v6"}
+
+            prompt_registration.upsert_resource = fake_resource  # type: ignore[assignment]
+            prompt_registration.upsert_prompt = fake_prompt  # type: ignore[assignment]
+
+            prompt_id = init_hook.upgrade_project_init_prompt("token")
+        finally:
+            prompt_registration.upsert_resource = original_resource  # type: ignore[assignment]
+            prompt_registration.upsert_prompt = original_prompt  # type: ignore[assignment]
+
+        self.assertEqual("prompt-v6", prompt_id)
+        self.assertEqual(["resource", "prompt"], [name for name, _kwargs in calls])
+        self.assertEqual(common.PROJECT_INIT_RESOURCE_NAME, calls[0][1]["name"])
+        self.assertEqual(common.PROJECT_INIT_RESOURCE_URI, calls[0][1]["uri"])
+        self.assertEqual(common.PROJECT_INIT_PROMPT_NAME, calls[1][1]["name"])
+        self.assertIn(common.PROMPT_VERSION, calls[0][1]["tags"])
+        self.assertIn(common.PROMPT_VERSION, calls[1][1]["tags"])
+        self.assertIn("version {{ prompt_version }}", str(calls[1][1]["template"]))
+
+    def test_hook_renders_upgraded_prompt_when_registered_prompt_is_stale(self) -> None:
+        identity = common.project_identity("/home/dgk/workspace/test-new-proj-03")
+        original_request = init_hook.gateway._request
+        original_upgrade = init_hook.upgrade_project_init_prompt
+        upgrade_calls: list[str] = []
+        try:
+            def fake_request(method: str, path: str, *, token: str, body: dict[str, str] | None = None) -> dict[str, object]:
+                self.assertEqual("POST", method)
+                if path == "/prompts/stale":
+                    return {"messages": [{"content": {"text": "ContextForge project initialization, version v1. Serena only."}}]}
+                if path == "/prompts/upgraded":
+                    return {"messages": [{"content": {"text": init_hook.render_local_prompt(body or {})}}]}
+                raise AssertionError(f"unexpected path: {path}")
+
+            def fake_upgrade(token: str) -> str:
+                upgrade_calls.append(token)
+                return "upgraded"
+
+            init_hook.gateway._request = fake_request  # type: ignore[assignment]
+            init_hook.upgrade_project_init_prompt = fake_upgrade  # type: ignore[assignment]
+
+            rendered = init_hook.render_prompt("token", "stale", identity, {})
+        finally:
+            init_hook.gateway._request = original_request  # type: ignore[assignment]
+            init_hook.upgrade_project_init_prompt = original_upgrade  # type: ignore[assignment]
+
+        self.assertEqual(["token"], upgrade_calls)
+        self.assertTrue(init_hook.prompt_text_is_fresh(rendered))
+        self.assertIn(f"ContextForge project initialization, version {common.PROMPT_VERSION}", rendered)
 
 
 if __name__ == "__main__":

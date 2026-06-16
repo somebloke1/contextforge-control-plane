@@ -15,17 +15,21 @@ from typing import Any, Iterable
 
 HOME = Path.home().resolve()
 WORKSPACE_ROOT = Path("/home/dgk/workspace").resolve()
+CMU_MATH_FOUNDATIONS_ROOT = Path("/home/dgk/gdrive/__CMU/classes/00_MathFoundationsML").resolve()
+SAFE_PROJECT_ROOTS = frozenset({WORKSPACE_ROOT, CMU_MATH_FOUNDATIONS_ROOT})
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUN_ROOT = REPO_ROOT / "run"
 SERVER_INSTANCES_ROOT = REPO_ROOT / "server-instances"
 WRAPPER_PATH = REPO_ROOT / "scripts" / "contextforge_mcp_wrapper.py"
 PYTHON_PATH = REPO_ROOT / ".venv" / "bin" / "python"
 
+PROMPT_VERSION = "v15"
 PROJECT_INIT_PROMPT_NAME = "project_init_prompt"
-PROJECT_INIT_RESOURCE_URI = "contextforge://context-portal/project-init/v1"
+PROJECT_INIT_RESOURCE_NAME = f"project_init_resource_{PROMPT_VERSION}"
+PROJECT_INIT_RESOURCE_URI = f"contextforge://context-portal/project-init/{PROMPT_VERSION}"
 SERENA_GUIDANCE_PROMPT_NAME = "serena_project_instance_guidance"
-SERENA_GUIDANCE_RESOURCE_URI = "contextforge://context-portal/serena-project-instance-guidance/v1"
-PROMPT_VERSION = "v4"
+SERENA_GUIDANCE_RESOURCE_NAME = f"serena_project_instance_guidance_resource_{PROMPT_VERSION}"
+SERENA_GUIDANCE_RESOURCE_URI = f"contextforge://context-portal/serena-project-instance-guidance/{PROMPT_VERSION}"
 
 ENV_PROJECT_INIT_STATUS = "CONTEXTFORGE_PROJECT_INIT_DIALOGUE_STATUS"
 ENV_SERENA_DECISION = "CONTEXTFORGE_SERENA_DECISION"
@@ -55,6 +59,7 @@ DENIED_PROJECT_ROOTS = {
 PROJECT_MARKERS = (
     ".git",
     ".codex",
+    ".opencode",
     ".env",
     "pyproject.toml",
     "package.json",
@@ -92,7 +97,7 @@ def is_denied_project_root(path: Path) -> bool:
 
 
 def safe_workspace_project_root(path: Path) -> bool:
-    return is_relative_to(path, WORKSPACE_ROOT) and path != WORKSPACE_ROOT and not is_denied_project_root(path)
+    return any(is_relative_to(path, root) for root in SAFE_PROJECT_ROOTS) and not is_denied_project_root(path)
 
 
 def normalize_slug(name: str) -> str:
@@ -131,6 +136,58 @@ def project_identity(root: str | Path) -> ProjectIdentity:
 def stable_digest(value: Any) -> str:
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
+    "codex": {
+        "client_type": "codex",
+        "required_after": ["project_activation_apply"],
+        "command": "start_new_session",
+        "actor": "user",
+        "instruction": (
+            "Before validating after approved Codex project-local MCP config changes, start a new Codex session from the project root. "
+            "Codex launches configured MCP servers and exposes their tools when a session starts; /mcp is a status view and does not reload MCP tools in-place."
+        ),
+        "blocks_validation_until_done": True,
+    },
+    "pi": {
+        "client_type": "pi",
+        "required_after": ["global_extension_install_or_upgrade", "project_activation_apply"],
+        "command": "/reload",
+        "actor": "pi_agent",
+        "instruction": "Before validating after an approved user-global Pi extension install or upgrade, issue /reload in Pi so the new or changed extension tools are active.",
+        "blocks_validation_until_done": True,
+    },
+    "gemini": {
+        "client_type": "gemini",
+        "required_after": ["project_activation_apply"],
+        "command": "start_new_session",
+        "actor": "user",
+        "instruction": (
+            "Before validating after approved Gemini project-local MCP settings changes, start a new Gemini CLI session from the project root. "
+            "Gemini CLI discovers configured MCP servers when a session starts."
+        ),
+        "blocks_validation_until_done": True,
+    },
+    "opencode": {
+        "client_type": "opencode",
+        "required_after": ["project_activation_apply"],
+        "command": "start_new_session",
+        "actor": "user",
+        "instruction": (
+            "Before validating after approved OpenCode project-local MCP config and plugin changes, start a new OpenCode session from the project root. "
+            "OpenCode discovers configured MCP servers and loads local plugins when a session starts."
+        ),
+        "blocks_validation_until_done": True,
+    }
+}
+
+
+def client_reload_requirement(client_type: str, *, event: str) -> dict[str, Any] | None:
+    requirement = CLIENT_RELOAD_REQUIREMENTS.get(client_type)
+    if not requirement or event not in set(requirement.get("required_after") or []):
+        return None
+    return json.loads(json.dumps(requirement))
 
 
 def load_server_instance_manifest(path: str | Path) -> dict[str, Any]:
@@ -188,7 +245,23 @@ def discover_contextforge_hosted_services(
         alias = normalize_codex_alias(str(manifest.get("codex_alias") or service_family))
         live_server = readback_by_name.get(server_name)
         registration = manifest.get("registration") if isinstance(manifest.get("registration"), dict) else {}
-        status = "matched" if live_server else ("not_checked" if contextforge_servers is None else "missing")
+        manifest_provisioning_required = _serena_manifest_needs_project_provisioning(manifest)
+        status = (
+            "not_provisioned"
+            if manifest_provisioning_required
+            else ("matched" if live_server else ("not_checked" if contextforge_servers is None else "missing"))
+        )
+        provisioning_required = manifest_provisioning_required or status in {"missing", "stale"}
+        scope = manifest.get("scope") if isinstance(manifest.get("scope"), dict) else {}
+        if provisioning_required and not scope and canonical_project_root:
+            scope = _serena_project_scope(canonical_path(str(canonical_project_root)), provisioned=False)
+        bridge = manifest.get("bridge") if isinstance(manifest.get("bridge"), dict) else {}
+        if provisioning_required and not bridge:
+            bridge = _serena_project_bridge(provisioned=False)
+        descriptor = _redacted_manifest_descriptor(manifest, server_name, instantiation_class)
+        if scope:
+            descriptor["scope"] = scope
+        descriptor["provisioning_status"] = "required" if provisioning_required else "manifest_backed"
         services.append(
             {
                 "service_family": service_family,
@@ -203,14 +276,112 @@ def discover_contextforge_hosted_services(
                 "contextforge_readback_status": status,
                 "contextforge_server_id": str(live_server.get("id")) if live_server and live_server.get("id") else None,
                 "registered_tools": list(registration.get("registered_tools") or []),
-                "scope": manifest.get("scope") if isinstance(manifest.get("scope"), dict) else {},
-                "bridge": manifest.get("bridge") if isinstance(manifest.get("bridge"), dict) else {},
+                "scope": scope,
+                "bridge": bridge,
                 "non_actions": _activation_non_actions(instantiation_class),
                 "validation_policy": safe_validation_policy(service_family),
-                "descriptor_digest": stable_digest(_redacted_manifest_descriptor(manifest, server_name, instantiation_class)),
+                "descriptor_digest": stable_digest(descriptor),
+                **(
+                    {
+                        "provisioning": {
+                            "status": "required",
+                            "helper": "manage_serena_project_instance.py",
+                            "requires_language_input": True,
+                            "reason": "existing Serena manifest is missing ContextForge gateway or virtual-server registration",
+                        }
+                    }
+                    if provisioning_required
+                    else {}
+                ),
             }
         )
+    if canonical_project is not None and safe_workspace_project_root(canonical_project) and not _has_project_serena_service(services):
+        services.append(_synthetic_serena_project_service(canonical_project))
     return services
+
+
+def _has_project_serena_service(services: Iterable[dict[str, Any]]) -> bool:
+    for service in services:
+        if str(service.get("service_family") or "").lower() == "serena":
+            return True
+    return False
+
+
+def _serena_manifest_needs_project_provisioning(manifest: dict[str, Any]) -> bool:
+    if manifest.get("service") != "serena" and not str(manifest.get("name") or "").startswith("serena-"):
+        return False
+    contextforge = manifest.get("contextforge") if isinstance(manifest.get("contextforge"), dict) else {}
+    gateway = contextforge.get("gateway") if isinstance(contextforge.get("gateway"), dict) else {}
+    virtual = contextforge.get("virtual_server") if isinstance(contextforge.get("virtual_server"), dict) else {}
+    return not (gateway.get("id") and virtual.get("id"))
+
+
+def _serena_project_scope(project_root: Path, *, provisioned: bool) -> dict[str, Any]:
+    state = "is configured" if provisioned else "will be started"
+    note = (
+        "Serena is stateful and project-scoped."
+        if provisioned
+        else "Serena is stateful and project-scoped. This project does not yet have a fully provisioned ContextForge Serena backend."
+    )
+    return {
+        "configuration_signal": f"Serena {state} with --project {project_root}",
+        "notes": note,
+        "requires_local_project_scope": True,
+        "scope_type": "single_workspace_code_intelligence",
+        "workspace_root": str(project_root),
+    }
+
+
+def _serena_project_bridge(*, provisioned: bool) -> dict[str, Any]:
+    return {
+        "needed": False,
+        "provider": None,
+        "reason": "Serena exposes native streamable HTTP; no ContextForge bridge is used."
+        if provisioned
+        else "Serena exposes native streamable HTTP after approved project-scoped provisioning; no ContextForge bridge is used.",
+        "streamable_http_url": None,
+        "sse_url": None,
+    }
+
+
+def _synthetic_serena_project_service(project_root: Path) -> dict[str, Any]:
+    identity = project_identity(project_root)
+    scope = _serena_project_scope(identity.root, provisioned=False)
+    bridge = _serena_project_bridge(provisioned=False)
+    descriptor_source = {
+        "name": identity.instance_slug,
+        "slug": identity.instance_slug,
+        "service": "serena",
+        "instantiation_class": "instance_per_project",
+        "virtual_server": identity.server_name,
+        "scope": scope,
+        "backend_transport": "streamable_http",
+        "provisioning_status": "not_provisioned",
+    }
+    return {
+        "service_family": "serena",
+        "canonical_service": "serena",
+        "service_binding": f"serena:{identity.hash}",
+        "codex_alias": "serena",
+        "instantiation_class": "instance_per_project",
+        "backend_instance": f"server-instances/{identity.instance_slug}",
+        "manifest_path": f"server-instances/{identity.instance_slug}/instance.json",
+        "virtual_server": identity.server_name,
+        "gateway": identity.instance_slug,
+        "contextforge_readback_status": "not_provisioned",
+        "contextforge_server_id": None,
+        "registered_tools": [],
+        "scope": scope,
+        "bridge": bridge,
+        "non_actions": _activation_non_actions("instance_per_project"),
+        "validation_policy": safe_validation_policy("serena"),
+        "descriptor_digest": stable_digest(descriptor_source),
+        "provisioning": {
+            "status": "required",
+            "helper": "manage_serena_project_instance.py",
+            "requires_language_input": True,
+        },
+    }
 
 
 def safe_validation_policy(service_family: str) -> dict[str, Any]:
@@ -284,7 +455,7 @@ def validate_project_root(root: str | Path, *, require_workspace: bool = False) 
     if canonical_root == Path("/").resolve():
         raise ValueError("refusing filesystem root as project root")
     if require_workspace and not safe_workspace_project_root(canonical_root):
-        raise ValueError(f"project root is not a safe /home/dgk/workspace child: {canonical_root}")
+        raise ValueError(f"project root is not under a safe project root: {canonical_root}")
     if canonical_root == HOME or is_relative_to(HOME, canonical_root):
         raise ValueError(f"refusing user home or parent of user home as project root: {canonical_root}")
     return canonical_root
