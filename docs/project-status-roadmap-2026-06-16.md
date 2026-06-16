@@ -223,16 +223,17 @@ work.
   only in the dirty holding checkout. This was a source-only slice: it did not
   install or reload the user-global Pi extension. Issue #3 remains open for the
   approval-gated global install, Pi `/reload`, and live Pi-visible validation.
-- Active project-init readiness subgoal: branch
-  `codex/project-init-readiness-reconciliation` adds a read-only
-  `inspect_project_init_readiness.py` report and focused tests for issue #4. It
-  makes the current split explicit without mutating `.project`, client config,
-  processes, services, registry, catalog, or trust: clean `dev-root` source
-  state is root-mismatched/blocked, legacy live state is schema-valid with Codex
-  verified and Pi validation-pending/mixed, and helper/wrapper processes still
-  source from the legacy dirty checkout. Issue #15 dirty checkout rebind and
-  issue #3 Pi install/reload remain real decision points for the user, not
-  hidden agent actions.
+- Retired project-init readiness reconciliation subgoal: PR #21 merged to
+  `dev-root` at merge commit `36a1639`. It added the read-only
+  `inspect_project_init_readiness.py` report and focused tests for issue #4.
+  The report makes the current split explicit without mutating `.project`,
+  client config, processes, services, registry, catalog, or trust: clean
+  `dev-root` source state is root-mismatched/blocked, legacy live state is
+  schema-valid with Codex verified and Pi validation-pending/mixed, and
+  helper/wrapper processes still source from the legacy dirty checkout. Issue
+  #4 remains open; issue #15 dirty checkout rebind and issue #3 Pi
+  install/reload remain real decision points for the user, not hidden agent
+  actions.
 - Dirty checkout retirement remains open under issue #15. The current authority
   snapshot is `run/dirty-state-preservation/20260616T114116Z/` in the clean
   `dev-root` controller worktree: 35 tracked dirty files and 41 untracked paths
@@ -384,8 +385,8 @@ Current evidence:
 - Issue #4 source mechanics are green after PR #10/#16: a post-compaction
   focused check compiled project-init/helper/state/Serena scripts and ran 150
   project-init/project-state tests OK.
-- Branch `codex/project-init-readiness-reconciliation` adds a read-only
-  readiness reconciliation report. Focused checks passed:
+- PR #21 merged the read-only readiness reconciliation report to `dev-root`.
+  Focused checks passed:
   `py_compile scripts/inspect_project_init_readiness.py
   tests/test_project_init_scripts.py`, `tests.test_project_init_scripts -v`
   with 52 tests OK, and `tests.test_project_init_activation_workflow -v` with
@@ -1017,8 +1018,7 @@ extraction if current evidence proves a better review boundary.
   is now closed by PR #17, eliminating the known broad test-suite evidence gap in
   clean worktrees under the project `.venv` interpreter. A post-compaction
   focused check compiled the project-init/helper/state/Serena scripts and ran
-  150 project-init/project-state tests OK. Branch
-  `codex/project-init-readiness-reconciliation` adds read-only issue #4
+  150 project-init/project-state tests OK. PR #21 added read-only issue #4
   readiness reconciliation: clean source state is reported as
   `invalid_blocked` with a root mismatch, legacy live state is schema-valid
   revision 10 and `initialized`, Codex is `verified`/`passed`, Pi is
