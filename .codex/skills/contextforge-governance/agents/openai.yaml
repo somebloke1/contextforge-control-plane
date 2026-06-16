@@ -1,0 +1,6 @@
+interface:
+  display_name: "ContextForge Governance"
+  short_description: "Maintain governance ledgers safely"
+  default_prompt: "Use $contextforge-governance to update or review this project's governance ledgers."
+policy:
+  allow_implicit_invocation: true

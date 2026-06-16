@@ -249,3 +249,16 @@ Non-assistant workspace REST APIs are not automatically promoted into ContextFor
 
 Codex project trust may be handled only through brokered, separate human approval with receipt-backed evidence and verification through actual config consumption. Generic project-init approval must not silently add trust. Project initialization may surface a trust gap, prepare a separate trust approval request, and wait for verified user-global trust evidence, but it must not bundle trust mutation into Serena provisioning or generic project setup.
 <!-- governance-crud:end id=oq-20260529-0001 -->
+
+<!-- governance-crud:start id=oq-20260531-0001 -->
+## oq-20260531-0001: Which services need first-class safe ContextForge probes instead of skipped validation?
+
+- Ledger: open-questions
+- Status: open
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-31
+- Updated: 2026-05-31
+- Tags: contextforge,project-init,validation,service-probes,skipped-services
+
+Some services can still be skipped during project-init validation when there is no safe default probe payload for the target-client-visible ContextForge route. Future work should decide and implement service-specific safe probes where appropriate, such as harmless search queries, read-only metadata calls, or no-op/list operations, while avoiding built-in-tool substitution, direct backend checks, secret exposure, and mutation. Until those probes exist, skipped services must remain explicitly marked as skipped or presumed working and must not be represented as validated by equivalent local shell or built-in tool behavior.
+<!-- governance-crud:end id=oq-20260531-0001 -->

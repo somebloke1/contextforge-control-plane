@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sub-Agent Delegator"
+  short_description: "Model-aware ContextForge delegation"
+  default_prompt: "Use $sub-agent-delegator to decide whether to delegate this ContextForge task, select the right subagent model, and write bounded contracts."

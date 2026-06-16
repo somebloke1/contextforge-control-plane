@@ -110,3 +110,29 @@ The host-wide assistant control-plane intention is honored by the formal design 
 
 Review the ContextForge prompt/resource guidance library for inference-inclusive proof and regression testing. The review should confirm that registered prompts/resources support Python-invoked headless agent scenarios, structured evaluator verdicts, concrete evidence citations, inferential isolation, remediation handoffs, and repeatable regression evidence without relying on deterministic pattern matching for semantic claims.
 <!-- governance-crud:end id=ai-20260530-0002 -->
+
+<!-- governance-crud:start id=ai-20260531-0001 -->
+## ai-20260531-0001: Continue project-init refinement after live staged inference pass
+
+- Ledger: abeyant-intentions
+- Status: parked
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-05-31
+- Updated: 2026-05-31
+- Tags: contextforge,project-init,inference-testing,regression,cleanup
+
+Continue refining the ContextForge project-init flow from the current implementation rather than restarting the design. The current full unit suite and six-case live staged inference run passed on 2026-05-31 with run id live-staged-inference-20260531T230915Z and evidence under run/contextforge-control-plane-implementation/live-staged-inference/live-staged-inference-20260531T230915Z/. Future changes must preserve idempotency, target-client-visible validation, stable service identity ID handling, numbered/user-selectable choices, explicit reload instructions, ephemeral temp project cleanup, ContextForge service-instance cleanup, and the prohibition on deterministic semantic gates. Re-run the full unit suite and live staged inference validation after material prompt or helper changes.
+<!-- governance-crud:end id=ai-20260531-0001 -->
+
+<!-- governance-crud:start id=ai-20260609-0001 -->
+## ai-20260609-0001: Generate identifiers deterministically instead of by agent discretion
+
+- Ledger: abeyant-intentions
+- Status: parked
+- Repository: /home/dgk/workspace/context-portal
+- Created: 2026-06-09
+- Updated: 2026-06-09
+- Tags: identifiers,determinism,project-init,governance
+
+Future project-init and governance workflows should generate identifiers programmatically from stable inputs or monotonic ledger state instead of leaving identifier choice to agent discretion. The generated scheme should deterministically avoid duplicate identifiers, preserve existing stable IDs, and make any collision handling explicit and repeatable so retries, resumes, and concurrent-looking edits do not mint conflicting service, plan, ledger, challenge, consent, or validation identifiers.
+<!-- governance-crud:end id=ai-20260609-0001 -->
