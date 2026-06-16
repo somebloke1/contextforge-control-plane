@@ -22,6 +22,7 @@ import opencode_project_init_hook
 import control_plane_contextforge_binding as binding
 import control_plane_project_state as project_state
 import inspect_project_init_readiness as readiness
+import plan_dirty_checkout_rebind as dirty_rebind
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
 
@@ -251,6 +252,170 @@ class ProjectInitReadinessInspectorTests(unittest.TestCase):
         self.assertEqual("ready", parsed["status"])
         self.assertEqual([], parsed["helper_processes"])
         self.assertEqual(["codex"], list(parsed["roots"][0]["inspections"]))
+
+
+class DirtyCheckoutRebindPlannerTests(unittest.TestCase):
+    def _write_minimal_surfaces(self, target: Path, legacy: Path) -> None:
+        (target / ".codex" / "skills" / "contextforge-project-init").mkdir(parents=True)
+        (target / ".project").mkdir(parents=True)
+        (target / ".serena").mkdir(parents=True)
+        (target / "server-instances" / "serena-context-portal").mkdir(parents=True)
+        (target / "server-instances" / "mentality").mkdir(parents=True)
+        (target / "scripts").mkdir(parents=True)
+
+        (target / ".codex" / "config.toml").write_text(
+            f"""
+[mcp_servers.serena]
+command = "{legacy}/.venv/bin/python"
+args = ["{legacy}/scripts/contextforge_mcp_wrapper.py", "serena_context_portal_server"]
+cwd = "{legacy}"
+""".lstrip(),
+            encoding="utf-8",
+        )
+        legacy_state = project_state.default_state(legacy, status="initialized")
+        written_legacy = project_state.write_state_atomic(legacy, legacy_state)
+        (target / ".project" / "context_forge_state.json").write_text(
+            json.dumps(written_legacy, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        (target / "server-instances" / "serena-context-portal" / "instance.json").write_text(
+            json.dumps(
+                {
+                    "name": "serena-context-portal",
+                    "canonical_project_root": str(legacy),
+                    "codex_config_path": str(legacy / ".codex" / "config.toml"),
+                    "scope": {"workspace_root": str(legacy)},
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (target / "server-instances" / "serena-context-portal" / "run-server.sh").write_text(
+            f'#!/usr/bin/env bash\nexec serena-mcp-server --project "{legacy}"\n',
+            encoding="utf-8",
+        )
+        (target / "server-instances" / "serena-context-portal" / "lsp.env").write_text(
+            f'PATH="{legacy}/server-instances/serena-context-portal/lsp-tools/bin:$PATH"\n',
+            encoding="utf-8",
+        )
+        (target / "server-instances" / "mentality" / "instance.json").write_text(
+            json.dumps({"backend": {"working_directory": str(legacy)}}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (target / ".serena" / "project.yml").write_text('project_name: "context-portal"\n', encoding="utf-8")
+        (target / ".codex" / "skills" / "contextforge-project-init" / "SKILL.md").write_text(
+            f"Use project_root={legacy}\n",
+            encoding="utf-8",
+        )
+        (target / "scripts" / "register_project_init_prompt.py").write_text(
+            f'PROJECT_ROOT = "{legacy}"\n',
+            encoding="utf-8",
+        )
+        (target / "scripts" / "register_serena_context_portal_service.py").write_text(
+            f'DESCRIPTION = "Serena scoped to {legacy}"\n',
+            encoding="utf-8",
+        )
+        (target / "scripts" / "install_user_systemd.py").write_text(
+            'UNIT = "contextforge-serena-context-portal.service"\n',
+            encoding="utf-8",
+        )
+
+    def test_preflight_reports_path_bound_surfaces_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "clean-root"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            self._write_minimal_surfaces(target, legacy)
+            before = {
+                path: path.read_text(encoding="utf-8")
+                for path in target.rglob("*")
+                if path.is_file()
+            }
+
+            report = dirty_rebind.build_report(
+                target_root=target,
+                legacy_root=legacy,
+                client_types=("codex",),
+                include_processes=False,
+            )
+
+            after = {
+                path: path.read_text(encoding="utf-8")
+                for path in target.rglob("*")
+                if path.is_file()
+            }
+        self.assertEqual(before, after)
+        self.assertEqual(dirty_rebind.REPORT_SCHEMA_URI, report["schema_uri"])
+        self.assertEqual("blocked", report["status"])
+        self.assertTrue(report["approval_required"])
+        self.assertIn("approval_required_before_rebind", report["blockers"])
+        self.assertIn("codex_project_config:surface_legacy_root_reference", report["blockers"])
+        self.assertIn("project_state:project_state_root_mismatch", report["blockers"])
+        self.assertIn("primary_project_state_root_mismatch", report["blockers"])
+        surfaces = {surface["surface_id"]: surface for surface in report["surfaces"]}
+        self.assertTrue(surfaces["codex_project_config"]["rebind_required"])
+        self.assertTrue(surfaces["project_state"]["rebind_required"])
+        self.assertEqual(str(target), surfaces["project_state"]["expected_root"])
+        self.assertIn("read-only preflight; no project files are written", report["non_actions"])
+
+    def test_preflight_marks_missing_optional_registration_script_as_warning(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "clean-root"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            self._write_minimal_surfaces(target, legacy)
+            (target / "scripts" / "register_serena_context_portal_service.py").unlink()
+
+            report = dirty_rebind.build_report(
+                target_root=target,
+                legacy_root=legacy,
+                client_types=("codex",),
+                include_processes=False,
+            )
+
+        surfaces = {surface["surface_id"]: surface for surface in report["surfaces"]}
+        self.assertEqual("attention_required", surfaces["serena_registration_script"]["status"])
+        self.assertIn("optional_surface_missing", surfaces["serena_registration_script"]["warnings"])
+
+    def test_preflight_cli_emits_clean_json_without_process_probe(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "clean-root"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            self._write_minimal_surfaces(target, legacy)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "plan_dirty_checkout_rebind.py"),
+                    "--target-root",
+                    str(target),
+                    "--legacy-root",
+                    str(legacy),
+                    "--client-type",
+                    "codex",
+                    "--no-processes",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                cwd=REPO_ROOT,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", result.stderr)
+        self.assertTrue(result.stdout.startswith("{"), result.stdout[:200])
+        parsed = json.loads(result.stdout)
+        self.assertEqual(dirty_rebind.REPORT_SCHEMA_URI, parsed["schema_uri"])
+        self.assertEqual("blocked", parsed["status"])
+        self.assertEqual([], parsed["helper_processes"])
 
 
 class SerenaManagerTests(unittest.TestCase):
