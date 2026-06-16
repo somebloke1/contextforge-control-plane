@@ -920,8 +920,9 @@ extraction if current evidence proves a better review boundary.
 | `codex/issue-15-clean-helper-binding` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #27](https://github.com/somebloke1/contextforge-control-plane/pull/27) | Project-local `contextforge-helper` MCP binding and regression test so clean-root Codex sessions shadow the stale global helper entry instead of depending on the legacy checkout. Does not edit user-global config/trust or reload clients. | `codex -C ... mcp list --json`; `tests.test_codex_precompact_continuity_hook`; readiness with `--no-processes`; delegated legacy-binding audit |
 | `codex/issue-15-global-codex-migration-plan` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #28](https://github.com/somebloke1/contextforge-control-plane/pull/28) | Read-only user-global Codex config/trust migration planner for stale `~/.codex/config.toml` entries. Classifies active replacements, historical hook-state provenance, clean-root trust/hook-state absence, target values, readback commands, and non-actions. Does not edit global config/trust or reload clients. | `scripts/plan_codex_global_config_migration.py`; focused planner tests; real global-config planner readback; `git diff --check` |
 | `codex/issue-29-global-codex-apply-rollback` | closed [#29](https://github.com/somebloke1/contextforge-control-plane/issues/29) / merged [PR #32](https://github.com/somebloke1/contextforge-control-plane/pull/32) | Idempotent apply/rollback tooling for the user-global Codex config/trust migration. Keeps planning read-only by default, requires explicit approval for writes/restores, creates pre-change backups, preserves legacy trust and hook-state provenance by default, de-duplicates partial migrations, requires separate paired approval for legacy trust removal or hook-state pruning, and reports `pending_restart` after writes. | 13 focused global config migration tests; 69 project-init tests; temp-config apply/plan/rollback smoke; real read-only planner readback; `git diff --check`; delegated read-only review |
-| `codex/issue-30-hook-retarget-preflight` | [#30](https://github.com/somebloke1/contextforge-control-plane/issues/30) | Read-only hook-retarget side-effect preflight for the user-global Codex config/trust migration. Identifies affected `SessionStart`/`UserPromptSubmit` commands, hook-state records, fresh hook-trust risk, and whether first hook execution is unknown/readback-required, read-only, or would upsert project-init prompt/resource metadata. | focused global config migration tests; real read-only planner readback; optional read-only ContextForge prompt/resource metadata inspection |
+| `codex/issue-30-hook-retarget-preflight` | closed [#30](https://github.com/somebloke1/contextforge-control-plane/issues/30) / merged [PR #34](https://github.com/somebloke1/contextforge-control-plane/pull/34) | Read-only hook-retarget side-effect preflight for the user-global Codex config/trust migration. Identifies affected `SessionStart`/`UserPromptSubmit` commands, hook-state records, fresh hook-trust risk, and whether first hook execution is unknown/readback-required, read-only, or would upsert project-init prompt/resource metadata. Does not edit global config/trust, execute hooks, grant/revoke trust, log in, write token cache, reload Codex, or upsert ContextForge prompt/resource metadata. | 15 focused global config migration tests; 71 project-init tests; real read-only planner readback; optional no-token metadata-inspection negative probe; `git diff --check`; delegated read-only reviews |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
+| `codex/serena-dynamic-port-reservation` | [#33](https://github.com/somebloke1/contextforge-control-plane/issues/33) | Investigate and remediate static `9108` usage for Serena per-project instances. Treat as a separate Serena infrastructure follow-up, not a blocker for #30, unless future evidence proves hook migration depends on reusing the canonical Serena launcher for multiple per-project instances. | manager/source audit; port-collision dry run; unit generation/readback plan; focused Serena manager tests |
 | `codex/clean-worktree-test-hermeticity` | closed [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) / merged [PR #17](https://github.com/somebloke1/contextforge-control-plane/pull/17) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
 | `codex/precompact-continuity-hook` | merged cross-cutting continuity slice / [PR #9](https://github.com/somebloke1/contextforge-control-plane/pull/9) | Project-local Codex `PreCompact` and `SessionStart`/`compact` hooks, ignored continuity snapshots, hook tests, and operator documentation. Does not override Codex's default compaction prompt. | precompact/session-start hook unit tests; hook smoke invocation; config guardrail check |
@@ -1378,16 +1379,21 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    depends on the legacy helper binding. PR #28 completed the read-only global
    Codex config/trust migration planner. Issue #29 is retired through merged PR
    #32, so the global migration is now idempotent and rollback-capable as source
-   tooling, but no live user-global write has occurred. Choose the next
-   separately approved operator-path step: address #30 hook retarget
-   trust/first-run side effects before hook-command migration, apply the
-   approved user-global Codex config/trust migration with #29 tooling,
-   perform #31 runtime `pending_restart` verification after an approved write,
-   perform systemd/Serena reload/readback, perform ContextForge registration
-   readback, or decide explicit archival disposition of the legacy checkout. Do
-   not bundle those runtime/global/check-out actions into ordinary source work.
-8. Review and clean stale Serena test units after explicit approval for
-   stop/disable/remove actions.
+   tooling. Issue #30 is retired through merged PR #34, so hook retarget
+   trust/first-run prompt-resource side effects are now modeled before
+   hook-command migration. No live user-global write, hook execution, trust
+   change, Codex reload/restart, or prompt/resource upsert has occurred. Choose
+   the next separately approved operator-path step: apply the approved
+   user-global Codex config/trust migration with #29/#30 tooling, perform #31
+   runtime `pending_restart` verification after an approved write, perform
+   systemd/Serena reload/readback, perform ContextForge registration readback,
+   or decide explicit archival disposition of the legacy checkout. Do not bundle
+   those runtime/global/check-out actions into ordinary source work.
+8. Review stale Serena test units and #33 Serena dynamic-port risk after
+   explicit approval for stop/disable/remove actions or any runtime unit
+   changes. Treat #33 as non-blocking for #30 unless future evidence proves the
+   hook migration depends on reusing the canonical Serena launcher for multiple
+   per-project instances.
 9. Treat PR #10 as landed and continue issue #4 only for final live
    project-state reconciliation and readiness acceptance.
 10. Treat issue #14 as retired unless new clean-worktree evidence proves a fresh
