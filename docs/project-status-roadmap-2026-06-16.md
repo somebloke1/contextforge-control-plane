@@ -29,6 +29,9 @@ Current local checks used for this snapshot:
 - `opencode mcp list`
 - `codex mcp list`
 - `tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck pi-extensions/contextforge-global-shim/index.ts`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m unittest tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_extension_source_registers_bootstrap_helper_tools_without_bridge_reuse tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_global_shim_install_plan_is_explicit_and_non_mutating_by_default tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_shim_dry_run_imports_project_state_bindings_and_blocks_mutating_defaults tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_shim_dry_run_reports_explicit_validation_skip_when_no_safe_tool_matches tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_helper_cli_stdout_is_clean_json -v`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python scripts/manage_pi_global_shim.py status`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python scripts/manage_pi_global_shim.py plan`
 
 Session-derived context came from these rollout summaries:
 
@@ -211,20 +214,20 @@ work.
   tests, broad control-plane discovery, and full `unittest discover` pass from a
   clean slice worktree when run with the project `.venv` interpreter. A default
   system `python` without `mcp` / `mcpgateway` remains outside that claim.
-- Current execution subgoal: issue #15 tracks retiring the dirty
-  `/home/dgk/workspace/context-portal` holding checkout as a hidden source of
-  truth. This is now part of the current execution priority because stale
-  worktree state directly degrades skill discovery, hook trust, formal goal
-  continuity, and delegation discipline. The current authority snapshot is
-  `run/dirty-state-preservation/20260616T114116Z/` in the clean `dev-root`
-  controller worktree: 35 tracked dirty files and 41 untracked paths were
-  preserved, checksum verification passed, and byte comparison against
+- Current execution subgoal: issue #3 is being extracted on
+  `codex/pi-global-shim-parity` so the Pi global shim source and manager no
+  longer exist only in the dirty holding checkout. This is a source-only slice:
+  it does not install or reload the user-global Pi extension.
+- Dirty checkout retirement remains open under issue #15. The current authority
+  snapshot is `run/dirty-state-preservation/20260616T114116Z/` in the clean
+  `dev-root` controller worktree: 35 tracked dirty files and 41 untracked paths
+  were preserved, checksum verification passed, and byte comparison against
   `dev-root` found 14 tracked dirty files plus 17 untracked paths already
   represented there. Remaining deltas classify as live path-local config/state,
   approval-gated network exposure, future #2/#3/#4/#5 slices, and local
-  scratch/runtime assets. Cleanup remains open until `/home/dgk/workspace/context-portal`
-  is either explicitly archival-only or safely rebound/retired without losing
-  preserved local work. Merged PR
+  scratch/runtime assets. Cleanup remains open until
+  `/home/dgk/workspace/context-portal` is either explicitly archival-only or
+  safely rebound/retired without losing preserved local work. Merged PR
   [#19](https://github.com/somebloke1/contextforge-control-plane/pull/19) adds
   `docs/dirty-checkout-retirement-runbook.md` so any later approval can execute
   a defined strategy instead of ad-hoc path edits.
@@ -256,7 +259,8 @@ The immediate problem is integration hygiene:
   #7, PR #8, PR #9, PR #10, PR #13, PR #16, PR #17, PR #18, and PR #19 are
   merged foundational/runtime slices.
 - Runtime reliability cleanup is retired through PR #7 and post-merge evidence.
-  Dirty holding checkout retirement is now the current execution subgoal.
+  Dirty holding checkout retirement has a merged runbook and remains approval
+  gated; issue #3's Pi global shim source extraction is the active slice.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
   and matching project/instance directories remain live and should be reviewed
   separately before cleanup.
@@ -458,14 +462,23 @@ wrapper lifecycle is no longer the current execution front.
 
 ### 4. Pi Global Shim And Prompt/Resource Parity
 
-Status: source-ready; a different user-global Pi shim is installed.
+Status: source-ready in branch `codex/pi-global-shim-parity`; a different
+user-global Pi shim is installed.
 
 Current evidence:
 
 - `pi-extensions/contextforge-global-shim/index.ts` typechecks with `tsc`.
 - `scripts/manage_pi_global_shim.py status` reports `installed_different`:
   the repo source digest differs from
-  `/home/dgk/.pi/agent/extensions/contextforge-global-shim`.
+  `/home/dgk/.pi/agent/extensions/contextforge-global-shim`. Current source
+  digest is
+  `sha256:cfc44e45e59d5768e80c3edec52300deaabad5ab8c88364a9996fba08735ecac`;
+  target digest is
+  `sha256:3b06621969821cff5f0e23eb03979a5c41426c3b3f309b31446d300e1296edff`.
+- Status readback shows no installed `contextforge-root.json` manifest yet.
+  The source branch adds that manifest to the install plan so an approved
+  user-global write binds the installed shim to the approved ContextForge repo
+  root instead of a hard-coded legacy checkout path.
 - Focused regression
   `test_pi_extension_source_registers_bootstrap_helper_tools_without_bridge_reuse`
   passes.
@@ -479,18 +492,29 @@ Dependencies:
 
 - Canonical ContextForge prompts/resources must remain useful and current.
 - `scripts/manage_pi_global_shim.py` owns global shim status/plan/install.
+- The installed shim resolves its helper repo root from
+  `CONTEXTFORGE_PI_SHIM_PORTAL_ROOT` first, then installed
+  `contextforge-root.json`, then process cwd as a last-resort diagnostic
+  fallback. The project-init prompt gate uses
+  `CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT` or the approved repo-root parent rather
+  than a hard-coded host workspace path. There is no hard-coded
+  `context-portal` root default.
 - Installing/reloading the Pi global extension is user-global mutation and
   requires explicit approval.
 - Pi global shim status/plan/install must be idempotent. Re-running install
   after approval should converge on the same target extension files and
   activation metadata, and reloading Pi should not duplicate imported tools,
   prompt/resource caches, or guidance lookup registrations.
+- Static Pi helper/readback/guidance/validation tools and imported MCP tools
+  use the same `globalThis` registration guard so repeated extension entrypoint
+  invocation in one Pi runtime does not duplicate tool registrations.
 
 Risks:
 
 - Passing source tests does not prove the user-global Pi extension matches this
   repo source; current status proves it does not.
-- Pi reload behavior and `globalThis` persistence need live verification.
+- Pi reload behavior, the installed root manifest, and `globalThis` persistence
+  need live verification after explicit approval.
 - Fuzzy prompt/resource matching may need edge-case hardening after real use.
 
 Prognosis: good for source readiness, incomplete for live Pi use until the
@@ -907,8 +931,11 @@ extraction if current evidence proves a better review boundary.
   prompt/resource guidance semantics as the repo source intends.
 - Beneficiary: Pi users activating ContextForge services or reading guidance
   through Pi extension tools.
-- Current state: TypeScript source typechecks; focused regression passes; the
-  user-global target exists but has a different digest from repo source.
+- Current state: TypeScript source typechecks; five focused Pi regressions pass;
+  `manage_pi_global_shim.py status/plan` is non-mutating and reports
+  `installed_different` with no installed root manifest. The source branch adds
+  `contextforge-root.json` to the approved install plan so the installed shim
+  binds to the approved ContextForge repo root.
 - Desired state: repo source merged; user-global install/upgrade is performed
   only after explicit approval; Pi `/reload` happens before validation; live Pi
   readback proves the changed tools are active.
@@ -918,17 +945,19 @@ extraction if current evidence proves a better review boundary.
 - Dependencies: pushed baseline, Pi source branch/PR, `manage_pi_global_shim.py
   status/plan`, user approval token
   `I_APPROVE_USER_GLOBAL_PI_EXTENSION_WRITE`, and Pi reload.
-- Hidden work: update issue #3 from "deployment pending" to
+- Hidden work: update issue #3 and the PR from "deployment pending" to
   `installed_different`; plan live validation steps that use Pi-visible routes,
-  not backend-only substitutes.
+  not backend-only substitutes. User-global install/reload remains outside the
+  source PR unless the user explicitly approves it.
 - Acceptance: `tsc` and focused tests pass; install plan is approved and
   applied; Pi reload is confirmed; live Pi validation proves parity or records
   an explicit skipped/presumed-working status with rationale.
 - Evidence: `tsc --noEmit --target ES2022 --module NodeNext
   --moduleResolution NodeNext --skipLibCheck
-  pi-extensions/contextforge-global-shim/index.ts`, focused Pi regression,
-  `scripts/manage_pi_global_shim.py status`, `scripts/manage_pi_global_shim.py
-  plan`, post-install digest readback, Pi-visible validation transcript.
+  pi-extensions/contextforge-global-shim/index.ts`, five focused Pi
+  regressions, `scripts/manage_pi_global_shim.py status`,
+  `scripts/manage_pi_global_shim.py plan`, post-install digest/readback, and
+  Pi-visible validation transcript after approval.
 - Debt policy: source-ready is not live-ready; if install/reload is deferred,
   issue #3 stays open with the approval blocker and target/source digests.
 
