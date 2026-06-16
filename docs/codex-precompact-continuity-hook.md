@@ -21,27 +21,56 @@ Codex's default compaction process remains authoritative.
 - Script: `.codex/hooks/contextforge_precompact_continuity.py`
 - Generated state: `run/codex-precompact-continuity/`
 
-On each `PreCompact` event, the hook writes:
+On each `PreCompact` event, the hook writes an event snapshot and, when Codex
+provides a session or thread id, a session-scoped latest pointer:
 
-- `run/codex-precompact-continuity/latest.json`
-- `run/codex-precompact-continuity/latest.md`
 - `run/codex-precompact-continuity/events/<event-id>.json`
+- `run/codex-precompact-continuity/sessions/<session-key>/latest.json`
+- `run/codex-precompact-continuity/sessions/<session-key>/latest.md`
 
 The `run/` directory is ignored local state. These snapshots are evidence for
 the next operator or post-compaction agent; they are not tracked source files.
+If a compaction payload does not include a session or thread id, the hook writes
+only the event snapshot and does not create a shared `unknown` latest pointer.
 
 The `PreCompact` hook returns only common hook output fields. Codex currently
 does not document `PreCompact` support for hook-specific additional context.
 After compaction, the `SessionStart` hook for `source=compact` returns
 `hookSpecificOutput.additionalContext`, which Codex documents for
-`SessionStart`.
+`SessionStart`, only for the matching session key.
+
+## Non-Commandeering Semantics
+
+The hook is project-local but session-scoped. An ad-hoc Codex session can write
+its own continuity evidence under its own session key, but it cannot replace a
+project-global roadmap pointer because the hook does not maintain one. A
+post-compaction `SessionStart` event reads only the latest snapshot for the same
+session key and treats that snapshot as additive evidence.
+
+The default Codex compaction summary, the active user-selected goal, and the
+current thread context remain authoritative. The hook is a continuity aid, not a
+mission handoff mechanism.
+
+## Retention
+
+The hook enforces bounded local retention while holding the project-local lock:
+
+- most recent event snapshots: `100`
+- most recent session latest directories: `50`
+
+The snapshot for the current event and current session, when one exists, is
+always retained. Older event files and stale session directories are best-effort
+removed from ignored `run/` state. The hook also removes stale root-level
+`latest.json` and `latest.md` files left by earlier hook versions, because
+current continuity pointers are session-scoped only.
 
 ## Idempotency
 
 The hook derives a stable event id from the repo root, event, trigger, session
 id, turn id, and payload key set. It does not persist caller-provided run-id
 values as event ids or filenames. Re-running the same hook input updates the
-same event record and `latest.*` files rather than creating duplicate records.
+same event record and session `latest.*` files rather than creating duplicate
+records.
 
 The hook serializes writes with a project-local lock file and writes files
 atomically before replacing the target path.

@@ -33,22 +33,27 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
             assert output is not None
             self.assertNotIn("hookSpecificOutput", output)
             context = output["systemMessage"]
-            self.assertIn("run/codex-precompact-continuity/latest.md", context)
-            self.assertIn("default compaction prompt authoritative", context)
+            session_latest_json = self._session_latest_json(root, payload)
+            session_latest_md = session_latest_json.with_suffix(".md")
+            self.assertIn(str(session_latest_md.relative_to(root)), context)
+            self.assertIn("default compaction prompt", context)
+            self.assertIn("active goal authoritative", context)
 
             state_dir = root / "run/codex-precompact-continuity"
-            latest_json = state_dir / "latest.json"
-            latest_md = state_dir / "latest.md"
-            self.assertTrue(latest_json.exists())
-            self.assertTrue(latest_md.exists())
+            self.assertFalse((state_dir / "latest.json").exists())
+            self.assertFalse((state_dir / "latest.md").exists())
+            self.assertTrue(session_latest_json.exists())
+            self.assertTrue(session_latest_md.exists())
 
-            snapshot = json.loads(latest_json.read_text(encoding="utf-8"))
+            snapshot = json.loads(session_latest_json.read_text(encoding="utf-8"))
             self.assertEqual("contextforge-precompact-continuity/v1", snapshot["schema"])
             self.assertEqual("ContextForge", snapshot["project_name"])
             self.assertEqual("manual", snapshot["compaction_trigger"])
+            self.assertEqual("session", snapshot["authority_scope"])
+            self.assertEqual(continuity_hook.session_key(payload, root), snapshot["session_key"])
             self.assertIn("docs/project-status-roadmap-2026-06-16.md", snapshot["roadmap_refs"])
 
-            markdown = latest_md.read_text(encoding="utf-8")
+            markdown = session_latest_md.read_text(encoding="utf-8")
             self.assertIn("ContextForge Pre-Compaction Continuity Snapshot", markdown)
             self.assertIn("Codex's default compaction prompt remains authoritative", markdown)
 
@@ -62,9 +67,25 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
 
             events = sorted((root / "run/codex-precompact-continuity/events").glob("*.json"))
             self.assertEqual(1, len(events))
-            latest = json.loads((root / "run/codex-precompact-continuity/latest.json").read_text(encoding="utf-8"))
+            latest = json.loads(self._session_latest_json(root, payload).read_text(encoding="utf-8"))
             event = json.loads(events[0].read_text(encoding="utf-8"))
             self.assertEqual(event["event_id"], latest["event_id"])
+
+    def test_precompact_removes_legacy_global_latest_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._init_repo(Path(tmp))
+            state_dir = root / "run/codex-precompact-continuity"
+            state_dir.mkdir(parents=True)
+            (state_dir / "latest.json").write_text("{}\n", encoding="utf-8")
+            (state_dir / "latest.md").write_text("# stale\n", encoding="utf-8")
+
+            continuity_hook.run(
+                {"hook_event_name": "PreCompact", "trigger": "manual", "thread_id": "thread-1"},
+                cwd=root,
+            )
+
+            self.assertFalse((state_dir / "latest.json").exists())
+            self.assertFalse((state_dir / "latest.md").exists())
 
     def test_non_precompact_event_is_noop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -78,16 +99,22 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
     def test_session_start_compact_returns_documented_additional_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self._init_repo(Path(tmp))
-            continuity_hook.run({"hook_event_name": "PreCompact", "trigger": "manual"}, cwd=root)
+            payload = {"hook_event_name": "PreCompact", "trigger": "manual", "thread_id": "thread-1"}
+            continuity_hook.run(payload, cwd=root)
 
-            output = continuity_hook.run({"hook_event_name": "SessionStart", "source": "compact"}, cwd=root)
+            output = continuity_hook.run(
+                {"hook_event_name": "SessionStart", "source": "compact", "thread_id": "thread-1"},
+                cwd=root,
+            )
 
             self.assertIsNotNone(output)
             assert output is not None
             hook_output = output["hookSpecificOutput"]
             self.assertEqual("SessionStart", hook_output["hookEventName"])
-            self.assertIn("run/codex-precompact-continuity/latest.md", hook_output["additionalContext"])
-            self.assertIn("without unchosen loss", hook_output["additionalContext"])
+            latest_md = str(self._session_latest_json(root, payload).with_suffix(".md").relative_to(root))
+            self.assertIn(latest_md, hook_output["additionalContext"])
+            self.assertIn("session-scoped additive continuity evidence", hook_output["additionalContext"])
+            self.assertIn("active goal authoritative", hook_output["additionalContext"])
 
     def test_session_start_compact_without_snapshot_is_noop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -109,7 +136,7 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
 
             continuity_hook.run(payload, cwd=root)
 
-            snapshot_text = (root / "run/codex-precompact-continuity/latest.json").read_text(encoding="utf-8")
+            snapshot_text = self._session_latest_json(root, payload).read_text(encoding="utf-8")
             self.assertNotIn("sk-secret-value", snapshot_text)
             self.assertIn("OPENAI_API_KEY:redacted", snapshot_text)
 
@@ -128,7 +155,9 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
             continuity_hook.run(payload, cwd=root)
 
             state_dir = root / "run/codex-precompact-continuity"
-            snapshot_text = (state_dir / "latest.json").read_text(encoding="utf-8")
+            snapshot_text = "\n".join(
+                path.read_text(encoding="utf-8") for path in (state_dir / "events").glob("*.json")
+            )
             event_names = "\n".join(path.name for path in (state_dir / "events").glob("*.json"))
             self.assertNotIn("secret-hook-run-id", snapshot_text)
             self.assertNotIn("secret-camel-run-id", snapshot_text)
@@ -136,6 +165,85 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
             self.assertNotIn("secret-hook-run-id", event_names)
             self.assertNotIn("secret-camel-run-id", event_names)
             self.assertNotIn("secret-run-id", event_names)
+
+    def test_ad_hoc_sessions_do_not_replace_each_other_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._init_repo(Path(tmp))
+            payload_a = {"hook_event_name": "PreCompact", "trigger": "manual", "thread_id": "thread-a"}
+            payload_b = {"hook_event_name": "PreCompact", "trigger": "manual", "thread_id": "thread-b"}
+
+            continuity_hook.run(payload_a, cwd=root, now="2026-06-16T12:00:00-0500")
+            continuity_hook.run(payload_b, cwd=root, now="2026-06-16T12:00:01-0500")
+            output = continuity_hook.run(
+                {"hook_event_name": "SessionStart", "source": "compact", "thread_id": "thread-a"},
+                cwd=root,
+            )
+
+            self.assertIsNotNone(output)
+            assert output is not None
+            context = output["hookSpecificOutput"]["additionalContext"]
+            key_a = continuity_hook.session_key(payload_a, root)
+            key_b = continuity_hook.session_key(payload_b, root)
+            self.assertIsNotNone(key_a)
+            self.assertIsNotNone(key_b)
+            assert key_a is not None
+            assert key_b is not None
+            self.assertIn(f"sessions/{key_a}/latest.md", context)
+            self.assertNotIn(f"sessions/{key_b}/latest.md", context)
+
+    def test_precompact_without_session_id_is_event_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._init_repo(Path(tmp))
+            payload = {"hook_event_name": "PreCompact", "trigger": "manual"}
+
+            with mock.patch.dict(continuity_hook.os.environ, {}, clear=True):
+                output = continuity_hook.run(payload, cwd=root)
+
+                self.assertIsNotNone(output)
+                assert output is not None
+                self.assertIn("event-only pre-compaction snapshot", output["systemMessage"])
+                state_dir = root / "run/codex-precompact-continuity"
+                events = sorted((state_dir / "events").glob("*.json"))
+                self.assertEqual(1, len(events))
+                self.assertFalse((state_dir / "sessions").exists())
+                session_start = continuity_hook.run({"hook_event_name": "SessionStart", "source": "compact"}, cwd=root)
+                self.assertIsNone(session_start)
+
+    def test_event_snapshot_retention_is_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(continuity_hook, "MAX_EVENT_SNAPSHOTS", 3):
+            root = self._init_repo(Path(tmp))
+            last_payload = {}
+            for index in range(5):
+                last_payload = {
+                    "hook_event_name": "PreCompact",
+                    "trigger": "manual",
+                    "thread_id": "thread-1",
+                    "turn_id": f"turn-{index}",
+                }
+                continuity_hook.run(last_payload, cwd=root, now=f"2026-06-16T12:00:0{index}-0500")
+
+            events = sorted((root / "run/codex-precompact-continuity/events").glob("*.json"))
+            self.assertLessEqual(len(events), 3)
+            latest_event = self._event_path(root, last_payload)
+            self.assertTrue(latest_event.exists())
+
+    def test_session_snapshot_retention_is_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(continuity_hook, "MAX_SESSION_SNAPSHOTS", 2):
+            root = self._init_repo(Path(tmp))
+            last_payload = {}
+            for index in range(4):
+                last_payload = {
+                    "hook_event_name": "PreCompact",
+                    "trigger": "manual",
+                    "thread_id": f"thread-{index}",
+                }
+                continuity_hook.run(last_payload, cwd=root, now=f"2026-06-16T12:00:0{index}-0500")
+
+            sessions = sorted(
+                path for path in (root / "run/codex-precompact-continuity/sessions").iterdir() if path.is_dir()
+            )
+            self.assertLessEqual(len(sessions), 2)
+            self.assertTrue(self._session_latest_json(root, last_payload).exists())
 
     def test_main_returns_zero_on_persistence_failure(self) -> None:
         payload = json.dumps({"hook_event_name": "PreCompact", "trigger": "manual"})
@@ -172,6 +280,16 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
             capture_output=True,
         )
         return root.resolve()
+
+    def _session_latest_json(self, root: Path, payload: dict[str, str]) -> Path:
+        key = continuity_hook.session_key(payload, root)
+        self.assertIsNotNone(key)
+        assert key is not None
+        return root / "run/codex-precompact-continuity/sessions" / key / "latest.json"
+
+    def _event_path(self, root: Path, payload: dict[str, str]) -> Path:
+        event_id = continuity_hook.stable_event_id(payload, root)
+        return root / "run/codex-precompact-continuity/events" / f"{event_id}.json"
 
 
 if __name__ == "__main__":
