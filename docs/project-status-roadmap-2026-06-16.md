@@ -173,15 +173,17 @@ work.
   session-scoped continuity evidence, falls back to event-only evidence when no
   session id is available, removes stale root latest files, and bounds ignored
   snapshot retention.
-- Current project-init readiness status: issue #4 is represented by draft PR
-  #10 from `codex/helper-multiclient-project-init` to `dev-root`; focused
-  acceptance evidence is green.
-- New operational coordination item: issue #11 tracks that PR #9's precompact
-  hook was not initially visible from the dirty
-  `codex/contextforge-wrapper-lifecycle` holding worktree. The hook has now been
-  deliberately propagated into that worktree again after PR #13 without
-  replacing existing MCP config; direct hook smoke passed, but user-visible
-  Codex hooks-table readback is still pending.
+- Current execution subgoal: wrapper lifecycle reliability is represented by
+  issue #1 and draft PR #7 from `codex/wrapper-lifecycle-cleanup` to
+  `dev-root`; refreshed runtime evidence is the next required closeout input.
+- Active but not current project-init readiness status: issue #4 is represented
+  by draft PR #10 from `codex/helper-multiclient-project-init` to `dev-root`;
+  focused acceptance evidence is green.
+- Active hook activation coordination item: issue #11 remains open for
+  post-Codex Desktop-restart readback. Pre-restart user-visible Codex `/hooks`
+  output showed `PreCompact` installed/active and `SessionStart`
+  installed/active from the `dev-root` worktree context, but the user restarted
+  Codex Desktop and noted the visible hook state may have changed.
 
 ## Executive Summary
 
@@ -200,12 +202,13 @@ The immediate problem is integration hygiene:
 - The current branch has one extra committed feature and a very large dirty
   worktree.
 - GitHub has tracking issues #1-#6 for the original active fronts plus issue
-  #11 for precompact hook visibility across active worktrees. Issue #12 is
-  closed by merged PR #13. PR #7 remains open for wrapper lifecycle cleanup; PR
-  #10 is open for issue #4 project-init readiness; PR #8, PR #9, and PR #13 are
-  merged foundational slices.
-- Runtime reliability cleanup is isolated in PR #7; final retirement still
-  requires merge-readiness checks and current operator-path evidence.
+  #11 for post-restart hook activation readback. Issue #12 is closed after
+  precompact hardening was verified. PR #7 remains open for wrapper lifecycle
+  cleanup; PR #10 is open for issue #4 project-init readiness; PR #8, PR #9,
+  and PR #13 are merged foundational slices.
+- Runtime reliability cleanup is the current execution subgoal and is isolated
+  in PR #7; final retirement still requires merge-readiness checks and current
+  operator-path evidence.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
   and matching project/instance directories remain live and should be reviewed
   separately before cleanup.
@@ -565,7 +568,7 @@ Current GitHub state:
 - Closed coordination issue:
   - [#12: Prevent ad-hoc compactions from replacing conductor continuity pointer](https://github.com/somebloke1/contextforge-control-plane/issues/12)
 - Local `dev-root` and `origin/dev-root` are synchronized after the
-  fast-tracked foundation merges at `c6fb551`.
+  fast-tracked foundation merges and follow-up status-only roadmap updates.
 - Holding worktree `/home/dgk/workspace/context-portal` is on
   `codex/contextforge-wrapper-lifecycle`, one commit beyond `dev-root`, and
   remains the intentionally dirty source for not-yet-extracted slices.
@@ -574,12 +577,13 @@ Current GitHub state:
 - PR #8 is merged; its former slice worktree now checks out clean `dev-root`.
 - PR #9 is merged; its remote branch is deleted, while the local merged worktree
   remains until local worktree cleanup is approved or performed deliberately.
-- Issue #11 captures the hook visibility mismatch and partial local repair:
-  clean `dev-root` contains the hook file and `[hooks]` config; the dirty
-  `codex/contextforge-wrapper-lifecycle` worktree has now received the same hook
-  file and hook block, with TOML parse plus direct hook smoke passing. Keep the
-  issue open until a new Codex terminal/session launched from that worktree
-  shows installed/active `PreCompact` and `SessionStart` hooks.
+- Issue #11 captures hook activation by worktree path. The dirty
+  `codex/contextforge-wrapper-lifecycle` worktree has received the hardened hook
+  and config, passed TOML/direct hook smoke checks, and has been user-approved
+  in Codex. A pre-restart `dev-root` `/hooks` table showed `PreCompact` 1
+  installed / 1 active and `SessionStart` 3 installed / 3 active, but Codex
+  Desktop was restarted afterward; keep issue #11 open until post-restart
+  readback confirms the same active hook state.
 - Issue #12 captured the ad-hoc compaction continuity risk and is closed by PR
   #13. The hook contract is now session-scoped latest pointers, event-only
   fallback without a shared unknown pointer, stale global latest cleanup, and
@@ -709,11 +713,13 @@ extraction if current evidence proves a better review boundary.
   or `model_auto_compact_token_limit`; do not make hook output authoritative
   over Codex's default compaction summary or the active user-selected goal; do
   not write tracked runtime snapshots.
-- Dependencies: PR #9 baseline, issue #11 visibility follow-up, current Codex
-  hook payload identity fields or `CODEX_THREAD_ID`, and ignored `run/` state.
+- Dependencies: PR #9 baseline, current Codex hook payload identity fields or
+  `CODEX_THREAD_ID`, and ignored `run/` state.
 - Hidden work: the hardened hook was propagated into the dirty
   `codex/contextforge-wrapper-lifecycle` holding worktree and direct smoke/TOML
-  checks passed. Fresh Codex `/hooks` table readback remains issue #11.
+  checks passed; the user subsequently approved those hooks and they are active
+  there. Dev-root worktree hook readback was confirmed before a Codex Desktop
+  restart; post-restart readback remains issue #11.
 - Acceptance: completed. Hook tests prove session isolation, no-session event-only
   fallback, bounded event retention, bounded session retention, stale root
   latest cleanup, idempotent event ids, and sensitive value redaction; docs
@@ -722,9 +728,9 @@ extraction if current evidence proves a better review boundary.
   on both the PR branch and merged `dev-root`; `py_compile` for the hook and
   tests passed; TOML parse of `.codex/config.toml` passed; `git diff --check`
   passed; direct dirty-checkout hook smoke passed.
-- Debt policy: issue #12 is retired. Issue #11 remains open until the active
-  dirty checkout shows installed/active `PreCompact` and `SessionStart` hooks
-  in a new Codex terminal/session.
+- Debt policy: issue #12 is retired. Issue #11 remains open until post-restart
+  user-visible readback confirms `PreCompact` and `SessionStart` are still
+  active in the relevant Codex worktree context.
 
 #### Wrapper lifecycle cleanup -> issue #1
 
@@ -992,8 +998,8 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    the ref before dependent PR work.
 3. Preserve the current dirty branch as-is, then continue splitting it into
    small branches rather than piling new changes onto it.
-4. Close issue #11 only after a fresh Codex terminal/session launched from the
-   dirty checkout shows installed/active `PreCompact` and `SessionStart` hooks.
+4. Keep issue #11 open until post-restart hook readback confirms the active
+   state; this is a narrow coordination item unless a regression appears.
 5. Keep PR #7 current while extracting the remaining issue slices.
 6. Land wrapper lifecycle changes first because they affect day-to-day tool
    reliability.
