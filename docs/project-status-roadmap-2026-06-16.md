@@ -200,6 +200,9 @@ work.
   commit `f530dda`. It advanced issue #4 with helper-mediated multi-client
   project-init support and recovery-resume idempotency fixes, backed by focused
   compile checks, 165 focused unit tests, changed-diff review, and diff hygiene.
+  PR #16 then merged as `f1a6404`, closing the narrow follow-on where
+  helper-mediated Serena provisioning requested `write_codex_config=False` but
+  the Serena manager still wrote `.codex/config.toml` directly.
   Issue #4 remains open because live project-state reconciliation and broad
   clean-worktree acceptance are still unproven; issue #14 tracks the known local
   evidence gaps blocking the broad control-plane suite in clean worktrees.
@@ -596,6 +599,10 @@ Current GitHub state:
   and
   `https://github.com/somebloke1/contextforge-control-plane/pull/10#issuecomment-4717661173`.
   No GitHub status checks were configured for the PR branch.
+- Merged PR [#16: ContextForge: honor Serena config write suppression](https://github.com/somebloke1/contextforge-control-plane/pull/16)
+  landed as merge commit `f1a6404`. It is the narrow issue #4 follow-on that
+  makes `manage_serena_project_instance.py create()` honor
+  `write_codex_config=False` while preserving the normal CLI default.
 - Merged PR [#8: ContextForge: roadmap and governance operating discipline](https://github.com/somebloke1/contextforge-control-plane/pull/8)
   landed as merge commit `f8a1aab`.
 - Merged PR [#9: ContextForge: project-local precompact continuity hook](https://github.com/somebloke1/contextforge-control-plane/pull/9)
@@ -893,10 +900,12 @@ extraction if current evidence proves a better review boundary.
   future project worktrees.
 - Current state: PR #10 merged the helper-mediated multi-client project-init
   slice to `dev-root` at `f530dda`, including recovery-resume idempotency fixes;
-  focused compile checks, 165 focused unit tests, sidecar changed-diff review,
-  and diff hygiene passed. The broader clean-worktree control-plane suite still
-  fails only on issue #14 local evidence gaps. The live project state still
-  requires final reconciliation/readiness acceptance before issue #4 can close.
+  PR #16 merged the follow-on Serena config-write suppression guard at
+  `f1a6404`. Focused compile checks, 166 focused unit tests before PR #16 merge,
+  post-merge compile checks, and 3 post-merge regression tests passed. The
+  broader clean-worktree control-plane suite still fails only on issue #14 local
+  evidence gaps. The live project state still requires final
+  reconciliation/readiness acceptance before issue #4 can close.
 - Desired state: project-state labels, readback fields, helper prompts, reload
   guidance, and state reconciliation tell the current truth without stale job
   assumptions.
@@ -922,7 +931,12 @@ extraction if current evidence proves a better review boundary.
   tests.test_control_plane_service_provision_fixtures -v` with 165 tests OK,
   broad `test_control_plane_*.py` discover with 301 tests run and only issue
   #14 local evidence gaps remaining, and
-  `git diff --check origin/dev-root...HEAD`.
+  `git diff --check origin/dev-root...HEAD`. Current PR #16 evidence:
+  `py_compile scripts/manage_serena_project_instance.py
+  tests/test_project_init_scripts.py`, focused flag regression, full
+  `tests.test_project_init_scripts -v`, targeted helper-mediated Serena
+  provisioning regressions, expanded 166-test focused suite before merge, and
+  post-merge compile plus 3-regression check on `dev-root`.
 - Debt policy: any remaining deprecated label or unchecked readback must be
   tracked with owner, impact, migration trigger, and retirement condition.
 
