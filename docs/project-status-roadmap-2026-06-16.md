@@ -193,8 +193,9 @@ work.
   separate worktrees remain independently trusted by their `.codex/config.toml`
   path if they are actively used.
 - Current execution subgoal: wrapper lifecycle reliability is represented by
-  issue #1 and draft PR #7 from `codex/wrapper-lifecycle-cleanup` to
-  `dev-root`; refreshed runtime evidence is the next required closeout input.
+  issue #1 and ready-for-review PR #7 from `codex/wrapper-lifecycle-cleanup`
+  to `dev-root`; refreshed runtime evidence and issue synchronization are done,
+  with post-merge verification still required before closing issue #1.
 - Active but not current project-init readiness status: issue #4 is represented
   by draft PR #10 from `codex/helper-multiclient-project-init` to `dev-root`;
   focused acceptance evidence is green.
@@ -230,8 +231,8 @@ The immediate problem is integration hygiene:
   PR #10 is open for issue #4 project-init readiness; PR #8, PR #9, and PR #13
   are merged foundational slices.
 - Runtime reliability cleanup is the current execution subgoal and is isolated
-  in PR #7; final retirement still requires merge-readiness checks and current
-  operator-path evidence.
+  in PR #7; the PR is now ready for review, but final retirement still requires
+  merge plus post-merge operator-path evidence before closing issue #1.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
   and matching project/instance directories remain live and should be reviewed
   separately before cleanup.
@@ -370,8 +371,9 @@ operator UX and state reconciliation are tightened.
 
 ### 3. Client Bootstrap And Wrapper Lifecycle
 
-Status: active cleanup slice; current runtime evidence is healthy, but PR #7
-still needs merge/readiness closeout and issue synchronization.
+Status: active cleanup slice; current runtime evidence is healthy and PR #7 is
+ready for review. Issue #1 should remain open until merge plus post-merge
+runtime verification.
 
 Current evidence:
 
@@ -385,12 +387,16 @@ Current evidence:
 - Current wrapper diagnostics after Codex Desktop restart and the wrapper idle
   window report:
   - `codex_contextforge_wrapper`: 0
-  - `contextforge_helper`: 9
-  - `node_repl`: 9
+  - `contextforge_helper`: 12
+  - `node_repl`: 12
   - total wrapper `CLOSE-WAIT` count is 0
   - filtered port-4444 socket readback shows no `CLOSE-WAIT` or `TIME-WAIT`
     sockets and one established Chrome network-service connection to
     `mcpgateway`, not a stale Codex Desktop wrapper connection
+- Subagent and parent evidence showed transient wrapper bursts drain without
+  process termination: 45 wrappers / 45 wrapper `CLOSE-WAIT`, then 18 / 18,
+  then 0 / 0 after the idle window. The runbook now treats immediate counts as
+  snapshots and bounded idle-window drain as the acceptance signal.
 
 Dependencies:
 
@@ -417,8 +423,9 @@ Risks:
   wrappers.
 
 Prognosis: good, but not complete. The runtime has converged without process
-termination; PR #7 should stay the first runtime cleanup front until its tests,
-runbook, issue comment, and PR state are closed out.
+termination; PR #7 has focused tests, runbook, issue comment, and
+ready-for-review PR state closed out. The remaining loop is merge and
+post-merge runtime verification before issue #1 retirement.
 
 ### 4. Pi Global Shim And Prompt/Resource Parity
 
@@ -573,8 +580,9 @@ Current GitHub state:
 - Remote: `https://github.com/somebloke1/contextforge-control-plane.git`
 - Default branch: `dev-root`
 - `gh auth status` is authenticated as `somebloke1`.
-- Draft PR [#7: ContextForge: wrapper lifecycle cleanup](https://github.com/somebloke1/contextforge-control-plane/pull/7)
-  is open from `codex/wrapper-lifecycle-cleanup` to `dev-root`.
+- Ready PR [#7: ContextForge: wrapper lifecycle cleanup](https://github.com/somebloke1/contextforge-control-plane/pull/7)
+  is open from `codex/wrapper-lifecycle-cleanup` to `dev-root` with clean merge
+  state and no status checks reported.
 - Draft PR [#10: ContextForge: helper-mediated project init readiness](https://github.com/somebloke1/contextforge-control-plane/pull/10)
   is open from `codex/helper-multiclient-project-init` to `dev-root` and has
   clean merge state with no status checks reported.
@@ -603,7 +611,7 @@ Current GitHub state:
   `codex/contextforge-wrapper-lifecycle`, one commit beyond `dev-root`, and
   remains the intentionally dirty source for not-yet-extracted slices.
 - Branch `codex/wrapper-lifecycle-cleanup` has been extracted and pushed with
-  draft PR #7.
+  ready-for-review PR #7.
 - PR #8 is merged; its former slice worktree now checks out clean `dev-root`.
 - PR #9 is merged; its remote branch is deleted, while the local merged worktree
   remains until local worktree cleanup is approved or performed deliberately.
@@ -769,11 +777,12 @@ extraction if current evidence proves a better review boundary.
   long-lived sessions and stale `CLOSE-WAIT` sockets.
 - Beneficiary: operators using Codex Desktop MCP tools through ContextForge.
 - Current state: post-restart and idle-window evidence is healthy. The compact
-  wrapper process report at `2026-06-16T09:04:13Z` showed no
-  `codex_contextforge_wrapper` processes and `close_wait_total: 0`, with only
-  nine `contextforge_helper` and nine `node_repl` processes. The
+  wrapper process report at `2026-06-16T09:34:40Z` showed no
+  `codex_contextforge_wrapper` processes and `close_wait_total: 0`, with
+  twelve `contextforge_helper` and twelve `node_repl` processes. The
   `mentality_server` path still succeeds in under a second, including the
-  stdio wrapper route at about 356 ms.
+  stdio wrapper route at about 356 ms. Live audit also observed transient
+  wrappers drain 45 -> 18 -> 0 without process termination.
 - Desired state: new wrapper launches carry attribution, idle/parent shutdown,
   session handling, and diagnostics; existing stale wrappers are cleared only by
   Codex relaunch or approved exact-match PID cleanup.
@@ -782,17 +791,16 @@ extraction if current evidence proves a better review boundary.
   health.
 - Dependencies: Phase 0 preservation, pushed `dev-root`, wrapper code/tests,
   current diagnostic report, and explicit approval before process termination.
-- Hidden work: issue #1 body has stale 165-count evidence and should be
-  commented with the current zero-wrapper/zero-`CLOSE-WAIT` evidence before PR
-  closeout. Socket ownership should remain part of the evidence model: the
-  current port-4444 check showed no `CLOSE-WAIT` or `TIME-WAIT` sockets and one
-  unrelated established Chrome-to-`mcpgateway` connection.
+- Hidden work: issue #1 body still has historical 165-count context, but the
+  issue now has a current comment with zero-wrapper/zero-`CLOSE-WAIT` evidence,
+  transient 45 -> 18 -> 0 drain evidence, and the diagnostic attribution
+  fallback. Socket ownership should remain part of the evidence model.
 - Acceptance: wrapper unit tests pass; process report after cleanup or idle
   retirement shows no unbounded duplicate growth; mentality path remains fast;
   cleanup is dry-run and exact-PID scoped if process termination is used. The
   current evidence satisfies the no-stale-wrapper runtime check without process
-  termination, but PR #7 still needs merge/readiness closeout and issue #1
-  comment synchronization.
+  termination. PR #7 is ready for review; issue #1 remains open until merge and
+  post-merge runtime readback.
 - Evidence: `tests/test_contextforge_mcp_wrapper.py`,
   `scripts/diagnose_contextforge_wrappers.py process-report`,
   `scripts/diagnose_contextforge_wrappers.py time-mentality-path --repo
