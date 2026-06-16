@@ -168,9 +168,13 @@ work.
   `PreCompact` preserves local state before compaction and `SessionStart`
   after `compact` restores the continuity pointer without replacing Codex's
   default compaction prompt.
-- Next likely execution subgoal after protocol closeout: continue issue #4
-  project-init readiness extraction from `dev-root`, unless GitHub/CI/runtime
-  evidence shows a higher-risk blocker first.
+- Current execution subgoal status: issue #4 project-init readiness extraction
+  is represented by draft PR #10 from `codex/helper-multiclient-project-init`
+  to `dev-root`; focused acceptance evidence is green.
+- New operational coordination item: issue #11 tracks that PR #9's precompact
+  hook is visible from clean `dev-root` worktrees but not from the dirty
+  `codex/contextforge-wrapper-lifecycle` holding worktree until that branch is
+  reconciled or the hook block is deliberately propagated.
 
 ## Executive Summary
 
@@ -188,9 +192,10 @@ The immediate problem is integration hygiene:
   `f8a1aab` and PR #9 at `eb97c66`.
 - The current branch has one extra committed feature and a very large dirty
   worktree.
-- GitHub has tracking issues #1-#6 for the active fronts. PR #7 remains open
-  for wrapper lifecycle cleanup; PR #8 and PR #9 are merged foundational
-  slices.
+- GitHub has tracking issues #1-#6 for the original active fronts plus issue
+  #11 for precompact hook visibility across active worktrees. PR #7 remains open
+  for wrapper lifecycle cleanup; PR #10 is open for issue #4 project-init
+  readiness; PR #8 and PR #9 are merged foundational slices.
 - Runtime reliability cleanup is isolated in PR #7; final retirement still
   requires merge-readiness checks and current operator-path evidence.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
@@ -531,6 +536,9 @@ Current GitHub state:
 - `gh auth status` is authenticated as `somebloke1`.
 - Draft PR [#7: ContextForge: wrapper lifecycle cleanup](https://github.com/somebloke1/contextforge-control-plane/pull/7)
   is open from `codex/wrapper-lifecycle-cleanup` to `dev-root`.
+- Draft PR [#10: ContextForge: helper-mediated project init readiness](https://github.com/somebloke1/contextforge-control-plane/pull/10)
+  is open from `codex/helper-multiclient-project-init` to `dev-root` and has
+  clean merge state with no status checks reported.
 - Merged PR [#8: ContextForge: roadmap and governance operating discipline](https://github.com/somebloke1/contextforge-control-plane/pull/8)
   landed as merge commit `f8a1aab`.
 - Merged PR [#9: ContextForge: project-local precompact continuity hook](https://github.com/somebloke1/contextforge-control-plane/pull/9)
@@ -542,6 +550,8 @@ Current GitHub state:
   - [#4: Polish project-init operator state reconciliation and readiness](https://github.com/somebloke1/contextforge-control-plane/issues/4)
   - [#5: Perform approved ContextForge registry orphan prompt/resource cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/5)
   - [#6: Triage noncanonical inventory entries and service-management handoffs](https://github.com/somebloke1/contextforge-control-plane/issues/6)
+- Additional coordination issue:
+  - [#11: Reconcile project-local precompact hook visibility across active worktrees](https://github.com/somebloke1/contextforge-control-plane/issues/11)
 - Local `dev-root` and `origin/dev-root` are synchronized after the
   fast-tracked foundation merges.
 - Holding worktree `/home/dgk/workspace/context-portal` is on
@@ -552,6 +562,9 @@ Current GitHub state:
 - PR #8 is merged; its former slice worktree now checks out clean `dev-root`.
 - PR #9 is merged; its remote branch is deleted, while the local merged worktree
   remains until local worktree cleanup is approved or performed deliberately.
+- Issue #11 captures the hook visibility mismatch: clean `dev-root` contains the
+  hook file and `[hooks]` config, while the dirty `codex/contextforge-wrapper-lifecycle`
+  worktree still lacks them until reconciled.
 
 ### Desired GitHub State
 
@@ -582,6 +595,8 @@ origin/dev-root and dev-root
 open draft PR worktrees
   /home/dgk/workspace/contextforge-slices/wrapper-lifecycle-cleanup
     codex/wrapper-lifecycle-cleanup -> PR #7
+  /home/dgk/workspace/contextforge-slices/helper-multiclient-project-init
+    codex/helper-multiclient-project-init -> PR #10
 
 merged foundation worktrees
   /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
@@ -644,7 +659,7 @@ extraction if current evidence proves a better review boundary.
 | Branch | Issue | Intended contents | First checks |
 | --- | --- | --- | --- |
 | `codex/wrapper-lifecycle-cleanup` | [#1](https://github.com/somebloke1/contextforge-control-plane/issues/1) / [PR #7](https://github.com/somebloke1/contextforge-control-plane/pull/7) | `scripts/contextforge_mcp_wrapper.py`, `scripts/diagnose_contextforge_wrappers.py`, `tests/test_contextforge_mcp_wrapper.py`, and `docs/contextforge-wrapper-lifecycle-runbook.md`. Project-local `.codex/config.toml` managed-block rewrites stay with project-init unless a later wrapper-only config delta is needed. | wrapper unit tests; wrapper process report; mentality timing path |
-| `codex/helper-multiclient-project-init` | [#4](https://github.com/somebloke1/contextforge-control-plane/issues/4) | `scripts/contextforge_helper_mcp.py`, `scripts/control_plane_project_init_helper.py`, project-state/schema updates, Codex/OpenCode/Gemini project-init hooks, project-init docs, and activation workflow tests. | `test_project_init_activation_workflow.py`; `test_project_init_scripts.py`; control-plane discovery |
+| `codex/helper-multiclient-project-init` | [#4](https://github.com/somebloke1/contextforge-control-plane/issues/4) / [PR #10](https://github.com/somebloke1/contextforge-control-plane/pull/10) | `scripts/contextforge_helper_mcp.py`, `scripts/control_plane_project_init_helper.py`, project-state/schema updates, Codex/OpenCode/Gemini project-init hooks, project-init docs, and activation workflow tests. | `test_project_init_activation_workflow.py`; `test_project_init_scripts.py`; control-plane discovery |
 | `codex/pi-global-shim-parity` | [#3](https://github.com/somebloke1/contextforge-control-plane/issues/3) | `pi-extensions/contextforge-global-shim/`, `scripts/manage_pi_global_shim.py`, Pi dry-run/CLI helpers, Pi prompt/resource parity docs/tests. | TypeScript `tsc`; focused Pi regression; `manage_pi_global_shim.py status/plan` |
 | `codex/live-validation-and-registry-cleanup-tools` | [#5](https://github.com/somebloke1/contextforge-control-plane/issues/5) | `scripts/inspect_contextforge_cleanup.py`, `scripts/apply_contextforge_stale_tool_cleanup.py`, `scripts/run_live_inference_validation.py`, live staged fixtures if they are sanitized and intended to be tracked. | cleanup inspector dry-run; inference harness tests; secret scan by review |
 | `codex/service-inventory-triage` | [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6) | inventory classification docs or scripts only; no generated `*.local.json`; any service-management handoff documentation. | inventory script; no generated/local files tracked |
