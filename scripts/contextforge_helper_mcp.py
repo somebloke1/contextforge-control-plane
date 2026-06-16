@@ -120,11 +120,12 @@ def _remember_project_init_result(project_root: str, result: dict[str, Any]) -> 
         _remember_plan(project_root, clean)
 
 
-def _clear_durable_recovery_cache(project_root: str) -> None:
+def _clear_durable_recovery_cache(project_root: str, *, keep_plan: bool = False) -> None:
     current = _read_durable_cache(project_root)
     if not current:
         return
-    current.pop("recovery_plan", None)
+    if not keep_plan:
+        current.pop("recovery_plan", None)
     current.pop("recovery_receipts", None)
     _write_durable_cache(project_root, current)
 
@@ -162,6 +163,22 @@ def _matching_cached_recovery_plan(project_root: str, challenge_id: str | None, 
         raise ValueError("cached project-init recovery plan challenge id does not match")
     if plan_digest and plan.get("plan_digest") != plan_digest:
         raise ValueError("cached project-init recovery plan digest does not match")
+    return plan
+
+
+def _cached_recovery_continuation_plan(project_root: str, activation_plan: dict[str, Any]) -> dict[str, Any] | None:
+    plan = _CACHED_RECOVERY_PLANS.get(_cache_key(project_root))
+    if not plan:
+        durable = _read_durable_cache(project_root)
+        durable_plan = durable.get("recovery_plan") if isinstance(durable.get("recovery_plan"), dict) else None
+        if durable_plan:
+            plan = dict(durable_plan)
+            _CACHED_RECOVERY_PLANS[_cache_key(project_root)] = plan
+    if not isinstance(plan, dict):
+        return None
+    source = plan.get("source_activation_plan") if isinstance(plan.get("source_activation_plan"), dict) else {}
+    if source.get("plan_id") != activation_plan.get("plan_id") or source.get("plan_digest") != activation_plan.get("plan_digest"):
+        return None
     return plan
 
 
@@ -489,7 +506,7 @@ def cf_project_init_recovery_apply(
             ),
         }
         if not dry_run:
-            _clear_durable_recovery_cache(project_root)
+            _clear_durable_recovery_cache(project_root, keep_plan=True)
         return result
     except Exception as exc:
         return _error(exc)
@@ -543,16 +560,19 @@ def apply_approved_project_init(
     try:
         clean_plan = _unwrap_tool_envelope(plan)
         helper.restore_process_local_approval_session(project_root=project_root, plan=clean_plan, receipts=receipts)
-        return {
+        result = {
             "ok": True,
             **helper.apply_approved_project_init(
                 project_root=project_root,
                 plan=clean_plan,
                 receipts=receipts,
                 contextforge_servers=contextforge_servers,
+                recovery_plan=_cached_recovery_continuation_plan(project_root, clean_plan),
                 dry_run=dry_run,
             ),
         }
+        _remember_project_init_result(project_root, result)
+        return result
     except Exception as exc:
         return _error(exc)
 
@@ -577,17 +597,21 @@ def cf_project_init_apply(
         if not isinstance(cached_receipts, list):
             raise ValueError("no cached project-init receipts are available; call cf_project_init_approve first")
         helper.restore_process_local_approval_session(project_root=project_root, plan=plan, receipts=cached_receipts)
+        recovery_plan = _cached_recovery_continuation_plan(project_root, plan)
+        result_payload = helper.apply_approved_project_init(
+            project_root=project_root,
+            plan=plan,
+            receipts=cached_receipts,
+            contextforge_servers=contextforge_servers,
+            recovery_plan=recovery_plan,
+            dry_run=dry_run,
+        )
         result = {
             "ok": True,
-            **helper.apply_approved_project_init(
-                project_root=project_root,
-                plan=plan,
-                receipts=cached_receipts,
-                contextforge_servers=contextforge_servers,
-                dry_run=dry_run,
-            ),
+            **result_payload,
         }
-        if not dry_run:
+        _remember_project_init_result(project_root, result)
+        if not dry_run and result_payload.get("status") != "config_recovery_required":
             _clear_durable_cache(project_root)
         return result
     except Exception as exc:

@@ -46,7 +46,7 @@ class ControlPlaneServiceProvisionFixtureTests(unittest.TestCase):
             {
                 "partial_contextforge_registration_missing_resume",
                 "partial_stale_virtual_server_policy_forward_repair",
-                "client_config_conflict_manual_recovery",
+                "client_config_conflict_helper_mediated_recovery",
                 "stale_target_client_digest_fresh_approval_required",
             },
             set(self.recovery_cases),

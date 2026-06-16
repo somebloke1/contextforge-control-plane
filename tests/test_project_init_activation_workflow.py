@@ -2404,54 +2404,83 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("contextforge_mcp_wrapper.py", config_text)
         self.assertNotIn('command = "serena"', config_text)
 
-    def test_apply_returns_recovery_required_without_consuming_receipts_after_provision_conflict(self) -> None:
+    def test_apply_time_recovery_resumes_cached_apply_after_provision_conflict(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             identity = common.project_identity(root)
-            plan = helper.propose_project_init(
-                project_root=root,
-                selected_services=["context7:canonical", "serena"],
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            contextforge_helper_mcp._CACHED_RECOVERY_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECOVERY_RECEIPTS.clear()
+            plan = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                ["context7:canonical", "serena"],
                 inputs={"language": "python"},
             )
-            approval = helper.approve_project_init_plan(
-                project_root=root,
-                plan=plan,
-                approval={
-                    "decision": "approve",
-                    "challenge_id": plan["approval_challenge"]["challenge_id"],
-                    "plan_digest": plan["plan_digest"],
-                },
-                local_approval_event_ref=helper.record_local_approval_event(
-                    project_root=root,
-                    plan=plan,
-                    issuer_token=helper._LOCAL_APPROVAL_ISSUER_TOKEN,
-                    channel="interactive_user",
-                )["event_ref"],
+            approval = contextforge_helper_mcp.cf_project_init_approve(
+                str(root),
+                plan["approval_challenge"]["challenge_id"],
+                plan["plan_digest"],
             )
+            provision_calls: list[dict[str, Any]] = []
 
             def fake_provision(provision_root: Path, service: dict[str, Any], *, language: str, client_type: str) -> dict[str, Any]:
-                (provision_root / ".codex").mkdir()
-                (provision_root / ".codex/config.toml").write_text("[mcp_servers.serena]\ncommand = \"serena\"\n", encoding="utf-8")
+                provision_calls.append({"language": language, "client_type": client_type, "service_binding": service["service_binding"]})
+                if len(provision_calls) == 1:
+                    (provision_root / ".codex").mkdir(exist_ok=True)
+                    (provision_root / ".codex/config.toml").write_text("[mcp_servers.serena]\ncommand = \"serena\"\n", encoding="utf-8")
                 return {
                     "service_binding": f"serena:{identity.hash}",
                     "status": "completed",
                     "operation_type": "provision_project_scoped_serena",
+                    "language": language,
+                    "instance_slug": identity.instance_slug,
+                    "server_name": identity.server_name,
                     "pre_digest": None,
-                    "post_digest": common.stable_digest({"instance_slug": identity.instance_slug}),
+                    "post_digest": common.stable_digest({"instance_slug": identity.instance_slug, "language": language}),
                 }
 
             with mock.patch.object(helper, "_run_serena_project_provisioning", side_effect=fake_provision):
-                result = helper.apply_approved_project_init(
-                    project_root=root,
-                    plan=plan,
-                    receipts=approval["receipts"],
-                )
+                result = contextforge_helper_mcp.cf_project_init_apply(str(root))
+            activation_receipt_unconsumed_after_conflict = approval["receipts"][0]["receipt_id"] not in helper._CONSUMED_RECEIPT_IDS
+            recovery_plan = result["recovery_plan"]
+            recovery_approval = contextforge_helper_mcp.cf_project_init_recovery_approve(
+                str(root),
+                recovery_plan["approval_challenge"]["challenge_id"],
+                recovery_plan["plan_digest"],
+            )
+            with mock.patch.object(helper, "_run_serena_project_provisioning", side_effect=fake_provision):
+                recovery = contextforge_helper_mcp.cf_project_init_recovery_apply(str(root))
 
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            contextforge_helper_mcp._CACHED_RECOVERY_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECOVERY_RECEIPTS.clear()
+            helper._APPROVED_RECEIPT_IDS_BY_PLAN.clear()
+            with mock.patch.object(helper, "_run_serena_project_provisioning", side_effect=fake_provision):
+                resumed = contextforge_helper_mcp.cf_project_init_apply(str(root))
+            config_text = (root / ".codex" / "config.toml").read_text(encoding="utf-8")
+            written = project_state.load_state(root)
+
+        self.assertTrue(plan["ok"])
+        self.assertEqual("allow", approval["decision"])
         self.assertEqual("config_recovery_required", result["status"])
         self.assertEqual("serena", result["blocked_services"][0]["alias"])
         self.assertEqual("approve-project-init-config-recovery", result["next_turn"]["question_id"])
         self.assertIn("recovery_plan", result)
-        self.assertNotIn(approval["receipts"][0]["receipt_id"], helper._CONSUMED_RECEIPT_IDS)
+        self.assertTrue(activation_receipt_unconsumed_after_conflict)
+        self.assertEqual("allow", recovery_approval["decision"])
+        self.assertEqual("project_init_recovery_applied", recovery["status"])
+        self.assertEqual("resume-approved-project-init-apply", recovery["next_turn"]["question_id"])
+        self.assertTrue(resumed["ok"])
+        self.assertEqual("codex-client-reload-before-validation", resumed["next_turn"]["question_id"])
+        self.assertIn("[mcp_servers.serena]", config_text)
+        self.assertIn("contextforge_mcp_wrapper.py", config_text)
+        self.assertNotIn('command = "serena"', config_text)
+        self.assertGreaterEqual(len(provision_calls), 2)
+        assert written is not None
+        self.assertTrue(any(binding_id.startswith("serena:") for binding_id in written["services"]))
 
     def test_helper_plan_summary_includes_exact_alias_virtual_server_bindings(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

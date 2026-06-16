@@ -1625,6 +1625,7 @@ def apply_approved_project_init(
     contextforge_servers: Iterable[dict[str, Any]] | None = None,
     server_instances_root: str | Path | None = None,
     catalog_revision_or_etag: str | None = None,
+    recovery_plan: Mapping[str, Any] | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     root = project_state.validate_project_root(project_root, require_workspace=True)
@@ -1641,6 +1642,7 @@ def apply_approved_project_init(
         contextforge_servers=contextforge_servers,
         server_instances_root=server_instances_root,
         catalog_revision_or_etag=catalog_revision_or_etag,
+        recovery_plan=recovery_plan,
     )
     _validate_receipts_for_plan(plan, receipts, project_root=root, consume=False)
     provisioning_results = [] if dry_run else _apply_project_scoped_provisioning(root, services, plan=plan)
@@ -2664,6 +2666,7 @@ def _validate_plan_not_stale(
     contextforge_servers: Iterable[dict[str, Any]] | None = None,
     server_instances_root: str | Path | None = None,
     catalog_revision_or_etag: str | None = None,
+    recovery_plan: Mapping[str, Any] | None = None,
 ) -> None:
     client_type = str(plan.get("client_type") or "codex")
     current_state, current_snapshot = _project_state_snapshot_for_init(project_root)
@@ -2721,7 +2724,48 @@ def _validate_plan_not_stale(
         current_descriptor_digests=descriptor_digests,
     )
     if stale["decision"] != "allow":
+        if _stale_plan_allowed_by_recovery_continuation(
+            plan,
+            recovery_plan,
+            client_type=client_type,
+            current_target_client_digest=current_config.get("before_digest"),
+            stale_reasons=stale["reasons"],
+        ):
+            return
         raise ProjectInitHelperError(f"stale plan: {stale['reasons']}")
+
+
+def _stale_plan_allowed_by_recovery_continuation(
+    plan: Mapping[str, Any],
+    recovery_plan: Mapping[str, Any] | None,
+    *,
+    client_type: str,
+    current_target_client_digest: Any,
+    stale_reasons: Sequence[Any],
+) -> bool:
+    """Allow the exact post-recovery digest for an exact source activation plan."""
+
+    if list(stale_reasons) != [f"target client digest changed: {client_type}"]:
+        return False
+    if not isinstance(recovery_plan, Mapping):
+        return False
+    if recovery_plan.get("schema_uri") != HELPER_RECOVERY_PLAN_SCHEMA_URI or recovery_plan.get("workflow") != "project_init_recovery":
+        return False
+    if _validate_plan_digest(recovery_plan):
+        return False
+    if str(recovery_plan.get("client_type") or "codex") != client_type:
+        return False
+    if str(recovery_plan.get("project_root") or "") != str(plan.get("project_root") or ""):
+        return False
+    source = recovery_plan.get("source_activation_plan") if isinstance(recovery_plan.get("source_activation_plan"), Mapping) else {}
+    if source.get("workflow") != plan.get("workflow"):
+        return False
+    if source.get("plan_id") != plan.get("plan_id") or source.get("plan_digest") != plan.get("plan_digest"):
+        return False
+    recovery_inputs = recovery_plan.get("stale_plan_inputs") if isinstance(recovery_plan.get("stale_plan_inputs"), Mapping) else {}
+    post_recovery = recovery_inputs.get("post_recovery_target_client_digests") if isinstance(recovery_inputs.get("post_recovery_target_client_digests"), Mapping) else {}
+    expected_digest = post_recovery.get(client_type)
+    return bool(expected_digest) and current_target_client_digest == expected_digest
 
 
 def _activation_job_from_plan(
