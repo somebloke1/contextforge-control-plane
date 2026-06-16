@@ -300,7 +300,7 @@ class ControlPlaneContextForgeBindingTests(unittest.TestCase):
     def test_recovery_classifications_are_typed_for_later_fixtures(self) -> None:
         self.assertEqual("resume", binding.classify_recovery("registration_missing")["recovery_outcome"])
         self.assertEqual("forward_repair", binding.classify_recovery("virtual_server_policy_mismatch")["recovery_outcome"])
-        self.assertEqual("manual_recovery", binding.classify_recovery("client_binding_config_conflict")["recovery_outcome"])
+        self.assertEqual("helper_mediated_recovery", binding.classify_recovery("client_binding_config_conflict")["recovery_outcome"])
         self.assertEqual("fresh_approval_required", binding.classify_recovery("target_client_mismatch")["recovery_outcome"])
         self.assertIn("rollback_by_approved_workflow", binding.classify_recovery("unknown")["allowed_outcomes"])
 

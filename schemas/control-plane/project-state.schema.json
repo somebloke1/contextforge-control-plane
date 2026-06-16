@@ -14,6 +14,7 @@
     "decisions",
     "services",
     "client_trust",
+    "project_init",
     "memory_policy",
     "drift",
     "open_items"
@@ -69,6 +70,9 @@
       "additionalProperties": {
         "$ref": "#/$defs/clientTrust"
       }
+    },
+    "project_init": {
+      "$ref": "#/$defs/projectInit"
     },
     "memory_policy": {
       "type": "object",
@@ -130,6 +134,17 @@
         {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sha256DigestOrNull": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
         },
         {
           "type": "null"
@@ -454,6 +469,335 @@
           "items": {
             "$ref": "#/$defs/artifactSnapshot"
           }
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "projectInit": {
+      "type": "object",
+      "required": [
+        "current_job_id",
+        "activation_jobs",
+        "client_states"
+      ],
+      "properties": {
+        "current_job_id": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "client_states": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/mapKey"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/projectInitClientState"
+          }
+        },
+        "activation_jobs": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/mapKey"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/activationJob"
+          }
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "projectInitClientState": {
+      "type": "object",
+      "required": [
+        "client_type",
+        "status",
+        "current_job_id",
+        "activation_surface",
+        "selected_service_ids",
+        "selected_service_bindings",
+        "validation_status",
+        "reload_status",
+        "updated_at"
+      ],
+      "properties": {
+        "client_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "uninitialized",
+            "activation_pending",
+            "reload_required",
+            "validation_pending",
+            "presumed_working",
+            "verified",
+            "disabled",
+            "blocked"
+          ]
+        },
+        "current_job_id": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "activation_surface": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "selected_service_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selected_service_bindings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "validation_status": {
+          "type": "string",
+          "enum": [
+            "not_started",
+            "pending",
+            "passed",
+            "presumed_working",
+            "skipped",
+            "mixed",
+            "blocked"
+          ]
+        },
+        "reload_status": {
+          "type": "string",
+          "enum": [
+            "not_required",
+            "required",
+            "acknowledged",
+            "unknown"
+          ]
+        },
+        "updated_at": {
+          "$ref": "#/$defs/timestampOrNull"
+        },
+        "last_plan_id": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "local_client_config_digest": {
+          "$ref": "#/$defs/sha256DigestOrNull"
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "activationJob": {
+      "type": "object",
+      "required": [
+        "job_id",
+        "plan_id",
+        "plan_digest",
+        "status",
+        "client_type",
+        "selected_service_ids",
+        "selected_service_bindings",
+        "step_statuses",
+        "stale_plan_inputs",
+        "consent_receipt_refs",
+        "local_client_config_digest",
+        "validation_records",
+        "recovery_state",
+        "non_actions"
+      ],
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "planned",
+            "applying",
+            "applied_validation_choice_pending",
+            "validation_pending",
+            "verified",
+            "presumed_working",
+            "failed",
+            "fresh_approval_required",
+            "manual_recovery"
+          ]
+        },
+        "client_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selected_service_bindings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selected_service_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "step_statuses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/activationStep"
+          }
+        },
+        "stale_plan_inputs": {
+          "type": "object"
+        },
+        "consent_receipt_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "local_client_config_digest": {
+          "$ref": "#/$defs/sha256DigestOrNull"
+        },
+        "validation_records": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/mapKey"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/validationRecord"
+          }
+        },
+        "recovery_state": {
+          "type": "string",
+          "enum": [
+            "none",
+            "server_ready_local_pending",
+            "local_written_validation_pending",
+            "validation_pending",
+            "forward_record_required",
+            "rollback_by_approved_workflow",
+            "manual_recovery",
+            "fresh_approval_required"
+          ]
+        },
+        "non_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "activationStep": {
+      "type": "object",
+      "required": [
+        "operation_id",
+        "operation_type",
+        "status",
+        "idempotency_key",
+        "pre_digest",
+        "post_digest",
+        "recovery_state"
+      ],
+      "properties": {
+        "operation_id": {
+          "type": "string"
+        },
+        "operation_type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "authorized",
+            "completed",
+            "skipped",
+            "failed",
+            "blocked"
+          ]
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "pre_digest": {
+          "$ref": "#/$defs/sha256DigestOrNull"
+        },
+        "post_digest": {
+          "$ref": "#/$defs/sha256DigestOrNull"
+        },
+        "recovery_state": {
+          "$ref": "#/$defs/stringOrNull"
+        }
+      },
+      "patternProperties": {
+        "^x_[A-Za-z0-9_]+$": true
+      },
+      "additionalProperties": false
+    },
+    "validationRecord": {
+      "type": "object",
+      "required": [
+        "mode",
+        "status",
+        "target_client_visible",
+        "proof_ref",
+        "skipped_reason",
+        "safe_probe_id"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "pending_choice",
+            "validate_now",
+            "presume_working"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending_user_choice",
+            "pending",
+            "passed",
+            "failed",
+            "skipped",
+            "presumed_working"
+          ]
+        },
+        "target_client_visible": {
+          "type": "boolean"
+        },
+        "proof_ref": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "skipped_reason": {
+          "$ref": "#/$defs/stringOrNull"
+        },
+        "safe_probe_id": {
+          "$ref": "#/$defs/stringOrNull"
         }
       },
       "patternProperties": {

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from datetime import datetime, timezone
@@ -13,8 +14,10 @@ from mcpgateway.services.content_security import get_content_security_service
 
 from project_init_common import (
     PROJECT_INIT_PROMPT_NAME,
+    PROJECT_INIT_RESOURCE_NAME,
     PROJECT_INIT_RESOURCE_URI,
     PROMPT_VERSION,
+    SERENA_GUIDANCE_RESOURCE_NAME,
     SERENA_GUIDANCE_PROMPT_NAME,
     SERENA_GUIDANCE_RESOURCE_URI,
 )
@@ -32,21 +35,28 @@ ContextForge project initialization, version {{ prompt_version }}.
 
 Project: {{ project_name }}
 Root: {{ project_root }}
+Target client: {{ target_client }}
 State: {{ project_state_status }} at {{ project_state_path }}
+Lifecycle: {{ project_state_lifecycle_status }} / {{ project_state_recommended_action }} / hook={{ project_init_hook_prompt_state }}
 Hash: {{ project_root_hash }}
 Legacy Serena state: {{ serena_decision }} / {{ serena_provision_status }}
 
-This is model-visible control context. Do not echo this context to the user. Conduct project init as a step-by-step call-and-response dialogue. Ask exactly one question, then stop and wait.
+This is model-visible control context. Do not echo this context to the user. When a target client provides hidden or structured prompt/context injection, deliver project-init guidance there. User-visible UI should be limited to information that requires user understanding or response. Conduct project init as call-and-response: Ask exactly one question, then stop and wait. Whenever presenting choices, use the helper-provided response_form or render a numbered option list. Never choose service selections, approval, reload acknowledgement, validation, or skipped-service follow-up actions on behalf of the user. If the user echoes your question, asks you to provide the selection numbers, or otherwise replies with assistant-like text, ask one clarifying question. Prefer the contextforge-helper workflow tools when visible; if missing, stale, untrusted, wrong-project-root, unsupported-client, or read-only-plan-only, stop at that boundary. Do not invoke project-init helper scripts or Python modules through shell as a substitute for visible helper tools; if helper approval/apply cannot complete through the visible helper surface and exact helper-returned plan fallback, stop.
 
-Boundaries: .project/context_forge_state.json is the project initialization authority; legacy .env is only a hint. Client configs are discovery sources, not service identity. Project init may write only project-local .codex/config.toml and .project/context_forge_state.json after scoped approval. No user-global config/trust changes, secrets, live registry/catalog mutation, backend install, backend restart, or shared canonical per-project backend creation.
+Boundaries: .project/context_forge_state.json is the project initialization authority; legacy .env is only a hint. Client configs and extension files are discovery or activation surfaces, not service identity. Project init may write only target-client project-local activation state after scoped approval: for Codex this is project-local .codex/config.toml plus .project/context_forge_state.json; for Gemini this is project-local .gemini/settings.json plus .project/context_forge_state.json after global Gemini hook and contextforge-helper bootstrap entries are available; for OpenCode this is project-local opencode.json plus .opencode/plugins/contextforge-project-init.js plus .project/context_forge_state.json after an OpenCode plugin hook and contextforge-helper bootstrap entries are available; for Pi this is .project/context_forge_state.json records consumed by the separately installed global Pi extension shim. No user-global config/trust/extension changes, secrets, live registry/catalog mutation, backend install, backend restart, or shared canonical per-project backend creation.
 
 Dialogue:
-1. If services are not selected, first do read-only discovery from live ContextForge /servers and server-instances/*/instance.json; then ask only: "Which ContextForge services should I activate for this project?" Show a short menu of discovered shared canonical services and project-scoped options. Serena is one project-scoped option in this menu, not the whole flow.
-2. If Serena is selected, run manage_serena_project_instance.py status --project-root PROJECT_ROOT --require-workspace; ask only for language if the manager says it is needed.
-3. After service selection, run the ContextForge binding helper in dry-run mode; summarize only planned project-local writes; ask only for approval to write PROJECT_ROOT/.codex/config.toml and PROJECT_ROOT/.project/context_forge_state.json.
-4. After approved apply, ask only: "Validate service functionality now, or record it as presumed working?"
+1. Start with get_project_context/list_available_capabilities through contextforge-helper. For every contextforge-helper project-init call, pass client_type={{ target_client }}. If helper is missing, stale, untrusted, wrong-project-root, unsupported-client, or read-only-plan-only, stop; no fallback direct file writes. Lifecycle: if repair_project_init_state or state_repair_required, do not restart service selection; ask only to repair and resume.
+2. If services are not selected and no repair/resume is pending, do read-only discovery, then ask only: "Which ContextForge services should I activate for this project?" Show discovered shared canonical services and project-scoped options. Serena is one project-scoped option in this menu, not the whole flow. When the user selects, pass the selected service ids/bindings back to contextforge-helper; do not reconstruct partial descriptors.
+3. If a service needs input, ask one input. For Serena, run manage_serena_project_instance.py status --project-root PROJECT_ROOT --require-workspace first; ask language before approval when needed.
+4. Present exact plan digest, challenge id, effects, planned writes, and non-actions; ask only for scoped approval. Do not invent or pass local_approval_event_ref strings. Prefer those cached id/digest tools over reconstructing a full plan object; prefer those cached id/digest tools over reconstructing a full plan object. Do not reconstruct; do not reconstruct the full plan object from visible text. Call cf_project_init_approve with the exact challenge id and plan digest; call cf_project_init_approve with the exact challenge id and plan digest, then call cf_project_init_apply using the cached plan and receipts. If status=config_conflict with an embedded recovery_plan, present its exact recovery digest/challenge/effects, then call cf_project_init_recovery_approve with the exact recovery challenge id and recovery plan digest and call cf_project_init_recovery_apply using the cached recovery plan and receipts. Do not call apply_project_init_recovery with only plan_id, plan_digest, or receipt ids; it needs the complete helper-returned recovery plan object and full receipt objects. If recovery includes Serena service_provision and wrapper replacement, keep them together in the helper recovery approval/apply path. If helper cache is missing or stale, use exact helper-returned plan/receipts or stop; do not silently replace the challenge id.
+5. After approved apply, if client_reload_requirement that blocks validation appears, ask only for the explicit client reload or new-session action first and stop. Say that after the reload or new session, resume project init and choose 1 or reply "validate" to run validation; choose 2 or reply "skip validation". On resume, first call cf_project_init_record_client_reload; if the resumed message already chose validation or skip, honor that choice after recording the reload acknowledgement instead of asking again. Otherwise ask only: "Choose 1 to validate now, or choose 2 to skip validation and record the services as presumed working without marking them verified."
 
-Validation must be target-client-visible and non-destructive. Use safe read/list/search probes only: context7 docs lookup; mentality read/list only; ssh-tmux list/session visibility only; github, web-search, exa, playwright, openzeppelin safe read/search/list probes only where credentials and semantics allow, otherwise record skipped with reason.
+Client localization: Codex uses .codex/config.toml; Codex launches configured MCP servers and exposes their tools when a session starts; /mcp is a status view, not an in-place MCP tool reload; start a new Codex session from the project root before target-client-visible validation. Gemini uses .gemini/settings.json; Gemini's user-global ContextForge hook injects this project-init guidance through SessionStart/BeforeAgent additionalContext; Gemini CLI launches configured MCP servers and exposes their tools when a session starts; start a new Gemini CLI session from the project root before target-client-visible validation. OpenCode uses opencode.json and .opencode/plugins/contextforge-project-init.js; OpenCode's ContextForge plugin hook injects this project-init guidance into the hidden experimental.chat.system.transform system context; OpenCode discovers configured MCP servers and loads local plugins when a session starts; start a new OpenCode session from the project root before target-client-visible validation. Pi uses the global extension framework: before_agent_start system-prompt context, cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only, do not print or summarize raw cf_contextforge_pi_readback JSON, do not dump readback data into chat, use pi.registerTool(), and the Pi agent must issue /reload before validation after an approved global extension install or upgrade.
+
+Validation must be target-client-visible and non-destructive. Use safe read/list/search probes only; otherwise record skipped with reason. For Pi, call cf_contextforge_pi_validate for validate-now, not cf_contextforge_pi_readback. Do not call unlisted or unavailable validation tool names. If a validation tool call is missing, not found, unavailable, or returns an error, validation did not pass. Backend-only ContextForge health and "tool exists" availability are not enough.
+
+Skipped-service follow-up: if the user later asks to manually verify skipped services, still require the target-client-visible ContextForge binding/tool surface. Do not substitute built-in web search, direct shell commands, direct SSH/tmux, direct backend/package commands, or provider reachability checks as validation proof for skipped ContextForge bindings. Report those only as diagnostics. If the actual Pi shim-imported or target-client-visible ContextForge tool is unavailable, say the service remains skipped/not verified rather than marking exa-search, web-search, ssh-tmux, openzeppelin, or any other skipped service passed.
 """.strip()
 
 
@@ -256,6 +266,9 @@ def verify_prompt_render(token: str, prompt: dict[str, Any]) -> None:
         "serena_server_name": "",
         "project_state_path": "/home/dgk/workspace/context-portal/.project/context_forge_state.json",
         "project_state_status": "uninitialized",
+        "project_state_lifecycle_status": "missing",
+        "project_state_recommended_action": "start_project_init",
+        "project_init_hook_prompt_state": "active",
         "prompt_version": PROMPT_VERSION,
     }
     rendered = api_request("POST", f"/prompts/{prompt_id(prompt)}", token, payload=args)
@@ -268,12 +281,30 @@ def verify_prompt_render(token: str, prompt: dict[str, Any]) -> None:
         raise RuntimeError("project_init_prompt render did not include the supplied project root")
 
 
-def main() -> int:
+def preflight_all_artifacts() -> None:
+    preflight_resource(PROJECT_INIT_RESOURCE_NAME, PROJECT_INIT_RESOURCE_URI, sanitize_scanner_text(PROJECT_INIT_TEXT))
+    preflight_prompt(PROJECT_INIT_PROMPT_NAME, sanitize_scanner_text(PROJECT_INIT_TEXT))
+    preflight_resource(SERENA_GUIDANCE_RESOURCE_NAME, SERENA_GUIDANCE_RESOURCE_URI, sanitize_scanner_text(SERENA_GUIDANCE_TEXT))
+    preflight_prompt(SERENA_GUIDANCE_PROMPT_NAME, sanitize_scanner_text(SERENA_GUIDANCE_TEXT))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Register ContextForge project-init prompt/resource artifacts.")
+    parser.add_argument("--dry-run", action="store_true", help="Preflight generated prompt/resource text without mutating ContextForge.")
+    args = parser.parse_args(argv)
+    if args.dry_run:
+        preflight_all_artifacts()
+        print(f"would_register project_init_prompt name={PROJECT_INIT_PROMPT_NAME}")
+        print(f"would_register project_init_resource uri={PROJECT_INIT_RESOURCE_URI}")
+        print(f"would_register serena_project_instance_guidance name={SERENA_GUIDANCE_PROMPT_NAME}")
+        print(f"would_register serena guidance resource uri={SERENA_GUIDANCE_RESOURCE_URI}")
+        return 0
+
     env = gateway._read_env(gateway.CONFIG_ENV)
     token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
     project_resource = upsert_resource(
         token,
-        name="project_init_resource",
+        name=PROJECT_INIT_RESOURCE_NAME,
         uri=PROJECT_INIT_RESOURCE_URI,
         content=PROJECT_INIT_TEXT,
         description="ContextForge project initialization guidance for Codex hooks.",
@@ -288,7 +319,7 @@ def main() -> int:
     )
     serena_resource = upsert_resource(
         token,
-        name="serena_project_instance_guidance_resource",
+        name=SERENA_GUIDANCE_RESOURCE_NAME,
         uri=SERENA_GUIDANCE_RESOURCE_URI,
         content=SERENA_GUIDANCE_TEXT,
         description="Per-project Serena instance guidance for ContextForge virtual servers.",

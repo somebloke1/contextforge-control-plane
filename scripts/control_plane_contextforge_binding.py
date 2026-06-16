@@ -44,6 +44,7 @@ RECOVERY_OUTCOMES = frozenset(
         "resume",
         "forward_repair",
         "rollback_by_approved_workflow",
+        "helper_mediated_recovery",
         "manual_recovery",
         "fresh_approval_required",
     }
@@ -54,7 +55,8 @@ RECOVERY_BY_FAILURE = {
     "virtual_server_missing": "resume",
     "virtual_server_policy_mismatch": "forward_repair",
     "client_binding_not_written": "resume",
-    "client_binding_config_conflict": "manual_recovery",
+    "client_config_conflict": "helper_mediated_recovery",
+    "client_binding_config_conflict": "helper_mediated_recovery",
     "target_client_mismatch": "fresh_approval_required",
     "stale_gateway_digest": "forward_repair",
     "stale_client_digest": "fresh_approval_required",
@@ -72,8 +74,78 @@ REQUIRED_CLIENT_BINDING_TRACE_LAYERS = (
 PROJECT_INIT_OWNER_MARKER = "# contextforge-project-init-owner = \"ContextForge\""
 PROJECT_INIT_BINDING_MARKER = "# contextforge-project-init-service-binding = \"{service_binding}\""
 PROJECT_INIT_SERVER_MARKER = "# contextforge-project-init-virtual-server = \"{virtual_server}\""
-VALIDATION_MODES = frozenset({"validate_now", "presume_working"})
+VALIDATION_MODES = frozenset({"pending_choice", "validate_now", "presume_working"})
 PROJECT_INIT_APPROVAL_SCOPE = "project-local-client-config-and-state"
+PI_SHIM_SURFACE = "global Pi extension + .project/context_forge_state.json"
+OPENCODE_CONFIG_SURFACE = "opencode.json + .opencode/plugins/contextforge-project-init.js"
+PROJECT_INIT_CLIENT_ADAPTERS: dict[str, dict[str, Any]] = {
+    "codex": {
+        "client_type": "codex",
+        "display_name": "Codex",
+        "surface": ".codex/config.toml",
+        "scope": "project_local",
+        "plan_kind": "project_local_config",
+        "project_local_paths": [".codex/config.toml"],
+        "supports_stale_owned_replacement": True,
+        "non_actions": [
+            "does not write user-global Codex config",
+            "does not mutate Codex trust",
+            "does not restart Codex",
+            "does not mutate ContextForge registry or service catalog",
+            "does not write secrets or token material",
+        ],
+    },
+    "gemini": {
+        "client_type": "gemini",
+        "display_name": "Gemini",
+        "surface": ".gemini/settings.json",
+        "scope": "project_local",
+        "plan_kind": "project_local_config",
+        "project_local_paths": [".gemini/settings.json"],
+        "supports_stale_owned_replacement": True,
+        "non_actions": [
+            "does not write user-global Gemini config",
+            "does not mutate Gemini trust",
+            "does not restart Gemini",
+            "does not mutate ContextForge registry or service catalog",
+            "does not write secrets or token material",
+        ],
+    },
+    "opencode": {
+        "client_type": "opencode",
+        "display_name": "OpenCode",
+        "surface": OPENCODE_CONFIG_SURFACE,
+        "scope": "project_local",
+        "plan_kind": "project_local_config_with_plugin",
+        "project_local_paths": ["opencode.json", ".opencode/plugins/contextforge-project-init.js"],
+        "supports_stale_owned_replacement": False,
+        "non_actions": [
+            "does not write user-global OpenCode config or plugins",
+            "does not mutate OpenCode trust",
+            "does not restart OpenCode",
+            "does not mutate ContextForge registry or service catalog",
+            "does not write secrets or token material",
+        ],
+    },
+    "pi": {
+        "client_type": "pi",
+        "display_name": "Pi",
+        "surface": PI_SHIM_SURFACE,
+        "scope": "project_state",
+        "plan_kind": "project_state_shim_metadata",
+        "project_local_paths": [],
+        "supports_stale_owned_replacement": False,
+        "requires_global_shim": True,
+        "non_actions": [
+            "does not write user-global Pi config or extensions",
+            "does not create a fake Pi MCP config surface",
+            "does not mutate Pi trust",
+            "does not restart Pi",
+            "does not mutate ContextForge registry or service catalog",
+            "does not write secrets or token material",
+        ],
+    },
+}
 
 
 class ContextForgeBindingInputError(ValueError):
@@ -82,6 +154,32 @@ class ContextForgeBindingInputError(ValueError):
 
 class ProjectInitApplyError(RuntimeError):
     """Raised when scoped project-init apply cannot safely write local files."""
+
+
+def supported_project_init_clients() -> tuple[str, ...]:
+    return tuple(PROJECT_INIT_CLIENT_ADAPTERS)
+
+
+def project_init_client_adapter(target_client: str) -> dict[str, Any]:
+    return _json_copy(_client_adapter(target_client))
+
+
+def project_init_client_adapters() -> dict[str, dict[str, Any]]:
+    return _json_copy(PROJECT_INIT_CLIENT_ADAPTERS)
+
+
+def _client_adapter(target_client: str) -> dict[str, Any]:
+    adapter = PROJECT_INIT_CLIENT_ADAPTERS.get(target_client)
+    if adapter is None:
+        raise ContextForgeBindingInputError(f"unsupported target_client: {target_client}")
+    return adapter
+
+
+def _client_non_actions(target_client: str, *, recovery: bool = False) -> list[str]:
+    actions = list(_client_adapter(target_client)["non_actions"])
+    if recovery:
+        actions.append("does not append non-conflicting selected service bindings")
+    return actions
 
 
 def now_timestamp() -> str:
@@ -109,6 +207,7 @@ def build_project_init_codex_binding_block(service: Mapping[str, Any]) -> str:
         f"command = \"{PYTHON_PATH}\"\n"
         f"args = [\"{WRAPPER_PATH}\", \"{virtual_server}\"]\n"
         f"cwd = \"{REPO_ROOT}\"\n"
+        "env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = \"300\", MCP_WRAPPER_LOG_LEVEL = \"INFO\" }\n"
         "startup_timeout_ms = 60000\n"
         "tool_timeout_ms = 120000\n"
     )
@@ -120,11 +219,12 @@ def plan_project_init_codex_config_write(
     *,
     existing_text: str | None = None,
     replace_existing_owned: bool = True,
+    replace_unmanaged_conflicts: bool = False,
 ) -> dict[str, Any]:
     """Build a deterministic project-local Codex config write plan.
 
-    The plan never targets user-global config. Unmanaged collisions block so a
-    developer must explicitly resolve local config they authored.
+    By default, unmanaged same-name blocks block writes, but unmanaged conflicts
+    can be replaced deterministically when requested.
     """
 
     root = project_state.validate_project_root(project_root, require_workspace=False)
@@ -142,17 +242,32 @@ def plan_project_init_codex_config_write(
             continue
         seen_aliases.add(alias)
         block = build_project_init_codex_binding_block(service).rstrip()
+        block_digest = _codex_section_digest(block)
         section_re = _codex_section_re(alias)
         match = section_re.search(output)
         block_class = "absent"
         operation = "append"
         if match:
             existing_block = match.group(0).rstrip()
+            existing_digest = _codex_section_digest(existing_block)
             if PROJECT_INIT_OWNER_MARKER in existing_block:
                 block_class = "owned"
                 operation = "replace"
-                if replace_existing_owned:
-                    output = output[: match.start()] + block + output[match.end() :]
+                if existing_digest == block_digest:
+                    operation = "unchanged"
+                elif replace_existing_owned:
+                    suffix = output[match.end() :]
+                    replacement = block + ("\n\n" if suffix and not block.endswith("\n\n") else "")
+                    output = output[: match.start()] + replacement + suffix
+            elif replace_unmanaged_conflicts:
+                block_class = "unmanaged_same_name"
+                if existing_digest == block_digest:
+                    operation = "unchanged"
+                else:
+                    operation = "replace"
+                    suffix = output[match.end() :]
+                    replacement = block + ("\n\n" if suffix and not block.endswith("\n\n") else "")
+                    output = output[: match.start()] + replacement + suffix
             else:
                 block_class = "unmanaged_same_name"
                 operation = "blocked"
@@ -166,13 +281,15 @@ def plan_project_init_codex_config_write(
                 "virtual_server": service.get("virtual_server"),
                 "owned_block_class": block_class,
                 "operation": operation,
+                "expected_block_digest": block_digest,
+                "existing_block_digest": existing_digest if match else None,
             }
         )
 
     next_text = output.rstrip() + "\n" if output else ""
     plan = {
-        "surface": ".codex/config.toml",
-        "scope": "project_local",
+        "surface": _client_surface("codex"),
+        "scope": _client_adapter("codex")["scope"],
         "config_path": str(config_path),
         "decision": "block" if blockers else "allow_owned_project_local_write",
         "write_allowed": not blockers,
@@ -194,6 +311,694 @@ def plan_project_init_codex_config_write(
     return plan
 
 
+def plan_project_init_codex_config_conflict_recovery(
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    existing_text: str | None = None,
+    conflict_aliases: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Plan replacement of unmanaged project-local Codex MCP alias conflicts.
+
+    This is narrower than normal activation. It only supersedes same-name
+    unmanaged sections for selected services, leaving unrelated config and
+    non-conflicting selected services for the activation apply/repair flow.
+    """
+
+    root = project_state.validate_project_root(project_root, require_workspace=False)
+    config_path = root / ".codex" / "config.toml"
+    text = existing_text if existing_text is not None else (config_path.read_text(encoding="utf-8") if config_path.exists() else "")
+    output = text.rstrip()
+    requested_aliases = {
+        normalize_codex_alias(str(alias))
+        for alias in (conflict_aliases or [])
+        if normalize_codex_alias(str(alias))
+    }
+    operations: list[dict[str, Any]] = []
+    blockers: list[dict[str, Any]] = []
+    changed = False
+    seen_aliases: set[str] = set()
+
+    for service in selected_services:
+        alias = normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
+        if not alias or alias in seen_aliases:
+            continue
+        seen_aliases.add(alias)
+        if requested_aliases and alias not in requested_aliases:
+            continue
+        block = build_project_init_codex_binding_block(service).rstrip()
+        section_re = _codex_section_re(alias)
+        match = section_re.search(output)
+        if not match:
+            operations.append(
+                {
+                    "alias": alias,
+                    "service_binding": service.get("service_binding"),
+                    "virtual_server": service.get("virtual_server"),
+                    "operation": "noop_absent",
+                    "pre_block_digest": None,
+                    "post_block_digest": common_stable_digest(block),
+                }
+            )
+            continue
+        existing_block = match.group(0).rstrip()
+        if PROJECT_INIT_OWNER_MARKER in existing_block:
+            operations.append(
+                {
+                    "alias": alias,
+                    "service_binding": service.get("service_binding"),
+                    "virtual_server": service.get("virtual_server"),
+                    "operation": "noop_owned",
+                    "pre_block_digest": common_stable_digest(existing_block),
+                    "post_block_digest": common_stable_digest(block),
+                }
+            )
+            continue
+        suffix = output[match.end() :]
+        replacement = block + ("\n\n" if suffix and not block.endswith("\n\n") else "")
+        output = output[: match.start()] + replacement + suffix
+        changed = True
+        operations.append(
+            {
+                "alias": alias,
+                "service_binding": service.get("service_binding"),
+                "virtual_server": service.get("virtual_server"),
+                "operation": "replace_unmanaged_block_with_managed_contextforge_binding",
+                "pre_block_digest": common_stable_digest(existing_block),
+                "post_block_digest": common_stable_digest(block),
+            }
+        )
+
+    if requested_aliases and not requested_aliases <= seen_aliases:
+        missing = sorted(requested_aliases - seen_aliases)
+        blockers.append(_blocker("unknown_conflict_alias", f"recovery aliases were not selected services: {', '.join(missing)}"))
+    next_text = output.rstrip() + "\n" if output else ""
+    plan = {
+        "surface": ".codex/config.toml",
+        "scope": "project_local",
+        "config_path": str(config_path),
+        "decision": "block" if blockers else ("recover" if changed else "noop"),
+        "write_allowed": not blockers,
+        "recovery_required": changed,
+        "blockers": _dedupe_blockers(blockers),
+        "operations": operations,
+        "before_digest": common_stable_digest(text),
+        "after_digest": common_stable_digest(next_text),
+        "next_text": next_text,
+        "non_actions": _client_non_actions("codex", recovery=True),
+        "redaction_status": "redacted",
+    }
+    contracts.validate_redacted(plan, require_status=True)
+    return plan
+
+
+def build_project_init_gemini_binding_entry(service: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the managed project-local Gemini MCP entry for one service."""
+
+    virtual_server = str(service.get("virtual_server") or "")
+    _require("virtual_server", virtual_server)
+    return {
+        "command": str(PYTHON_PATH),
+        "args": [str(WRAPPER_PATH), virtual_server],
+        "cwd": str(REPO_ROOT),
+        "env": {
+            "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
+            "MCP_WRAPPER_LOG_LEVEL": "INFO",
+        },
+        "timeout": 120000,
+    }
+
+
+def _gemini_managed_entry_matches(existing: Any, expected: Mapping[str, Any]) -> bool:
+    if not isinstance(existing, Mapping):
+        return False
+    return _json_copy(existing) == _json_copy(expected)
+
+
+def _gemini_settings_text(data: Mapping[str, Any]) -> str:
+    return json.dumps(_json_copy(data), indent=2, sort_keys=True) + "\n"
+
+
+def _read_gemini_settings(config_path: Path, existing_text: str | None) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+    text = existing_text if existing_text is not None else (config_path.read_text(encoding="utf-8") if config_path.exists() else "")
+    if not text.strip():
+        return text, {}, []
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return text, {}, [_blocker("invalid_gemini_settings_json", f"invalid JSON in {config_path}: {exc}")]
+    if not isinstance(data, dict):
+        return text, {}, [_blocker("invalid_gemini_settings_json", f"Gemini settings must be a JSON object: {config_path}")]
+    return text, data, []
+
+
+def plan_project_init_gemini_config_write(
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    existing_text: str | None = None,
+    replace_existing_owned: bool = True,
+    replace_unmanaged_conflicts: bool = False,
+) -> dict[str, Any]:
+    """Build a deterministic project-local Gemini settings write plan."""
+
+    root = project_state.validate_project_root(project_root, require_workspace=False)
+    config_path = root / ".gemini" / "settings.json"
+    text, settings, blockers = _read_gemini_settings(config_path, existing_text)
+    output = _json_copy(settings)
+    mcp_servers = output.get("mcpServers")
+    if mcp_servers is None:
+        mcp_servers = {}
+        output["mcpServers"] = mcp_servers
+    if not isinstance(mcp_servers, dict):
+        blockers.append(_blocker("invalid_gemini_mcp_servers", "Gemini settings mcpServers must be a JSON object."))
+        mcp_servers = {}
+
+    changes: list[dict[str, Any]] = []
+    seen_aliases: set[str] = set()
+    for service in selected_services:
+        alias = normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
+        if alias in seen_aliases:
+            blockers.append(_blocker("duplicate_gemini_alias", f"duplicate Gemini MCP alias selected: {alias}"))
+            continue
+        seen_aliases.add(alias)
+        expected = build_project_init_gemini_binding_entry(service)
+        existing = mcp_servers.get(alias)
+        existing_digest = common_stable_digest(existing) if existing is not None else None
+        expected_digest = common_stable_digest(expected)
+        block_class = "absent"
+        operation = "append"
+        if existing is not None:
+            if _gemini_managed_entry_matches(existing, expected):
+                block_class = "owned"
+                operation = "unchanged"
+            elif replace_unmanaged_conflicts:
+                block_class = "unmanaged_same_name"
+                operation = "replace"
+                mcp_servers[alias] = expected
+            else:
+                block_class = "unmanaged_same_name"
+                operation = "blocked"
+                blockers.append(_blocker("client_config_conflict", f"unmanaged Gemini mcpServers.{alias} already exists."))
+        else:
+            mcp_servers[alias] = expected
+        changes.append(
+            {
+                "alias": alias,
+                "service_binding": service.get("service_binding"),
+                "virtual_server": service.get("virtual_server"),
+                "owned_block_class": block_class,
+                "operation": operation,
+                "expected_block_digest": expected_digest,
+                "existing_block_digest": existing_digest,
+            }
+        )
+
+    next_text = _gemini_settings_text(output)
+    plan = {
+        "surface": _client_surface("gemini"),
+        "scope": _client_adapter("gemini")["scope"],
+        "config_path": str(config_path),
+        "decision": "block" if blockers else "allow_owned_project_local_write",
+        "write_allowed": not blockers,
+        "blockers": _dedupe_blockers(blockers),
+        "changes": changes,
+        "before_digest": common_stable_digest(text),
+        "after_digest": common_stable_digest(next_text),
+        "next_text": next_text,
+        "non_actions": _client_non_actions("gemini"),
+        "redaction_status": "redacted",
+    }
+    contracts.validate_redacted(plan, require_status=True)
+    return plan
+
+
+def plan_project_init_gemini_config_conflict_recovery(
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    existing_text: str | None = None,
+    conflict_aliases: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Plan replacement of conflicting project-local Gemini MCP entries."""
+
+    root = project_state.validate_project_root(project_root, require_workspace=False)
+    config_path = root / ".gemini" / "settings.json"
+    text, settings, blockers = _read_gemini_settings(config_path, existing_text)
+    output = _json_copy(settings)
+    mcp_servers = output.get("mcpServers")
+    if mcp_servers is None:
+        mcp_servers = {}
+        output["mcpServers"] = mcp_servers
+    if not isinstance(mcp_servers, dict):
+        blockers.append(_blocker("invalid_gemini_mcp_servers", "Gemini settings mcpServers must be a JSON object."))
+        mcp_servers = {}
+    requested_aliases = {
+        normalize_codex_alias(str(alias))
+        for alias in (conflict_aliases or [])
+        if normalize_codex_alias(str(alias))
+    }
+    operations: list[dict[str, Any]] = []
+    changed = False
+    seen_aliases: set[str] = set()
+
+    for service in selected_services:
+        alias = normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
+        if not alias or alias in seen_aliases:
+            continue
+        seen_aliases.add(alias)
+        if requested_aliases and alias not in requested_aliases:
+            continue
+        expected = build_project_init_gemini_binding_entry(service)
+        existing = mcp_servers.get(alias)
+        if existing is None:
+            operations.append(
+                {
+                    "alias": alias,
+                    "service_binding": service.get("service_binding"),
+                    "virtual_server": service.get("virtual_server"),
+                    "operation": "noop_absent",
+                    "pre_block_digest": None,
+                    "post_block_digest": common_stable_digest(expected),
+                }
+            )
+            continue
+        if _gemini_managed_entry_matches(existing, expected):
+            operations.append(
+                {
+                    "alias": alias,
+                    "service_binding": service.get("service_binding"),
+                    "virtual_server": service.get("virtual_server"),
+                    "operation": "noop_owned",
+                    "pre_block_digest": common_stable_digest(existing),
+                    "post_block_digest": common_stable_digest(expected),
+                }
+            )
+            continue
+        mcp_servers[alias] = expected
+        changed = True
+        operations.append(
+            {
+                "alias": alias,
+                "service_binding": service.get("service_binding"),
+                "virtual_server": service.get("virtual_server"),
+                "operation": "replace_unmanaged_entry_with_managed_contextforge_binding",
+                "pre_block_digest": common_stable_digest(existing),
+                "post_block_digest": common_stable_digest(expected),
+            }
+        )
+
+    if requested_aliases and not requested_aliases <= seen_aliases:
+        missing = sorted(requested_aliases - seen_aliases)
+        blockers.append(_blocker("unknown_conflict_alias", f"recovery aliases were not selected services: {', '.join(missing)}"))
+    next_text = _gemini_settings_text(output)
+    plan = {
+        "surface": _client_surface("gemini"),
+        "scope": _client_adapter("gemini")["scope"],
+        "config_path": str(config_path),
+        "decision": "block" if blockers else ("recover" if changed else "noop"),
+        "write_allowed": not blockers,
+        "recovery_required": changed,
+        "blockers": _dedupe_blockers(blockers),
+        "operations": operations,
+        "before_digest": common_stable_digest(text),
+        "after_digest": common_stable_digest(next_text),
+        "next_text": next_text,
+        "non_actions": _client_non_actions("gemini", recovery=True),
+        "redaction_status": "redacted",
+    }
+    contracts.validate_redacted(plan, require_status=True)
+    return plan
+
+
+def build_project_init_opencode_binding_entry(service: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the managed project-local OpenCode MCP entry for one service."""
+
+    virtual_server = str(service.get("virtual_server") or "")
+    _require("virtual_server", virtual_server)
+    return {
+        "type": "local",
+        "command": [str(PYTHON_PATH), str(WRAPPER_PATH), virtual_server],
+        "enabled": True,
+        "environment": {
+            "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
+            "MCP_WRAPPER_LOG_LEVEL": "INFO",
+        },
+    }
+
+
+def build_project_init_opencode_plugin_text() -> str:
+    """Return the project-local OpenCode plugin that injects project-init context."""
+
+    return f"""// contextforge-project-init-owner = "ContextForge"
+// contextforge-project-init-hook = "{REPO_ROOT / "scripts" / "opencode_project_init_hook.py"}"
+import {{ spawnSync }} from "node:child_process"
+
+const PYTHON = {json.dumps(str(PYTHON_PATH))}
+const HOOK = {json.dumps(str(REPO_ROOT / "scripts" / "opencode_project_init_hook.py"))}
+const HOOK_EVENT = "experimental.chat.system.transform"
+
+export const ContextForgeProjectInit = async () => {{
+  let injected = false
+
+  return {{
+    [HOOK_EVENT]: async (input, output) => {{
+      if (injected) return
+
+      const sessionID =
+        input?.sessionID ??
+        input?.session?.id ??
+        input?.message?.sessionID ??
+        `${{process.pid}}:${{Date.now()}}`
+      const cwd = input?.cwd ?? input?.directory ?? process.cwd()
+
+      const result = spawnSync(PYTHON, [HOOK], {{
+        input: JSON.stringify({{
+          hook_event_name: HOOK_EVENT,
+          session_id: String(sessionID),
+          cwd: String(cwd),
+        }}),
+        encoding: "utf8",
+        timeout: 10000,
+        stdio: ["pipe", "pipe", "pipe"],
+      }})
+
+      if (result.status !== 0 || !result.stdout?.trim()) return
+
+      try {{
+        const payload = JSON.parse(result.stdout)
+        const context = payload?.hookSpecificOutput?.additionalContext
+        if (typeof context === "string" && Array.isArray(output?.system)) {{
+          output.system.push(context)
+          injected = true
+        }}
+      }} catch {{
+        return
+      }}
+    }},
+  }}
+}}
+"""
+
+
+def _opencode_managed_entry_matches(existing: Any, expected: Mapping[str, Any]) -> bool:
+    if not isinstance(existing, Mapping):
+        return False
+    return _json_copy(existing) == _json_copy(expected)
+
+
+def _opencode_config_text(data: Mapping[str, Any]) -> str:
+    return json.dumps(_json_copy(data), indent=2, sort_keys=True) + "\n"
+
+
+def _read_opencode_config(config_path: Path, existing_text: str | None) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+    text = existing_text if existing_text is not None else (config_path.read_text(encoding="utf-8") if config_path.exists() else "")
+    if not text.strip():
+        return text, {"$schema": "https://opencode.ai/config.json"}, []
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return text, {}, [_blocker("invalid_opencode_json", f"invalid JSON in {config_path}: {exc}")]
+    if not isinstance(data, dict):
+        return text, {}, [_blocker("invalid_opencode_json", f"OpenCode config must be a JSON object: {config_path}")]
+    data.setdefault("$schema", "https://opencode.ai/config.json")
+    return text, data, []
+
+
+def _opencode_plugin_text_state(
+    plugin_path: Path,
+    plugin_existing_text: str | None,
+    *,
+    replace_unmanaged_conflicts: bool,
+) -> tuple[str, str, str, list[dict[str, Any]]]:
+    text = plugin_existing_text if plugin_existing_text is not None else (plugin_path.read_text(encoding="utf-8") if plugin_path.exists() else "")
+    expected = build_project_init_opencode_plugin_text()
+    blockers: list[dict[str, Any]] = []
+    if not text:
+        return text, expected, "append", blockers
+    if text == expected:
+        return text, expected, "unchanged", blockers
+    if "contextforge-project-init-owner = \"ContextForge\"" in text or replace_unmanaged_conflicts:
+        return text, expected, "replace", blockers
+    blockers.append(_blocker("client_plugin_conflict", f"unmanaged OpenCode project-init plugin already exists: {plugin_path}"))
+    return text, text, "blocked", blockers
+
+
+def _opencode_plan_digest(config_text: str, plugin_text: str) -> str:
+    return common_stable_digest({"opencode_json": config_text, "project_init_plugin": plugin_text})
+
+
+def plan_project_init_opencode_config_write(
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    existing_text: str | None = None,
+    plugin_existing_text: str | None = None,
+    replace_unmanaged_conflicts: bool = False,
+) -> dict[str, Any]:
+    """Build a deterministic project-local OpenCode config/plugin write plan."""
+
+    root = project_state.validate_project_root(project_root, require_workspace=False)
+    config_path = root / "opencode.json"
+    plugin_path = root / ".opencode" / "plugins" / "contextforge-project-init.js"
+    text, config, blockers = _read_opencode_config(config_path, existing_text)
+    output = _json_copy(config)
+    mcp_servers = output.get("mcp")
+    if mcp_servers is None:
+        mcp_servers = {}
+        output["mcp"] = mcp_servers
+    if not isinstance(mcp_servers, dict):
+        blockers.append(_blocker("invalid_opencode_mcp_servers", "OpenCode config mcp must be a JSON object."))
+        mcp_servers = {}
+
+    changes: list[dict[str, Any]] = []
+    seen_aliases: set[str] = set()
+    for service in selected_services:
+        alias = normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
+        if alias in seen_aliases:
+            blockers.append(_blocker("duplicate_opencode_alias", f"duplicate OpenCode MCP alias selected: {alias}"))
+            continue
+        seen_aliases.add(alias)
+        expected = build_project_init_opencode_binding_entry(service)
+        existing = mcp_servers.get(alias)
+        existing_digest = common_stable_digest(existing) if existing is not None else None
+        expected_digest = common_stable_digest(expected)
+        block_class = "absent"
+        operation = "append"
+        if existing is not None:
+            if _opencode_managed_entry_matches(existing, expected):
+                block_class = "owned"
+                operation = "unchanged"
+            elif replace_unmanaged_conflicts:
+                block_class = "unmanaged_same_name"
+                operation = "replace"
+                mcp_servers[alias] = expected
+            else:
+                block_class = "unmanaged_same_name"
+                operation = "blocked"
+                blockers.append(_blocker("client_config_conflict", f"unmanaged OpenCode mcp.{alias} already exists."))
+        else:
+            mcp_servers[alias] = expected
+        changes.append(
+            {
+                "alias": alias,
+                "service_binding": service.get("service_binding"),
+                "virtual_server": service.get("virtual_server"),
+                "owned_block_class": block_class,
+                "operation": operation,
+                "expected_block_digest": expected_digest,
+                "existing_block_digest": existing_digest,
+            }
+        )
+
+    plugin_before, plugin_next, plugin_operation, plugin_blockers = _opencode_plugin_text_state(
+        plugin_path,
+        plugin_existing_text,
+        replace_unmanaged_conflicts=replace_unmanaged_conflicts,
+    )
+    blockers.extend(plugin_blockers)
+    next_text = _opencode_config_text(output)
+    plan = {
+        "surface": _client_surface("opencode"),
+        "scope": _client_adapter("opencode")["scope"],
+        "config_path": str(config_path),
+        "plugin_path": str(plugin_path),
+        "decision": "block" if blockers else "allow_owned_project_local_write",
+        "write_allowed": not blockers,
+        "blockers": _dedupe_blockers(blockers),
+        "changes": changes,
+        "plugin_change": {
+            "path": str(plugin_path),
+            "operation": plugin_operation,
+            "before_digest": common_stable_digest(plugin_before),
+            "after_digest": common_stable_digest(plugin_next),
+        },
+        "before_digest": _opencode_plan_digest(text, plugin_before),
+        "after_digest": _opencode_plan_digest(next_text, plugin_next),
+        "next_text": next_text,
+        "plugin_next_text": plugin_next,
+        "non_actions": _client_non_actions("opencode"),
+        "redaction_status": "redacted",
+    }
+    contracts.validate_redacted(plan, require_status=True)
+    return plan
+
+
+def plan_project_init_opencode_config_conflict_recovery(
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    existing_text: str | None = None,
+    plugin_existing_text: str | None = None,
+    conflict_aliases: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Plan replacement of conflicting project-local OpenCode MCP/plugin entries."""
+
+    requested_aliases = {
+        normalize_codex_alias(str(alias))
+        for alias in (conflict_aliases or [])
+        if normalize_codex_alias(str(alias))
+    }
+    selected_aliases = {
+        normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
+        for service in selected_services
+    }
+    recovery_services = [
+        service
+        for service in selected_services
+        if not requested_aliases
+        or normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or "")) in requested_aliases
+    ]
+    plan = plan_project_init_opencode_config_write(
+        project_root,
+        recovery_services,
+        existing_text=existing_text,
+        plugin_existing_text=plugin_existing_text,
+        replace_unmanaged_conflicts=True,
+    )
+    if requested_aliases:
+        missing = sorted(requested_aliases - selected_aliases)
+        if missing:
+            plan["blockers"] = _dedupe_blockers(
+                [
+                    *(plan.get("blockers") or []),
+                    _blocker("unknown_conflict_alias", f"recovery aliases were not selected services: {', '.join(missing)}"),
+                ]
+            )
+            plan["decision"] = "block"
+            plan["write_allowed"] = False
+    if plan["decision"] != "block":
+        changed = any(
+            isinstance(change, Mapping) and change.get("operation") == "replace"
+            for change in plan.get("changes") or []
+        ) or (plan.get("plugin_change") or {}).get("operation") == "replace"
+        plan["decision"] = "recover" if changed else "noop"
+        plan["recovery_required"] = changed
+    plan["operations"] = [
+        {
+            "alias": change.get("alias"),
+            "service_binding": change.get("service_binding"),
+            "virtual_server": change.get("virtual_server"),
+            "operation": (
+                "replace_unmanaged_entry_with_managed_contextforge_binding"
+                if change.get("operation") == "replace"
+                else f"noop_{change.get('operation') or 'unchanged'}"
+            ),
+            "pre_block_digest": change.get("existing_block_digest"),
+            "post_block_digest": change.get("expected_block_digest"),
+        }
+        for change in plan.get("changes") or []
+        if isinstance(change, Mapping)
+    ]
+    plan["non_actions"] = _client_non_actions("opencode", recovery=True)
+    contracts.validate_redacted(plan, require_status=True)
+    return plan
+
+
+def plan_project_init_pi_shim_activation(
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    existing_state: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a deterministic Pi shim activation metadata plan.
+
+    Pi does not have a native MCP config file equivalent to Codex
+    ``[mcp_servers.*]`` TOML. Project activation for Pi is therefore recorded in
+    project state for a separately installed global extension shim to read at
+    runtime. This plan deliberately has no ``next_text`` payload and no Pi
+    config target.
+    """
+
+    root = project_state.validate_project_root(project_root, require_workspace=False)
+    state = existing_state if existing_state is not None else project_state.load_state(root)
+    before_entries = _pi_target_entries_from_state(state or {}, selected_services)
+    after_entries = {
+        str(service.get("service_binding") or service.get("service_family") or ""): _pi_target_entry(service)
+        for service in selected_services
+    }
+    changes: list[dict[str, Any]] = []
+    seen_prefixes: set[str] = set()
+    blockers: list[dict[str, Any]] = []
+    for service in selected_services:
+        binding_id = str(service.get("service_binding") or service.get("service_family") or "")
+        after = after_entries[binding_id]
+        prefix = str(after["pi_tool_prefix"])
+        if prefix in seen_prefixes:
+            blockers.append(_blocker("duplicate_pi_tool_prefix", f"duplicate Pi tool prefix selected: {prefix}"))
+        seen_prefixes.add(prefix)
+        before = before_entries.get(binding_id)
+        changes.append(
+            {
+                "pi_tool_prefix": prefix,
+                "service_binding": service.get("service_binding"),
+                "virtual_server": service.get("virtual_server"),
+                "owned_block_class": "project_state_metadata",
+                "operation": "record" if before != after else "unchanged",
+            }
+        )
+
+    plan = {
+        "surface": _client_surface("pi"),
+        "scope": _client_adapter("pi")["scope"],
+        "config_path": None,
+        "decision": "block" if blockers else "allow_project_state_shim_activation",
+        "write_allowed": not blockers,
+        "blockers": _dedupe_blockers(blockers),
+        "changes": changes,
+        "before_digest": common_stable_digest(before_entries),
+        "after_digest": common_stable_digest(after_entries),
+        "activation_surface": "pi_global_extension_shim",
+        "requires_global_shim": True,
+        "global_shim_mutation": "not_performed_by_project_init",
+        "non_actions": _client_non_actions("pi"),
+        "redaction_status": "redacted",
+    }
+    contracts.validate_redacted(plan, require_status=True)
+    return plan
+
+
+def plan_project_init_target_client_activation(
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any]],
+    *,
+    target_client: str = "codex",
+    existing_state: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    adapter = _client_adapter(target_client)
+    if adapter["plan_kind"] == "project_state_shim_metadata":
+        return plan_project_init_pi_shim_activation(project_root, selected_services, existing_state=existing_state)
+    planners = {
+        "codex": plan_project_init_codex_config_write,
+        "gemini": plan_project_init_gemini_config_write,
+        "opencode": plan_project_init_opencode_config_write,
+    }
+    planner = planners.get(target_client)
+    if planner is None:
+        raise ContextForgeBindingInputError(f"target_client has no activation planner: {target_client}")
+    return planner(project_root, selected_services)
+
+
 def build_project_init_validation_plan(
     selected_services: Sequence[Mapping[str, Any]],
     *,
@@ -211,9 +1016,17 @@ def build_project_init_validation_plan(
                 "service_family": service.get("service_family"),
                 "target_client": target_client,
                 "mode": validation_mode,
-                "required_proof": "target_client_visible_mcp" if validation_mode == "validate_now" else "deferred",
+                "required_proof": (
+                    "target_client_visible_mcp"
+                    if validation_mode == "validate_now"
+                    else ("user_validation_choice" if validation_mode == "pending_choice" else "deferred")
+                ),
                 "safe_default": _json_copy(policy),
-                "status": "pending_target_client_probe" if validation_mode == "validate_now" else "presumed_working_without_probe",
+                "status": (
+                    "pending_target_client_probe"
+                    if validation_mode == "validate_now"
+                    else ("pending_user_validation_choice" if validation_mode == "pending_choice" else "presumed_working_without_probe")
+                ),
                 "non_destructive": True,
             }
         )
@@ -226,6 +1039,7 @@ def build_project_init_validation_plan(
             "does not use backend health alone as target-client proof",
             "does not call mutating tools during default validation",
             "does not mark target-client verification passed when validation is presumed",
+            "does not mark target-client verification passed before validation choice",
         ],
     }
 
@@ -238,11 +1052,15 @@ def apply_project_init_service_activation(
     approval_scope: str,
     target_client: str = "codex",
     validation_results: Mapping[str, Mapping[str, Any]] | None = None,
+    activation_job: Mapping[str, Any] | None = None,
+    consent_receipt_refs: Sequence[str] | None = None,
+    allow_invalid_existing_state: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Apply approved project-local service activation only.
 
-    Writes are limited to `<project>/.codex/config.toml` and
+    Writes are limited to target-client-owned project-local activation state:
+    Codex uses `<project>/.codex/config.toml` plus project state; Pi uses only
     `<project>/.project/context_forge_state.json`. The caller must provide an
     approval scope string so this helper cannot be mistaken for registry,
     backend, trust, or secret mutation authorization.
@@ -252,17 +1070,26 @@ def apply_project_init_service_activation(
         raise ProjectInitApplyError(f"approval_scope must be {PROJECT_INIT_APPROVAL_SCOPE!r}")
     if validation_mode not in VALIDATION_MODES:
         raise ProjectInitApplyError(f"unsupported validation mode: {validation_mode}")
+    if not consent_receipt_refs:
+        raise ProjectInitApplyError("scoped consent receipt refs are required for project-init activation apply")
+    if not dry_run:
+        raise ProjectInitApplyError("control_plane_contextforge_binding is plan-only; non-dry-run writes must use contextforge-helper")
     root = project_state.validate_project_root(project_root, require_workspace=False)
     services = [_json_copy(service) for service in selected_services]
     if not services:
         raise ProjectInitApplyError("at least one selected service is required")
 
-    config_plan = plan_project_init_codex_config_write(root, services)
+    base_state = project_state.read_or_default(root, allow_invalid_existing=allow_invalid_existing_state)
+    config_plan = plan_project_init_target_client_activation(
+        root,
+        services,
+        target_client=target_client,
+        existing_state=base_state,
+    )
     validation_plan = build_project_init_validation_plan(services, validation_mode=validation_mode, target_client=target_client)
-    if config_plan["decision"] != "allow_owned_project_local_write":
-        raise ProjectInitApplyError(f"project-local Codex config write blocked: {config_plan['blockers']}")
+    if not config_plan.get("write_allowed"):
+        raise ProjectInitApplyError(f"project-local {target_client} activation blocked: {config_plan['blockers']}")
 
-    base_state = project_state.read_or_default(root)
     next_state = project_state.apply_project_init_activation_to_state(
         base_state,
         services,
@@ -270,6 +1097,8 @@ def apply_project_init_service_activation(
         client_config_plan=config_plan,
         validation_plan=validation_plan,
         validation_results=validation_results or {},
+        activation_job=_json_copy(dict(activation_job)) if activation_job is not None else None,
+        consent_receipt_refs=list(consent_receipt_refs or []),
         updated_by="control_plane_contextforge_binding",
     )
     result = {
@@ -280,10 +1109,7 @@ def apply_project_init_service_activation(
         "validation_plan": validation_plan,
         "state_status": next_state["status"],
         "selected_service_bindings": [service.get("service_binding") for service in services],
-        "writes": [
-            str(root / ".codex" / "config.toml"),
-            str(project_state.project_state_path(root)),
-        ],
+        "writes": _project_init_writes(root, target_client),
         "non_actions": [
             "no user-global config or trust mutation",
             "no ContextForge registry or catalog mutation",
@@ -291,15 +1117,7 @@ def apply_project_init_service_activation(
             "no secret or token material write",
         ],
     }
-    if dry_run:
-        result["planned_state"] = next_state
-        return result
-
-    config_path = root / ".codex" / "config.toml"
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(config_plan["next_text"], encoding="utf-8")
-    written_state = project_state.write_state_atomic(root, next_state, updated_by="control_plane_contextforge_binding")
-    result["state_revision"] = written_state["meta"]["revision"]
+    result["planned_state"] = next_state
     return result
 
 
@@ -627,7 +1445,7 @@ def classify_recovery(failure: Mapping[str, Any] | str) -> dict[str, Any]:
         "recovery_outcome": outcome,
         "allowed_outcomes": sorted(RECOVERY_OUTCOMES),
         "requires_new_consent": outcome == "fresh_approval_required",
-        "requires_approved_workflow": outcome in {"rollback_by_approved_workflow", "fresh_approval_required"},
+        "requires_approved_workflow": outcome in {"rollback_by_approved_workflow", "fresh_approval_required", "helper_mediated_recovery"},
     }
 
 
@@ -656,8 +1474,13 @@ def _base_scope_blockers(
 def _codex_section_re(alias: str) -> re.Pattern[str]:
     escaped = re.escape(alias)
     return re.compile(
-        rf"(?ms)^(?:# contextforge-project-init-[^\n]*\n)*\[mcp_servers\.{escaped}\]\n.*?(?=^(?:# contextforge-project-init-[^\n]*\n)*\[mcp_servers\.|\Z)"
+        rf"(?ms)^(?:# contextforge-project-init-[^\n]*\n)*\[mcp_servers\.{escaped}\]\n.*?(?=^(?:# contextforge-project-init-[^\n]*\n)*\[|\Z)"
     )
+
+
+def _codex_section_digest(block_text: str) -> str:
+    normalized = "\n".join(line.rstrip() for line in str(block_text).replace("\r\n", "\n").splitlines()).strip()
+    return stable_digest(normalized)
 
 
 def _policy_blockers(
@@ -796,9 +1619,57 @@ def _dedupe_blockers(blockers: Sequence[Mapping[str, Any]]) -> list[dict[str, An
 
 
 def _client_surface(target_client: str) -> str:
-    if target_client == "codex":
-        return ".codex/config.toml"
+    adapter = PROJECT_INIT_CLIENT_ADAPTERS.get(target_client)
+    if adapter:
+        return str(adapter["surface"])
     return f"{target_client}:project_local_config"
+
+
+def _project_init_writes(root: Path, target_client: str) -> list[str]:
+    adapter = _client_adapter(target_client)
+    writes = [str(root / str(relative_path)) for relative_path in adapter.get("project_local_paths", [])]
+    writes.append(str(project_state.project_state_path(root)))
+    return writes
+
+
+def _pi_target_entry(service: Mapping[str, Any]) -> dict[str, Any]:
+    service_family = str(service.get("service_family") or service.get("canonical_service") or "service")
+    service_binding = str(service.get("service_binding") or service_family)
+    prefix = normalize_codex_alias(str(service.get("pi_tool_prefix") or service.get("codex_alias") or service_family)).replace("_", "-")
+    return {
+        "service_binding": service_binding,
+        "surface": PI_SHIM_SURFACE,
+        "alias": prefix,
+        "pi_tool_prefix": prefix,
+        "virtual_server": service.get("virtual_server"),
+        "status": "shim_activation_planned",
+        "shim": "contextforge-global-shim",
+    }
+
+
+def _pi_target_entries_from_state(
+    state: Mapping[str, Any],
+    selected_services: Sequence[Mapping[str, Any]],
+) -> dict[str, dict[str, Any] | None]:
+    services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
+    entries: dict[str, dict[str, Any] | None] = {}
+    for service in selected_services:
+        binding_id = str(service.get("service_binding") or service.get("service_family") or "")
+        service_record = services.get(binding_id) if isinstance(services, Mapping) else None
+        if not isinstance(service_record, Mapping):
+            entries[binding_id] = None
+            continue
+        target_clients = service_record.get("target_clients") if isinstance(service_record.get("target_clients"), Mapping) else {}
+        pi_record = target_clients.get("pi") if isinstance(target_clients, Mapping) else None
+        if not isinstance(pi_record, Mapping):
+            entries[binding_id] = None
+            continue
+        expected = _pi_target_entry(service)
+        entries[binding_id] = {
+            key: (binding_id if key == "service_binding" else pi_record.get(key))
+            for key in expected
+        }
+    return entries
 
 
 def _stale(stale_inputs: Mapping[str, Any] | None) -> bool:
@@ -860,7 +1731,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--service", action="append", required=True, help="Service alias, family, or binding to activate. Repeatable.")
     parser.add_argument("--validation-mode", required=True, choices=sorted(VALIDATION_MODES))
     parser.add_argument("--approval-scope", required=True, choices=[PROJECT_INIT_APPROVAL_SCOPE])
-    parser.add_argument("--target-client", default="codex", choices=["codex"])
+    parser.add_argument("--consent-receipt-ref", action="append", required=True, help="Scoped consent receipt ref. Repeatable.")
+    parser.add_argument("--target-client", default="codex", choices=sorted(supported_project_init_clients()))
     parser.add_argument("--contextforge-readback-json", help="Optional fixture/live readback of ContextForge /servers.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -872,6 +1744,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         validation_mode=args.validation_mode,
         approval_scope=args.approval_scope,
         target_client=args.target_client,
+        consent_receipt_refs=args.consent_receipt_ref,
         dry_run=args.dry_run,
     )
     print(json.dumps(result, indent=2, sort_keys=True))

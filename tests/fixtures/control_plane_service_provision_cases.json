@@ -146,9 +146,9 @@
       "expected_recovery": "forward_repair"
     },
     {
-      "name": "client_config_conflict_manual_recovery",
+      "name": "client_config_conflict_helper_mediated_recovery",
       "failure_type": "client_binding_config_conflict",
-      "expected_recovery": "manual_recovery"
+      "expected_recovery": "helper_mediated_recovery"
     },
     {
       "name": "stale_target_client_digest_fresh_approval_required",
@@ -163,7 +163,7 @@
       "owned_block_class": "unmanaged_same_name",
       "expected_decision": "block",
       "expected_blockers": ["client_config_conflict"],
-      "expected_recovery": "manual_recovery"
+      "expected_recovery": "helper_mediated_recovery"
     },
     {
       "name": "stale_target_client_binding_digest",

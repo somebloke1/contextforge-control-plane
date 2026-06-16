@@ -337,6 +337,11 @@ def validate_stale_plan(
         descriptor_id = str(descriptor.get("descriptor_id"))
         if descriptor_id in descriptor_digests and descriptor_digests[descriptor_id] != descriptor.get("artifact_digest"):
             reasons.append(f"descriptor digest changed: {descriptor_id}")
+    if isinstance(catalog, Mapping) and isinstance(catalog.get("descriptor_digests"), Mapping):
+        for descriptor_id, planned_digest in catalog["descriptor_digests"].items():
+            descriptor_key = str(descriptor_id)
+            if descriptor_key in descriptor_digests and descriptor_digests[descriptor_key] != planned_digest:
+                reasons.append(f"descriptor digest changed: {descriptor_key}")
     return _decision("block" if reasons else "allow", reasons)
 
 
