@@ -15,7 +15,7 @@
     "args": [
       "scripts/governance_mcp.py"
     ],
-    "working_directory": "/home/dgk/workspace/context-portal"
+    "working_directory": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
   },
   "bridge": {
     "needed": true,

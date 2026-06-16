@@ -8,7 +8,7 @@ Entry shape:
 
 - Ledger: <decisions|abeyant-intentions|open-questions>
 - Status: <finite-status>
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
 - Created: YYYY-MM-DD
 - Updated: YYYY-MM-DD
 - Tags: comma,separated,tags

@@ -11,7 +11,7 @@
       "--context",
       "codex",
       "--project",
-      "/home/dgk/workspace/context-portal",
+      "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance",
       "--open-web-dashboard",
       "false"
     ],
@@ -35,10 +35,10 @@
     "sse_url": null,
     "streamable_http_url": "http://127.0.0.1:9108/mcp"
   },
-  "canonical_project_root": "/home/dgk/workspace/context-portal",
+  "canonical_project_root": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance",
   "client": "canonical",
   "codex_alias": "serena",
-  "codex_config_path": "/home/dgk/workspace/context-portal/.codex/config.toml",
+  "codex_config_path": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.codex/config.toml",
   "config_path": null,
   "contextforge": {
     "gateway": {
@@ -99,10 +99,10 @@
     "install_implemented": false,
     "instance_scope": {
       "created": true,
-      "env_file": "/home/dgk/workspace/context-portal/server-instances/serena-context-portal/lsp.env",
-      "instance_dir": "/home/dgk/workspace/context-portal/server-instances/serena-context-portal",
-      "lsp_tools_dir": "/home/dgk/workspace/context-portal/server-instances/serena-context-portal/lsp-tools",
-      "manifest_path": "/home/dgk/workspace/context-portal/server-instances/serena-context-portal/lsp-tools/manifest.json"
+      "env_file": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/server-instances/serena-context-portal/lsp.env",
+      "instance_dir": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/server-instances/serena-context-portal",
+      "lsp_tools_dir": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/server-instances/serena-context-portal/lsp-tools",
+      "manifest_path": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/server-instances/serena-context-portal/lsp-tools/manifest.json"
     },
     "language": "python",
     "updated_at": "2026-05-29T21:35:32.858737+00:00"
@@ -110,7 +110,7 @@
   "mcp_url": "http://127.0.0.1:9108/mcp",
   "name": "serena-context-portal",
   "port": 9108,
-  "project_root_hash": "42304ce73dad61a491e9a20d0825d060b606b0035737e60795bc2bf6eefb32f2",
+  "project_root_hash": "06493d30d268e6d91df08e746ea2dd8c65205d4544412d3dc47c375658a1c312",
   "registration": {
     "registered_tools": [
       "serena-context-portal-delete-memory",
@@ -164,11 +164,11 @@
   },
   "schema_version": 1,
   "scope": {
-    "configuration_signal": "Serena is started with --project /home/dgk/workspace/context-portal",
+    "configuration_signal": "Serena is started with --project /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance",
     "notes": "Serena is stateful and project-scoped. This instance inspects only the ContextForge operator repo.",
     "requires_local_project_scope": true,
     "scope_type": "single_workspace_code_intelligence",
-    "workspace_root": "/home/dgk/workspace/context-portal"
+    "workspace_root": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
   },
   "server_name": "serena_context_portal_server",
   "service": "serena",

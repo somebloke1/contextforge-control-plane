@@ -13,7 +13,7 @@ validation.
 ## Required Sequence
 
 1. Call `get_project_context` or `cf_project_init_get_context` with:
-   - `project_root=/home/dgk/workspace/context-portal`
+   - `project_root=/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`
    - `client_type=codex` unless the user explicitly targets Pi or another client.
 2. Call `list_available_capabilities` or `cf_project_init_list_capabilities`.
 3. If services are not selected, ask exactly one service-selection question using

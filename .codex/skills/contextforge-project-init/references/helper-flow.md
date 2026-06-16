@@ -14,7 +14,7 @@ Service classes currently seen for this repo:
 
 - Shared/canonical bindings: `context7`, `github`, `openzeppelin-solidity-contracts`.
 - Hosted or scoped shared bindings: `mentality`, `playwright`, `ssh-tmux`, `web-search`, `exa-search`.
-- Project-scoped provisioning: `serena` for `/home/dgk/workspace/context-portal`.
+- Project-scoped provisioning: `serena` for `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`.
 
 Validation policy:
 

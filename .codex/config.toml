@@ -1,47 +1,47 @@
 [mcp_servers.serena]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "serena_context_portal_server"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "serena_context_portal_server"]
+cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
 
 [mcp_servers.mentality]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "mentality_server"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "mentality_server"]
+cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
 
 [mcp_servers.ssh_tmux]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "ssh_tmux_server"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "ssh_tmux_server"]
+cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
 
 [mcp_servers.context7]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "context7_local_server"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "context7_local_server"]
+cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
 
 [mcp_servers.exa_search]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "exa_search_server"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "exa_search_server"]
+cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
 
 [mcp_servers.github]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "github_server"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "github_server"]
+cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
 
 [mcp_servers.openzeppelin_solidity_contracts]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "openzeppelin_solidity_contracts_server"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "openzeppelin_solidity_contracts_server"]
+cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
 
 [mcp_servers.playwright]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "playwright_server"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "playwright_server"]
+cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
 
 [mcp_servers.web_search]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "web_search_server"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
+args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "web_search_server"]
+cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
 
 [hooks]
 

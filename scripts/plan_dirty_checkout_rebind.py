@@ -291,6 +291,8 @@ def build_report(
     target_root: str | Path,
     legacy_root: str | Path = DEFAULT_LEGACY_ROOT,
     strategy: str = DEFAULT_STRATEGY,
+    approval_acknowledged: bool = False,
+    approval_ref: str | None = None,
     include_processes: bool = True,
     client_types: Sequence[str] = ("codex", "pi"),
     process_snapshot: Sequence[Mapping[str, Any]] | None = None,
@@ -308,7 +310,7 @@ def build_report(
         include_processes=include_processes,
         process_snapshot=process_snapshot,
     )
-    blockers = ["approval_required_before_rebind"]
+    blockers = [] if approval_acknowledged else ["approval_required_before_rebind"]
     warnings: list[str] = []
     for surface in surfaces:
         blockers.extend(f"{surface['surface_id']}:{blocker}" for blocker in surface["blockers"])
@@ -326,7 +328,12 @@ def build_report(
         "strategy": strategy,
         "target_root": str(target),
         "legacy_root": str(legacy),
-        "approval_required": True,
+        "approval_required": not approval_acknowledged,
+        "approval": {
+            "acknowledged": approval_acknowledged,
+            "ref": approval_ref,
+            "required_before_mutation": not approval_acknowledged,
+        },
         "status": _status_from_findings(blockers, warnings),
         "blockers": _dedupe(blockers),
         "warnings": _dedupe(warnings),
@@ -335,7 +342,11 @@ def build_report(
         "helper_processes": readiness_report.get("helper_processes", []),
         "next_actions": _dedupe(
             [
-                "Ask the user to approve Strategy 1 compatibility rebind, Strategy 2 new root identity, or Strategy 3 archival-only deferral.",
+                (
+                    "Approval has been acknowledged for this report; continue only within the approved mutation scope."
+                    if approval_acknowledged
+                    else "Ask the user to approve Strategy 1 compatibility rebind, Strategy 2 new root identity, or Strategy 3 archival-only deferral."
+                ),
                 "Do not mutate project state, client config, service units, registry entries, hook trust, or processes from this report alone.",
                 *[str(action) for action in readiness_report.get("next_actions", [])],
             ]
@@ -359,6 +370,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--target-root", default=str(Path.cwd()), help="Clean root that would receive the rebind.")
     parser.add_argument("--legacy-root", default=str(DEFAULT_LEGACY_ROOT), help="Legacy dirty checkout root.")
     parser.add_argument("--strategy", default=DEFAULT_STRATEGY, choices=(DEFAULT_STRATEGY, "new_root_identity", "archival_only"))
+    parser.add_argument("--approval-acknowledged", action="store_true", help="Report using an explicit user approval already recorded for this pass.")
+    parser.add_argument("--approval-ref", help="Human-readable approval reference, such as an issue comment or conversation summary.")
     parser.add_argument("--client-type", action="append", help="Client type for embedded readiness reconciliation. May repeat.")
     parser.add_argument("--no-processes", action="store_true", help="Skip read-only helper process source inspection.")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON.")
@@ -371,6 +384,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         target_root=args.target_root,
         legacy_root=args.legacy_root,
         strategy=args.strategy,
+        approval_acknowledged=args.approval_acknowledged,
+        approval_ref=args.approval_ref,
         include_processes=not args.no_processes,
         client_types=tuple(args.client_type or ("codex", "pi")),
     )

@@ -382,6 +382,37 @@ cwd = "{legacy}"
         self.assertEqual("attention_required", surfaces["serena_registration_script"]["status"])
         self.assertIn("optional_surface_missing", surfaces["serena_registration_script"]["warnings"])
 
+    def test_preflight_approval_acknowledgement_removes_approval_blocker(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "clean-root"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            self._write_minimal_surfaces(target, legacy)
+            project_state.write_state_atomic(
+                target,
+                project_state.default_state(target, status="initialized"),
+                allow_invalid_existing=True,
+            )
+            for path in target.rglob("*"):
+                if path.is_file():
+                    path.write_text(path.read_text(encoding="utf-8").replace(str(legacy), str(target)), encoding="utf-8")
+
+            report = dirty_rebind.build_report(
+                target_root=target,
+                legacy_root=legacy,
+                client_types=("codex",),
+                include_processes=False,
+                approval_acknowledged=True,
+                approval_ref="test-approval",
+            )
+
+        self.assertFalse(report["approval_required"])
+        self.assertTrue(report["approval"]["acknowledged"])
+        self.assertEqual("test-approval", report["approval"]["ref"])
+        self.assertNotIn("approval_required_before_rebind", report["blockers"])
+
     def test_preflight_cli_emits_clean_json_without_process_probe(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
