@@ -125,16 +125,18 @@ source-only branch:
 - installing a new Serena backend or changing the existing Serena service
   registration.
 
-## User-Global Codex Config/Trust Planner
+## User-Global Codex Config/Trust Migration
 
 Use `scripts/plan_codex_global_config_migration.py` before asking for or
-applying any user-global Codex config/trust migration. The planner is
-read-only: it parses `~/.codex/config.toml`, classifies remaining legacy
+applying any user-global Codex config/trust migration. The tool is read-only by
+default: it parses `~/.codex/config.toml`, classifies remaining legacy
 `/home/dgk/workspace/context-portal` entries, and emits target values plus
 readback commands without writing global config, granting hook trust, reloading
-Codex, or mutating services.
+Codex, or mutating services. Apply and rollback modes require explicit
+`--approval-acknowledged` and must be used only after an operator approval is
+recorded for the exact scope.
 
-Current read-only evidence after PR #27:
+Current read-only evidence after PR #28:
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
@@ -158,12 +160,68 @@ The current plan is blocked until explicit user-global approval and reports:
 
 The intended active-target migration, if approved, is to replace active global
 helper/hook paths with
-`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`,
-migrate project trust deliberately to that clean root, and verify by readback.
-Do not treat approval for active global entries as approval to prune historical
-hook-state provenance, reload clients, restart services, mutate ContextForge
-registry/catalog state, change Pi global state, or delete/rename/reset the
-legacy checkout.
+`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`, add
+clean-root project trust while retaining legacy trust for rollback by default,
+create a pre-change backup, and verify by readback. Do not treat approval for
+active global entries as approval to remove legacy project trust, prune
+historical hook-state provenance, reload clients, restart services, mutate
+ContextForge registry/catalog state, change Pi global state, or
+delete/rename/reset the legacy checkout.
+
+Approved staged apply, when the operator explicitly authorizes this exact
+global config/trust write, must use:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
+  scripts/plan_codex_global_config_migration.py \
+  --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
+  --legacy-root /home/dgk/workspace/context-portal \
+  --approval-acknowledged \
+  --approval-ref "issue-15 operator approval, YYYY-MM-DD" \
+  --apply \
+  --pretty
+```
+
+The expected terminal status after a write is `pending_restart`, not
+`verified`. The script creates a timestamped backup next to the selected config
+unless `--backup-path` is supplied. If a rollback is approved, restore from that
+backup with:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
+  scripts/plan_codex_global_config_migration.py \
+  --rollback-from ~/.codex/config.toml.contextforge-backup-YYYYMMDDTHHMMSSZ \
+  --approval-acknowledged \
+  --approval-ref "issue-15 rollback approval, YYYY-MM-DD" \
+  --pretty
+```
+
+After rollback, rerun the planner and direct config readback to confirm the
+restored helper command/args, hook commands, trust stanzas, and hook-state
+posture match the intended backup state before deciding whether another
+operator action is needed.
+
+After any approved write, perform all three readbacks before claiming the file
+transition is ready for runtime verification:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
+  scripts/plan_codex_global_config_migration.py \
+  --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
+  --legacy-root /home/dgk/workspace/context-portal \
+  --approval-acknowledged \
+  --approval-ref "issue-15 operator approval, YYYY-MM-DD" \
+  --pretty
+rg -n "context-portal|contextforge-slices|contextforge-helper|codex_project_init_hook" ~/.codex/config.toml
+cd /home/dgk && codex mcp list --json
+codex -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp list --json
+```
+
+If the operator separately approves removal of legacy trust or pruning of
+legacy hook-state provenance, pass both the action flag and its paired approval
+flag, for example `--remove-legacy-trust --remove-legacy-trust-approved` or
+`--prune-legacy-hook-state --prune-legacy-hook-state-approved`. The base
+`--approval-acknowledged` flag is not enough for those cleanup actions.
 
 ## Path-Bound Operating Surfaces
 
@@ -396,7 +454,7 @@ only the intended stable surface, and verifies by readback.
    project-local hooks if prompted. Do not edit Codex trust files directly.
 
 5. Before any user-global Codex config/trust migration, generate and review the
-   read-only global plan:
+   global plan:
 
    ```sh
    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
@@ -406,10 +464,29 @@ only the intended stable surface, and verifies by readback.
      --pretty
    ```
 
-   If the user approves the global migration, edit only the approved global
-   entries, then verify by rereading `~/.codex/config.toml` and running
-   clean-root `codex mcp list --json`. Preserve legacy hook-state entries unless
-   pruning is separately approved.
+If the user approves the global migration, use the same script with
+`--apply --approval-acknowledged --approval-ref ...` so the transition
+creates a backup, preserves legacy trust/hook-state by default, reports
+   `pending_restart` after a write, and can be retried without duplicating
+   helper, hook, or trust entries. Do not hand-edit `~/.codex/config.toml`.
+   Preserve legacy hook-state entries and legacy project trust unless pruning
+   or removal is separately approved.
+
+   Verify the file transition by direct config readback plus both global and
+   clean-project MCP readbacks:
+
+   ```sh
+   rg -n "context-portal|contextforge-slices|contextforge-helper|codex_project_init_hook" ~/.codex/config.toml
+   PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
+     scripts/plan_codex_global_config_migration.py \
+     --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
+     --legacy-root /home/dgk/workspace/context-portal \
+     --approval-acknowledged \
+     --approval-ref "issue-15 operator approval, YYYY-MM-DD" \
+     --pretty
+   cd /home/dgk && codex mcp list --json
+   codex -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp list --json
+   ```
 
 6. Verify MCP startup from the clean root:
 
