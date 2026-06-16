@@ -162,10 +162,11 @@ work.
   persistent dynamic goal loop until the roadmap reaches verified no-debt
   state.
 - Current protocol subgoal: install the goal-loop and model-aware delegation
-  discipline into live agent state and repo-local skills/governance artifacts.
+  discipline into live agent state and repo-local skills/governance artifacts,
+  with draft PR #8 carrying the roadmap/skill updates.
 - Recently chained subgoal: add a project-local Codex `PreCompact` continuity
   hook that preserves agent goal state without replacing Codex's default
-  compaction prompt.
+  compaction prompt, now isolated in draft PR #9.
 - Next likely execution subgoal after protocol closeout: continue issue #4
   project-init readiness extraction from `dev-root`, unless GitHub/CI/runtime
   evidence shows a higher-risk blocker first.
@@ -181,15 +182,15 @@ project activation should flow through helper-mediated consent and state.
 
 The immediate problem is integration hygiene:
 
-- GitHub does not reflect local history: local `dev-root` is 11 commits ahead
-  of `origin/dev-root`.
+- GitHub now reflects the accepted integration baseline: `dev-root` and
+  `origin/dev-root` both point at `b4db351`.
 - The current branch has one extra committed feature and a very large dirty
   worktree.
-- GitHub has tracking issues #1-#6 for the active fronts, but still has no
-  pull requests for the branch slices.
-- Runtime reliability still has visible client-side lifecycle debt: current
-  wrapper diagnostics report 36 ContextForge wrapper processes under Codex
-  Desktop, with 37 total `CLOSE-WAIT` sockets.
+- GitHub has tracking issues #1-#6 for the active fronts, draft PRs #7 and #8
+  for the first extracted slices, and draft PR #9 for the cross-cutting
+  pre-compaction continuity hook.
+- Runtime reliability cleanup is isolated in PR #7; final retirement still
+  requires merge-readiness checks and current operator-path evidence.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
   and matching project/instance directories remain live and should be reviewed
   separately before cleanup.
@@ -530,6 +531,8 @@ Current GitHub state:
   is open from `codex/wrapper-lifecycle-cleanup` to `dev-root`.
 - Draft PR [#8: ContextForge: roadmap and governance operating discipline](https://github.com/somebloke1/contextforge-control-plane/pull/8)
   is open from `codex/repo-local-skills-and-governance` to `dev-root`.
+- Draft PR [#9: ContextForge: project-local precompact continuity hook](https://github.com/somebloke1/contextforge-control-plane/pull/9)
+  is open from `codex/precompact-continuity-hook` to `dev-root`.
 - Six GitHub tracking issues now hold the active cleanup fronts:
   - [#1: Control Codex ContextForge wrapper lifecycle and stale process cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/1)
   - [#2: Review and clean stale Serena test project units](https://github.com/somebloke1/contextforge-control-plane/issues/2)
@@ -537,13 +540,15 @@ Current GitHub state:
   - [#4: Polish project-init operator state reconciliation and readiness](https://github.com/somebloke1/contextforge-control-plane/issues/4)
   - [#5: Perform approved ContextForge registry orphan prompt/resource cleanup](https://github.com/somebloke1/contextforge-control-plane/issues/5)
   - [#6: Triage noncanonical inventory entries and service-management handoffs](https://github.com/somebloke1/contextforge-control-plane/issues/6)
-- Local `dev-root` is 11 commits ahead of `origin/dev-root`.
+- Local `dev-root` and `origin/dev-root` are synchronized at `b4db351`.
 - Current branch `codex/contextforge-wrapper-lifecycle` has one commit beyond
   `dev-root`.
 - Branch `codex/wrapper-lifecycle-cleanup` has been extracted and pushed with
   draft PR #7.
 - Branch `codex/repo-local-skills-and-governance` has been extracted and
   pushed with draft PR #8.
+- Branch `codex/precompact-continuity-hook` has been extracted and pushed with
+  draft PR #9.
 - The working tree contains many tracked modifications and untracked files.
 
 ### Desired GitHub State
@@ -568,12 +573,16 @@ Current local topology:
 main / origin/main
   7572018 Bootstrap repository branch policy
 
-origin/dev-root
-  9d41c6b Add ContextForge control plane initiative plan
-
-dev-root
+origin/dev-root and dev-root
   b4db351 Merge ContextForge project-local activation state
-  ahead of origin/dev-root by 11 commits
+
+open draft PR worktrees
+  codex/wrapper-lifecycle-cleanup -> PR #7
+  codex/repo-local-skills-and-governance -> PR #8
+  codex/precompact-continuity-hook -> PR #9
+
+historical baseline shown before synchronization
+  9d41c6b Add ContextForge control plane initiative plan
 
 codex/contextforge-helper-project-init
 codex/contextforge-wrapper-lifecycle
@@ -602,13 +611,13 @@ Phase 0: preserve local state.
 - Keep `codex/contextforge-wrapper-lifecycle` as the temporary holding branch
   until all slices are extracted.
 
-Phase 1: publish the accepted integration baseline.
+Phase 1: publish the accepted integration baseline. Status: completed.
 
-- Confirm tests still pass from the current checkout.
-- Push local `dev-root` to `origin/dev-root`.
-- Do not open a PR for those 11 commits if `dev-root` is intentionally the
-  default integration branch; this is baseline synchronization, not feature
-  review.
+- Evidence: local `dev-root` and `origin/dev-root` both resolve to `b4db351`.
+- The former 11-commit local lead has been synchronized to GitHub without a
+  baseline PR because `dev-root` is the integration branch.
+- Re-run focused tests before merging dependent slices, but do not repeat
+  baseline push work unless evidence shows the refs diverged again.
 
 Phase 2: create branch/PR slices from `dev-root`.
 
@@ -623,6 +632,7 @@ Recommended PR slices:
 | `codex/service-inventory-triage` | [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6) | inventory classification docs or scripts only; no generated `*.local.json`; any service-management handoff documentation. | inventory script; no generated/local files tracked |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/repo-local-skills-and-governance` | cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
+| `codex/precompact-continuity-hook` | cross-cutting continuity slice / [PR #9](https://github.com/somebloke1/contextforge-control-plane/pull/9) | Project-local Codex `PreCompact` hook, ignored continuity snapshots, hook tests, and operator documentation. Does not override Codex's default compaction prompt. | precompact hook unit tests; hook smoke invocation; config guardrail check |
 
 ### Executable Slice Contracts
 
@@ -865,9 +875,8 @@ Phase 4: post-merge hygiene.
 
 Do not open one giant PR from the current dirty branch. Recommended sequence:
 
-1. Push `dev-root` after a final focused test check. These 11 commits already
-   represent integrated local history and should become the visible GitHub
-   baseline.
+1. Keep `dev-root` synchronized with `origin/dev-root`; the original 11-commit
+   baseline push is complete as of `b4db351`.
 2. Use the tracking issues above as the GitHub coordination layer for active
    work.
 3. Split current dirty work into reviewable branches:
@@ -878,6 +887,7 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    - `codex/service-inventory-triage`
    - `codex/serena-stale-unit-cleanup`
    - `codex/repo-local-skills-and-governance`
+   - `codex/precompact-continuity-hook`
 4. For each branch, include only one front, run focused tests, then open a draft
    PR against `dev-root`.
 5. Only after PRs exist, decide whether each issue closes through a PR,
@@ -885,25 +895,28 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
 
 ## Recommended Execution Order
 
-1. Freeze new feature work until GitHub reflects local history.
-2. Push local `dev-root`.
-3. Capture and preserve the current dirty branch as-is, then split it into
-   small branches rather than continuing to pile changes onto it.
-4. Land wrapper lifecycle changes first because they affect day-to-day tool
+1. Keep new feature work frozen until the remaining dirty-branch slices are
+   represented as reviewable branches or explicitly deferred.
+2. Treat the `dev-root` baseline push as complete while continuing to verify
+   the ref before dependent PR work.
+3. Preserve the current dirty branch as-is, then continue splitting it into
+   small branches rather than piling new changes onto it.
+4. Keep PRs #7, #8, and #9 current while extracting the remaining issue slices.
+5. Land wrapper lifecycle changes first because they affect day-to-day tool
    reliability.
-5. Clean stale wrapper processes through Codex Desktop relaunch or exact-match
+6. Clean stale wrapper processes through Codex Desktop relaunch or exact-match
    process cleanup from the runbook; the cleanup must be dry-run first,
    exact-PID scoped, and safe to repeat.
-6. Review and clean stale Serena test units.
-7. Land helper/project-init multi-client support and reconcile project-state
+7. Review and clean stale Serena test units.
+8. Land helper/project-init multi-client support and reconcile project-state
    historical jobs into terminal, verified, or explicitly non-blocking states
    without duplicating activation records.
-8. Land Pi shim source and perform approved global install/reload verification.
-9. Perform approved registry orphan cleanup using exact ids from a fresh
+9. Land Pi shim source and perform approved global install/reload verification.
+10. Perform approved registry orphan cleanup using exact ids from a fresh
    dry-run report and verify a second dry run is empty for those candidates.
-10. Re-run full tests, inventory, gateway health, service unit status,
+11. Re-run full tests, inventory, gateway health, service unit status,
     protocol-aware MCP probes, and selected client-visible validation.
-11. Run goal maintenance/refinement: update the meta-goal/sub-goal map,
+12. Run goal maintenance/refinement: update the meta-goal/sub-goal map,
     reprioritize the next slice from current evidence, and record the next best
     move in this roadmap or the relevant issue/PR.
 
