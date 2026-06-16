@@ -5,16 +5,17 @@ from __future__ import annotations
 
 import json
 import os
+import select
 import ssl
 import sys
 import urllib.error
 import urllib.request
 import base64
+from dataclasses import dataclass
 import fcntl
 import time
 from pathlib import Path
 from typing import Any
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_ENV = REPO_ROOT / "config" / "contextforge.env"
@@ -25,6 +26,118 @@ GATEWAY_BASE = os.environ.get(
     "CONTEXTFORGE_BASE_URL",
     "http://127.0.0.1:4444",
 ).rstrip("/")
+DEFAULT_WRAPPER_IDLE_TIMEOUT_SECONDS = 300
+DEFAULT_WRAPPER_TOOL_TIMEOUT_SECONDS = 120
+
+
+@dataclass
+class WrapperLifecycle:
+    server_name: str
+    server_url: str
+    parent_pid: int
+    idle_timeout_seconds: float
+    stop_reason: str | None = None
+    exit_code: int | None = None
+
+
+def _log_lifecycle(event: str, lifecycle: WrapperLifecycle, **extra: Any) -> None:
+    payload = {
+        "event": event,
+        "pid": os.getpid(),
+        "ppid": os.getppid(),
+        "initial_ppid": lifecycle.parent_pid,
+        "server_name": lifecycle.server_name,
+        "mcp_server_url": lifecycle.server_url,
+        "idle_timeout_seconds": lifecycle.idle_timeout_seconds,
+    }
+    payload.update(extra)
+    print(json.dumps(payload, sort_keys=True), file=sys.stderr, flush=True)
+
+
+def _log_bootstrap_error(server_name: str, stage: str, exc: Exception | str) -> None:
+    payload = {
+        "event": "contextforge_wrapper_bootstrap_error",
+        "pid": os.getpid(),
+        "ppid": os.getppid(),
+        "server_name": server_name,
+        "stage": stage,
+        "error_type": exc.__class__.__name__ if isinstance(exc, Exception) else "RuntimeError",
+        "error": str(exc),
+    }
+    print(json.dumps(payload, sort_keys=True), file=sys.stderr, flush=True)
+
+
+def _float_env(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return max(0.0, value)
+
+
+class _LifecycleStdinBuffer:
+    """Expose stdin.readline with idle and parent-liveness termination."""
+
+    def __init__(self, wrapped: Any, lifecycle: WrapperLifecycle) -> None:
+        self._wrapped = wrapped
+        self._lifecycle = lifecycle
+        self._pending = b""
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._wrapped, name)
+
+    def readline(self, *args: Any, **kwargs: Any) -> bytes:
+        timeout = self._lifecycle.idle_timeout_seconds
+        if timeout <= 0 or not hasattr(self._wrapped, "fileno"):
+            line = self._wrapped.readline(*args, **kwargs)
+            if not line:
+                self._lifecycle.stop_reason = self._lifecycle.stop_reason or "stdin_eof"
+            return line
+
+        fd = self._wrapped.fileno()
+        deadline = time.monotonic() + timeout
+        while True:
+            if b"\n" in self._pending:
+                line, self._pending = self._pending.split(b"\n", 1)
+                return line + b"\n"
+            if os.getppid() != self._lifecycle.parent_pid:
+                self._lifecycle.stop_reason = "parent_pid_changed"
+                return b""
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self._lifecycle.stop_reason = "idle_timeout"
+                return b""
+            try:
+                readable, _, _ = select.select([fd], [], [], min(remaining, 1.0))
+            except InterruptedError:
+                continue
+            if not readable:
+                continue
+            chunk = os.read(fd, 4096)
+            if not chunk:
+                self._lifecycle.stop_reason = self._lifecycle.stop_reason or "stdin_eof"
+                if self._pending:
+                    line = self._pending
+                    self._pending = b""
+                    return line
+                return b""
+            self._pending += chunk
+
+
+class _LifecycleStdin:
+    def __init__(self, wrapped: Any, lifecycle: WrapperLifecycle) -> None:
+        self._wrapped = wrapped
+        self.buffer = _LifecycleStdinBuffer(wrapped.buffer, lifecycle)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._wrapped, name)
+
+    def readline(self, *args: Any, **kwargs: Any) -> str:
+        line = self.buffer.readline(*args, **kwargs)
+        return line.decode(getattr(self._wrapped, "encoding", None) or "utf-8") if isinstance(line, bytes) else line
 
 
 def _read_env(path: Path) -> dict[str, str]:
@@ -141,6 +254,160 @@ def _token(email: str, password: str) -> str:
         return _login_token(email, password)
 
 
+def _jsonrpc_ids(payload: Any) -> set[Any]:
+    if isinstance(payload, dict) and "id" in payload:
+        return {payload["id"]}
+    if isinstance(payload, list):
+        return {item["id"] for item in payload if isinstance(item, dict) and "id" in item}
+    return set()
+
+
+def _jsonrpc_error(request_id: Any, message: str, code: int, data: Any = None) -> dict[str, Any]:
+    error = {"code": code, "message": message}
+    if data is not None:
+        error["data"] = data
+    return {"jsonrpc": "2.0", "id": request_id, "error": error}
+
+
+def _install_transport_shim(stock_wrapper: Any, lifecycle: WrapperLifecycle, email: str, password: str) -> None:
+    """Patch stock wrapper forwarding to be id/session aware for streamable HTTP."""
+
+    session: dict[str, str | None] = {"mcp_session_id": None}
+
+    async def forward_once(client: Any, settings: Any, payload: Any, *, refresh_allowed: bool = True) -> None:
+        if stock_wrapper.shutting_down():
+            return
+
+        headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "Accept": "application/json, application/x-ndjson, text/event-stream",
+        }
+        if settings.auth_header:
+            headers["Authorization"] = settings.auth_header
+        if session["mcp_session_id"]:
+            headers["Mcp-Session-Id"] = session["mcp_session_id"]
+
+        body_bytes = stock_wrapper.orjson.dumps(payload)
+        expected_ids = _jsonrpc_ids(payload)
+        seen_ids: set[Any] = set()
+
+        async with client.stream("POST", settings.server_url, data=body_bytes, headers=headers) as resp:
+            if resp.headers.get("mcp-session-id"):
+                session["mcp_session_id"] = resp.headers["mcp-session-id"]
+            status = resp.status_code
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            if status == 401 and refresh_allowed:
+                token = _login_token(email, password)
+                settings.auth_header = f"Bearer {token}"
+                os.environ["MCP_AUTH"] = settings.auth_header
+                lifecycle.stop_reason = None
+                _log_lifecycle("contextforge_wrapper_token_refreshed", lifecycle)
+                await forward_once(client, settings, payload, refresh_allowed=False)
+                return
+            if status < 200 or status >= 300:
+                _log_lifecycle(
+                    "contextforge_wrapper_http_error",
+                    lifecycle,
+                    status=status,
+                    content_type=ctype,
+                    classification="inside_gateway_or_upstream_http",
+                )
+                request_ids = expected_ids or {"bridge"}
+                for request_id in request_ids:
+                    stock_wrapper.send_to_stdout(_jsonrpc_error(request_id, f"HTTP {status}", status))
+                return
+            if not expected_ids:
+                return
+
+            async def process_line(line: str | bytes) -> bool:
+                if stock_wrapper.shutting_down():
+                    return True
+                try:
+                    obj = stock_wrapper.orjson.loads(line)
+                except Exception:
+                    line_text = line if isinstance(line, str) else line.decode("utf-8", "replace")
+                    _log_lifecycle(
+                        "contextforge_wrapper_invalid_gateway_json",
+                        lifecycle,
+                        classification="inside_gateway_or_bridge_response",
+                    )
+                    for request_id in expected_ids:
+                        stock_wrapper.send_to_stdout(_jsonrpc_error(request_id, "Invalid JSON from server", stock_wrapper.JSONRPC_PARSE_ERROR, line_text))
+                    return True
+                stock_wrapper.send_to_stdout(obj)
+                if isinstance(obj, dict) and obj.get("id") in expected_ids:
+                    seen_ids.add(obj.get("id"))
+                if isinstance(obj, list):
+                    seen_ids.update(item.get("id") for item in obj if isinstance(item, dict) and item.get("id") in expected_ids)
+                return expected_ids.issubset(seen_ids)
+
+            if "event-stream" in ctype:
+                async for data_payload in stock_wrapper.sse_events(resp):
+                    if await process_line(data_payload):
+                        return
+                return
+            if "x-ndjson" in ctype or "ndjson" in ctype:
+                async for line in stock_wrapper.ndjson_lines(resp):
+                    if await process_line(line):
+                        return
+                return
+            if "application/json" in ctype:
+                raw = await resp.aread()
+                if raw.strip():
+                    await process_line(raw)
+                return
+            async for line in stock_wrapper.ndjson_lines(resp):
+                if await process_line(line):
+                    return
+
+    stock_wrapper.forward_once = forward_once
+
+
+def _run_stock_wrapper(lifecycle: WrapperLifecycle, email: str, password: str) -> int:
+    """Run stock ContextForge's stdio wrapper with local lifecycle guards."""
+
+    original_stdin = sys.stdin
+    original_argv = sys.argv[:]
+    sys.stdin = _LifecycleStdin(sys.stdin, lifecycle)
+    sys.argv = [
+        "mcpgateway.wrapper",
+        "--timeout",
+        str(int(_float_env("CONTEXTFORGE_WRAPPER_TOOL_TIMEOUT_SECONDS", DEFAULT_WRAPPER_TOOL_TIMEOUT_SECONDS))),
+    ]
+    _log_lifecycle("contextforge_wrapper_start", lifecycle, tool_timeout_seconds=sys.argv[-1])
+    try:
+        from mcpgateway import wrapper as stock_wrapper  # pylint: disable=import-outside-toplevel
+
+        _install_transport_shim(stock_wrapper, lifecycle, email, password)
+        stock_wrapper.main()
+        lifecycle.stop_reason = lifecycle.stop_reason or "stock_wrapper_returned"
+        lifecycle.exit_code = 0
+        return 0
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 1
+        lifecycle.exit_code = code
+        lifecycle.stop_reason = lifecycle.stop_reason or "system_exit"
+        return code
+    except BrokenPipeError:
+        lifecycle.exit_code = 1
+        lifecycle.stop_reason = lifecycle.stop_reason or "broken_stdout_pipe"
+        return 1
+    except Exception as exc:  # pragma: no cover - defensive process boundary
+        lifecycle.exit_code = 1
+        lifecycle.stop_reason = lifecycle.stop_reason or exc.__class__.__name__
+        _log_lifecycle("contextforge_wrapper_error", lifecycle, error_type=exc.__class__.__name__, error=str(exc))
+        return 1
+    finally:
+        sys.stdin = original_stdin
+        sys.argv = original_argv
+        _log_lifecycle(
+            "contextforge_wrapper_stop",
+            lifecycle,
+            stop_reason=lifecycle.stop_reason or "unknown",
+            exit_code=lifecycle.exit_code,
+        )
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: contextforge_mcp_wrapper.py <virtual-server-name>", file=sys.stderr)
@@ -157,13 +424,21 @@ def main() -> int:
     try:
         token = _token(email, password)
     except RuntimeError as exc:
+        _log_bootstrap_error(server_name, "auth_token", exc)
         print(str(exc), file=sys.stderr)
         return 1
 
-    servers = _items(_request("GET", "/servers?include_inactive=true&limit=1000", token=token))
+    try:
+        servers = _items(_request("GET", "/servers?include_inactive=true&limit=1000", token=token))
+    except Exception as exc:
+        _log_bootstrap_error(server_name, "contextforge_server_readback", exc)
+        print(str(exc), file=sys.stderr)
+        return 1
     matches = [server for server in servers if server.get("name") == server_name]
     if len(matches) != 1:
-        print(f"expected one virtual server named {server_name!r}, found {len(matches)}", file=sys.stderr)
+        message = f"expected one virtual server named {server_name!r}, found {len(matches)}"
+        _log_bootstrap_error(server_name, "contextforge_server_match", message)
+        print(message, file=sys.stderr)
         return 1
 
     server_id = matches[0]["id"]
@@ -171,10 +446,20 @@ def main() -> int:
     os.environ["MCP_AUTH"] = f"Bearer {token}"
     if GATEWAY_BASE.startswith("https://"):
         os.environ["SSL_CERT_FILE"] = str(TLS_CERT)
+    os.environ["CONTEXTFORGE_WRAPPER_SERVER_NAME"] = server_name
+    os.environ.setdefault("MCP_WRAPPER_LOG_LEVEL", "INFO")
+    os.environ["FORGE_CONTENT_TYPE"] = "application/json"
 
-    python = str(REPO_ROOT / ".venv" / "bin" / "python")
-    os.execv(python, [python, "-m", "mcpgateway.wrapper", "--timeout", "120"])
-    return 1
+    lifecycle = WrapperLifecycle(
+        server_name=server_name,
+        server_url=os.environ["MCP_SERVER_URL"],
+        parent_pid=os.getppid(),
+        idle_timeout_seconds=_float_env(
+            "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS",
+            DEFAULT_WRAPPER_IDLE_TIMEOUT_SECONDS,
+        ),
+    )
+    return _run_stock_wrapper(lifecycle, email, password)
 
 
 if __name__ == "__main__":
