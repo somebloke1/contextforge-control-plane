@@ -32,6 +32,10 @@ Current local checks used for this snapshot:
 - `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m unittest tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_extension_source_registers_bootstrap_helper_tools_without_bridge_reuse tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_global_shim_install_plan_is_explicit_and_non_mutating_by_default tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_shim_dry_run_imports_project_state_bindings_and_blocks_mutating_defaults tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_shim_dry_run_reports_explicit_validation_skip_when_no_safe_tool_matches tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_helper_cli_stdout_is_clean_json -v`
 - `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python scripts/manage_pi_global_shim.py status`
 - `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python scripts/manage_pi_global_shim.py plan`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m py_compile scripts/inspect_project_init_readiness.py tests/test_project_init_scripts.py`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m unittest tests.test_project_init_scripts -v`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m unittest tests.test_project_init_activation_workflow -v`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python scripts/inspect_project_init_readiness.py --project-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance --compare-root /home/dgk/workspace/context-portal --client-type codex --client-type pi`
 
 Session-derived context came from these rollout summaries:
 
@@ -219,8 +223,14 @@ work.
   only in the dirty holding checkout. This was a source-only slice: it did not
   install or reload the user-global Pi extension. Issue #3 remains open for the
   approval-gated global install, Pi `/reload`, and live Pi-visible validation.
-- Current next subgoal: issue #4 live project-init readiness reconciliation is
-  the next best non-approval-gated slice. Issue #15 dirty checkout rebind and
+- Active project-init readiness subgoal: branch
+  `codex/project-init-readiness-reconciliation` adds a read-only
+  `inspect_project_init_readiness.py` report and focused tests for issue #4. It
+  makes the current split explicit without mutating `.project`, client config,
+  processes, services, registry, catalog, or trust: clean `dev-root` source
+  state is root-mismatched/blocked, legacy live state is schema-valid with Codex
+  verified and Pi validation-pending/mixed, and helper MCP processes still
+  source from the legacy dirty checkout. Issue #15 dirty checkout rebind and
   issue #3 Pi install/reload remain real decision points for the user, not
   hidden agent actions.
 - Dirty checkout retirement remains open under issue #15. The current authority
@@ -374,15 +384,22 @@ Current evidence:
 - Issue #4 source mechanics are green after PR #10/#16: a post-compaction
   focused check compiled project-init/helper/state/Serena scripts and ran 150
   project-init/project-state tests OK.
-- Live helper readback is not yet a close signal: the visible helper processes
-  still launch from `/home/dgk/workspace/context-portal`, and that checkout's
-  helper file differs from clean `dev-root` for recovery-continuation fixes.
-- The clean tracked `.project/context_forge_state.json` remains old and
-  `in_progress`; the legacy live
-  `/home/dgk/workspace/context-portal/.project/context_forge_state.json` is
-  `initialized` with service records and latest Codex target-client validation
-  `passed`, but it also carries Pi validation-pending/mixed state and stale
-  ContextForge readback fields.
+- Branch `codex/project-init-readiness-reconciliation` adds a read-only
+  readiness reconciliation report. Focused checks passed:
+  `py_compile scripts/inspect_project_init_readiness.py
+  tests/test_project_init_scripts.py`, `tests.test_project_init_scripts -v`
+  with 49 tests OK, and `tests.test_project_init_activation_workflow -v` with
+  77 tests OK.
+- Live helper readback is now inspectable but not yet a close signal: the
+  readiness report classifies the clean source worktree state as
+  `invalid_blocked` because tracked `.project/context_forge_state.json` still
+  attests `/home/dgk/workspace/context-portal`, while eight visible helper MCP
+  processes launch from the legacy checkout.
+- The legacy live `/home/dgk/workspace/context-portal/.project/context_forge_state.json`
+  is schema-valid, revision 10, and `initialized`; its current Codex client
+  state is `verified` with validation `passed`, while Pi remains
+  `validation_pending` with validation `mixed`. Historical activation-job
+  counts are two `validation_pending` jobs and one `verified` job.
 - The project state still carries deprecated project label `context-portal`;
   per `dec-20260616-0001`, that is naming debt unless a compatibility-safe
   migration is planned and approved.
@@ -401,10 +418,14 @@ Dependencies:
 
 Risks:
 
-- State no longer exposes the historical activation-job shape described by
-  older issue text, but it does expose `not_checked` gateway readback and the
-  deprecated project label. The project should reconcile those fields before
-  declaring state hygiene complete.
+- Issue #4 cannot close while clean tracked source state is root-mismatched and
+  helper MCP processes still source from the legacy dirty checkout; those are
+  issue #15 rebind/retirement inputs and require explicit process/config
+  decisions before mutation.
+- Legacy live state still contains historical `validation_pending` activation
+  jobs and a current Pi `validation_pending`/`mixed` client state. The project
+  should reconcile or explicitly retain those records before declaring state
+  hygiene complete.
 - Some implementation remains helper/script-oriented rather than a cohesive
   production operator CLI.
 - Live inference validation exists as a script path but should be re-run only
@@ -996,27 +1017,29 @@ extraction if current evidence proves a better review boundary.
   is now closed by PR #17, eliminating the known broad test-suite evidence gap in
   clean worktrees under the project `.venv` interpreter. A post-compaction
   focused check compiled the project-init/helper/state/Serena scripts and ran
-  150 project-init/project-state tests OK. Live readiness still cannot close:
-  tracked `dev-root` project state is old/in-progress, the legacy live
-  `/home/dgk/workspace/context-portal/.project/context_forge_state.json` is
-  initialized but includes Pi validation-pending/mixed state, and currently
-  running helper MCP processes are served from the legacy dirty checkout rather
-  than clean `dev-root`.
+  150 project-init/project-state tests OK. Branch
+  `codex/project-init-readiness-reconciliation` adds read-only issue #4
+  readiness reconciliation: clean source state is reported as
+  `invalid_blocked` with a root mismatch, legacy live state is schema-valid
+  revision 10 and `initialized`, Codex is `verified`/`passed`, Pi is
+  `validation_pending`/`mixed`, and eight helper MCP processes still source
+  from the legacy dirty checkout. Live readiness still cannot close until those
+  approval-gated rebind/retirement facts are resolved.
 - Desired state: project-state labels, readback fields, helper prompts, reload
-  guidance, and state reconciliation tell the current truth without stale job
-  assumptions.
+  guidance, state reconciliation, and read-only diagnostics tell the current
+  truth without stale job assumptions.
 - Invariants: `.project/context_forge_state.json` remains the state authority;
   project-init mutations require helper consent receipts; no direct global
   trust, secret, registry, or catalog writes happen in this slice.
 - Dependencies: helper context/list evidence, schema/test updates, naming
   decision `dec-20260616-0001`, and explicit approval before any compatibility
   migration of live names or service identities.
-- Hidden work: issue #4's live-state wording must distinguish clean tracked
-  source state, legacy live state, per-client activation jobs, and helper
-  process source. A prior roadmap claim that `validation_pending` jobs were no
-  longer present is stale; the legacy live state still includes a Pi
-  `validation_pending`/mixed validation job even though the latest Codex job is
-  verified and not repair-pending.
+- Hidden work: issue #4's live-state wording must keep clean tracked source
+  state, legacy live state, per-client activation jobs, and helper process
+  source distinct. A prior roadmap claim that `validation_pending` jobs were no
+  longer present is stale; the legacy live state still includes current Pi
+  `validation_pending`/mixed state plus one older Codex `validation_pending`
+  job, even though the latest Codex job is verified and not repair-pending.
 - Acceptance: schema-valid state, no stale activation-job claims, clear
   `not_checked`/verified/presumed-working semantics, numbered choices, explicit
   reload text, and full tests pass.
@@ -1039,7 +1062,15 @@ extraction if current evidence proves a better review boundary.
   post-compaction issue #4 audit evidence: `cf_project_init_get_context`,
   `cf_project_init_list_capabilities`, repair/reload dry-run readbacks,
   live/clean `.project/context_forge_state.json` comparison, helper process
-  source-path inspection, and 150 focused tests OK.
+  source-path inspection, and 150 focused tests OK. Current branch evidence:
+  `scripts/inspect_project_init_readiness.py` reports
+  `primary_project_state_invalid_blocked`,
+  `primary_project_state_root_mismatch`, and
+  `helper_process_source_mismatch`; it reports the comparison legacy root as
+  valid with activation-job status counts `validation_pending: 2` and
+  `verified: 1`. Focused branch checks passed: compile for the new script and
+  tests, `tests.test_project_init_scripts -v` with 49 tests OK, and
+  `tests.test_project_init_activation_workflow -v` with 77 tests OK.
 - Debt policy: any remaining deprecated label or unchecked readback must be
   tracked with owner, impact, migration trigger, and retirement condition.
 

@@ -21,6 +21,7 @@ import gemini_project_init_hook
 import opencode_project_init_hook
 import control_plane_contextforge_binding as binding
 import control_plane_project_state as project_state
+import inspect_project_init_readiness as readiness
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
 
@@ -110,6 +111,79 @@ class ProjectInitCommonTests(unittest.TestCase):
             child.mkdir()
             (child / "notes.txt").write_text("not a separate empty project\n", encoding="utf-8")
             self.assertEqual(parent, common.detect_project_root(child))
+
+
+class ProjectInitReadinessInspectorTests(unittest.TestCase):
+    def test_report_distinguishes_primary_root_mismatch_from_legacy_live_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            primary = base / "clean-dev-root"
+            legacy = base / "context-portal"
+            primary.mkdir()
+            legacy.mkdir()
+
+            legacy_state = project_state.default_state(legacy, status="initialized")
+            written_legacy = project_state.write_state_atomic(legacy, legacy_state)
+            primary_state_path = project_state.project_state_path(primary)
+            primary_state_path.parent.mkdir(mode=0o700, parents=True)
+            primary_state_path.write_text(json.dumps(written_legacy, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            before = primary_state_path.read_text(encoding="utf-8")
+
+            process_snapshot = [
+                {
+                    "pid": 12345,
+                    "script": str(legacy / "scripts" / "contextforge_helper_mcp.py"),
+                    "source_root": str(legacy),
+                    "command": f"{legacy}/.venv/bin/python {legacy}/scripts/contextforge_helper_mcp.py",
+                }
+            ]
+            report = readiness.build_report(
+                project_root=primary,
+                compare_roots=[legacy],
+                client_types=("codex", "pi"),
+                process_snapshot=process_snapshot,
+            )
+
+            self.assertEqual(before, primary_state_path.read_text(encoding="utf-8"))
+            self.assertEqual("blocked", report["status"])
+            self.assertIn("primary_project_state_root_mismatch", report["blockers"])
+            self.assertIn("helper_process_source_mismatch", report["blockers"])
+            self.assertIn("comparison_root_has_valid_project_state", report["warnings"])
+            self.assertEqual("invalid_blocked", report["roots"][0]["readiness_status"])
+            self.assertEqual("valid", report["roots"][1]["readiness_status"])
+            self.assertFalse(report["roots"][0]["state"]["root_match"]["root_matches"])
+            self.assertEqual(str(legacy), report["helper_processes"][0]["source_root"])
+            self.assertIn("read-only inspection; no project files are written", report["non_actions"])
+
+    def test_cli_emits_clean_json_without_process_probe(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            project_state.write_state_atomic(root, project_state.default_state(root, status="initialized"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "inspect_project_init_readiness.py"),
+                    "--project-root",
+                    str(root),
+                    "--client-type",
+                    "codex",
+                    "--no-processes",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                cwd=REPO_ROOT,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", result.stderr)
+        self.assertTrue(result.stdout.startswith("{"), result.stdout[:200])
+        parsed = json.loads(result.stdout)
+        self.assertEqual(readiness.REPORT_SCHEMA_URI, parsed["schema_uri"])
+        self.assertEqual("ready", parsed["status"])
+        self.assertEqual([], parsed["helper_processes"])
+        self.assertEqual(["codex"], list(parsed["roots"][0]["inspections"]))
 
 
 class SerenaManagerTests(unittest.TestCase):
