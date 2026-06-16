@@ -838,7 +838,13 @@ extraction if current evidence proves a better review boundary.
 - Beneficiary: operators reading systemd, inventory, registry, and port state.
 - Current state: this repo's Serena unit is active; phronesis-devstack Serena is
   active; eight `contextforge-serena-test-new-proj-*` units and matching
-  workspace plus `server-instances/` directories exist.
+  workspace plus `server-instances/` directories exist. A read-only
+  classification pass was recorded on issue #2 at
+  `https://github.com/somebloke1/contextforge-control-plane/issues/2#issuecomment-4718131243`:
+  the context-portal unit is canonical, phronesis-devstack is intentionally
+  retained, and the eight `test-new-proj*` units are disposable candidates only
+  after explicit approval. The same pass found three empty `serena-tmp*`
+  server-instance directories with no installed or loaded user units.
 - Desired state: legitimate project-scoped Serena services remain active;
   disposable test units/directories/registry records are removed only after
   approval and exact-match readback.
@@ -851,6 +857,9 @@ extraction if current evidence proves a better review boundary.
 - Hidden work: reconcile stale project-scoped registry tools reported by
   `scripts/inspect_contextforge_cleanup.py`; issue #2 and issue #5 overlap and
   must not double-delete the same logical service assets.
+- Additional risk: current live Serena listeners on ports `9108` and
+  `9110`-`9117` are bound to `0.0.0.0`; exposure changes remain approval-gated
+  and must not be bundled into stale test-unit cleanup.
 - Acceptance: retained services have a rationale; removed services have dry-run
   evidence, stop/disable/delete readback, and a second status/cleanup pass with
   no unexpected candidates.
