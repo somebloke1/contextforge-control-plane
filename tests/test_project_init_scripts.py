@@ -555,6 +555,86 @@ trusted_hash = "sha256:sessionstart"
         self.assertNotIn("clean_root_project_trust_missing", report["warnings"])
         self.assertNotIn("clean_root_project_local_hook_state_missing", report["warnings"])
 
+    def test_global_config_plan_reports_hook_retarget_side_effect_preflight(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+
+            report = codex_global_plan.build_report(
+                config_path=config,
+                target_root=target,
+                legacy_root=legacy,
+            )
+
+        preflight = report["hook_retarget_preflight"]
+        self.assertEqual(["SessionStart", "UserPromptSubmit"], [item["event"] for item in preflight["affected_hook_commands"]])
+        self.assertIn(f"{legacy}/.codex/config.toml:session_start:0:0", preflight["legacy_hook_state_records"])
+        self.assertEqual([], preflight["clean_root_hook_state_records"])
+        prompt_resource = preflight["first_run_side_effect_model"]["prompt_resource_readback"]
+        self.assertEqual("unknown_prompt_resource_readback_required", prompt_resource["status"])
+        self.assertTrue(prompt_resource["approval_required_before_hook_execution"])
+        self.assertIn("no hook is executed", preflight["non_actions"])
+
+    def test_prompt_resource_side_effect_classifier_distinguishes_fresh_from_upsert(self) -> None:
+        fresh = codex_global_plan.classify_prompt_resource_side_effect(
+            prompt_record={"id": "prompt-id", "name": common.PROJECT_INIT_PROMPT_NAME, "tags": [common.PROMPT_VERSION]},
+            resource_record={
+                "id": "resource-id",
+                "name": common.PROJECT_INIT_RESOURCE_NAME,
+                "uri": common.PROJECT_INIT_RESOURCE_URI,
+                "tags": [common.PROMPT_VERSION],
+            },
+            prompt_version=common.PROMPT_VERSION,
+            resource_uri=common.PROJECT_INIT_RESOURCE_URI,
+        )
+        missing_prompt = codex_global_plan.classify_prompt_resource_side_effect(
+            prompt_record=None,
+            resource_record={
+                "id": "resource-id",
+                "name": common.PROJECT_INIT_RESOURCE_NAME,
+                "uri": common.PROJECT_INIT_RESOURCE_URI,
+                "tags": [common.PROMPT_VERSION],
+            },
+            prompt_version=common.PROMPT_VERSION,
+            resource_uri=common.PROJECT_INIT_RESOURCE_URI,
+        )
+        stale_resource = codex_global_plan.classify_prompt_resource_side_effect(
+            prompt_record={"id": "prompt-id", "name": common.PROJECT_INIT_PROMPT_NAME, "tags": [common.PROMPT_VERSION]},
+            resource_record={
+                "id": "resource-id",
+                "name": common.PROJECT_INIT_RESOURCE_NAME,
+                "uri": common.PROJECT_INIT_RESOURCE_URI,
+                "tags": ["old"],
+            },
+            prompt_version=common.PROMPT_VERSION,
+            resource_uri=common.PROJECT_INIT_RESOURCE_URI,
+        )
+        missing_ids = codex_global_plan.classify_prompt_resource_side_effect(
+            prompt_record={"name": common.PROJECT_INIT_PROMPT_NAME, "tags": [common.PROMPT_VERSION]},
+            resource_record={
+                "name": common.PROJECT_INIT_RESOURCE_NAME,
+                "uri": common.PROJECT_INIT_RESOURCE_URI,
+                "tags": [common.PROMPT_VERSION],
+            },
+            prompt_version=common.PROMPT_VERSION,
+            resource_uri=common.PROJECT_INIT_RESOURCE_URI,
+        )
+
+        self.assertEqual("read_only_render_path", fresh["status"])
+        self.assertFalse(fresh["would_call_upgrade_project_init_prompt"])
+        self.assertEqual("would_upsert_prompt_resource", missing_prompt["status"])
+        self.assertIn("project_init_prompt_missing", missing_prompt["reasons"])
+        self.assertEqual("would_upsert_prompt_resource", stale_resource["status"])
+        self.assertIn("project_init_resource_stale", stale_resource["reasons"])
+        self.assertEqual("would_upsert_prompt_resource", missing_ids["status"])
+        self.assertIn("project_init_prompt_missing_id", missing_ids["reasons"])
+        self.assertIn("project_init_resource_missing_id", missing_ids["reasons"])
+
     def test_global_config_apply_requires_approval_and_does_not_write(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()

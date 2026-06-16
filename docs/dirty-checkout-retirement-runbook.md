@@ -158,6 +158,42 @@ The current plan is blocked until explicit user-global approval and reports:
 - no clean-root project trust stanza yet;
 - no clean-root project-local hook-state entries yet.
 
+The same report includes `hook_retarget_preflight`, which must be reviewed
+before any retargeted `SessionStart` or `UserPromptSubmit` hook is allowed to
+execute. This block identifies:
+
+- the exact hook commands that would move from the legacy checkout to the clean
+  root;
+- legacy and clean-root hook-state records;
+- the trust-state consequence that changed global hook commands may require a
+  fresh Codex hook approval/trust action;
+- the first-run prompt/resource side-effect model for
+  `codex_project_init_hook.py`.
+
+By default, prompt/resource side-effect status is
+`unknown_prompt_resource_readback_required` because the planner does not call
+ContextForge APIs. For an explicit metadata check using only existing bearer or
+cached token material, run:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
+  scripts/plan_codex_global_config_migration.py \
+  --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
+  --legacy-root /home/dgk/workspace/context-portal \
+  --inspect-contextforge-prompt-state \
+  --pretty
+```
+
+That inspection may report `read_only_render_path` when prompt/resource
+metadata is current, `would_upsert_prompt_resource` when first hook execution
+would call `upgrade_project_init_prompt()`, or
+`contextforge_prompt_resource_readback_failed` when no existing token material
+is available or readback fails. The inspection must not log in or create token
+cache state merely to classify hook side effects. If upsert is possible or
+readback fails, treat hook execution as a separate approval-gated action. Do not
+describe a global config path edit as free of ContextForge prompt/resource side
+effects until this preflight is understood.
+
 The intended active-target migration, if approved, is to replace active global
 helper/hook paths with
 `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`, add
