@@ -2478,7 +2478,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("[mcp_servers.serena]", config_text)
         self.assertIn("contextforge_mcp_wrapper.py", config_text)
         self.assertNotIn('command = "serena"', config_text)
-        self.assertGreaterEqual(len(provision_calls), 2)
+        self.assertEqual(2, len(provision_calls))
         assert written is not None
         self.assertTrue(any(binding_id.startswith("serena:") for binding_id in written["services"]))
 

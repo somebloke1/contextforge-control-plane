@@ -1645,8 +1645,14 @@ def apply_approved_project_init(
         recovery_plan=recovery_plan,
     )
     _validate_receipts_for_plan(plan, receipts, project_root=root, consume=False)
-    provisioning_results = [] if dry_run else _apply_project_scoped_provisioning(root, services, plan=plan)
     client_type = str(plan.get("client_type") or "codex")
+    recovery_ensured_bindings = _recovery_ensured_service_bindings(plan, recovery_plan, client_type=client_type)
+    provisioning_results = [] if dry_run else _apply_project_scoped_provisioning(
+        root,
+        services,
+        plan=plan,
+        skip_service_bindings=recovery_ensured_bindings,
+    )
     activation_config_plan = _client_activation_plan(
         root,
         services,
@@ -1709,10 +1715,14 @@ def _apply_project_scoped_provisioning(
     services: Sequence[Mapping[str, Any]],
     *,
     plan: Mapping[str, Any],
+    skip_service_bindings: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     client_type = str(plan.get("client_type") or "codex")
+    skip = set(skip_service_bindings)
     for service in services:
+        if str(service.get("service_binding") or "") in skip:
+            continue
         if not _needs_serena_project_provisioning(service):
             continue
         language = _serena_language_from_plan(plan, service)
@@ -2747,6 +2757,20 @@ def _stale_plan_allowed_by_recovery_continuation(
 
     if list(stale_reasons) != [f"target client digest changed: {client_type}"]:
         return False
+    if not _recovery_plan_matches_source_activation(plan, recovery_plan, client_type=client_type):
+        return False
+    recovery_inputs = recovery_plan.get("stale_plan_inputs") if isinstance(recovery_plan.get("stale_plan_inputs"), Mapping) else {}
+    post_recovery = recovery_inputs.get("post_recovery_target_client_digests") if isinstance(recovery_inputs.get("post_recovery_target_client_digests"), Mapping) else {}
+    expected_digest = post_recovery.get(client_type)
+    return bool(expected_digest) and current_target_client_digest == expected_digest
+
+
+def _recovery_plan_matches_source_activation(
+    plan: Mapping[str, Any],
+    recovery_plan: Mapping[str, Any] | None,
+    *,
+    client_type: str,
+) -> bool:
     if not isinstance(recovery_plan, Mapping):
         return False
     if recovery_plan.get("schema_uri") != HELPER_RECOVERY_PLAN_SCHEMA_URI or recovery_plan.get("workflow") != "project_init_recovery":
@@ -2760,12 +2784,25 @@ def _stale_plan_allowed_by_recovery_continuation(
     source = recovery_plan.get("source_activation_plan") if isinstance(recovery_plan.get("source_activation_plan"), Mapping) else {}
     if source.get("workflow") != plan.get("workflow"):
         return False
-    if source.get("plan_id") != plan.get("plan_id") or source.get("plan_digest") != plan.get("plan_digest"):
-        return False
-    recovery_inputs = recovery_plan.get("stale_plan_inputs") if isinstance(recovery_plan.get("stale_plan_inputs"), Mapping) else {}
-    post_recovery = recovery_inputs.get("post_recovery_target_client_digests") if isinstance(recovery_inputs.get("post_recovery_target_client_digests"), Mapping) else {}
-    expected_digest = post_recovery.get(client_type)
-    return bool(expected_digest) and current_target_client_digest == expected_digest
+    return source.get("plan_id") == plan.get("plan_id") and source.get("plan_digest") == plan.get("plan_digest")
+
+
+def _recovery_ensured_service_bindings(
+    plan: Mapping[str, Any],
+    recovery_plan: Mapping[str, Any] | None,
+    *,
+    client_type: str,
+) -> set[str]:
+    if not _recovery_plan_matches_source_activation(plan, recovery_plan, client_type=client_type):
+        return set()
+    return {
+        str(operation.get("service_binding"))
+        for operation in recovery_plan.get("service_recovery_plan") or []
+        if isinstance(operation, Mapping)
+        and operation.get("recovery_required") is True
+        and operation.get("operation") == "ensure_project_scoped_serena_instance"
+        and operation.get("service_binding")
+    }
 
 
 def _activation_job_from_plan(
