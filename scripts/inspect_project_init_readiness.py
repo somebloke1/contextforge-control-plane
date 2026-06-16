@@ -142,13 +142,21 @@ def inspect_root(root: str | Path, *, label: str, client_types: Sequence[str]) -
     }
 
 
-def _script_source_root(script_path: Path) -> str | None:
-    if script_path.parent.name != "scripts":
+def _script_source_root(script_path: str | Path) -> str | None:
+    path = Path(script_path).expanduser().resolve(strict=False)
+    if path.parent.name != "scripts":
         return None
-    return str(script_path.parent.parent)
+    return str(path.parent.parent)
 
 
-def _extract_process_script(command: str) -> tuple[str | None, str | None]:
+def _process_cwd(pid: str) -> str | None:
+    try:
+        return str((Path("/proc") / pid / "cwd").resolve(strict=True))
+    except OSError:
+        return None
+
+
+def _extract_process_script(command: str, *, cwd: str | None = None) -> tuple[str | None, str | None]:
     try:
         parts = shlex.split(command)
     except ValueError:
@@ -156,8 +164,14 @@ def _extract_process_script(command: str) -> tuple[str | None, str | None]:
     for part in parts:
         candidate = Path(part)
         if candidate.name in HELPER_PROCESS_SCRIPT_NAMES:
-            script = str(candidate.expanduser().resolve(strict=False)) if candidate.is_absolute() else str(candidate)
-            source_root = _script_source_root(Path(script)) if Path(script).is_absolute() else None
+            if candidate.is_absolute():
+                script_path = candidate
+            elif cwd:
+                script_path = Path(cwd) / candidate
+            else:
+                return str(candidate), None
+            script = str(script_path.expanduser().resolve(strict=False))
+            source_root = _script_source_root(script)
             return script, source_root
     return None, None
 
@@ -184,10 +198,12 @@ def list_helper_processes() -> list[dict[str, Any]]:
             pid_text, command = stripped.split(maxsplit=1)
         except ValueError:
             continue
-        script, source_root = _extract_process_script(command)
+        cwd = _process_cwd(pid_text)
+        script, source_root = _extract_process_script(command, cwd=cwd)
         processes.append(
             {
                 "pid": int(pid_text) if pid_text.isdigit() else pid_text,
+                "cwd": cwd,
                 "script": script,
                 "source_root": source_root,
                 "command": command,
@@ -228,7 +244,16 @@ def _readiness_findings(roots: Sequence[Mapping[str, Any]], helper_processes: Se
             if process.get("source_root")
         }
     )
-    if source_roots and primary_root and primary_root not in source_roots:
+    unknown_source_processes = [
+        process
+        for process in helper_processes
+        if process.get("script") and not process.get("source_root")
+    ]
+    foreign_source_roots = [source_root for source_root in source_roots if source_root != primary_root]
+    if unknown_source_processes:
+        blockers.append("helper_process_source_unknown")
+        next_actions.append("Do not treat helper readiness as proven while any helper process source root is unknown.")
+    if foreign_source_roots:
         blockers.append("helper_process_source_mismatch")
         next_actions.append("Do not terminate helper processes implicitly; rebind or retire the legacy helper source only after explicit approval.")
 

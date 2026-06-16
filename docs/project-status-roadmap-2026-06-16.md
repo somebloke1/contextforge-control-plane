@@ -229,7 +229,7 @@ work.
   makes the current split explicit without mutating `.project`, client config,
   processes, services, registry, catalog, or trust: clean `dev-root` source
   state is root-mismatched/blocked, legacy live state is schema-valid with Codex
-  verified and Pi validation-pending/mixed, and helper MCP processes still
+  verified and Pi validation-pending/mixed, and helper/wrapper processes still
   source from the legacy dirty checkout. Issue #15 dirty checkout rebind and
   issue #3 Pi install/reload remain real decision points for the user, not
   hidden agent actions.
@@ -388,12 +388,12 @@ Current evidence:
   readiness reconciliation report. Focused checks passed:
   `py_compile scripts/inspect_project_init_readiness.py
   tests/test_project_init_scripts.py`, `tests.test_project_init_scripts -v`
-  with 49 tests OK, and `tests.test_project_init_activation_workflow -v` with
+  with 52 tests OK, and `tests.test_project_init_activation_workflow -v` with
   77 tests OK.
 - Live helper readback is now inspectable but not yet a close signal: the
   readiness report classifies the clean source worktree state as
   `invalid_blocked` because tracked `.project/context_forge_state.json` still
-  attests `/home/dgk/workspace/context-portal`, while eight visible helper MCP
+  attests `/home/dgk/workspace/context-portal`, while visible helper/wrapper
   processes launch from the legacy checkout.
 - The legacy live `/home/dgk/workspace/context-portal/.project/context_forge_state.json`
   is schema-valid, revision 10, and `initialized`; its current Codex client
@@ -419,7 +419,7 @@ Dependencies:
 Risks:
 
 - Issue #4 cannot close while clean tracked source state is root-mismatched and
-  helper MCP processes still source from the legacy dirty checkout; those are
+  helper/wrapper processes still source from the legacy dirty checkout; those are
   issue #15 rebind/retirement inputs and require explicit process/config
   decisions before mutation.
 - Legacy live state still contains historical `validation_pending` activation
@@ -1022,9 +1022,9 @@ extraction if current evidence proves a better review boundary.
   readiness reconciliation: clean source state is reported as
   `invalid_blocked` with a root mismatch, legacy live state is schema-valid
   revision 10 and `initialized`, Codex is `verified`/`passed`, Pi is
-  `validation_pending`/`mixed`, and eight helper MCP processes still source
-  from the legacy dirty checkout. Live readiness still cannot close until those
-  approval-gated rebind/retirement facts are resolved.
+  `validation_pending`/`mixed`, and visible helper/wrapper processes still
+  source from the legacy dirty checkout. Live readiness still cannot close
+  until those approval-gated rebind/retirement facts are resolved.
 - Desired state: project-state labels, readback fields, helper prompts, reload
   guidance, state reconciliation, and read-only diagnostics tell the current
   truth without stale job assumptions.
@@ -1069,7 +1069,7 @@ extraction if current evidence proves a better review boundary.
   `helper_process_source_mismatch`; it reports the comparison legacy root as
   valid with activation-job status counts `validation_pending: 2` and
   `verified: 1`. Focused branch checks passed: compile for the new script and
-  tests, `tests.test_project_init_scripts -v` with 49 tests OK, and
+  tests, `tests.test_project_init_scripts -v` with 52 tests OK, and
   `tests.test_project_init_activation_workflow -v` with 77 tests OK.
 - Debt policy: any remaining deprecated label or unchecked readback must be
   tracked with owner, impact, migration trigger, and retirement condition.

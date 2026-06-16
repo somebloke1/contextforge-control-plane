@@ -155,6 +155,73 @@ class ProjectInitReadinessInspectorTests(unittest.TestCase):
             self.assertEqual(str(legacy), report["helper_processes"][0]["source_root"])
             self.assertIn("read-only inspection; no project files are written", report["non_actions"])
 
+    def test_report_blocks_mixed_helper_process_sources(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            primary = base / "clean-dev-root"
+            legacy = base / "context-portal"
+            primary.mkdir()
+            legacy.mkdir()
+            project_state.write_state_atomic(primary, project_state.default_state(primary, status="initialized"))
+            process_snapshot = [
+                {
+                    "pid": 12345,
+                    "cwd": str(primary),
+                    "script": str(primary / "scripts" / "contextforge_helper_mcp.py"),
+                    "source_root": str(primary),
+                    "command": f"{primary}/.venv/bin/python {primary}/scripts/contextforge_helper_mcp.py",
+                },
+                {
+                    "pid": 12346,
+                    "cwd": str(legacy),
+                    "script": str(legacy / "scripts" / "contextforge_helper_mcp.py"),
+                    "source_root": str(legacy),
+                    "command": f"{legacy}/.venv/bin/python {legacy}/scripts/contextforge_helper_mcp.py",
+                },
+            ]
+
+            report = readiness.build_report(
+                project_root=primary,
+                client_types=("codex",),
+                process_snapshot=process_snapshot,
+            )
+
+        self.assertEqual("blocked", report["status"])
+        self.assertIn("helper_process_source_mismatch", report["blockers"])
+
+    def test_relative_helper_process_command_uses_cwd_for_source_root(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            (root / "scripts").mkdir()
+            script, source_root = readiness._extract_process_script(
+                "python scripts/contextforge_mcp_wrapper.py",
+                cwd=str(root),
+            )
+
+        self.assertEqual(str(root / "scripts" / "contextforge_mcp_wrapper.py"), script)
+        self.assertEqual(str(root), source_root)
+
+    def test_unattributed_helper_process_source_blocks_readiness(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            project_state.write_state_atomic(root, project_state.default_state(root, status="initialized"))
+            report = readiness.build_report(
+                project_root=root,
+                client_types=("codex",),
+                process_snapshot=[
+                    {
+                        "pid": 12345,
+                        "cwd": None,
+                        "script": "scripts/contextforge_mcp_wrapper.py",
+                        "source_root": None,
+                        "command": "python scripts/contextforge_mcp_wrapper.py",
+                    }
+                ],
+            )
+
+        self.assertEqual("blocked", report["status"])
+        self.assertIn("helper_process_source_unknown", report["blockers"])
+
     def test_cli_emits_clean_json_without_process_probe(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
