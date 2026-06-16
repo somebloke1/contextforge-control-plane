@@ -555,6 +555,292 @@ trusted_hash = "sha256:sessionstart"
         self.assertNotIn("clean_root_project_trust_missing", report["warnings"])
         self.assertNotIn("clean_root_project_local_hook_state_missing", report["warnings"])
 
+    def test_global_config_apply_requires_approval_and_does_not_write(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+            before = config.read_text(encoding="utf-8")
+
+            with self.assertRaises(PermissionError):
+                codex_global_plan.apply_migration(
+                    config_path=config,
+                    target_root=target,
+                    legacy_root=legacy,
+                    approval_acknowledged=False,
+                )
+
+            self.assertEqual(before, config.read_text(encoding="utf-8"))
+            self.assertEqual([], list(base.glob(f"codex-config.toml{codex_global_plan.BACKUP_SUFFIX}-*")))
+
+    def test_global_config_apply_is_staged_idempotent_and_preserves_provenance(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            backup = base / "pre-change.toml"
+            self._write_global_config(config, legacy)
+
+            first = codex_global_plan.apply_migration(
+                config_path=config,
+                target_root=target,
+                legacy_root=legacy,
+                approval_acknowledged=True,
+                approval_ref="test approval",
+                backup_path=backup,
+            )
+            migrated = config.read_text(encoding="utf-8")
+            backup_created = backup.exists()
+            second = codex_global_plan.apply_migration(
+                config_path=config,
+                target_root=target,
+                legacy_root=legacy,
+                approval_acknowledged=True,
+                approval_ref="test approval",
+                backup_path=base / "second-backup.toml",
+            )
+
+        self.assertTrue(first["changed"])
+        self.assertEqual("pending_restart", first["status"])
+        self.assertEqual(str(backup), first["backup_path"])
+        self.assertTrue(backup_created)
+        self.assertFalse(second["changed"])
+        self.assertEqual("already_converged", second["status"])
+        self.assertIn(f'command = "{target}/.venv/bin/python"', migrated)
+        self.assertIn(f'args = ["{target}/scripts/contextforge_helper_mcp.py"]', migrated)
+        self.assertIn(f'[projects."{target}"]', migrated)
+        self.assertIn(f'[projects."{legacy}"]', migrated)
+        self.assertIn(f'[hooks.state."{legacy}/.codex/config.toml:pre_compact:0:0"]', migrated)
+        self.assertEqual(2, migrated.count(f"{target}/scripts/codex_project_init_hook.py"))
+
+    def test_global_config_apply_de_duplicates_partial_hook_migration(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+            with config.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    "\n[[hooks.SessionStart.hooks]]\n"
+                    'type = "command"\n'
+                    f'command = "{target}/.venv/bin/python {target}/scripts/codex_project_init_hook.py"\n'
+                    "timeout = 10\n"
+                )
+
+            codex_global_plan.apply_migration(
+                config_path=config,
+                target_root=target,
+                legacy_root=legacy,
+                approval_acknowledged=True,
+                approval_ref="test approval",
+            )
+            migrated = config.read_text(encoding="utf-8")
+
+        self.assertEqual(2, migrated.count(f"{target}/scripts/codex_project_init_hook.py"))
+        self.assertNotIn(f"{legacy}/scripts/codex_project_init_hook.py", migrated)
+
+    def test_global_config_apply_scopes_helper_rewrite_to_owned_mcp_block(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+            with config.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    "\n[mcp_servers.unrelated]\n"
+                    f'command = "{legacy}/.venv/bin/python"\n'
+                    'args = ["-m", "unrelated"]\n'
+                )
+
+            codex_global_plan.apply_migration(
+                config_path=config,
+                target_root=target,
+                legacy_root=legacy,
+                approval_acknowledged=True,
+                approval_ref="test approval",
+            )
+            migrated = config.read_text(encoding="utf-8")
+
+        self.assertIn("[mcp_servers.unrelated]", migrated)
+        self.assertIn(f'command = "{legacy}/.venv/bin/python"', migrated)
+        self.assertIn(f'args = ["-m", "unrelated"]', migrated)
+
+    def test_global_config_apply_refuses_to_overwrite_explicit_backup(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            backup = base / "pre-change.toml"
+            self._write_global_config(config, legacy)
+            before = config.read_text(encoding="utf-8")
+            backup.write_text("existing backup", encoding="utf-8")
+
+            with self.assertRaises(FileExistsError):
+                codex_global_plan.apply_migration(
+                    config_path=config,
+                    target_root=target,
+                    legacy_root=legacy,
+                    approval_acknowledged=True,
+                    approval_ref="test approval",
+                    backup_path=backup,
+                )
+
+            self.assertEqual(before, config.read_text(encoding="utf-8"))
+            self.assertEqual("existing backup", backup.read_text(encoding="utf-8"))
+
+    def test_global_config_apply_refuses_config_path_as_backup_path(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+            before = config.read_text(encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                codex_global_plan.apply_migration(
+                    config_path=config,
+                    target_root=target,
+                    legacy_root=legacy,
+                    approval_acknowledged=True,
+                    approval_ref="test approval",
+                    backup_path=config,
+                )
+
+            self.assertEqual(before, config.read_text(encoding="utf-8"))
+
+    def test_global_config_apply_requires_separate_approval_for_destructive_options(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+            before = config.read_text(encoding="utf-8")
+
+            with self.assertRaises(PermissionError):
+                codex_global_plan.apply_migration(
+                    config_path=config,
+                    target_root=target,
+                    legacy_root=legacy,
+                    approval_acknowledged=True,
+                    approval_ref="base approval only",
+                    remove_legacy_trust=True,
+                )
+            with self.assertRaises(PermissionError):
+                codex_global_plan.apply_migration(
+                    config_path=config,
+                    target_root=target,
+                    legacy_root=legacy,
+                    approval_acknowledged=True,
+                    approval_ref="base approval only",
+                    prune_legacy_hook_state=True,
+                )
+
+            self.assertEqual(before, config.read_text(encoding="utf-8"))
+
+    def test_global_config_apply_can_use_separately_approved_destructive_options(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+
+            result = codex_global_plan.apply_migration(
+                config_path=config,
+                target_root=target,
+                legacy_root=legacy,
+                approval_acknowledged=True,
+                approval_ref="base plus cleanup approval",
+                remove_legacy_trust=True,
+                remove_legacy_trust_approved=True,
+                prune_legacy_hook_state=True,
+                prune_legacy_hook_state_approved=True,
+            )
+            migrated = config.read_text(encoding="utf-8")
+
+        self.assertEqual("pending_restart", result["status"])
+        self.assertEqual("removed_by_separate_approval", result["policies"]["legacy_project_trust"])
+        self.assertEqual("pruned_by_separate_approval", result["policies"]["legacy_hook_state"])
+        self.assertNotIn(f'[projects."{legacy}"]', migrated)
+        self.assertNotIn(f'[hooks.state."{legacy}/.codex/config.toml:pre_compact:0:0"]', migrated)
+
+    def test_global_config_rollback_restores_backup_with_new_safety_backup(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "repo-local-skills-and-governance"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            backup = base / "pre-change.toml"
+            self._write_global_config(config, legacy)
+            original = config.read_text(encoding="utf-8")
+            codex_global_plan.apply_migration(
+                config_path=config,
+                target_root=target,
+                legacy_root=legacy,
+                approval_acknowledged=True,
+                approval_ref="test approval",
+                backup_path=backup,
+            )
+
+            rollback = codex_global_plan.rollback_from_backup(
+                config_path=config,
+                backup_path=backup,
+                approval_acknowledged=True,
+                approval_ref="rollback approval",
+            )
+            restored = config.read_text(encoding="utf-8")
+            rollback_backup_exists = Path(rollback["pre_rollback_backup_path"]).exists()
+
+        self.assertEqual("rolled_back_pending_restart", rollback["status"])
+        self.assertEqual(original, restored)
+        self.assertTrue(rollback_backup_exists)
+
+    def test_global_config_rollback_refuses_live_config_as_backup(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            legacy = base / "context-portal"
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, legacy)
+            before = config.read_text(encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                codex_global_plan.rollback_from_backup(
+                    config_path=config,
+                    backup_path=config,
+                    approval_acknowledged=True,
+                    approval_ref="rollback approval",
+                )
+
+            self.assertEqual(before, config.read_text(encoding="utf-8"))
+            self.assertEqual([], list(base.glob(f"codex-config.toml{codex_global_plan.BACKUP_SUFFIX}-*")))
+
     def test_global_config_plan_cli_emits_clean_json(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()

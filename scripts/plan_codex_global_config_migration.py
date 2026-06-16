@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Read-only planner for ContextForge user-global Codex config migration.
+"""Plan and safely apply ContextForge user-global Codex config migration.
 
-This report is intentionally non-mutating. It classifies stale
+By default this report is non-mutating. It classifies stale
 ``/home/dgk/workspace/context-portal`` entries in ``~/.codex/config.toml`` and
 builds an approval-ready plan for moving active global Codex surfaces to the
 clean ContextForge worktree.
@@ -10,7 +10,10 @@ clean ContextForge worktree.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
+import shutil
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +23,7 @@ from typing import Any, Mapping, Sequence
 REPORT_SCHEMA_URI = "contextforge://control-plane/codex-global-config-migration-plan/v1"
 DEFAULT_LEGACY_ROOT = Path("/home/dgk/workspace/context-portal")
 DEFAULT_CONFIG_PATH = Path("~/.codex/config.toml")
+BACKUP_SUFFIX = ".contextforge-backup"
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,257 @@ def _hook_event_command_lines(text: str, event_name: str, script_name: str) -> t
 
 def _legacy_replaced(value: str, *, legacy_root: Path, target_root: Path) -> str:
     return value.replace(str(legacy_root), str(target_root))
+
+
+def _timestamp() -> str:
+    return dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _default_backup_path(config_file: Path) -> Path:
+    candidate = config_file.with_name(f"{config_file.name}{BACKUP_SUFFIX}-{_timestamp()}")
+    if not candidate.exists():
+        return candidate
+    for counter in range(1, 1000):
+        numbered = candidate.with_name(f"{candidate.name}-{counter}")
+        if not numbered.exists():
+            return numbered
+    raise FileExistsError(f"could not allocate unique backup path near {candidate}")
+
+
+def _validated_backup_path(path: str | Path) -> Path:
+    backup = _canonical(path)
+    if backup.exists():
+        raise FileExistsError(f"backup path already exists: {backup}")
+    return backup
+
+
+def _replace_line_value(lines: list[str], *, key: str, old_value: str, new_value: str) -> bool:
+    old_line = f'{key} = "{old_value}"'
+    new_line = f'{key} = "{new_value}"'
+    changed = False
+    for index, line in enumerate(lines):
+        if line.strip() == new_line:
+            continue
+        if line.strip() == old_line:
+            prefix = line[: len(line) - len(line.lstrip())]
+            lines[index] = f"{prefix}{new_line}"
+            changed = True
+    return changed
+
+
+def _toml_section_bounds(lines: Sequence[str], header: str) -> tuple[int, int] | None:
+    for index, line in enumerate(lines):
+        if line.strip() != header:
+            continue
+        section_end = len(lines)
+        for probe in range(index + 1, len(lines)):
+            stripped = lines[probe].strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                section_end = probe
+                break
+        return index, section_end
+    return None
+
+
+def _replace_section_line_value(
+    lines: list[str],
+    *,
+    header: str,
+    key: str,
+    old_value: str,
+    new_value: str,
+) -> bool:
+    bounds = _toml_section_bounds(lines, header)
+    if bounds is None:
+        return False
+    start, end = bounds
+    section = lines[start:end]
+    changed = _replace_line_value(section, key=key, old_value=old_value, new_value=new_value)
+    if changed:
+        lines[start:end] = section
+    return changed
+
+
+def _replace_args_line(lines: list[str], *, old_args: Sequence[str], new_args: Sequence[str]) -> bool:
+    old_line = f"args = {json.dumps(list(old_args))}"
+    new_line = f"args = {json.dumps(list(new_args))}"
+    changed = False
+    for index, line in enumerate(lines):
+        if line.strip() == new_line:
+            continue
+        if line.strip() == old_line:
+            prefix = line[: len(line) - len(line.lstrip())]
+            lines[index] = f"{prefix}{new_line}"
+            changed = True
+    return changed
+
+
+def _replace_section_args_line(
+    lines: list[str],
+    *,
+    header: str,
+    old_args: Sequence[str],
+    new_args: Sequence[str],
+) -> bool:
+    bounds = _toml_section_bounds(lines, header)
+    if bounds is None:
+        return False
+    start, end = bounds
+    section = lines[start:end]
+    changed = _replace_args_line(section, old_args=old_args, new_args=new_args)
+    if changed:
+        lines[start:end] = section
+    return changed
+
+
+def _ensure_project_trust(lines: list[str], *, project_root: Path) -> bool:
+    header = f'[projects."{project_root}"]'
+    for index, line in enumerate(lines):
+        if line.strip() != header:
+            continue
+        section_end = len(lines)
+        for probe in range(index + 1, len(lines)):
+            stripped = lines[probe].strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                section_end = probe
+                break
+        for probe in range(index + 1, section_end):
+            if lines[probe].strip() == 'trust_level = "trusted"':
+                return False
+            if lines[probe].strip().startswith("trust_level ="):
+                lines[probe] = 'trust_level = "trusted"'
+                return True
+        lines.insert(section_end, 'trust_level = "trusted"')
+        return True
+
+    insert_at = len(lines)
+    while insert_at > 0 and lines[insert_at - 1].strip() == "":
+        insert_at -= 1
+    block = ["", header, 'trust_level = "trusted"']
+    lines[insert_at:insert_at] = block
+    return True
+
+
+def _remove_project_trust(lines: list[str], *, project_root: Path) -> bool:
+    header = f'[projects."{project_root}"]'
+    for index, line in enumerate(lines):
+        if line.strip() != header:
+            continue
+        section_end = len(lines)
+        for probe in range(index + 1, len(lines)):
+            stripped = lines[probe].strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                section_end = probe
+                break
+        del lines[index:section_end]
+        while index < len(lines) and lines[index].strip() == "":
+            del lines[index]
+        return True
+    return False
+
+
+def _hook_command_from_block(block: Sequence[str]) -> str | None:
+    for line in block:
+        stripped = line.strip()
+        if stripped.startswith("command = "):
+            try:
+                value = tomllib.loads(f"command = {stripped.removeprefix('command = ')}\n")
+            except tomllib.TOMLDecodeError:
+                return None
+            command = value.get("command")
+            return command if isinstance(command, str) else None
+    return None
+
+
+def _replace_hook_commands(
+    lines: list[str],
+    *,
+    event_name: str,
+    old_command: str,
+    new_command: str,
+) -> bool:
+    changed = False
+    event_header = f"[[hooks.{event_name}]]"
+    hook_header = f"[[hooks.{event_name}.hooks]]"
+
+    new_present = False
+    index = 0
+    while index < len(lines):
+        if lines[index].strip() != hook_header:
+            index += 1
+            continue
+        block_end = len(lines)
+        for probe in range(index + 1, len(lines)):
+            stripped = lines[probe].strip()
+            if stripped == hook_header or stripped == event_header:
+                block_end = probe
+                break
+            if stripped.startswith("[[hooks.") and stripped.endswith("]]"):
+                block_end = probe
+                break
+        if _hook_command_from_block(lines[index:block_end]) == new_command:
+            new_present = True
+            break
+        index = block_end
+
+    index = 0
+    while index < len(lines):
+        if lines[index].strip() != hook_header:
+            index += 1
+            continue
+        block_end = len(lines)
+        for probe in range(index + 1, len(lines)):
+            stripped = lines[probe].strip()
+            if stripped == hook_header or stripped == event_header:
+                block_end = probe
+                break
+            if stripped.startswith("[[hooks.") and stripped.endswith("]]"):
+                block_end = probe
+                break
+        block = lines[index:block_end]
+        command = _hook_command_from_block(block)
+        if command == new_command:
+            index = block_end
+            continue
+        if command == old_command:
+            if new_present:
+                del lines[index:block_end]
+                while index < len(lines) and lines[index].strip() == "":
+                    del lines[index]
+                changed = True
+                continue
+            for block_index in range(index, block_end):
+                stripped = lines[block_index].strip()
+                if stripped.startswith("command = "):
+                    prefix = lines[block_index][: len(lines[block_index]) - len(lines[block_index].lstrip())]
+                    lines[block_index] = f'{prefix}command = "{new_command}"'
+                    changed = True
+                    new_present = True
+                    break
+        index = block_end
+    return changed
+
+
+def _remove_hook_state(lines: list[str], *, root: Path) -> bool:
+    changed = False
+    root_text = str(root)
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if not (stripped.startswith('[hooks.state."') and root_text in stripped):
+            index += 1
+            continue
+        section_end = len(lines)
+        for probe in range(index + 1, len(lines)):
+            next_stripped = lines[probe].strip()
+            if next_stripped.startswith("[") and next_stripped.endswith("]"):
+                section_end = probe
+                break
+        del lines[index:section_end]
+        while index < len(lines) and lines[index].strip() == "":
+            del lines[index]
+        changed = True
+    return changed
 
 
 def _hook_commands(config: Mapping[str, Any], event_name: str) -> list[str]:
@@ -168,11 +423,15 @@ def build_report(
         EntryPlan(
             "legacy_project_trust",
             "replace_with_clean_root",
-            "Replace legacy project trust with the clean project root only after explicit user-global trust approval.",
+            "Add clean project trust first; retain legacy trust for rollback unless separate removal is explicitly approved.",
             "medium",
-            "Global config readback shows the legacy project stanza absent and the clean project stanza trusted.",
+            "Global config readback shows the clean project stanza trusted; legacy project trust remains unless separately removed.",
             {"project": legacy_text, "trust": legacy_project},
-            {"project": target_text, "trust": {"trust_level": "trusted"}},
+            {
+                "project": target_text,
+                "trust": {"trust_level": "trusted"},
+                "legacy_trust_policy": "retain_by_default",
+            },
             _toml_table_lines(text, f'[projects."{legacy_text}"]'),
         ),
         EntryPlan(
@@ -245,9 +504,9 @@ def build_report(
         "entries": [_entry_dict(entry) for entry in entries],
         "next_actions": [
             "Ask for explicit approval before editing user-global Codex config or trust.",
-            "If approved, replace active global helper and project-init hook paths with the clean root and migrate project trust deliberately.",
+            "If approved, replace active global helper and project-init hook paths with the clean root and add clean project trust while retaining legacy trust unless separate removal is approved.",
             "Do not prune legacy hook-state provenance unless that cleanup is explicitly approved.",
-            "After any approved change, restart/reload the affected Codex surface only with explicit user action and verify readback.",
+            "After any approved file change, treat the result as pending_restart until the affected Codex surface is restarted by explicit user action and verified by readback.",
         ],
         "non_actions": [
             "read-only plan; no user-global config or trust file is written",
@@ -256,8 +515,170 @@ def build_report(
             "no service, process, registry, catalog, Pi, or legacy checkout mutation is performed",
         ],
         "readback_commands": [
-            "rg -n \"context-portal|contextforge-slices\" ~/.codex/config.toml",
+            "rg -n \"context-portal|contextforge-slices|contextforge-helper|codex_project_init_hook\" ~/.codex/config.toml",
+            "cd /home/dgk && codex mcp list --json",
             "codex -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp list --json",
+        ],
+    }
+
+
+def apply_migration(
+    *,
+    config_path: str | Path = DEFAULT_CONFIG_PATH,
+    target_root: str | Path,
+    legacy_root: str | Path = DEFAULT_LEGACY_ROOT,
+    approval_acknowledged: bool,
+    approval_ref: str | None = None,
+    backup_path: str | Path | None = None,
+    remove_legacy_trust: bool = False,
+    remove_legacy_trust_approved: bool = False,
+    prune_legacy_hook_state: bool = False,
+    prune_legacy_hook_state_approved: bool = False,
+) -> dict[str, Any]:
+    if not approval_acknowledged:
+        raise PermissionError("explicit approval is required before writing user-global Codex config")
+    if remove_legacy_trust and not remove_legacy_trust_approved:
+        raise PermissionError("separate approval is required before removing legacy project trust")
+    if prune_legacy_hook_state and not prune_legacy_hook_state_approved:
+        raise PermissionError("separate approval is required before pruning legacy hook-state provenance")
+
+    config_file = _canonical(config_path)
+    target = _canonical(target_root)
+    legacy = _canonical(legacy_root)
+    before_text = config_file.read_text(encoding="utf-8")
+    before_report = build_report(
+        config_path=config_file,
+        target_root=target,
+        legacy_root=legacy,
+        approval_acknowledged=approval_acknowledged,
+        approval_ref=approval_ref,
+    )
+    lines = before_text.splitlines()
+    actions: list[dict[str, Any]] = []
+
+    helper_entries = {entry["entry_id"]: entry for entry in before_report["entries"]}
+    helper = helper_entries["global_mcp_contextforge_helper"]
+    helper_current = helper["current_value"]
+    helper_target = helper["target_value"]
+    if _replace_section_line_value(
+        lines,
+        header="[mcp_servers.contextforge-helper]",
+        key="command",
+        old_value=helper_current["command"],
+        new_value=helper_target["command"],
+    ):
+        actions.append({"action": "replace_global_helper_command", "result": "changed"})
+    if _replace_section_args_line(
+        lines,
+        header="[mcp_servers.contextforge-helper]",
+        old_args=helper_current["args"],
+        new_args=helper_target["args"],
+    ):
+        actions.append({"action": "replace_global_helper_args", "result": "changed"})
+
+    if _ensure_project_trust(lines, project_root=target):
+        actions.append({"action": "ensure_clean_project_trust", "result": "changed"})
+    if remove_legacy_trust and _remove_project_trust(lines, project_root=legacy):
+        actions.append({"action": "remove_legacy_project_trust", "result": "changed"})
+
+    for event_name, entry_id in (
+        ("SessionStart", "global_session_start_project_init_hook"),
+        ("UserPromptSubmit", "global_user_prompt_project_init_hook"),
+    ):
+        entry = helper_entries[entry_id]
+        for old_command, new_command in zip(entry["current_value"], entry["target_value"], strict=False):
+            if _replace_hook_commands(
+                lines,
+                event_name=event_name,
+                old_command=old_command,
+                new_command=new_command,
+            ):
+                actions.append({"action": f"replace_{event_name}_project_init_hook", "result": "changed"})
+
+    if prune_legacy_hook_state and _remove_hook_state(lines, root=legacy):
+        actions.append({"action": "prune_legacy_hook_state", "result": "changed"})
+
+    after_text = "\n".join(lines) + ("\n" if before_text.endswith("\n") else "")
+    changed = after_text != before_text
+    if backup_path:
+        backup_candidate = _canonical(backup_path)
+        if backup_candidate == config_file:
+            raise ValueError("backup path must be different from config path")
+        backup = _validated_backup_path(backup_candidate)
+    else:
+        backup = _default_backup_path(config_file)
+    if backup == config_file:
+        raise ValueError("backup path must be different from config path")
+    if changed:
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        backup.write_text(before_text, encoding="utf-8")
+        config_file.write_text(after_text, encoding="utf-8")
+
+    after_report = build_report(
+        config_path=config_file,
+        target_root=target,
+        legacy_root=legacy,
+        approval_acknowledged=approval_acknowledged,
+        approval_ref=approval_ref,
+    )
+    return {
+        "schema_uri": "contextforge://control-plane/codex-global-config-migration-apply/v1",
+        "project_name": "ContextForge",
+        "config_path": str(config_file),
+        "status": "pending_restart" if changed else "already_converged",
+        "changed": changed,
+        "backup_path": str(backup) if changed else None,
+        "approval": {"acknowledged": approval_acknowledged, "ref": approval_ref},
+        "policies": {
+            "legacy_project_trust": (
+                "removed_by_separate_approval" if remove_legacy_trust else "retained_for_rollback"
+            ),
+            "legacy_hook_state": (
+                "pruned_by_separate_approval" if prune_legacy_hook_state else "preserved_as_provenance"
+            ),
+        },
+        "actions": actions,
+        "post_apply_report": after_report,
+        "non_actions": [
+            "no hook trust is granted or revoked",
+            "no Codex client reload or restart is performed",
+            "no service, process, registry, catalog, Pi, or legacy checkout mutation is performed",
+        ],
+    }
+
+
+def rollback_from_backup(
+    *,
+    config_path: str | Path = DEFAULT_CONFIG_PATH,
+    backup_path: str | Path,
+    approval_acknowledged: bool,
+    approval_ref: str | None = None,
+) -> dict[str, Any]:
+    if not approval_acknowledged:
+        raise PermissionError("explicit approval is required before restoring user-global Codex config")
+
+    config_file = _canonical(config_path)
+    backup = _canonical(backup_path)
+    if backup == config_file:
+        raise ValueError("rollback backup path must be different from config path")
+    if not backup.exists():
+        raise FileNotFoundError(f"backup does not exist: {backup}")
+    before_text = config_file.read_text(encoding="utf-8") if config_file.exists() else ""
+    restore_backup = _default_backup_path(config_file)
+    restore_backup.write_text(before_text, encoding="utf-8")
+    shutil.copyfile(backup, config_file)
+    return {
+        "schema_uri": "contextforge://control-plane/codex-global-config-migration-rollback/v1",
+        "project_name": "ContextForge",
+        "config_path": str(config_file),
+        "status": "rolled_back_pending_restart",
+        "restored_from": str(backup),
+        "pre_rollback_backup_path": str(restore_backup),
+        "approval": {"acknowledged": approval_acknowledged, "ref": approval_ref},
+        "non_actions": [
+            "no hook trust is granted or revoked",
+            "no Codex client reload or restart is performed",
+            "no service, process, registry, catalog, Pi, or legacy checkout mutation is performed",
         ],
     }
 
@@ -269,19 +690,54 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--legacy-root", default=str(DEFAULT_LEGACY_ROOT), help="Legacy checkout root to classify.")
     parser.add_argument("--approval-acknowledged", action="store_true", help="Report using an explicit approval already recorded for this pass.")
     parser.add_argument("--approval-ref", help="Human-readable approval reference.")
+    parser.add_argument("--apply", action="store_true", help="Apply the approved staged migration to the selected config.")
+    parser.add_argument("--backup-path", help="Backup path to create before --apply, or explicit destination for tests.")
+    parser.add_argument("--remove-legacy-trust", action="store_true", help="With --apply, remove legacy project trust instead of retaining it for rollback.")
+    parser.add_argument("--remove-legacy-trust-approved", action="store_true", help="Separate approval for --remove-legacy-trust.")
+    parser.add_argument("--prune-legacy-hook-state", action="store_true", help="With --apply, prune legacy hook-state provenance.")
+    parser.add_argument("--prune-legacy-hook-state-approved", action="store_true", help="Separate approval for --prune-legacy-hook-state.")
+    parser.add_argument("--rollback-from", help="Restore the selected config from a prior backup path.")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON.")
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    report = build_report(
-        config_path=args.config_path,
-        target_root=args.target_root,
-        legacy_root=args.legacy_root,
-        approval_acknowledged=args.approval_acknowledged,
-        approval_ref=args.approval_ref,
-    )
+    if args.apply and args.rollback_from:
+        print("--apply and --rollback-from are mutually exclusive", file=sys.stderr)
+        return 2
+    try:
+        if args.rollback_from:
+            report = rollback_from_backup(
+                config_path=args.config_path,
+                backup_path=args.rollback_from,
+                approval_acknowledged=args.approval_acknowledged,
+                approval_ref=args.approval_ref,
+            )
+        elif args.apply:
+            report = apply_migration(
+                config_path=args.config_path,
+                target_root=args.target_root,
+                legacy_root=args.legacy_root,
+                approval_acknowledged=args.approval_acknowledged,
+                approval_ref=args.approval_ref,
+                backup_path=args.backup_path,
+                remove_legacy_trust=args.remove_legacy_trust,
+                remove_legacy_trust_approved=args.remove_legacy_trust_approved,
+                prune_legacy_hook_state=args.prune_legacy_hook_state,
+                prune_legacy_hook_state_approved=args.prune_legacy_hook_state_approved,
+            )
+        else:
+            report = build_report(
+                config_path=args.config_path,
+                target_root=args.target_root,
+                legacy_root=args.legacy_root,
+                approval_acknowledged=args.approval_acknowledged,
+                approval_ref=args.approval_ref,
+            )
+    except (FileExistsError, FileNotFoundError, PermissionError, tomllib.TOMLDecodeError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     print(json.dumps(report, indent=2 if args.pretty else None, sort_keys=True))
     return 0
 
