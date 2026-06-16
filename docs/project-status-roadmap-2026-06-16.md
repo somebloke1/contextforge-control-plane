@@ -45,6 +45,7 @@ Current local checks used for this snapshot:
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/inspect_project_init_readiness.py --project-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance --compare-root /home/dgk/workspace/context-portal --client-type codex --client-type pi --no-processes`
 - `rg -n "/home/dgk/workspace/context-portal" .codex/config.toml .project/context_forge_state.json server-instances/serena-context-portal server-instances/mentality/instance.json .codex/skills scripts/register_project_init_prompt.py scripts/register_serena_context_portal_service.py .serena`
 - `git diff --check`
+- `gh pr view 24 --json number,state,mergedAt,mergeCommit,url,isDraft,headRefName,baseRefName`
 
 Session-derived context came from these rollout summaries:
 
@@ -257,11 +258,11 @@ work.
   Merged PR
   [#23](https://github.com/somebloke1/contextforge-control-plane/pull/23)
   added the read-only preflight planner on `dev-root` at merge commit
-  `726d7cf`. Current subgoal branch
-  `codex/issue-15-strategy1-source-rebind` is the user-approved Strategy 1
-  first source-only compatibility rebind: source/project-local launch,
-  project-state, Serena, mentality, skill, and registration-example surfaces are
-  retargeted to
+  `726d7cf`. Merged PR
+  [#24](https://github.com/somebloke1/contextforge-control-plane/pull/24)
+  then completed the user-approved Strategy 1 first source-only compatibility
+  rebind at merge commit `9aa732b`: source/project-local launch, project-state,
+  Serena, mentality, skill, and registration-example surfaces are retargeted to
   `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`
   while compatibility slugs remain intact. Cleanup remains open until
   `/home/dgk/workspace/context-portal` is either explicitly archival-only or
@@ -286,8 +287,8 @@ The immediate problem is integration hygiene:
   `f8a1aab`, PR #9 at `eb97c66`, PR #13 at `c6fb551`, PR #10 at `f530dda`,
   PR #16 at `f1a6404`, PR #17 at `0539d50`, PR #18 at `d130027`, PR #19 at
   `74bdbc4`, PR #20 at `bcf55ce`, PR #21 at `36a1639`, PR #22 at `52d758e`,
-  and PR #23 at `726d7cf`; post-merge roadmap updates include `6054319` and
-  `4a9e496`.
+  PR #23 at `726d7cf`, and PR #24 at `9aa732b`; post-merge roadmap updates
+  include `6054319` and `4a9e496`.
 - The clean controller worktree is `dev-root`; the legacy
   `/home/dgk/workspace/context-portal` checkout still carries a very large dirty
   worktree and should be treated as archival until explicitly rebound or retired.
@@ -299,11 +300,12 @@ The immediate problem is integration hygiene:
   #7, PR #8, PR #9, PR #10, PR #13, PR #16, PR #17, PR #18, PR #19, and PR
   #20 are merged foundational/runtime slices.
 - Runtime reliability cleanup is retired through PR #7 and post-merge evidence.
-  Dirty holding checkout retirement has a merged runbook and remains approval
-  gated for runtime/global/check-out disposition, but the user has approved the
-  Strategy 1 source-only compatibility rebind now in progress on
-  `codex/issue-15-strategy1-source-rebind`; issue #3's Pi global shim source is
-  merged but live Pi deployment is still approval-gated.
+  Dirty holding checkout retirement has a merged runbook and PR #24 completed
+  the approved Strategy 1 source-only compatibility rebind. It remains approval
+  gated for target-client validation, runtime/global mutations, systemd/Serena
+  reload/readback, registry readback/write, and legacy checkout disposition;
+  issue #3's Pi global shim source is merged but live Pi deployment is still
+  approval-gated.
 - Several stale-looking Serena test units, one phronesis-devstack Serena unit,
   and matching project/instance directories remain live and should be reviewed
   separately before cleanup.
@@ -419,10 +421,10 @@ Current evidence:
 - Live helper readback is now inspectable but not yet a close signal. PR #21
   originally classified the clean source worktree state as `invalid_blocked`
   because tracked `.project/context_forge_state.json` still attested
-  `/home/dgk/workspace/context-portal`. On the Strategy 1 source branch, the
-  clean-root project state is repaired to the clean worktree and readiness
-  reports primary `valid`/`resume_validation`; target-client validation and live
-  process/runtime rebind are still pending.
+  `/home/dgk/workspace/context-portal`. After merged PR #24, the clean-root
+  project state is repaired to the clean worktree and readiness reports primary
+  `valid`/`resume_validation`; target-client validation and live process/runtime
+  rebind are still pending.
 - The legacy live `/home/dgk/workspace/context-portal/.project/context_forge_state.json`
   is schema-valid, revision 10, and `initialized`; its current Codex client
   state is `verified` with validation `passed`, while Pi remains
@@ -447,7 +449,7 @@ Dependencies:
 Risks:
 
 - Issue #4 cannot close on the Strategy 1 source patch alone. The clean tracked
-  state is now valid on the source branch, but target-client validation, any
+  state is now valid on `dev-root`, but target-client validation, any
   runtime helper/wrapper source change, and any systemd/Serena reload/readback
   remain issue #15 approval-gated operator-path work.
 - Legacy live state still contains historical `validation_pending` activation
@@ -805,13 +807,9 @@ open draft PR worktrees
   /home/dgk/workspace/contextforge-slices/helper-multiclient-project-init
     codex/helper-multiclient-project-init -> PR #10
 
-active issue #15 Strategy 1 source rebind worktree
-  /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
-    codex/issue-15-strategy1-source-rebind -> source-only compatibility rebind
-
 merged foundation worktrees
   /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
-    dev-root -> PR #8, PR #9, and PR #13 merged
+    dev-root -> PR #8, PR #9, PR #13, PR #23, and PR #24 merged
   /home/dgk/workspace/contextforge-slices/precompact-continuity-hook
     codex/precompact-continuity-hook -> PR #9 merged, remote branch deleted
   /home/dgk/workspace/contextforge-slices/precompact-conductor-pointer
@@ -879,7 +877,7 @@ extraction if current evidence proves a better review boundary.
 | `codex/dirty-checkout-retirement-runbook` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #19](https://github.com/somebloke1/contextforge-control-plane/pull/19) | Non-mutating rebind/retire runbook only; no local path mutation, service restart, registry mutation, hook approval, or checkout deletion. | `git diff --check`; sidecar path-bound surface audit; delegated PR review; no generated/local files tracked |
 | `codex/issue-15-current-rebind-contract` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #22](https://github.com/somebloke1/contextforge-control-plane/pull/22) | Post-PR #21 update to the dirty-checkout retirement contract: current `dev-root` evidence, read-only readiness evidence, Strategy 1 compatibility rebind approval question, Strategy 2 new-root identity, and Strategy 3 archival-only deferral. | `git diff --check`; preservation checksum verification; current dirty-vs-dev-root classification; readiness reconciler readback |
 | `codex/issue-15-rebind-preflight-planner` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #23](https://github.com/somebloke1/contextforge-control-plane/pull/23) | Read-only source planner for Strategy 1/2/3 approval: inventories path-bound local surfaces, embeds readiness reconciliation, and reports non-actions before any live rebind mutation. | focused planner/readiness tests; live planner JSON readback; `git diff --check`; no runtime mutation |
-| `codex/issue-15-strategy1-source-rebind` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / active | User-approved Strategy 1 first pass: retarget source/project-local path-bound operating surfaces from `/home/dgk/workspace/context-portal` to the clean worktree while preserving compatibility names and making no runtime/global/process/registry/Pi/checkout-disposition mutations. | planner with `--approval-acknowledged`; readiness with `--no-processes`; targeted legacy-root `rg`; `tests.test_project_init_scripts`; TOML parse; `git diff --check`; delegated source-surface audit |
+| `codex/issue-15-strategy1-source-rebind` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #24](https://github.com/somebloke1/contextforge-control-plane/pull/24) | User-approved Strategy 1 first pass: retarget source/project-local path-bound operating surfaces from `/home/dgk/workspace/context-portal` to the clean worktree while preserving compatibility names and making no runtime/global/process/registry/Pi/checkout-disposition mutations. | planner with `--approval-acknowledged`; readiness with `--no-processes`; targeted legacy-root `rg`; `tests.test_project_init_scripts`; TOML parse; `git diff --check`; delegated source-surface audit |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/clean-worktree-test-hermeticity` | closed [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) / merged [PR #17](https://github.com/somebloke1/contextforge-control-plane/pull/17) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
@@ -1059,8 +1057,8 @@ extraction if current evidence proves a better review boundary.
   live state was schema-valid revision 10 and `initialized`, Codex was
   `verified`/`passed`, Pi was `validation_pending`/`mixed`, and visible
   helper/wrapper processes still sourced from the legacy dirty checkout. On
-  branch `codex/issue-15-strategy1-source-rebind`, helper-owned repair now makes
-  the clean project state schema-valid with recommended action
+  merged PR #24, helper-owned repair now makes the clean project state
+  schema-valid with recommended action
   `resume_validation`, but target-client validation remains pending and live
   runtime/process rebind remains separately approval-gated.
 - Desired state: project-state labels, readback fields, helper prompts, reload
@@ -1078,7 +1076,7 @@ extraction if current evidence proves a better review boundary.
   longer present is stale; the legacy live state still includes current Pi
   `validation_pending`/mixed state plus one older Codex `validation_pending`
   job, even though the latest Codex job is verified and not repair-pending.
-  The Strategy 1 source branch also has validation-pending clean-root state
+  The Strategy 1 source rebind also has validation-pending clean-root state
   after helper-owned repair; that is expected first-pass residue, not issue #4
   closure.
 - Acceptance: schema-valid state, no stale activation-job claims, clear
@@ -1109,8 +1107,8 @@ extraction if current evidence proves a better review boundary.
   `primary_project_state_root_mismatch`, and
   `helper_process_source_mismatch`; it reports the comparison legacy root as
   valid with activation-job status counts `validation_pending: 2` and
-  `verified: 1`. Strategy 1 source-branch evidence now supersedes the clean
-  root mismatch portion: planner with `--approval-acknowledged` reports
+  `verified: 1`. PR #24 evidence now supersedes the clean root mismatch
+  portion: planner with `--approval-acknowledged` reports
   `status: attention_required`, `approval_required: false`, no blockers, and
   primary root `valid`/`resume_validation`; readiness with `--no-processes`
   reports no blockers, primary root `valid`/`resume_validation`, and comparison
@@ -1281,13 +1279,12 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
 5. Treat PR #7 / issue #1 as retired unless new runtime evidence proves a fresh
    wrapper regression.
 6. Continue issue #15 dirty-checkout retirement before starting new
-   inward-facing work. The user selected Strategy 1 and approved the first
-   source-only compatibility rebind pass. Complete the scoped branch/PR, then
-   perform only the next separately approved operator-path step: clean-root
-   Codex/hook/MCP validation, systemd/Serena reload/readback, ContextForge
-   registration readback, or explicit archival disposition of the legacy
-   checkout. Do not bundle those runtime/global/check-out actions into the
-   source PR.
+   inward-facing work. The user selected Strategy 1 and PR #24 completed the
+   first source-only compatibility rebind pass. Perform only the next separately
+   approved operator-path step: clean-root Codex/hook/MCP validation,
+   systemd/Serena reload/readback, ContextForge registration readback, or
+   explicit archival disposition of the legacy checkout. Do not bundle those
+   runtime/global/check-out actions into ordinary source work.
 7. Review and clean stale Serena test units after explicit approval for
    stop/disable/remove actions.
 8. Treat PR #10 as landed and continue issue #4 only for final live

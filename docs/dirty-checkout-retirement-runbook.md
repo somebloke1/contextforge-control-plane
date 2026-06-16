@@ -18,9 +18,9 @@ Clean operating tree:
 
 ```text
 /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
-branch: codex/issue-15-strategy1-source-rebind
-base: 726d7cf7510b4c4385e29e01518f743474176a73
-base status: synchronized with origin/dev-root
+branch: dev-root
+head: 9aa732b9f5d89d4663f37be1418d98f8e736f6a8
+status: synchronized with origin/dev-root
 ```
 
 Legacy dirty checkout:
@@ -46,7 +46,7 @@ Current GitHub state:
 - Issue #4 has read-only readiness reconciliation on `dev-root` through PR
   #21. Before the Strategy 1 source rebind branch, the clean source state was
   root-mismatched and helper/wrapper processes still sourced from the legacy
-  checkout. The source branch repairs the clean root state, but issue #4 still
+  checkout. Merged PR #24 repairs the clean root state, but issue #4 still
   requires target-client validation and any separately approved runtime reload
   or service readback.
 - Issue #3 source parity is merged through PR #20, but the user-global Pi
@@ -85,8 +85,8 @@ Current read-only issue #15 evidence:
   reported the clean root as `invalid_blocked` due to project-state root
   mismatch and the legacy root as valid with Codex `verified`/`passed` and Pi
   `validation_pending`/`mixed`.
-- On branch `codex/issue-15-strategy1-source-rebind`, the first approved
-  source-only pass retargets project-local active surfaces to
+- Merged PR #24 completed the first approved source-only pass and retargets
+  project-local active surfaces to
   `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`.
   The corrected readiness report now classifies the primary root as `valid`
   with recommended action `resume_validation` and the comparison legacy root as
@@ -102,9 +102,9 @@ Without explicit approval, only these actions are allowed:
 - open a draft PR for the planning artifact;
 - update GitHub issue comments with evidence.
 
-The user has explicitly approved the first Strategy 1 source-only compatibility
-rebind pass on a scoped branch. That approval covers project-local/source
-retargeting only:
+The user explicitly approved the first Strategy 1 source-only compatibility
+rebind pass, which merged through PR #24. That approval covered
+project-local/source retargeting only:
 
 - `.codex/config.toml` command/argument/cwd references;
 - `.project/context_forge_state.json` repair through helper-owned project-init
@@ -193,10 +193,9 @@ Required approval scope:
 
 First-pass source status:
 
-- `codex/issue-15-strategy1-source-rebind` retargets the source/project-local
-  surfaces listed above and preserves compatibility identifiers such as
-  `serena-context-portal`, `serena_context_portal_server`, and project name
-  `context-portal`.
+- Merged PR #24 retargets the source/project-local surfaces listed above and
+  preserves compatibility identifiers such as `serena-context-portal`,
+  `serena_context_portal_server`, and project name `context-portal`.
 - Helper-owned repair updated `.project/context_forge_state.json` to the clean
   root and left target-client validation pending. It did not overwrite
   unmanaged `.codex/config.toml`, mutate user-global trust, mutate ContextForge
