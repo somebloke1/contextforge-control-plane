@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import shutil
 import sys
 import tomllib
@@ -359,6 +360,159 @@ def _hook_state(config: Mapping[str, Any]) -> Mapping[str, Any]:
     return state if isinstance(state, Mapping) else {}
 
 
+def _record_tags(record: Mapping[str, Any] | None) -> set[str]:
+    if not record:
+        return set()
+    tags = record.get("tags")
+    if isinstance(tags, list):
+        collected: set[str] = set()
+        for tag in tags:
+            if isinstance(tag, str):
+                collected.add(tag)
+            elif isinstance(tag, Mapping):
+                name = tag.get("name") or tag.get("label")
+                if name:
+                    collected.add(str(name))
+        return collected
+    return set()
+
+
+def classify_prompt_resource_side_effect(
+    *,
+    prompt_record: Mapping[str, Any] | None,
+    resource_record: Mapping[str, Any] | None,
+    prompt_version: str,
+    resource_uri: str,
+) -> dict[str, Any]:
+    reasons: list[str] = []
+    if not prompt_record:
+        reasons.append("project_init_prompt_missing")
+    elif not prompt_record.get("id"):
+        reasons.append("project_init_prompt_missing_id")
+    elif prompt_version not in _record_tags(prompt_record):
+        reasons.append("project_init_prompt_stale")
+
+    if not resource_record:
+        reasons.append("project_init_resource_missing")
+    elif not resource_record.get("id"):
+        reasons.append("project_init_resource_missing_id")
+    elif resource_record.get("uri") != resource_uri or prompt_version not in _record_tags(resource_record):
+        reasons.append("project_init_resource_stale")
+
+    would_upsert = bool(reasons)
+    return {
+        "status": "would_upsert_prompt_resource" if would_upsert else "read_only_render_path",
+        "would_call_upgrade_project_init_prompt": would_upsert,
+        "reasons": reasons,
+        "approval_required_before_hook_execution": would_upsert,
+        "non_actions": ["classification only; no prompt/resource upsert performed"],
+    }
+
+
+def _not_inspected_prompt_resource_side_effect() -> dict[str, Any]:
+    return {
+        "status": "unknown_prompt_resource_readback_required",
+        "would_call_upgrade_project_init_prompt": "unknown",
+        "reasons": ["contextforge_prompt_resource_records_not_inspected"],
+        "approval_required_before_hook_execution": True,
+        "non_actions": ["classification only; no ContextForge API read or upsert performed"],
+    }
+
+
+def _read_contextforge_prompt_resource_side_effect() -> dict[str, Any]:
+    import codex_project_init_hook as hook
+    import contextforge_mcp_wrapper as gateway
+    from project_init_common import PROMPT_VERSION, PROJECT_INIT_RESOURCE_URI
+
+    env_token = os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
+    token = env_token.removeprefix("Bearer ").strip() if env_token else gateway._cached_token()
+    if not token:
+        raise RuntimeError("no existing bearer or cached token; refusing login/token-cache write during preflight")
+    prompt = hook.get_prompt_record(token)
+    resource = hook.get_project_init_resource_record(token)
+    classified = classify_prompt_resource_side_effect(
+        prompt_record=prompt,
+        resource_record=resource,
+        prompt_version=PROMPT_VERSION,
+        resource_uri=PROJECT_INIT_RESOURCE_URI,
+    )
+    classified["prompt_record_present"] = bool(prompt)
+    classified["resource_record_present"] = bool(resource)
+    classified["non_actions"] = [
+        "read-only ContextForge prompt/resource metadata inspection using existing token material only",
+        "no prompt/resource upsert performed",
+        "no login or token-cache write performed",
+    ]
+    return classified
+
+
+def _hook_retarget_preflight(
+    *,
+    entries: Sequence[EntryPlan],
+    legacy_hook_state: Mapping[str, Any],
+    target_hook_state: Mapping[str, Any],
+    inspect_contextforge_prompt_state: bool,
+) -> dict[str, Any]:
+    entry_map = {entry.entry_id: entry for entry in entries}
+    affected = [
+        {
+            "event": "SessionStart",
+            "entry_id": "global_session_start_project_init_hook",
+            "current_commands": entry_map["global_session_start_project_init_hook"].current_value,
+            "target_commands": entry_map["global_session_start_project_init_hook"].target_value,
+            "lines": list(entry_map["global_session_start_project_init_hook"].lines),
+        },
+        {
+            "event": "UserPromptSubmit",
+            "entry_id": "global_user_prompt_project_init_hook",
+            "current_commands": entry_map["global_user_prompt_project_init_hook"].current_value,
+            "target_commands": entry_map["global_user_prompt_project_init_hook"].target_value,
+            "lines": list(entry_map["global_user_prompt_project_init_hook"].lines),
+        },
+    ]
+    if inspect_contextforge_prompt_state:
+        try:
+            prompt_resource = _read_contextforge_prompt_resource_side_effect()
+        except Exception as exc:
+            prompt_resource = {
+                "status": "contextforge_prompt_resource_readback_failed",
+                "would_call_upgrade_project_init_prompt": "unknown",
+                "reasons": [f"{type(exc).__name__}: {exc}"],
+                "approval_required_before_hook_execution": True,
+                "non_actions": [
+                    "attempted read-only ContextForge prompt/resource metadata inspection",
+                    "no prompt/resource upsert performed",
+                ],
+            }
+    else:
+        prompt_resource = _not_inspected_prompt_resource_side_effect()
+    return {
+        "affected_hook_commands": affected,
+        "legacy_hook_state_records": sorted(str(key) for key in legacy_hook_state),
+        "clean_root_hook_state_records": sorted(str(key) for key in target_hook_state),
+        "trust_state_effect": {
+            "changed_global_hook_commands_may_require_new_hook_trust_or_operator_approval": True,
+            "hook_trust_is_not_granted_or_revoked_by_this_tool": True,
+            "legacy_hook_state_policy": "preserve_by_default",
+        },
+        "first_run_side_effect_model": {
+            "hook_code_path": "codex_project_init_hook.main_for_events -> prompt/resource freshness check -> optional upgrade_project_init_prompt",
+            "prompt_resource_readback": prompt_resource,
+            "approval_boundary": "Hook execution and any prompt/resource upsert side effect require separate operator approval from global config file editing.",
+        },
+        "post_restart_readback": [
+            "Inspect Codex hook trust/approval UI or hook-state readback after the retargeted command is observed.",
+            "If prompt/resource metadata was missing or stale, record explicit approval before allowing first hook execution to upsert.",
+            "Preserve legacy project-local hook-state provenance unless separate pruning approval is provided.",
+        ],
+        "non_actions": [
+            "no hook trust is granted or revoked",
+            "no hook is executed",
+            "no prompt/resource upsert is performed",
+        ],
+    }
+
+
 def _entry_dict(entry: EntryPlan) -> dict[str, Any]:
     return {
         "entry_id": entry.entry_id,
@@ -380,6 +534,7 @@ def build_report(
     legacy_root: str | Path = DEFAULT_LEGACY_ROOT,
     approval_acknowledged: bool = False,
     approval_ref: str | None = None,
+    inspect_contextforge_prompt_state: bool = False,
 ) -> dict[str, Any]:
     config_file = _canonical(config_path)
     target = _canonical(target_root)
@@ -502,9 +657,16 @@ def build_report(
             "global_helper_already_targets_clean_root": target_text in json.dumps(helper, sort_keys=True),
         },
         "entries": [_entry_dict(entry) for entry in entries],
+        "hook_retarget_preflight": _hook_retarget_preflight(
+            entries=entries,
+            legacy_hook_state=legacy_hook_state,
+            target_hook_state=target_hook_state,
+            inspect_contextforge_prompt_state=inspect_contextforge_prompt_state,
+        ),
         "next_actions": [
             "Ask for explicit approval before editing user-global Codex config or trust.",
             "If approved, replace active global helper and project-init hook paths with the clean root and add clean project trust while retaining legacy trust unless separate removal is approved.",
+            "Before executing retargeted hooks, review hook_retarget_preflight and require separate approval for hook trust/execution and any prompt/resource upsert side effect.",
             "Do not prune legacy hook-state provenance unless that cleanup is explicitly approved.",
             "After any approved file change, treat the result as pending_restart until the affected Codex surface is restarted by explicit user action and verified by readback.",
         ],
@@ -697,6 +859,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--prune-legacy-hook-state", action="store_true", help="With --apply, prune legacy hook-state provenance.")
     parser.add_argument("--prune-legacy-hook-state-approved", action="store_true", help="Separate approval for --prune-legacy-hook-state.")
     parser.add_argument("--rollback-from", help="Restore the selected config from a prior backup path.")
+    parser.add_argument(
+        "--inspect-contextforge-prompt-state",
+        action="store_true",
+        help="Perform read-only ContextForge prompt/resource metadata inspection for hook side-effect preflight.",
+    )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON.")
     return parser.parse_args(argv)
 
@@ -734,6 +901,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 legacy_root=args.legacy_root,
                 approval_acknowledged=args.approval_acknowledged,
                 approval_ref=args.approval_ref,
+                inspect_contextforge_prompt_state=args.inspect_contextforge_prompt_state,
             )
     except (FileExistsError, FileNotFoundError, PermissionError, tomllib.TOMLDecodeError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
