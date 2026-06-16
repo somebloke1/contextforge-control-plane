@@ -197,8 +197,14 @@ work.
   `mentality_server` timing evidence passed without process termination,
   service restart, or registry/database mutation.
 - Active but not current project-init readiness status: issue #4 is represented
-  by draft PR #10 from `codex/helper-multiclient-project-init` to `dev-root`;
-  focused acceptance evidence is green.
+  by draft PR #10 from `codex/helper-multiclient-project-init` to `dev-root`.
+  The PR branch was merged forward to current `origin/dev-root` at
+  `f285f89`, then advanced to `e38c5df` with two idempotency fixes for
+  helper-mediated recovery resume. Focused compile checks, 165 focused unit
+  tests, and `git diff --check origin/dev-root...HEAD` pass; the broader
+  clean-worktree control-plane suite is blocked only by issue #14 local evidence
+  gaps. It remains draft pending final readiness review because issue #4 still
+  carries broader reconciliation acceptance.
 - Active but not current test-portability debt: issue #14 records that clean
   slice worktrees cannot run the full suite without ignored local `.env` and
   `run/*registration.json` evidence, while the operational checkout currently
@@ -207,7 +213,11 @@ work.
   `/home/dgk/workspace/context-portal` holding checkout as a hidden source of
   truth. This is now part of the current execution priority because stale
   worktree state directly degrades skill discovery, hook trust, formal goal
-  continuity, and delegation discipline.
+  continuity, and delegation discipline. A read-only sidecar audit classified
+  the remaining dirty checkout state into already-extracted PR #10 files,
+  already-merged baseline files, unextracted future slices, and local
+  runtime/scratch state; cleanup remains open until those classes are reconciled
+  without losing preserved local work.
 
 ## Executive Summary
 
@@ -579,8 +589,15 @@ Current GitHub state:
 - Merged PR [#7: ContextForge: wrapper lifecycle cleanup](https://github.com/somebloke1/contextforge-control-plane/pull/7)
   landed as merge commit `9d6b539`.
 - Draft PR [#10: ContextForge: helper-mediated project init readiness](https://github.com/somebloke1/contextforge-control-plane/pull/10)
-  is open from `codex/helper-multiclient-project-init` to `dev-root` and has
-  clean merge state with no status checks reported.
+  is open from `codex/helper-multiclient-project-init` to `dev-root`. The
+  branch was merged forward to current `origin/dev-root` and pushed at
+  `f285f89`, then advanced to `e38c5df` for recovery-resume idempotency.
+  Evidence was recorded in PR comments
+  `https://github.com/somebloke1/contextforge-control-plane/pull/10#issuecomment-4717222163`,
+  `https://github.com/somebloke1/contextforge-control-plane/pull/10#issuecomment-4717512657`,
+  and
+  `https://github.com/somebloke1/contextforge-control-plane/pull/10#issuecomment-4717661173`.
+  GitHub still reports no status checks for the PR branch.
 - Merged PR [#8: ContextForge: roadmap and governance operating discipline](https://github.com/somebloke1/contextforge-control-plane/pull/8)
   landed as merge commit `f8a1aab`.
 - Merged PR [#9: ContextForge: project-local precompact continuity hook](https://github.com/somebloke1/contextforge-control-plane/pull/9)
@@ -876,10 +893,13 @@ extraction if current evidence proves a better review boundary.
   consistent with helper-mediated consent.
 - Beneficiary: maintainers activating ContextForge services in this repo and
   future project worktrees.
-- Current state: full tests and control-plane tests pass; helper is available;
-  project state is `initialized`; service records show target-client validation
-  passed but gateway readback is `not_checked`; project label still says
-  `context-portal`.
+- Current state: draft PR #10 contains the helper-mediated multi-client
+  project-init slice and was merged forward to current `origin/dev-root` at
+  `f285f89`, then advanced to `e38c5df` with recovery-resume idempotency fixes;
+  focused compile checks, 165 focused unit tests, and diff hygiene pass. The
+  broader clean-worktree control-plane suite still fails only on issue #14 local
+  evidence gaps. The live project state still requires final
+  reconciliation/readiness acceptance before issue #4 can close.
 - Desired state: project-state labels, readback fields, helper prompts, reload
   guidance, and state reconciliation tell the current truth without stale job
   assumptions.
@@ -898,6 +918,14 @@ extraction if current evidence proves a better review boundary.
 - Evidence: helper `cf_project_init_get_context`,
   `cf_project_init_list_capabilities`, `.project/context_forge_state.json`
   readback, project-init focused tests, control-plane discovery, full suite.
+  Current PR #10 slice evidence: `py_compile` for project-init/helper hooks,
+  `unittest tests.test_project_init_activation_workflow
+  tests.test_project_init_scripts tests.test_control_plane_contextforge_binding
+  tests.test_control_plane_project_state
+  tests.test_control_plane_service_provision_fixtures -v` with 165 tests OK,
+  broad `test_control_plane_*.py` discover with 301 tests run and only issue
+  #14 local evidence gaps remaining, and
+  `git diff --check origin/dev-root...HEAD`.
 - Debt policy: any remaining deprecated label or unchecked readback must be
   tracked with owner, impact, migration trigger, and retirement condition.
 
@@ -1055,9 +1083,12 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    inward-facing work, because stale active-tree state degrades the operating
    agent itself.
 7. Review and clean stale Serena test units.
-8. Land helper/project-init multi-client support and reconcile project-state
-   historical jobs into terminal, verified, or explicitly non-blocking states
-   without duplicating activation records.
+8. Finish readiness review for PR #10, then land the helper/project-init
+   multi-client slice if review finds no blocking issue. Keep issue #4 open
+   afterward if final live project-state reconciliation or broad-suite
+   acceptance remains unproven.
+9. Resolve issue #14 clean-worktree evidence gaps so broad control-plane checks
+   do not depend on ignored local `.env` or `run/*registration.json` files.
 10. Land Pi shim source and perform approved global install/reload verification.
 11. Perform approved registry orphan cleanup using exact ids from a fresh
    dry-run report and verify a second dry run is empty for those candidates.
