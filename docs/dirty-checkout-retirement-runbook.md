@@ -237,7 +237,22 @@ Before any approved mutation:
    git -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance rev-parse HEAD origin/dev-root
    ```
 
-3. Read back active path-bound state:
+3. Run the read-only rebind preflight planner:
+
+   ```sh
+   PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python \
+     scripts/plan_dirty_checkout_rebind.py \
+     --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
+     --legacy-root /home/dgk/workspace/context-portal \
+     --client-type codex --client-type pi
+   ```
+
+   The report is evidence only. It must not be treated as approval to mutate
+   project state, client config, services, registry entries, hook trust, or the
+   legacy checkout.
+
+4. Read back active path-bound state if manual line-level confirmation is
+   needed:
 
    ```sh
    rg -n "/home/dgk/workspace/context-portal|/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance" \
@@ -251,11 +266,11 @@ Before any approved mutation:
      /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.serena
    ```
 
-4. Confirm the user selected Strategy 1 or Strategy 2 and approved the exact
+5. Confirm the user selected Strategy 1 or Strategy 2 and approved the exact
    mutation set. If Strategy 3 is selected, update issue #15 and stop without
    local mutation.
 
-5. Run the read-only readiness reconciler:
+6. Run the read-only readiness reconciler:
 
    ```sh
    PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python \
