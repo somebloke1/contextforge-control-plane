@@ -224,7 +224,10 @@ work.
   approval-gated network exposure, future #2/#3/#4/#5 slices, and local
   scratch/runtime assets. Cleanup remains open until `/home/dgk/workspace/context-portal`
   is either explicitly archival-only or safely rebound/retired without losing
-  preserved local work.
+  preserved local work. The non-mutating planning branch
+  `codex/dirty-checkout-retirement-runbook` adds
+  `docs/dirty-checkout-retirement-runbook.md` so any later approval can execute
+  a defined strategy instead of ad-hoc path edits.
 
 ## Executive Summary
 
@@ -776,6 +779,7 @@ extraction if current evidence proves a better review boundary.
 | `codex/pi-global-shim-parity` | [#3](https://github.com/somebloke1/contextforge-control-plane/issues/3) | `pi-extensions/contextforge-global-shim/`, `scripts/manage_pi_global_shim.py`, Pi dry-run/CLI helpers, Pi prompt/resource parity docs/tests. | TypeScript `tsc`; focused Pi regression; `manage_pi_global_shim.py status/plan` |
 | `codex/live-validation-and-registry-cleanup-tools` | [#5](https://github.com/somebloke1/contextforge-control-plane/issues/5) | `scripts/inspect_contextforge_cleanup.py`, `scripts/apply_contextforge_stale_tool_cleanup.py`, `scripts/run_live_inference_validation.py`, live staged fixtures if they are sanitized and intended to be tracked. | cleanup inspector dry-run; inference harness tests; secret scan by review |
 | `codex/service-inventory-triage` | closed [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6) / merged [PR #18](https://github.com/somebloke1/contextforge-control-plane/pull/18) | Current inventory classification and candidate handoff debt recorded without committing generated `*.local.json` or promoting services. | inventory script; no generated/local files tracked; delegated PR review |
+| `codex/dirty-checkout-retirement-runbook` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) | Non-mutating rebind/retire runbook only; no local path mutation, service restart, registry mutation, hook approval, or checkout deletion. | `git diff --check`; sidecar path-bound surface audit; no generated/local files tracked |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/clean-worktree-test-hermeticity` | closed [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) / merged [PR #17](https://github.com/somebloke1/contextforge-control-plane/pull/17) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
 | `codex/repo-local-skills-and-governance` | merged cross-links #1-#6 as needed / [PR #8](https://github.com/somebloke1/contextforge-control-plane/pull/8) | `.codex/skills/`, `DECISIONS.md`, `ABEYANT_INTENTIONS.md`, `OPEN_QUESTIONS.md`, and this roadmap if intentionally tracked. | governance CRUD shape checks; ledger-focused tests |
@@ -1149,9 +1153,11 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
 5. Treat PR #7 / issue #1 as retired unless new runtime evidence proves a fresh
    wrapper regression.
 6. Continue issue #15 dirty-checkout retirement before starting new
-   inward-facing work: either approve a rebind/retirement plan for
-   `/home/dgk/workspace/context-portal`, or keep it explicitly archival while all
-   new work happens from clean `dev-root`.
+   inward-facing work: review
+   `docs/dirty-checkout-retirement-runbook.md`, then either approve a
+   compatibility rebind or new-root identity plan for
+   `/home/dgk/workspace/context-portal`, or keep it explicitly archival while
+   all new work happens from clean `dev-root`.
 7. Review and clean stale Serena test units after explicit approval for
    stop/disable/remove actions.
 8. Treat PR #10 as landed and continue issue #4 only for final live
