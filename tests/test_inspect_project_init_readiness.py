@@ -10,8 +10,28 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import control_plane_contextforge_binding as binding
 import control_plane_project_state as project_state
 import inspect_project_init_readiness as readiness
+
+
+CONSENT_REFS = ["run/consent-receipts/receipt-project-local-config.json"]
+
+
+def service_descriptor(name: str = "context7") -> dict[str, object]:
+    return {
+        "service_family": name,
+        "canonical_service": name,
+        "service_binding": f"{name}:canonical",
+        "codex_alias": name.replace("-", "_"),
+        "instantiation_class": "shared_canonical",
+        "backend_instance": f"server-instances/{name}",
+        "virtual_server": f"{name.replace('-', '_')}_server",
+        "contextforge_readback_status": "matched",
+        "gateway": f"{name}-gateway",
+        "validation_policy": {"mode": "read_only_lookup", "default_safe_operations": ["read"]},
+        "non_actions": ["do not create a per-project backend"],
+    }
 
 
 def write_fake_python(root: Path) -> None:
@@ -118,6 +138,91 @@ class ReadinessCompatibilityTests(unittest.TestCase):
                 },
             ],
             references,
+        )
+
+    def test_activation_job_reconciliation_retains_superseded_pending_jobs_as_history(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve() / "cf-controlplane"
+            root.mkdir()
+            write_fake_python(root)
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            pending_state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan([service], validation_mode="pending_choice", target_client="codex"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            verified_state = project_state.apply_project_init_activation_to_state(
+                pending_state,
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan([service], validation_mode="validate_now", target_client="codex"),
+                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": True}},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, verified_state)
+
+            report = readiness.build_report(
+                project_root=root,
+                client_types=("codex",),
+                include_processes=False,
+            )
+
+        self.assertNotIn("project_init_activation_jobs_need_reconciliation", report["warnings"])
+        reconciliation = report["roots"][0]["state"]["activation_job_reconciliation"]
+        self.assertEqual(1, reconciliation["summary"]["current_verified_jobs"])
+        self.assertEqual(1, reconciliation["summary"]["superseded_pending_jobs"])
+        self.assertEqual(0, reconciliation["summary"]["attention_required_jobs"])
+        jobs = {
+            job["job_id"]: job
+            for job in reconciliation["clients"]["codex"]["jobs"]
+        }
+        self.assertEqual("current_verified", jobs[verified_state["project_init"]["current_job_id"]]["classification"])
+        superseded = [
+            job
+            for job in jobs.values()
+            if job["classification"] == "superseded_by_current_client_state"
+        ]
+        self.assertEqual(1, len(superseded))
+        self.assertEqual("retain_as_historical_audit_trail", superseded[0]["recommended_disposition"])
+
+    def test_activation_job_reconciliation_warns_for_current_pending_validation(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve() / "cf-controlplane"
+            root.mkdir()
+            write_fake_python(root)
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            pending_state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan([service], validation_mode="pending_choice", target_client="codex"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, pending_state)
+
+            report = readiness.build_report(
+                project_root=root,
+                client_types=("codex",),
+                include_processes=False,
+            )
+
+        self.assertEqual("attention_required", report["status"])
+        self.assertIn("project_init_activation_jobs_need_reconciliation", report["warnings"])
+        reconciliation = report["roots"][0]["state"]["activation_job_reconciliation"]
+        self.assertEqual(1, reconciliation["summary"]["current_validation_pending_jobs"])
+        self.assertEqual(1, reconciliation["summary"]["attention_required_jobs"])
+        self.assertEqual(
+            "current_validation_pending",
+            reconciliation["clients"]["codex"]["jobs"][0]["classification"],
         )
 
 
