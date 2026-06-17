@@ -400,6 +400,43 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn(normalized_id, normalized_job["validation_records"])
         self.assertEqual("context7:canonical", normalized_job["validation_records"][normalized_id]["x_service_binding"])
 
+    def test_state_rekeys_existing_service_record_by_binding_during_activation(self) -> None:
+        state = project_state.default_state("/home/dgk/workspace/context-portal")
+        state["services"]["context7"] = {
+            "service_family": "context7",
+            "service_binding": "context7:canonical",
+            "instantiation_class": "shared_canonical",
+            "backend_instance": "server-instances/context7",
+            "virtual_server": "context7_server",
+            "target_clients": {},
+            "consent_receipt_refs": ["run/consent-receipts/imported-existing-state.json"],
+            "evidence": [{"name": "existing_readback", "status": "passed"}],
+        }
+        service = service_descriptor("context7")
+        config_plan = binding.plan_project_init_codex_config_write(
+            "/home/dgk/workspace/context-portal",
+            [service],
+            existing_text="",
+        )
+        validation_plan = binding.build_project_init_validation_plan([service], validation_mode="pending_choice")
+
+        next_state = project_state.apply_project_init_activation_to_state(
+            state,
+            [service],
+            target_client="codex",
+            client_config_plan=config_plan,
+            validation_plan=validation_plan,
+            validation_results={},
+            consent_receipt_refs=CONSENT_REFS,
+        )
+
+        self.assertNotIn("context7", next_state["services"])
+        self.assertIn("context7:canonical", next_state["services"])
+        record = next_state["services"]["context7:canonical"]
+        self.assertIn("run/consent-receipts/imported-existing-state.json", record["consent_receipt_refs"])
+        self.assertEqual("existing_readback", record["evidence"][0]["name"])
+        project_state.validate_state(next_state)
+
     def test_state_marks_initialized_only_with_target_client_visible_validation(self) -> None:
         state = project_state.default_state("/home/dgk/workspace/context-portal")
         service = service_descriptor("context7")

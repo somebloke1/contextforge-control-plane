@@ -14,17 +14,16 @@ Service classes currently seen for this repo:
 
 - Shared/canonical bindings: `context7`, `github`, `openzeppelin-solidity-contracts`.
 - Hosted or scoped shared bindings: `mentality`, `playwright`, `ssh-tmux`, `web-search`, `exa-search`.
-- Project-scoped provisioning: `serena` for the current repository root. During
-  the `cf-controlplane` migration, that root is
+- Project-scoped provisioning: `serena` for the current repository root:
   `/home/dgk/workspace/cf-controlplane`.
 
-Legacy note:
+Root authority:
 
-- Tracked `.codex/config.toml`, `.project/context_forge_state.json`, and
-  `server-instances/serena-context-portal/**` may still contain
-  `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`.
-  Treat those as activation blockers or explicit compatibility evidence until a
-  helper-approved retarget/regeneration step replaces them.
+- Treat `/home/dgk/workspace/cf-controlplane` as the only active helper,
+  wrapper, client-cwd, project-state, and Serena provisioning root.
+- Any copied, migration, or legacy checkout path in `.codex/config.toml`,
+  `.project/context_forge_state.json`, generated prompt resources, or
+  server-instance metadata is a blocker to repair, not a usable target.
 
 Validation policy:
 

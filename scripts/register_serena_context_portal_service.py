@@ -41,9 +41,9 @@ def gateway_body() -> dict[str, Any]:
     return {
         "name": GATEWAY_NAME,
         "url": GATEWAY_URL,
-        "description": "Serena MCP code-intelligence backend scoped to /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance.",
+        "description": "Serena MCP code-intelligence backend scoped to the active cf-controlplane repository root.",
         "transport": "STREAMABLEHTTP",
-        "tags": ["contextforge", "serena", "context-portal", "local-backend"],
+        "tags": ["contextforge", "serena", "cf-controlplane", "local-backend"],
         "visibility": "public",
         "owner_email": OWNER,
         "gateway_mode": "cache",
@@ -89,7 +89,7 @@ def server_body(tool_ids: list[str]) -> dict[str, Any]:
         "name": SERVER_NAME,
         "description": "Virtual server exposing Serena for the ContextForge operator repository.",
         "associated_tools": tool_ids,
-        "tags": ["contextforge", "serena", "context-portal"],
+        "tags": ["contextforge", "serena", "cf-controlplane"],
         "owner_email": OWNER,
         "visibility": "public",
     }

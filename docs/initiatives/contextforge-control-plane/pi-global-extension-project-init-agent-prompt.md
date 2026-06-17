@@ -3,9 +3,9 @@
 Use the following prompt for an independent ContextForge/control-plane implementation agent.
 
 ```text
-Work in the current ContextForge repository checkout. On this host, the
-historical checkout path may still contain `context-portal`, but that is a
-legacy path/runtime identifier and not the product name.
+Work in `/home/dgk/workspace/cf-controlplane`, the active ContextForge
+control-plane repository checkout. Do not use copied, migration, archive, or
+legacy checkout paths as the active project root.
 
 You are an independent ContextForge/control-plane implementation agent. Research, plan, and implement Pi support for ContextForge-hosted MCP service activation.
 

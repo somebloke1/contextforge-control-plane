@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, Mapping
 
 try:
     import jsonschema
@@ -839,7 +839,8 @@ def apply_project_init_activation_to_state(
         if not binding:
             raise StateValidationError("selected service missing service_binding")
         service_key = _state_map_key(binding)
-        existing_service = next_state["services"].get(service_key)
+        legacy_service_key = _service_key_for_binding(next_state["services"], binding)
+        existing_service = next_state["services"].get(legacy_service_key or service_key)
         existing_service = existing_service if isinstance(existing_service, dict) else {}
         existing_target_clients = existing_service.get("target_clients") if isinstance(existing_service.get("target_clients"), dict) else {}
         target_clients = json.loads(json.dumps(existing_target_clients))
@@ -920,6 +921,8 @@ def apply_project_init_activation_to_state(
             "x_validation_mode": validation_plan.get("validation_mode"),
             "x_non_actions": list(service.get("non_actions") or []),
         }
+        if legacy_service_key and legacy_service_key != service_key:
+            del next_state["services"][legacy_service_key]
         next_state["services"][service_key] = {
             "service_family": str(service.get("service_family") or service_key),
             "service_binding": binding,
@@ -1625,6 +1628,13 @@ def _state_map_key(value: str) -> str:
     if not re.match(r"^[A-Za-z0-9]", key):
         key = f"service-{key}"
     return key[:192]
+
+
+def _service_key_for_binding(services: Mapping[str, Any], binding: str) -> str | None:
+    for service_key, service in services.items():
+        if isinstance(service, Mapping) and str(service.get("service_binding") or service_key) == binding:
+            return str(service_key)
+    return None
 
 
 def _service_ref(prefix: str, binding: str) -> str:

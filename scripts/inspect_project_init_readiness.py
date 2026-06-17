@@ -5,14 +5,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import control_plane_project_init_helper as helper
 import control_plane_project_state as project_state
+import project_init_common as common
 
 
 REPORT_SCHEMA_URI = "contextforge://control-plane/project-init-readiness-report/v1"
@@ -20,6 +23,14 @@ HELPER_PROCESS_SCRIPT_NAMES = (
     "contextforge_helper_mcp.py",
     "control_plane_project_init_helper.py",
     "contextforge_mcp_wrapper.py",
+)
+LEGACY_ROOTS = (
+    Path("/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"),
+    Path("/home/dgk/workspace/context-portal"),
+)
+COMPATIBILITY_IDENTIFIER_NEEDLES = (
+    "contextforge://context-portal/",
+    "serena-context-portal",
 )
 
 
@@ -37,6 +48,158 @@ def _json_summary(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     if not isinstance(data, dict):
         return None, f"project state must be a JSON object: {path}"
     return data, None
+
+
+def _read_text(path: Path) -> tuple[str, str | None]:
+    try:
+        return path.read_text(encoding="utf-8"), None
+    except (OSError, UnicodeDecodeError) as exc:
+        return "", f"{exc.__class__.__name__}: {exc}"
+
+
+def _reference_counts(text: str, needles: Sequence[str | Path]) -> dict[str, int]:
+    return {str(needle): text.count(str(needle)) for needle in needles}
+
+
+def _text_files(path: Path) -> list[Path]:
+    if path.is_file():
+        return [path]
+    if not path.is_dir():
+        return []
+    return sorted(
+        candidate
+        for candidate in path.rglob("*")
+        if candidate.is_file() and "__pycache__" not in candidate.parts and ".git" not in candidate.parts
+    )
+
+
+def _tree_reference_counts(path: Path, needles: Sequence[str | Path]) -> dict[str, int]:
+    counts = {str(needle): 0 for needle in needles}
+    for file_path in _text_files(path):
+        text, error = _read_text(file_path)
+        if error:
+            continue
+        for needle, count in _reference_counts(text, needles).items():
+            counts[needle] += count
+    return counts
+
+
+def _summarize_python_environment(root: Path) -> dict[str, Any]:
+    python_path = root / ".venv" / "bin" / "python"
+    return {
+        "python_path": str(python_path),
+        "exists": python_path.exists(),
+        "is_executable": python_path.exists() and os.access(python_path, os.X_OK),
+    }
+
+
+def _mcp_server_summary(name: str, config: Mapping[str, Any], *, root: Path) -> dict[str, Any]:
+    command = config.get("command")
+    args = config.get("args") if isinstance(config.get("args"), list) else []
+    cwd = config.get("cwd")
+    text = " ".join(
+        [
+            str(command or ""),
+            " ".join(str(arg) for arg in args),
+            str(cwd or ""),
+        ]
+    )
+    legacy_counts = _reference_counts(text, LEGACY_ROOTS)
+    command_path = Path(str(command)).expanduser() if isinstance(command, str) else None
+    cwd_path = Path(str(cwd)).expanduser() if isinstance(cwd, str) else None
+    return {
+        "name": name,
+        "command": command,
+        "args": [str(arg) for arg in args],
+        "cwd": cwd,
+        "command_exists": command_path.exists() if command_path and command_path.is_absolute() else None,
+        "cwd_exists": cwd_path.exists() if cwd_path and cwd_path.is_absolute() else None,
+        "current_root_reference_count": text.count(str(root)),
+        "legacy_root_reference_counts": legacy_counts,
+        "legacy_bound": any(count > 0 for count in legacy_counts.values()),
+    }
+
+
+def _summarize_codex_config(root: Path) -> dict[str, Any]:
+    path = root / ".codex" / "config.toml"
+    text, read_error = _read_text(path) if path.exists() else ("", None)
+    parsed: dict[str, Any] = {}
+    parse_error = None
+    if text:
+        try:
+            parsed = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as exc:
+            parse_error = f"{exc.__class__.__name__}: {exc}"
+    mcp_servers = parsed.get("mcp_servers") if isinstance(parsed.get("mcp_servers"), Mapping) else {}
+    server_summaries = [
+        _mcp_server_summary(str(name), server, root=root)
+        for name, server in sorted(mcp_servers.items())
+        if isinstance(server, Mapping)
+    ]
+    return {
+        "path": str(path),
+        "exists": path.exists(),
+        "read_error": read_error,
+        "parse_error": parse_error,
+        "mcp_server_count": len(server_summaries),
+        "current_root_reference_count": text.count(str(root)),
+        "legacy_root_reference_counts": _reference_counts(text, LEGACY_ROOTS),
+        "mcp_servers": server_summaries,
+    }
+
+
+def _summarize_serena_identity(root: Path) -> dict[str, Any]:
+    identity = common.project_identity(root)
+    expected_instance = root / "server-instances" / identity.instance_slug
+    legacy_instance = root / "server-instances" / "serena-context-portal"
+    return {
+        "expected": {
+            "service_binding": f"serena:{identity.hash}",
+            "instance_slug": identity.instance_slug,
+            "server_name": identity.server_name,
+            "backend_instance": str(expected_instance.relative_to(root)),
+            "instance_exists": expected_instance.exists(),
+            "manifest_exists": (expected_instance / "instance.json").exists(),
+        },
+        "legacy": {
+            "backend_instance": str(legacy_instance.relative_to(root)),
+            "instance_exists": legacy_instance.exists(),
+            "manifest_exists": (legacy_instance / "instance.json").exists(),
+            "legacy_root_reference_counts": _tree_reference_counts(legacy_instance, LEGACY_ROOTS),
+        },
+    }
+
+
+def _summarize_compatibility_identifiers(root: Path) -> dict[str, Any]:
+    paths = (
+        root / "scripts" / "project_init_common.py",
+        root / "scripts" / "register_serena_context_portal_service.py",
+        root / "server-instances" / "serena-context-portal",
+    )
+    files: list[Path] = []
+    for path in paths:
+        files.extend(_text_files(path))
+    counts = {needle: 0 for needle in COMPATIBILITY_IDENTIFIER_NEEDLES}
+    for file_path in files:
+        text, error = _read_text(file_path)
+        if error:
+            continue
+        for needle, count in _reference_counts(text, COMPATIBILITY_IDENTIFIER_NEEDLES).items():
+            counts[needle] += count
+    return {
+        "paths": [str(path) for path in paths],
+        "reference_counts": counts,
+    }
+
+
+def inspect_activation_artifacts(root: str | Path) -> dict[str, Any]:
+    canonical = _canonical(root)
+    return {
+        "python_environment": _summarize_python_environment(canonical),
+        "codex_config": _summarize_codex_config(canonical),
+        "serena_project_instance": _summarize_serena_identity(canonical),
+        "compatibility_identifiers": _summarize_compatibility_identifiers(canonical),
+    }
 
 
 def _status_counts(values: Sequence[str]) -> dict[str, int]:
@@ -212,7 +375,11 @@ def list_helper_processes() -> list[dict[str, Any]]:
     return processes
 
 
-def _readiness_findings(roots: Sequence[Mapping[str, Any]], helper_processes: Sequence[Mapping[str, Any]]) -> tuple[str, list[str], list[str], list[str]]:
+def _readiness_findings(
+    roots: Sequence[Mapping[str, Any]],
+    helper_processes: Sequence[Mapping[str, Any]],
+    activation_artifacts: Mapping[str, Any],
+) -> tuple[str, list[str], list[str], list[str]]:
     blockers: list[str] = []
     warnings: list[str] = []
     next_actions: list[str] = []
@@ -221,6 +388,19 @@ def _readiness_findings(roots: Sequence[Mapping[str, Any]], helper_processes: Se
     primary_status = str(primary.get("readiness_status") or "")
     state = primary.get("state") if isinstance(primary.get("state"), Mapping) else {}
     root_match = state.get("root_match") if isinstance(state.get("root_match"), Mapping) else {}
+    state_client_bindings = [
+        binding
+        for client_state in (state.get("client_states") or {}).values()
+        if isinstance(client_state, Mapping)
+        for binding in client_state.get("selected_service_bindings") or []
+    ]
+    state_job_bindings = [
+        binding
+        for activation_job in state.get("activation_jobs") or []
+        if isinstance(activation_job, Mapping)
+        for binding in activation_job.get("selected_service_bindings") or []
+    ]
+    selected_bindings = [str(binding) for binding in state_client_bindings + state_job_bindings]
 
     if primary_status == "invalid_blocked":
         blockers.append("primary_project_state_invalid_blocked")
@@ -257,6 +437,43 @@ def _readiness_findings(roots: Sequence[Mapping[str, Any]], helper_processes: Se
         blockers.append("helper_process_source_mismatch")
         next_actions.append("Do not terminate helper processes implicitly; rebind or retire the legacy helper source only after explicit approval.")
 
+    python_environment = activation_artifacts.get("python_environment") if isinstance(activation_artifacts.get("python_environment"), Mapping) else {}
+    if python_environment.get("is_executable") is not True:
+        blockers.append("python_environment_missing")
+        next_actions.append("Create the ignored local .venv before retargeting project-local MCP commands to this checkout.")
+
+    codex_config = activation_artifacts.get("codex_config") if isinstance(activation_artifacts.get("codex_config"), Mapping) else {}
+    if codex_config.get("read_error"):
+        blockers.append("codex_config_unreadable")
+    if codex_config.get("parse_error"):
+        blockers.append("codex_config_parse_error")
+    legacy_config_refs = sum(int(count) for count in (codex_config.get("legacy_root_reference_counts") or {}).values())
+    if legacy_config_refs:
+        blockers.append("codex_config_legacy_root_references")
+        next_actions.append("Retarget project-local MCP command, args, and cwd values through the helper/project-init path; do not activate the legacy-bound config as-is.")
+    for server in codex_config.get("mcp_servers") or []:
+        if isinstance(server, Mapping) and (server.get("command_exists") is False or server.get("cwd_exists") is False):
+            blockers.append("codex_config_missing_mcp_path")
+            break
+
+    serena = activation_artifacts.get("serena_project_instance") if isinstance(activation_artifacts.get("serena_project_instance"), Mapping) else {}
+    expected_serena = serena.get("expected") if isinstance(serena.get("expected"), Mapping) else {}
+    legacy_serena = serena.get("legacy") if isinstance(serena.get("legacy"), Mapping) else {}
+    legacy_serena_refs = sum(int(count) for count in (legacy_serena.get("legacy_root_reference_counts") or {}).values())
+    serena_selected = any(binding.startswith("serena:") for binding in selected_bindings)
+    serena_legacy_present = bool(legacy_serena.get("instance_exists"))
+    if expected_serena.get("manifest_exists") is not True and (serena_selected or serena_legacy_present):
+        warnings.append("serena_project_instance_not_provisioned")
+        next_actions.append("Choose whether Serena should be provisioned for cf-controlplane or retained only as legacy compatibility evidence.")
+    if legacy_serena.get("instance_exists") and legacy_serena_refs:
+        warnings.append("legacy_serena_project_instance_present")
+
+    compatibility = activation_artifacts.get("compatibility_identifiers") if isinstance(activation_artifacts.get("compatibility_identifiers"), Mapping) else {}
+    compatibility_refs = sum(int(count) for count in (compatibility.get("reference_counts") or {}).values())
+    if compatibility_refs:
+        warnings.append("project_init_compatibility_identifiers_present")
+        next_actions.append("Classify context-portal resource URIs and serena-context-portal names as compatibility identifiers or migrate them in a separate approved slice.")
+
     if blockers:
         status = "blocked"
     elif warnings:
@@ -280,7 +497,8 @@ def build_report(
         for index, root in enumerate(compare_roots, start=1)
     )
     helper_processes = list(process_snapshot) if process_snapshot is not None else (list_helper_processes() if include_processes else [])
-    status, blockers, warnings, next_actions = _readiness_findings(roots, helper_processes)
+    activation_artifacts = inspect_activation_artifacts(project_root)
+    status, blockers, warnings, next_actions = _readiness_findings(roots, helper_processes, activation_artifacts)
     return {
         "schema_uri": REPORT_SCHEMA_URI,
         "project_name": "ContextForge",
@@ -288,6 +506,7 @@ def build_report(
         "blockers": blockers,
         "warnings": warnings,
         "roots": roots,
+        "activation_artifacts": activation_artifacts,
         "helper_processes": helper_processes,
         "next_actions": next_actions,
         "non_actions": [

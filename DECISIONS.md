@@ -811,9 +811,9 @@ Use ContextForge, Context Forge, or contextforge as the project name in human-fa
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
+- Repository: /home/dgk/workspace/cf-controlplane
 - Created: 2026-06-16
-- Updated: 2026-06-16
+- Updated: 2026-06-17
 - Tags: agent-operations,roadmap,skills,hooks,worktrees,continuity
 
 The active Codex operating surface is project-critical state, not incidental
@@ -860,3 +860,16 @@ Clean-worktree test hermeticity is tracked by issue #14. This decision does
 not authorize destructive cleanup, reset, rebase, global hook installation, or
 copying secrets into Git; preservation and approval boundaries still apply.
 <!-- governance-crud:end id=dec-20260616-0002 -->
+
+<!-- governance-crud:start id=dec-20260617-0001 -->
+## dec-20260617-0001: Allow scoped dependency installation for control-plane work
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-17
+- Updated: 2026-06-17
+- Tags: dependencies,venv,tooling,operator-approval
+
+The user explicitly approved the operating agent to install software and Python/venv libraries needed to support scoped ContextForge control-plane development and validation work in /home/dgk/workspace/cf-controlplane. Use the project Python policy by default: create or repair the ignored local .venv with uv venv .venv when needed, install Python dependencies with uv pip install --python .venv/bin/python ..., and keep installed environments, caches, secrets, OAuth state, runtime evidence, service state, and generated local artifacts out of Git unless separately promoted as sanitized source. This approval does not authorize global Codex config mutation, hook trust/state mutation, runtime secret/OAuth/trust copy, service/process/systemd/registry/Pi global config mutation, destructive git operations, mutation of /home/dgk/workspace/context-portal, or helper/project-init apply steps that require challenge approval.
+<!-- governance-crud:end id=dec-20260617-0001 -->

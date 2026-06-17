@@ -375,21 +375,48 @@ Runbook:
 
 - `docs/cf-controlplane-project-local-activation-runbook.md`
 
-Status as of this source-prep branch:
+Status as of branch `codex/issue-37-activation-readiness`:
 
-- branch `codex/issue-37-cf-controlplane-operating-context` prepares the
-  project-local activation instructions and runbook from
-  `/home/dgk/workspace/cf-controlplane`;
-- it does not retarget `.codex/config.toml`, regenerate
-  `.project/context_forge_state.json`, mutate hook trust, copy runtime state,
-  touch services/systemd/registry/Pi/global config/processes, or edit the
-  legacy checkout;
-- PR #38 is ready for review and publishes the branch:
-  <https://github.com/somebloke1/contextforge-control-plane/pull/38>;
-- PR #38 is source-prep only and leaves environment setup, `.codex/config.toml`
-  retarget, `.project/context_forge_state.json` regeneration/migration, Serena
-  compatibility or regeneration, Codex project approval, and #31 runtime
-  readback as later approval-gated transitions.
+- PR #38 is merged into `dev-root` at
+  `89dc9421d9b7f99a6b03869e88481ee318a308d9`;
+- the branch contains the next activation-readiness transition from that merge
+  commit;
+- `.venv/bin/python` exists, `.codex/config.toml` is retargeted to
+  `/home/dgk/workspace/cf-controlplane`, and
+  `.project/context_forge_state.json` records the `cf-controlplane` root;
+- helper/readiness evidence reports no active old-root config blockers;
+- `.project/context_forge_state.json` revision 12 marks project status
+  `initialized`, Codex activation `verified`, and validation `passed` after an
+  operator-directed state repair because the helper refused a redundant
+  validation record for a non-pending job;
+- Serena remains a compatibility decision: the existing
+  `server-instances/serena-context-portal/**` files are rooted at
+  `cf-controlplane` but retain the old compatibility slug and tool names.
+
+Activation-readiness evidence on this branch:
+
+- `codex -C /home/dgk/workspace/cf-controlplane mcp list --json` reads
+  project-local `contextforge-helper`, `context7`, `github`, `mentality`, and
+  `web_search` entries from the `cf-controlplane` checkout;
+- `scripts/inspect_project_init_readiness.py --project-root
+  /home/dgk/workspace/cf-controlplane --client-type codex --no-processes`
+  reports no blockers and records only the Serena provisioning and
+  compatibility-identifier warnings;
+- `tests.test_project_init_scripts -v` ran 72 tests OK,
+  `tests.test_project_init_activation_workflow -v` ran 78 tests OK,
+  `tests.test_control_plane_project_state -v` ran 31 tests OK, script
+  `py_compile` passed, and `git diff --check` passed;
+- delegated stale-reference audit found one active stale old-root readback
+  command in `scripts/plan_codex_global_config_migration.py`; this branch
+  corrects that command to use the target root and adds a regression test.
+
+Non-actions preserved by this branch:
+
+- no global config change;
+- no hook trust or hook-state change;
+- no runtime secret/evidence/OAuth/trust copy;
+- no service, registry, systemd, Pi/global config, or process mutation;
+- no legacy checkout mutation.
 
 Acceptance evidence:
 
@@ -454,14 +481,14 @@ The candidate stack can replace the current live ContextForge only after:
 
 ## Current Next Move
 
-Continue Subgoal 5 by activating project-local Codex operating artifacts for
-`/home/dgk/workspace/cf-controlplane`.
+Continue Subgoal 5 by packaging and reviewing branch
+`codex/issue-37-activation-readiness`.
 
-The next transition is not runtime recreation. First, retarget or regenerate the
-project-local Codex config and project-state artifacts for the new root, keep
-runtime secrets/evidence local-only, then have the user open/approve the
-`cf-controlplane` Codex project and verify hooks, skills, governance, and
-project-local MCP paths from that project context.
+The next transition is not runtime recreation. First, merge or otherwise accept
+the activation-readiness branch. Keep broader runtime/readback and future
+Pi/OpenCode client-pattern work under #31 or focused follow-up branches, keep
+runtime secrets/evidence local-only, and do not mutate global/runtime/legacy
+surfaces without a separate approval.
 
 Do not treat issue #37 activation or issue #31 runtime verification as complete
 until the new project context proves it is no longer using hidden

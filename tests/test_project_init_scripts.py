@@ -31,6 +31,14 @@ import register_project_init_prompt as prompt_registration
 CONSENT_REFS = ["run/consent-receipts/receipt-project-local-config.json"]
 
 
+def write_fake_python(root: Path) -> Path:
+    python_path = root / ".venv" / "bin" / "python"
+    python_path.parent.mkdir(parents=True, exist_ok=True)
+    python_path.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+    python_path.chmod(0o755)
+    return python_path
+
+
 def service_descriptor(name: str = "context7") -> dict[str, object]:
     return {
         "service_family": name,
@@ -227,6 +235,7 @@ class ProjectInitReadinessInspectorTests(unittest.TestCase):
     def test_cli_emits_clean_json_without_process_probe(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
+            write_fake_python(root)
             project_state.write_state_atomic(root, project_state.default_state(root, status="initialized"))
 
             result = subprocess.run(
@@ -253,6 +262,59 @@ class ProjectInitReadinessInspectorTests(unittest.TestCase):
         self.assertEqual("ready", parsed["status"])
         self.assertEqual([], parsed["helper_processes"])
         self.assertEqual(["codex"], list(parsed["roots"][0]["inspections"]))
+        self.assertTrue(parsed["activation_artifacts"]["python_environment"]["is_executable"])
+
+    def test_activation_artifacts_report_legacy_config_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            legacy = root.parent / "contextforge-slices" / "repo-local-skills-and-governance" / "missing-fixture-root"
+            write_fake_python(root)
+            project_state.write_state_atomic(root, project_state.default_state(root, status="initialized"))
+            config = root / ".codex" / "config.toml"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                f"""
+[mcp_servers.contextforge-helper]
+command = "{legacy}/.venv/bin/python"
+args = ["{legacy}/scripts/contextforge_helper_mcp.py"]
+""".lstrip(),
+                encoding="utf-8",
+            )
+            legacy_serena = root / "server-instances" / "serena-context-portal"
+            legacy_serena.mkdir(parents=True)
+            (legacy_serena / "instance.json").write_text(
+                json.dumps({"canonical_project_root": str(legacy), "name": "serena-context-portal"}),
+                encoding="utf-8",
+            )
+            before = {
+                path: path.read_text(encoding="utf-8")
+                for path in root.rglob("*")
+                if path.is_file()
+            }
+
+            report = readiness.build_report(
+                project_root=root,
+                client_types=("codex",),
+                include_processes=False,
+            )
+
+            after = {
+                path: path.read_text(encoding="utf-8")
+                for path in root.rglob("*")
+                if path.is_file()
+            }
+
+        self.assertEqual(before, after)
+        self.assertEqual("blocked", report["status"])
+        self.assertIn("codex_config_legacy_root_references", report["blockers"])
+        self.assertIn("codex_config_missing_mcp_path", report["blockers"])
+        self.assertIn("serena_project_instance_not_provisioned", report["warnings"])
+        self.assertIn("legacy_serena_project_instance_present", report["warnings"])
+        artifacts = report["activation_artifacts"]
+        self.assertTrue(artifacts["python_environment"]["is_executable"])
+        self.assertEqual(1, artifacts["codex_config"]["mcp_server_count"])
+        self.assertTrue(artifacts["codex_config"]["mcp_servers"][0]["legacy_bound"])
+        self.assertEqual("serena", artifacts["serena_project_instance"]["expected"]["service_binding"].split(":", 1)[0])
 
 
 class DirtyCheckoutRebindPlannerTests(unittest.TestCase):
@@ -522,6 +584,16 @@ trusted_hash = "sha256:sessionstart"
             entries["legacy_project_local_hook_state"]["bucket"],
         )
         self.assertIn("read-only plan; no user-global config or trust file is written", report["non_actions"])
+        self.assertIn(f"codex -C {target} mcp list --json", report["readback_commands"])
+        stale_hardcoded_readback = (
+            "codex -C "
+            + "/home/dgk/workspace/"
+            + "contextforge-slices/repo-local-skills-and-governance mcp list --json"
+        )
+        self.assertNotIn(
+            stale_hardcoded_readback,
+            report["readback_commands"],
+        )
 
     def test_global_config_plan_reports_clean_root_presence_after_approval(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

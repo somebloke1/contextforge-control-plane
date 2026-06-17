@@ -1,51 +1,6 @@
 [mcp_servers.contextforge-helper]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_helper_mcp.py"]
-
-[mcp_servers.serena]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "serena_context_portal_server"]
-cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
-
-[mcp_servers.mentality]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "mentality_server"]
-cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
-
-[mcp_servers.ssh_tmux]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "ssh_tmux_server"]
-cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
-
-[mcp_servers.context7]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "context7_local_server"]
-cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
-
-[mcp_servers.exa_search]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "exa_search_server"]
-cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
-
-[mcp_servers.github]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "github_server"]
-cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
-
-[mcp_servers.openzeppelin_solidity_contracts]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "openzeppelin_solidity_contracts_server"]
-cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
-
-[mcp_servers.playwright]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "playwright_server"]
-cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
-
-[mcp_servers.web_search]
-command = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.venv/bin/python"
-args = ["/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/contextforge_mcp_wrapper.py", "web_search_server"]
-cwd = "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
+command = ".venv/bin/python"
+args = ["scripts/contextforge_helper_mcp.py"]
 
 [hooks]
 
@@ -68,3 +23,47 @@ command = '/usr/bin/env python3 "$(git rev-parse --show-toplevel)/.codex/hooks/c
 timeout = 10
 statusMessage = "Restoring ContextForge continuity"
 suppressOutput = true
+
+# contextforge-project-init-owner = "ContextForge"
+# contextforge-project-init-service-binding = "context7:canonical"
+# contextforge-project-init-virtual-server = "context7_local_server"
+[mcp_servers.context7]
+command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
+args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_mcp_wrapper.py", "context7_local_server"]
+cwd = "/home/dgk/workspace/cf-controlplane"
+env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
+startup_timeout_ms = 60000
+tool_timeout_ms = 120000
+
+# contextforge-project-init-owner = "ContextForge"
+# contextforge-project-init-service-binding = "github:canonical"
+# contextforge-project-init-virtual-server = "github_server"
+[mcp_servers.github]
+command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
+args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_mcp_wrapper.py", "github_server"]
+cwd = "/home/dgk/workspace/cf-controlplane"
+env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
+startup_timeout_ms = 60000
+tool_timeout_ms = 120000
+
+# contextforge-project-init-owner = "ContextForge"
+# contextforge-project-init-service-binding = "mentality:static_repo_local"
+# contextforge-project-init-virtual-server = "mentality_server"
+[mcp_servers.mentality]
+command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
+args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_mcp_wrapper.py", "mentality_server"]
+cwd = "/home/dgk/workspace/cf-controlplane"
+env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
+startup_timeout_ms = 60000
+tool_timeout_ms = 120000
+
+# contextforge-project-init-owner = "ContextForge"
+# contextforge-project-init-service-binding = "web-search:credential_scoped"
+# contextforge-project-init-virtual-server = "web_search_server"
+[mcp_servers.web_search]
+command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
+args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_mcp_wrapper.py", "web_search_server"]
+cwd = "/home/dgk/workspace/cf-controlplane"
+env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
+startup_timeout_ms = 60000
+tool_timeout_ms = 120000
