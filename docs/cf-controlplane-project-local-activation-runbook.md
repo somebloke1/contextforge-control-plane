@@ -183,20 +183,20 @@ Before claiming issue #37 complete, the operating agent should prove:
    before applying any approved change.
 5. If later runtime/client smoke tests require UI approval, OAuth login, hook
    trust toggle, service mutation, or process/systemd changes, route that
-   concrete boundary to #31 or a new focused issue instead of reopening this
-   activation-readiness state marker.
+   concrete boundary to a focused follow-up issue instead of reopening this
+   activation-readiness state marker or closed #31.
 6. After the user opens/approves the `cf-controlplane` Codex project, verify
    active hooks and MCP paths from that project context.
-7. Update issue #37 and issue #31 with readback evidence before claiming the
-   operating-context transition complete.
+7. Update issue #37 and any focused follow-up issue with readback evidence
+   before claiming the operating-context transition complete.
 
 ## Residual Risk
 
 This branch does not prove Codex Desktop project approval, hook trust, live
 wrapper process origin, OAuth state, ContextForge registry state, Serena backend
 provisioning, or Pi/OpenCode client behavior. Those are runtime/client readback
-or Serena/project-init provisioning gates for issue #31 or later focused
-branches. Serena provisioning may remain parked only until the appropriate
+or Serena/project-init provisioning gates for later focused branches. Serena
+provisioning may remain parked only until the appropriate
 approved provisioning juncture surfaces.
 
 ## Issue #31 Readback

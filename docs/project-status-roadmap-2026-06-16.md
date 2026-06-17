@@ -19,8 +19,9 @@ Current tracker topology:
   blocker for ordinary `cf-controlplane` work;
 - issue #37 is open and owns project-local Codex operating-context activation
   for `/home/dgk/workspace/cf-controlplane`;
-- issue #31 is open and owns Codex runtime/project-context readback after the
-  approved global config migration;
+- issue #31 is closed after the approved global config/helper cleanup and final
+  runtime readback; the remaining active activation queue is owned by issue #37
+  and its linked PRs;
 - issue #2, issue #3, issue #4, issue #5, and issue #33 remain separate
   roadmap fronts where still open.
 
@@ -274,11 +275,12 @@ work.
   `dev-root` source state is root-mismatched/blocked, legacy live state is
   schema-valid with Codex verified and Pi validation-pending/mixed, and
   helper/wrapper processes still source from the legacy dirty checkout. Issue
-  #4 remains open; issue #37 project-local operating-context activation, issue
-  #31 runtime readback, and issue #3 Pi install/reload remain real decision
-  points for the user, not hidden agent actions.
+  #4 remains open; issue #37 project-local operating-context activation and
+  issue #3 Pi install/reload remain real decision points for the user, not
+  hidden agent actions. Issue #31 later closed its runtime readback path.
 - Dirty checkout retirement is closed under issue #15 and its remaining
-  practical concerns have moved to issue #37 and issue #31. The authority
+  practical concerns moved to issue #37, while issue #31 later closed its
+  runtime/global readback path. The authority
   snapshot is `run/dirty-state-preservation/20260616T114116Z/` in the clean
   `dev-root` controller worktree: 35 tracked dirty files and 41 untracked paths
   were preserved, checksum verification passed, and byte comparison against
@@ -338,8 +340,8 @@ The immediate problem is integration hygiene:
   `/home/dgk/workspace/legacy-controlplane-archive` checkout remains archive/compatibility
   evidence, not the place for new source truth.
 - GitHub has tracking issues #2-#5 for the remaining original active fronts,
-  plus issue #37 for `cf-controlplane` project-local activation and issue #31
-  for Codex runtime/project-context readback. Issue #1, issue #6, issue #11,
+  plus issue #37 for `cf-controlplane` project-local activation. Issue #31 is
+  closed after Codex runtime/project-context readback. Issue #1, issue #6, issue #11,
   issue #12, issue #14, and issue #15 are closed after wrapper lifecycle cleanup,
   inventory/service-management triage, post-restart hook activation,
   precompact hardening, clean-worktree test hermeticity, and dirty-checkout
@@ -505,12 +507,10 @@ Risks:
 - Issue #4 cannot close on the Strategy 1 source patch alone. The clean tracked
   state is now valid on `dev-root`, but target-client validation, any
   runtime helper/wrapper source change, and any systemd/Serena reload/readback
-  remain issue #37/#31 approval-gated operator-path work.
-- The project-local helper shadow does not retire global Codex migration debt.
-  `~/.codex/config.toml` still contains legacy `contextforge-helper`,
-  SessionStart/UserPromptSubmit project-init hook commands, project trust, and
-  hook trust-state records for `/home/dgk/workspace/legacy-controlplane-archive`; changing
-  those remains a separate user-approved global config/trust migration.
+  remain approval-gated operator-path work owned by the specific active issue.
+- The project-local helper shadow did not itself retire global Codex migration
+  debt. Issue #31 later closed that global helper/hook readback path; future
+  changes to user-global trust or hook state still require separate approval.
 - Merged PR
   [#28](https://github.com/somebloke1/contextforge-control-plane/pull/28)
   adds a read-only planner for that global boundary at merge commit `fb8df1e`.
@@ -1046,7 +1046,8 @@ extraction if current evidence proves a better review boundary.
 - Debt policy: issue #25 can close after PR #26 merge readback because the
   repo-standard assets are on `dev-root` and raw snapshot promotion remains
   explicitly rejected unless separately sanitized. Operator-path validation now
-  returns to issue #37 and issue #31.
+  returns to issue #37 or the focused issue that owns the affected runtime/client
+  surface.
 
 #### Wrapper lifecycle cleanup -> issue #1
 
@@ -1412,8 +1413,8 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
 6. Treat issue #25 continuity standardization as retired through PR #26 unless
    new continuity evidence shows the repo-standard assets are insufficient or
    raw transitional snapshots are being normalized as target architecture.
-7. Continue issue #37 project-local activation and issue #31 runtime readback
-   before starting new inward-facing work. Issue #15 is closed. The user
+7. Continue issue #37 project-local activation before starting new inward-facing
+   work; issue #31 is closed after final runtime readback. Issue #15 is closed. The user
    selected Strategy 1 and PR #24 completed the
    first source-only compatibility rebind pass, and PR #27 completed the
    clean-root `contextforge-helper` shadow so Codex MCP readback no longer
@@ -1433,9 +1434,9 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    execution, hook approval/toggle, prompt/resource upsert,
    token-cache/login write, service/process/systemd/registry/Pi mutation,
    legacy trust removal, hook-state pruning, or legacy checkout cleanup occurred.
-   The next separately approved operator-path step is #37: prepare
-   `/home/dgk/workspace/cf-controlplane` project-local operating artifacts,
-   then have the user open/approve that project and update #31 with readback.
+   The later #31 closure completed the approved global helper/hook cleanup and
+   final runtime readback. The next operator-path step is #37 activation queue
+   review plus focused follow-ups for any new runtime/client gaps.
    Do not bundle runtime/global/check-out actions into ordinary source work.
 8. Review stale Serena test units and #33 Serena dynamic-port risk after
    explicit approval for stop/disable/remove actions or any runtime unit

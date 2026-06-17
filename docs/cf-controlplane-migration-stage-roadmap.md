@@ -177,8 +177,8 @@ transferred to the specific successor gates that own them:
 
 - issue #37 owns `cf-controlplane` project-local Codex operating-context
   activation;
-- issue #31 owns Codex runtime/project-context readback after the global config
-  migration;
+- issue #31 closed after the approved global config/helper cleanup and final
+  runtime readback;
 - issue #2, issue #3, issue #4, issue #5, and issue #33 continue to own their
   original service/project-init/Pi/registry/Serena work where still open.
 
@@ -186,17 +186,14 @@ Current refreshed evidence on 2026-06-17:
 
 - issue #15 is closed;
 - issue #37 is open for `cf-controlplane` project-local activation;
-- issue #31 is open for Codex `pending_restart` and runtime readback after the
-  approved global config migration;
-- issue #31 now distinguishes the state precisely: the global config/trust
-  migration is verified at disk and fresh CLI readback level, but active
-  Codex Desktop project-local wrapper processes still come from the legacy
-  `cf-controlplane` project because this Desktop thread remains rooted there.
+- issue #31 is closed after final `readback_clean` evidence; global helper and
+  owned project-init hook commands now target `/home/dgk/workspace/cf-controlplane`,
+  and exact-match stale helper processes from the prior helper root were retired
+  under explicit operator approval.
 
 The archive-insurance posture remains valid only as an interim operating
-strategy. It does not complete issue #37 or issue #31 until the new
-`cf-controlplane` project context proves hooks, skills, MCP paths, and runtime
-readback from the new root.
+strategy. It does not complete issue #37 until the activation-readiness queue is
+merged and reviewed from the `cf-controlplane` project context.
 
 ### Cleanup Semantics
 
@@ -269,7 +266,7 @@ Current disposition report:
 Current blockers:
 
 - issue #15 is closed; remaining operating-context work is owned by issue #37;
-- issue #31 remains open;
+- issue #31 is closed after final runtime readback;
 - `.codex/config.toml` and `.project/context_forge_state.json` must encode the
   canonical `cf-controlplane` operational identity before activation can rely
   on them.
@@ -556,14 +553,13 @@ Continue Subgoal 5 by packaging and reviewing branch
 `codex/issue-37-activation-readiness`.
 
 The next transition is not runtime recreation. First, merge or otherwise accept
-the activation-readiness branch. Keep broader runtime/readback and future
-Pi/OpenCode client-pattern work under #31 or focused follow-up branches, keep
-runtime secrets/evidence local-only, and do not mutate global/runtime/legacy
-surfaces without a separate approval.
+the activation-readiness queue. Keep future Pi/OpenCode client-pattern work under
+focused follow-up branches, keep runtime secrets/evidence local-only, and do not
+mutate global/runtime/legacy surfaces without a separate approval.
 
-Do not treat issue #37 activation or issue #31 runtime verification as complete
-until the new project context proves it is no longer using hidden predecessor
-workspace or `legacy-controlplane-slices` operating paths.
+Issue #31 has closed its runtime/global readback path. Do not treat issue #37
+activation as complete until the queued activation-readiness work is merged and
+reviewed without hidden predecessor workspace operating paths.
 
 Source-edit boundary: after this clone, any new migration documentation,
 configuration source, hook, skill, harness, or governance change belongs in
