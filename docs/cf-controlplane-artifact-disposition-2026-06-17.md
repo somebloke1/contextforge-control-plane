@@ -100,7 +100,7 @@ is not complete.
 | --- | --- | --- | --- |
 | GitHub dirty-retirement authority | `FAIL` | Issue #15 is open. | Keep #15 open until accepted closeout evidence or an explicit successor issue owns each remaining retirement condition. |
 | Runtime restart/readback authority | `FAIL` | Issue #31 is open. Global helper is clean-root by disk/fresh CLI readback, but this Desktop project still launches legacy project-local wrappers. | Validate from the clean-root or future `cf-controlplane` Codex project context, then close/supersede #31 with evidence. |
-| Cloneable source artifacts | `PENDING` | Migration docs, hooks, skills, and Docker harness files are present but currently untracked in this legacy checkout. | Curate and commit/promote the intended source set before cloning `cf-controlplane`. |
+| Cloneable source artifacts | `PASS` | PR #35 merged the curated migration source into `dev-root` as `75aa437573ac3a8be38f584ab629da2bb0cfa814`; `/home/dgk/workspace/cf-controlplane` is now a clean clone of that branch. | Continue with project-local operating artifact activation; do not copy runtime state as part of this gate. |
 | Project-local Codex config | `FAIL` | `.codex/config.toml` has absolute `context-portal` command, args, and cwd entries. | Rewrite/regenerate for the new workspace or keep only as archived legacy config; do not copy as-is. |
 | Project state identity | `FAIL` | `.project/context_forge_state.json` has legacy root/name/project-root fields. | Regenerate through project-init or rewrite by an approved migration path for the new workspace. |
 | Serena project instance identity | `FAIL` | `server-instances/serena-context-portal/**` contains legacy root, LSP, and service identity. | Generate a `cf-controlplane`-scoped Serena instance or explicitly classify the old instance as historical compatibility state. |
@@ -115,7 +115,7 @@ is not complete.
 | --- | --- | --- |
 | GitHub dirty-retirement authority | Operating agent, with user approval for destructive or global actions | Close #15 only after source promotion, project-context validation, and residual retirement conditions are either completed or delegated to explicit successor issues. |
 | Runtime restart/readback authority | Operating agent for evidence; user for Desktop workspace switch/trust actions | Close or supersede #31 after a clean-root or `cf-controlplane` Codex project proves hook/MCP/runtime readback without active legacy project-local wrapper dependence. |
-| Cloneable source artifacts | Operating agent | Curate, stage, and commit the intended source set before clone; leave runtime/local state ignored or recreate-only. |
+| Cloneable source artifacts | Operating agent | Retired by PR #35 and the clean `cf-controlplane` clone; keep runtime/local state ignored or recreate-only. |
 | Project-local Codex config | Operating agent for rewrite plan; user for hook trust/approval | Replace with generated/project-local `cf-controlplane` config or keep the old file archive-only; retire when no active new project depends on legacy paths. |
 | Project state identity | ContextForge project-init slice / operating agent | Regenerate or migrate through approved project-init flow; retire when `.project/context_forge_state.json` reflects the canonical workspace or is intentionally local-only. |
 | Serena project instance identity | Serena/project-init slice / operating agent | Generate a new canonical project-scoped Serena instance or classify old `serena-context-portal` as historical compatibility state. |
@@ -141,7 +141,8 @@ Before moving from Subgoal 1 to Git curation, the operator must have:
    conditions to explicit successor issues with accepted residual risk.
 2. Issue #31 must be closed, superseded, or explicitly no longer blocking #15.
 3. The source set intended for cloning into `cf-controlplane` must be staged or
-   otherwise made cloneable.
+   otherwise made cloneable. This gate is satisfied by PR #35 and merge commit
+   `75aa437573ac3a8be38f584ab629da2bb0cfa814`.
 4. Runtime/local Codex artifacts must be ignored, recreated, or copied only
    after path and secret review.
 5. `.codex/config.toml`, `.project/context_forge_state.json`, and
