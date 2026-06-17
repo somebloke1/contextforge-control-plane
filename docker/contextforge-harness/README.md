@@ -3,8 +3,9 @@
 Isolated IBM ContextForge gateway harness for integration testing while the
 host development gateway remains untouched.
 
-This harness intentionally starts only the ContextForge gateway. It does not
-register MCP services.
+This harness starts the stock ContextForge gateway and can start isolated
+development MCP backend/transceiver sidecars. Registration is explicit; sidecar
+startup alone does not register MCP services.
 
 Service locality and the first MCP integration path are defined in
 `SERVICE_LOCALITY.md`.
@@ -20,6 +21,9 @@ Service locality and the first MCP integration path are defined in
 - Persistent data volume: `contextforge-harness_contextforge-data`
 - SQLite database: `/data/mcp.db`
 - Reserved integration MCP backend port range: `9200-9299`
+- First dev MCP sidecar: `mentality-transceiver` on host
+  `http://127.0.0.1:9201` and compose-network
+  `http://mentality-transceiver:9201`
 
 The named Docker volume has no explicit size cap. Initial gateway-only usage is
 expected to stay small; use `scripts/volume-usage.sh` to inspect it.
@@ -38,17 +42,53 @@ scripts/verify-auth.sh
 The generated `env/contextforge.env` contains local admin and signing secrets
 and is ignored by Git.
 
+## Dev MCP Transceiver
+
+The first development sidecar fronts the repo-local `mentality` stdio MCP
+backend with the stock ContextForge bridge. It uses a sanitized copy of the
+governance ledgers inside the image and does not mount the host checkout by
+default.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway mentality-transceiver
+scripts/probe-mentality-dev.py --direct-only
+scripts/register_mentality_dev.py
+scripts/probe-mentality-dev.py
+```
+
+`scripts/register_mentality_dev.py` registers
+`http://mentality-transceiver:9201/mcp` as `mentality-dev-docker` through the
+development gateway API at `http://127.0.0.1:4445`. It is idempotent by gateway
+and virtual-server name and reads credentials only from ignored
+`env/contextforge.env`.
+
+`scripts/probe-mentality-dev.py` validates both surfaces. The direct probe
+lists tools from `http://127.0.0.1:9201/mcp`. The virtual probe looks up the
+registered server through the development gateway, creates a one-day scoped
+catalog token for that server, lists tools through
+`/servers/{server_id}/mcp/`, and revokes the probe token before exiting. The
+script prints the token id only; it never prints the raw token value.
+
+The harness enables `SSRF_ALLOW_PRIVATE_NETWORKS=true` because the isolated
+development gateway must register compose-network upstreams such as
+`http://mentality-transceiver:9201/mcp`. Do not copy this setting to the
+legacy/live ContextForge surface without a separate approval and threat review.
+It also sets `REQUIRE_USER_IN_DB=false` so the generated bootstrap admin can use
+virtual MCP endpoints during disposable dev-harness validation.
+
 ## Operations
 
 ```sh
 docker compose -f compose.yml logs -f contextforge-gateway
+docker compose -f compose.yml logs -f mentality-transceiver
 docker compose -f compose.yml restart contextforge-gateway
 scripts/volume-usage.sh
 ```
 
 ## Boundaries
 
-- Do not register MCP services in this initial harness setup.
+- Register MCP services only into this development gateway unless a separate
+  approval explicitly targets another surface.
 - Do not install MCP backend files or services inside the gateway container by
   default.
 - Run stdio MCP backends beside a local or remote transceiver, then register the
