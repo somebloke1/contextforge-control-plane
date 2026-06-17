@@ -172,6 +172,14 @@ Before claiming issue #37 complete, the operating agent should prove:
 7. Update issue #37 and issue #31 with readback evidence before claiming the
    operating-context transition complete.
 
+## Queue Dry-Run Validation
+
+Use `scripts/validate_queue_dry_run.py` for broad local validation of a stacked
+draft queue before requesting or executing merge approval. The helper is
+documented in `docs/queue-dry-run-validation.md` and keeps the canonical
+project-local `.codex/config.toml` path contract intact while normalizing paths
+only inside the disposable validation worktree.
+
 ## Residual Risk
 
 This branch does not prove Codex Desktop project approval, hook trust, live

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,9 @@ from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_CONTRACT_ROOT = Path(
+    os.environ.get("CONTEXTFORGE_CONFIG_CONTRACT_ROOT", "/home/dgk/workspace/cf-controlplane")
+)
 HOOK_PATH = REPO_ROOT / ".codex/hooks/contextforge_precompact_continuity.py"
 
 spec = importlib.util.spec_from_file_location("contextforge_precompact_continuity", HOOK_PATH)
@@ -327,8 +331,8 @@ class CodexPrecompactContinuityHookTests(unittest.TestCase):
         self.assertNotIn("experimental_compact_prompt_file", config)
         self.assertNotIn("model_auto_compact_token_limit", config)
         helper = parsed["mcp_servers"]["contextforge-helper"]
-        self.assertEqual(str(REPO_ROOT / ".venv/bin/python"), helper["command"])
-        self.assertEqual([str(REPO_ROOT / "scripts/contextforge_helper_mcp.py")], helper["args"])
+        self.assertEqual(str(CONFIG_CONTRACT_ROOT / ".venv/bin/python"), helper["command"])
+        self.assertEqual([str(CONFIG_CONTRACT_ROOT / "scripts/contextforge_helper_mcp.py")], helper["args"])
 
     def _init_repo(self, root: Path) -> Path:
         (root / "AGENTS.md").write_text("# Agent Instructions\n", encoding="utf-8")
