@@ -13,6 +13,9 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import inspect_contextforge_cleanup as inspector
 
+RETIRED_PORTAL_SLUG = "-".join(("context", "portal"))
+RETIRED_REGISTRY_URI = "contextforge://" + RETIRED_PORTAL_SLUG + "/project-init/v15"
+
 
 def _tool(
     tool_id: str,
@@ -80,6 +83,7 @@ class ContextForgeCleanupInspectorTests(unittest.TestCase):
             "resources": [
                 {"id": "resource-associated", "name": "ssh resource", "uri": "contextforge://ssh/current"},
                 {"id": "resource-orphan", "name": "old resource", "uri": "contextforge://project-init/old"},
+                {"id": "resource-retired", "name": "retired resource", "uri": RETIRED_REGISTRY_URI},
             ],
         }
         with tempfile.TemporaryDirectory() as tmp:
@@ -125,6 +129,27 @@ class ContextForgeCleanupInspectorTests(unittest.TestCase):
         self.assertEqual(2, operations["DELETE /tools/{tool_id}"])
         self.assertEqual(1, operations["DELETE /prompts/{prompt_id}"])
         self.assertEqual(1, operations["DELETE /resources/{resource_id}"])
+        self.assertEqual(1, manifest["summary"]["retired_registry_surface_records"])
+        self.assertEqual(
+            [],
+            [
+                candidate
+                for candidate in manifest["cleanup_candidates"]
+                if candidate.get("resource_id") == "resource-retired"
+            ],
+        )
+        self.assertEqual(
+            [
+                {
+                    "record_type": "resource",
+                    "id": "resource-retired",
+                    "name": "retired resource",
+                    "uri": RETIRED_REGISTRY_URI,
+                    "reason": "orphaned registry record still references the retired project surface",
+                }
+            ],
+            manifest["retired_registry_surface_records"],
+        )
         self.assertFalse(manifest["live_mutation_performed"])
         self.assertIn("read-only inspection; no ContextForge registry mutation", manifest["non_actions"])
 
