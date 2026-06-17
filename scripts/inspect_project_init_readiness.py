@@ -32,6 +32,11 @@ COMPATIBILITY_IDENTIFIER_NEEDLES = (
     "contextforge://context-portal/",
     "serena-context-portal",
 )
+SERENA_APPROVAL_BOUNDARY = (
+    "Serena provisioning or compatibility retention must be handled in a "
+    "GitHub-tracked Serena/project-init slice with explicit approval before "
+    "any live registry, service, systemd, or global client state changes."
+)
 
 
 def _canonical(path: str | Path) -> Path:
@@ -152,6 +157,17 @@ def _summarize_serena_identity(root: Path) -> dict[str, Any]:
     identity = common.project_identity(root)
     expected_instance = root / "server-instances" / identity.instance_slug
     legacy_instance = root / "server-instances" / "serena-context-portal"
+    expected_manifest_exists = (expected_instance / "instance.json").exists()
+    legacy_manifest_exists = (legacy_instance / "instance.json").exists()
+    if expected_manifest_exists:
+        readiness_status = "canonical_instance_present"
+        classification = "canonical_cf_controlplane_serena_ready_for_validation"
+    elif legacy_manifest_exists:
+        readiness_status = "canonical_instance_missing_compatibility_present"
+        classification = "compatibility_evidence_not_provisioning_completion"
+    else:
+        readiness_status = "canonical_instance_missing"
+        classification = "serena_hard_requirement_unmet"
     return {
         "expected": {
             "service_binding": f"serena:{identity.hash}",
@@ -159,36 +175,74 @@ def _summarize_serena_identity(root: Path) -> dict[str, Any]:
             "server_name": identity.server_name,
             "backend_instance": str(expected_instance.relative_to(root)),
             "instance_exists": expected_instance.exists(),
-            "manifest_exists": (expected_instance / "instance.json").exists(),
+            "manifest_exists": expected_manifest_exists,
         },
         "legacy": {
             "backend_instance": str(legacy_instance.relative_to(root)),
             "instance_exists": legacy_instance.exists(),
-            "manifest_exists": (legacy_instance / "instance.json").exists(),
+            "manifest_exists": legacy_manifest_exists,
             "legacy_root_reference_counts": _tree_reference_counts(legacy_instance, LEGACY_ROOTS),
+        },
+        "readiness_decision": {
+            "status": readiness_status,
+            "classification": classification,
+            "hard_requirement": True,
+            "approval_boundary": SERENA_APPROVAL_BOUNDARY,
+            "retirement_condition": (
+                f"Generate and validate {identity.instance_slug} for "
+                f"{root}, or record an explicit validated compatibility decision."
+            ),
         },
     }
 
 
-def _summarize_compatibility_identifiers(root: Path) -> dict[str, Any]:
-    paths = (
+def _compatibility_identifier_paths(root: Path) -> tuple[Path, ...]:
+    return (
         root / "scripts" / "project_init_common.py",
         root / "scripts" / "register_serena_context_portal_service.py",
         root / "server-instances" / "serena-context-portal",
+    )
+
+
+def _summarize_compatibility_identifiers(root: Path) -> dict[str, Any]:
+    paths = (
+        *_compatibility_identifier_paths(root),
     )
     files: list[Path] = []
     for path in paths:
         files.extend(_text_files(path))
     counts = {needle: 0 for needle in COMPATIBILITY_IDENTIFIER_NEEDLES}
+    references: list[dict[str, Any]] = []
     for file_path in files:
         text, error = _read_text(file_path)
         if error:
             continue
         for needle, count in _reference_counts(text, COMPATIBILITY_IDENTIFIER_NEEDLES).items():
             counts[needle] += count
+            if count:
+                references.append(
+                    {
+                        "path": str(file_path.relative_to(root)),
+                        "identifier": needle,
+                        "count": count,
+                        "classification": "compatibility_pending_retirement",
+                        "owner_issue": "#37",
+                        "retirement_condition": (
+                            "Retain only while compatibility naming is required, "
+                            "or retire in a focused GitHub-tracked slice."
+                        ),
+                    }
+                )
     return {
         "paths": [str(path) for path in paths],
         "reference_counts": counts,
+        "references": sorted(references, key=lambda item: (str(item["path"]), str(item["identifier"]))),
+        "policy": {
+            "classification_required": True,
+            "broad_rename_allowed": False,
+            "owner_issue": "#37",
+            "approval_boundary": SERENA_APPROVAL_BOUNDARY,
+        },
     }
 
 
@@ -471,7 +525,9 @@ def _readiness_findings(
     serena_legacy_present = bool(legacy_serena.get("instance_exists"))
     if expected_serena.get("manifest_exists") is not True and (serena_selected or serena_legacy_present):
         warnings.append("serena_project_instance_not_provisioned")
-        next_actions.append("Choose whether Serena should be provisioned for cf-controlplane or retained only as legacy compatibility evidence.")
+        next_actions.append(
+            "Open or update a GitHub-tracked Serena/project-init slice to generate the canonical cf-controlplane Serena instance or record an explicit validated compatibility decision."
+        )
     if legacy_serena.get("instance_exists") and legacy_serena_refs:
         warnings.append("legacy_serena_project_instance_present")
 
@@ -479,7 +535,7 @@ def _readiness_findings(
     compatibility_refs = sum(int(count) for count in (compatibility.get("reference_counts") or {}).values())
     if compatibility_refs:
         warnings.append("project_init_compatibility_identifiers_present")
-        next_actions.append("Classify context-portal resource URIs and serena-context-portal names as compatibility identifiers or migrate them in a separate approved slice.")
+        next_actions.append("Use the compatibility_identifiers.references report to retire active context-portal naming through focused GitHub-tracked slices; do not broad-rename compatibility/history.")
 
     if blockers:
         status = "blocked"

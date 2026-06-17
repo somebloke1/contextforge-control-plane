@@ -80,7 +80,6 @@ SURFACE_SPECS: tuple[SurfaceSpec, ...] = (
         ".serena/project.yml",
         "serena_project_metadata",
         "Serena project metadata and compatibility project name.",
-        safe_to_leave_compatibility_slug=True,
     ),
     SurfaceSpec(
         "project_local_skills",
