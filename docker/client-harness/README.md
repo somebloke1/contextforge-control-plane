@@ -92,6 +92,38 @@ The OpenCode config follows the public OpenCode config/provider docs:
 The remaining launch-only clients are not configured against Qwen in this
 harness yet. They are installed and version-checked only.
 
+## OpenCode ContextForge Dev Gateway Smoke
+
+After the ContextForge development Docker gateway and `mentality-transceiver`
+from `../contextforge-harness` are running and registered, OpenCode can validate
+the remote MCP client surface without touching the legacy/live gateway:
+
+```sh
+scripts/smoke-opencode-contextforge-dev.sh
+```
+
+The script creates a one-day scoped token for
+`mentality_dev_docker_server`, runs `opencode mcp add` and
+`opencode mcp list` inside the OpenCode client container against
+`http://host.docker.internal:4445/servers/<server-id>/mcp/`, writes evidence
+under ignored `evidence/`, and revokes the token before exit. It prints only
+the token id, never the raw token value.
+
+## Pi ContextForge Dev Gateway Path
+
+Pi remains shim-first. The real Pi validation target is
+`cf_contextforge_pi_validate` from `pi-extensions/contextforge-global-shim`,
+not direct `/mcp` consumption. Container-local Pi validation needs the shim to
+run against the development gateway with explicit wrapper overrides:
+
+- `CONTEXTFORGE_BASE_URL=http://host.docker.internal:4445`
+- `CONTEXTFORGE_CONFIG_ENV` pointing at a dev-harness env file, or
+  `CONTEXTFORGE_BEARER_TOKEN` for a scoped dev token
+- `CONTEXTFORGE_TOKEN_CACHE` pointing at client-container local/ignored state
+
+Do not install or reload the host user-global Pi extension for this harness
+without separate approval.
+
 ## Authenticated Container State
 
 The default client images are clean tool images. When an authenticated state

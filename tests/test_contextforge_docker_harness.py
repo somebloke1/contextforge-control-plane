@@ -96,6 +96,22 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("contextforge-gateway", service_names)
         self.assertIn("mentality-transceiver", service_names)
 
+    def test_opencode_dev_smoke_uses_ephemeral_contextforge_token(self) -> None:
+        source = (ROOT / "docker/client-harness/scripts/smoke-opencode-contextforge-dev.sh").read_text(encoding="utf-8")
+
+        self.assertIn("surface=OpenCode client Docker", source)
+        self.assertIn("contextforge_surface=ContextForge dev Docker", source)
+        self.assertIn("CONTEXTFORGE_HOST_BASE_URL:-http://127.0.0.1:4445", source)
+        self.assertIn("CONTEXTFORGE_CONTAINER_BASE_URL:-http://host.docker.internal:4445", source)
+        self.assertIn("CONTEXTFORGE_DEV_SERVER_NAME:-mentality_dev_docker_server", source)
+        self.assertIn("opencode mcp add", source)
+        self.assertIn("opencode mcp list", source)
+        self.assertIn("chown -R", source)
+        self.assertIn("revoke_probe_token", source)
+        self.assertIn("CONTEXTFORGE_DEV_BEARER_TOKEN", source)
+        self.assertNotIn("127.0.0.1:4444", source)
+        self.assertNotIn("/home/dgk/.pi", source)
+
 
 if __name__ == "__main__":
     unittest.main()
