@@ -114,12 +114,29 @@ the token id, never the raw token value.
 Pi remains shim-first. The real Pi validation target is
 `cf_contextforge_pi_validate` from `pi-extensions/contextforge-global-shim`,
 not direct `/mcp` consumption. Container-local Pi validation needs the shim to
-run against the development gateway with explicit wrapper overrides:
+run against the development gateway with explicit wrapper overrides. The Debian
+Pi image includes a container-local wrapper runtime under
+`/opt/contextforge-wrapper-venv`, so it does not depend on the host repo
+`.venv`:
 
 - `CONTEXTFORGE_BASE_URL=http://host.docker.internal:4445`
-- `CONTEXTFORGE_CONFIG_ENV` pointing at a dev-harness env file, or
-  `CONTEXTFORGE_BEARER_TOKEN` for a scoped dev token
+- `CONTEXTFORGE_SERVER_ID` set to the dev virtual server id, avoiding broad
+  `/servers` readback from the scoped client token
+- `CONTEXTFORGE_BEARER_TOKEN` set to a scoped dev token
 - `CONTEXTFORGE_TOKEN_CACHE` pointing at client-container local/ignored state
+
+Run the Pi validation smoke with:
+
+```sh
+scripts/smoke-pi-contextforge-dev.sh
+```
+
+The script creates a disposable ignored `.project/context_forge_state.json`
+inside the client-harness workspace, loads the shim through Pi's explicit
+`--extension` flag, calls `cf_contextforge_pi_validate` against
+`mentality_dev_docker_server`, writes evidence under ignored `evidence/`, and
+revokes the scoped token before exit. It prints only the token id, never the raw
+token value.
 
 Do not install or reload the host user-global Pi extension for this harness
 without separate approval.

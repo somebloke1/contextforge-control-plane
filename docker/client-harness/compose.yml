@@ -127,6 +127,7 @@ services:
       context: ./pi
       args:
         BASE_IMAGE: contextforge-client-base:bookworm
+        MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"
         PI_CODING_AGENT_VERSION: "${PI_CODING_AGENT_VERSION:-latest}"
     env_file:
       - ./env/local-llama.env

@@ -73,6 +73,7 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
         self.assertIn('CONTEXTFORGE_TOKEN_CACHE", REPO_ROOT / "run" / "contextforge-wrapper-token.local.json"', source)
         self.assertIn('CONTEXTFORGE_TOKEN_LOCK", f"{TOKEN_CACHE}.lock"', source)
         self.assertIn('os.environ.get("CONTEXTFORGE_BEARER_TOKEN")', source)
+        self.assertIn('os.environ.get("CONTEXTFORGE_SERVER_ID", "").strip()', source)
         self.assertIn("if not email or not password:", source)
 
     def test_wrapper_can_bootstrap_with_bearer_token_without_env_file(self) -> None:
