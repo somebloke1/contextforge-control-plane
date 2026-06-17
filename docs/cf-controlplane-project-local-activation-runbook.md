@@ -125,6 +125,28 @@ or Serena/project-init provisioning gates for issue #31 or later focused
 branches. Serena provisioning may remain parked only until the appropriate
 approved provisioning juncture surfaces.
 
+## Issue #31 Readback
+
+Use the read-only runtime inspector for current Codex runtime/project-context
+evidence:
+
+```bash
+scripts/inspect_codex_runtime_readback.py \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --config-path /home/dgk/.codex/config.toml
+```
+
+The 2026-06-17 readback on `codex/issue-31-runtime-readback-plan` reported
+`status: blocked`. Both `codex mcp list --json` from the project cwd and
+`codex -C /home/dgk/workspace/cf-controlplane mcp list --json` had zero
+`context-portal` or `contextforge-slices` transport references, but process
+inspection still found one live helper sourced from
+`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`.
+Global `~/.codex/config.toml` also still references that older clean-root helper
+path. Do not kill the process or rewrite global config as part of readback;
+route any required Codex Desktop project reload/new-session, hook trust, global
+config, or cleanup action through a concrete approval boundary.
+
 ## Non-Actions
 
 Do not mutate the legacy checkout as part of this runbook. The legacy

@@ -450,6 +450,18 @@ Activation-readiness evidence on this branch:
   command in `scripts/plan_codex_global_config_migration.py`; this branch
   corrects that command to use the target root and adds a regression test.
 
+Issue #31 readback-planning evidence on branch
+`codex/issue-31-runtime-readback-plan` adds
+`scripts/inspect_codex_runtime_readback.py` as a read-only report for Codex
+runtime/project-context state. On 2026-06-17 it reported `status: blocked`:
+the two Codex MCP readbacks from `/home/dgk/workspace/cf-controlplane` had zero
+legacy-root transport references, but process inspection still found one live
+helper sourced from
+`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`, and
+global config still referenced that older clean-root helper path. The allowed
+next action is evidence capture or a concrete human approval/reload boundary,
+not implicit process termination or global config mutation.
+
 Non-actions preserved by this branch:
 
 - no global config change;

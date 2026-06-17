@@ -21,6 +21,7 @@ import gemini_project_init_hook
 import opencode_project_init_hook
 import control_plane_contextforge_binding as binding
 import control_plane_project_state as project_state
+import inspect_codex_runtime_readback as codex_runtime_readback
 import inspect_project_init_readiness as readiness
 import plan_codex_global_config_migration as codex_global_plan
 import plan_dirty_checkout_rebind as dirty_rebind
@@ -1058,6 +1059,162 @@ trusted_hash = "sha256:sessionstart"
         parsed = json.loads(result.stdout)
         self.assertEqual(codex_global_plan.REPORT_SCHEMA_URI, parsed["schema_uri"])
         self.assertEqual("blocked", parsed["status"])
+
+
+class CodexRuntimeReadbackInspectorTests(unittest.TestCase):
+    def _write_global_config(self, path: Path, target: Path, legacy: Path) -> None:
+        path.write_text(
+            f"""
+[mcp_servers.contextforge-helper]
+command = "{target}/.venv/bin/python"
+args = ["{target}/scripts/contextforge_helper_mcp.py"]
+
+[projects."{target}"]
+trust_level = "trusted"
+
+[hooks]
+
+[[hooks.SessionStart]]
+matcher = "startup"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "{target}/.venv/bin/python {target}/scripts/codex_project_init_hook.py"
+timeout = 10
+
+[[hooks.UserPromptSubmit]]
+
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = "{target}/.venv/bin/python {target}/scripts/codex_project_init_hook.py"
+timeout = 10
+
+[hooks.state."{target}/.codex/config.toml:session_start:0:0"]
+trusted_hash = "sha256:target"
+
+[projects."{legacy}"]
+trust_level = "trusted"
+""".lstrip(),
+            encoding="utf-8",
+        )
+
+    def test_runtime_readback_blocks_legacy_mcp_and_process_paths(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "cf-controlplane"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, target, legacy)
+            readbacks = {
+                "project_explicit_root": {
+                    "status": "ok",
+                    "summary": {
+                        "legacy_root_reference_counts": {str(legacy): 1},
+                        "non_target_servers": ["context7"],
+                    },
+                }
+            }
+            processes = [
+                {
+                    "pid": 123,
+                    "ppid": 1,
+                    "script": str(legacy / "scripts" / "contextforge_mcp_wrapper.py"),
+                    "source_root": str(legacy),
+                    "command": f"{legacy}/.venv/bin/python {legacy}/scripts/contextforge_mcp_wrapper.py context7",
+                }
+            ]
+
+            report = codex_runtime_readback.build_report(
+                project_root=target,
+                config_path=config,
+                legacy_roots=(legacy,),
+                codex_mcp_readbacks=readbacks,
+                process_snapshot=processes,
+            )
+
+        self.assertEqual(codex_runtime_readback.REPORT_SCHEMA_URI, report["schema_uri"])
+        self.assertEqual("blocked", report["status"])
+        self.assertIn("project_explicit_root_codex_mcp_readback_legacy_root_reference", report["blockers"])
+        self.assertIn("codex_runtime_legacy_helper_processes_present", report["blockers"])
+        self.assertIn("Codex Desktop project open/reload/new-session action", " ".join(report["human_boundaries"]))
+        self.assertIn("no process termination or restart", report["non_actions"])
+
+    def test_runtime_readback_accepts_target_mcp_and_process_paths(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "cf-controlplane"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, target, legacy)
+            readbacks = {
+                "project_explicit_root": {
+                    "status": "ok",
+                    "summary": {
+                        "legacy_root_reference_counts": {str(legacy): 0},
+                        "non_target_servers": [],
+                    },
+                }
+            }
+            processes = [
+                {
+                    "pid": 123,
+                    "ppid": 1,
+                    "script": str(target / "scripts" / "contextforge_helper_mcp.py"),
+                    "source_root": str(target),
+                    "command": f"{target}/.venv/bin/python {target}/scripts/contextforge_helper_mcp.py",
+                }
+            ]
+
+            report = codex_runtime_readback.build_report(
+                project_root=target,
+                config_path=config,
+                legacy_roots=(legacy,),
+                codex_mcp_readbacks=readbacks,
+                process_snapshot=processes,
+            )
+
+        self.assertEqual("readback_clean", report["status"])
+        self.assertEqual([], report["blockers"])
+        self.assertEqual([], report["warnings"])
+
+    def test_runtime_readback_cli_emits_clean_json(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            target = base / "cf-controlplane"
+            legacy = base / "context-portal"
+            target.mkdir()
+            legacy.mkdir()
+            config = base / "codex-config.toml"
+            self._write_global_config(config, target, legacy)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "inspect_codex_runtime_readback.py"),
+                    "--project-root",
+                    str(target),
+                    "--config-path",
+                    str(config),
+                    "--legacy-root",
+                    str(legacy),
+                    "--no-codex-mcp",
+                    "--no-processes",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                cwd=REPO_ROOT,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", result.stderr)
+        parsed = json.loads(result.stdout)
+        self.assertEqual(codex_runtime_readback.REPORT_SCHEMA_URI, parsed["schema_uri"])
+        self.assertIn("read-only inspection; no global Codex config write", parsed["non_actions"])
 
 
 class SerenaManagerTests(unittest.TestCase):
