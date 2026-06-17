@@ -12,7 +12,7 @@ import control_plane_contracts as contracts
 import control_plane_service_classifier as classifier
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 
 
 def descriptor(

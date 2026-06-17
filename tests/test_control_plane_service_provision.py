@@ -15,7 +15,7 @@ import control_plane_project_state as project_state
 import control_plane_service_provision as provision
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 STAMP = "2026-05-30T21:00:00Z"
 
 
@@ -27,7 +27,7 @@ def artifact_ref(name: str, payload: dict[str, object] | None = None) -> dict[st
 def base_state() -> dict[str, object]:
     return {
         "meta": {"revision": 7},
-        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "context-portal"},
+        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "cf-controlplane"},
         "status": "uninitialized",
         "decisions": {},
         "services": {},
@@ -42,7 +42,7 @@ def planner_plan() -> dict[str, object]:
         "schema_version": 1,
         "surface": "propose_project_init",
         "planner": "control_plane_project_planner",
-        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "context-portal"},
+        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "cf-controlplane"},
         "plan_id": "project-init-fixture",
         "status": "planned_non_mutating",
         "mutation_allowed": False,

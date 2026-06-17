@@ -2,7 +2,7 @@
   "version": 1,
   "run_id": "20260530T234500Z",
   "generated_at": "2026-05-30T23:45:00Z",
-  "project_root": "/home/dgk/workspace/context-portal",
+  "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
   "default_request": {
     "request_id": "remote-proof-request",
     "requested_profile": "remote_ready",

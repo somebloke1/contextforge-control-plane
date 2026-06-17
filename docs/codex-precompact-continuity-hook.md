@@ -75,7 +75,7 @@ and only when it has durable value beyond the originating session.
 Snapshot `repo_root`, branch, worktree, and dirty-status fields are
 point-in-time evidence. They are not target architecture and must not be used to
 normalize dependence on a transitional checkout such as the legacy
-`/home/dgk/workspace/context-portal` path.
+`/home/dgk/workspace/legacy-controlplane-archive` path.
 
 During migration, active snapshots may still exist in a transitional worktree.
 Use them to recover continuity, then return to the tracked standard repo

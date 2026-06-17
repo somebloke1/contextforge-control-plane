@@ -20,9 +20,9 @@ import inspect_project_init_readiness as readiness
 
 
 REPORT_SCHEMA_URI = "contextforge://control-plane/dirty-checkout-rebind-preflight/v1"
-DEFAULT_LEGACY_ROOT = Path("/home/dgk/workspace/context-portal")
+DEFAULT_LEGACY_ROOT = Path("/home/dgk/workspace/legacy-controlplane-archive")
 DEFAULT_STRATEGY = "compatibility_rebind"
-COMPATIBILITY_SLUG = "context-portal"
+COMPATIBILITY_SLUG = "legacy-controlplane-archive"
 
 
 @dataclass(frozen=True)
@@ -50,21 +50,21 @@ SURFACE_SPECS: tuple[SurfaceSpec, ...] = (
     ),
     SurfaceSpec(
         "serena_manifest",
-        "server-instances/serena-context-portal/instance.json",
+        "server-instances/serena-cf-controlplane-d46fe58a2a20/instance.json",
         "service_manifest",
         "Serena backend manifest and ContextForge registration metadata.",
         safe_to_leave_compatibility_slug=True,
     ),
     SurfaceSpec(
         "serena_launcher",
-        "server-instances/serena-context-portal/run-server.sh",
+        "server-instances/serena-cf-controlplane-d46fe58a2a20/run-server.sh",
         "service_launcher",
         "User-systemd Serena backend launch script.",
         safe_to_leave_compatibility_slug=True,
     ),
     SurfaceSpec(
         "serena_lsp_env",
-        "server-instances/serena-context-portal/lsp.env",
+        "server-instances/serena-cf-controlplane-d46fe58a2a20/lsp.env",
         "local_runtime_env",
         "Local LSP environment used by the Serena backend.",
         safe_to_leave_compatibility_slug=True,
@@ -95,7 +95,7 @@ SURFACE_SPECS: tuple[SurfaceSpec, ...] = (
     ),
     SurfaceSpec(
         "serena_registration_script",
-        "scripts/register_serena_context_portal_service.py",
+        "scripts/register_serena_cf_controlplane_service.py",
         "contextforge_registration_script",
         "Serena ContextForge registration helper.",
         required=False,

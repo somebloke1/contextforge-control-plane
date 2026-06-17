@@ -13,7 +13,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import control_plane_project_adapter as adapter
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 STAMP = "2026-05-30T20:21:54Z"
 
 

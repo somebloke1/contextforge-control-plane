@@ -18,13 +18,13 @@ class DirtyCheckoutSerenaMetadataTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "cf-controlplane"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             serena_dir = target / ".serena"
             serena_dir.mkdir()
             metadata = serena_dir / "project.yml"
-            metadata.write_text('project_name: "context-portal"\n', encoding="utf-8")
+            metadata.write_text('project_name: "legacy-controlplane-archive"\n', encoding="utf-8")
 
             report = dirty_rebind.build_report(
                 target_root=target,
@@ -46,7 +46,7 @@ class DirtyCheckoutSerenaMetadataTests(unittest.TestCase):
         metadata = (REPO_ROOT / ".serena" / "project.yml").read_text(encoding="utf-8")
 
         self.assertIn('project_name: "cf-controlplane"', metadata)
-        self.assertNotIn('project_name: "context-portal"', metadata)
+        self.assertNotIn('project_name: "legacy-controlplane-archive"', metadata)
 
 
 if __name__ == "__main__":

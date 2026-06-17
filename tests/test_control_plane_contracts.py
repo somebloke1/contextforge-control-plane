@@ -100,7 +100,7 @@ def service_management_handoff() -> dict[str, object]:
         "handoff_id": "handoff-web-search",
         "schema_uri": "contextforge://control-plane/schemas/service-management-handoff/v1",
         "source": "project_init",
-        "project_root": "/home/dgk/workspace/context-portal",
+        "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
         "candidate_descriptor": {"package": "redacted", "argv": "redacted"},
         "redaction_status": "redacted",
         "dedupe_keys": {
@@ -171,7 +171,7 @@ def consent_receipt() -> dict[str, object]:
         "plan_presented_digest": OTHER_DIGEST,
         "consent_class": "service_provision",
         "scope": {
-            "project_root": "/home/dgk/workspace/context-portal",
+            "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
             "service_binding": "serena:project-root",
             "client": "codex",
             "persistent_target": "systemd",
@@ -241,7 +241,7 @@ def requirement_scenario() -> dict[str, object]:
         "schema_uri": "contextforge://control-plane/schemas/requirement-scenario/v1",
         "requirement_ids": ["cfcp-req-0001"],
         "tested_agent_view": {
-            "cwd": "/home/dgk/workspace/context-portal",
+            "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
             "user_prompt": "Initialize the project-local ContextForge service.",
             "available_tools": [{"name": "shell"}],
             "visible_files": ["AGENTS.md"],

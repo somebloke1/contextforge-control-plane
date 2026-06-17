@@ -42,7 +42,7 @@ class ControlPlaneApplyJournalFixtureTests(unittest.TestCase):
             "project": {
                 "root": self.project_root,
                 "root_hash": project_state.project_root_hash(self.project_root),
-                "name": "context-portal",
+                "name": "cf-controlplane",
             },
             "status": status,
             "decisions": {},
@@ -61,7 +61,7 @@ class ControlPlaneApplyJournalFixtureTests(unittest.TestCase):
             "project": {
                 "root": self.project_root,
                 "root_hash": project_state.project_root_hash(self.project_root),
-                "name": "context-portal",
+                "name": "cf-controlplane",
             },
             "plan_id": self.fixture["plan_id"],
             "status": "planned_non_mutating",

@@ -8,7 +8,7 @@ Parked intentions may later become tasks, decisions, or open questions.
 
 - Ledger: abeyant-intentions
 - Status: parked
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: lessons,architecture,cleanup,contextforge
@@ -25,7 +25,7 @@ carry the generated-fleet architecture forward.
 
 - Ledger: abeyant-intentions
 - Status: honored
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: scripts,verification,operations,stock
@@ -38,7 +38,7 @@ Thin operator scripts are now present where stock behavior was first proven. scr
 
 - Ledger: abeyant-intentions
 - Status: honored
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: templates,documentation,registration,secrets
@@ -51,7 +51,7 @@ Sanitized registration examples have been promoted only after live proof. script
 
 - Ledger: abeyant-intentions
 - Status: honored
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: https,verification,local-runtime
@@ -64,7 +64,7 @@ Local gateway restart and Admin UI/API verification are complete for the current
 
 - Ledger: abeyant-intentions
 - Status: honored
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: server-instances,inventory,registration
@@ -77,7 +77,7 @@ The earlier generated 22-entry backend-home pass was superseded by the canonical
 
 - Ledger: abeyant-intentions
 - Status: honored
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: registration,stdio,bridges,contextforge
@@ -90,7 +90,7 @@ The remaining canonical service set has been registered and verified in controll
 
 - Ledger: abeyant-intentions
 - Status: honored
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-29
 - Updated: 2026-05-30
 - Tags: contextforge,bootstrap,control-plane,project-init,governance,serena,lsp,rfc
@@ -103,7 +103,7 @@ The host-wide assistant control-plane intention is honored by the formal design 
 
 - Ledger: abeyant-intentions
 - Status: parked
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-30
 - Updated: 2026-05-30
 - Tags: inference-testing,prompts,resources,regression,qa
@@ -116,7 +116,7 @@ Review the ContextForge prompt/resource guidance library for inference-inclusive
 
 - Ledger: abeyant-intentions
 - Status: parked
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-31
 - Updated: 2026-05-31
 - Tags: contextforge,project-init,inference-testing,regression,cleanup
@@ -129,7 +129,7 @@ Continue refining the ContextForge project-init flow from the current implementa
 
 - Ledger: abeyant-intentions
 - Status: parked
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-06-09
 - Updated: 2026-06-09
 - Tags: identifiers,determinism,project-init,governance
@@ -147,5 +147,5 @@ Future project-init and governance workflows should generate identifiers program
 - Updated: 2026-06-17
 - Tags: serena,project-init,backend-provisioning,hard-requirement
 
-Provisioning a canonical project-scoped Serena backend for /home/dgk/workspace/cf-controlplane, and preserving the repeatable means for doing so, is a hard requirement for the ContextForge control-plane roadmap. It may remain abeyant during non-mutating #31 runtime/project-context readback planning because this slice must not mutate live/runtime/global services, registry state, systemd units, hooks, trust, Pi global config, or the legacy /home/dgk/workspace/context-portal checkout. Abeyant does not mean optional: the next Serena/project-init provisioning juncture must generate or intentionally bind a cf-controlplane-scoped Serena backend such as server-instances/serena-cf-controlplane-d46fe58a2a20, or record an explicit compatibility decision with equivalent target-client-visible validation. Retirement requires a focused GitHub-tracked slice with documented approval boundaries, provisioning/readback evidence, and non-actions.
+Provisioning a canonical project-scoped Serena backend for /home/dgk/workspace/cf-controlplane, and preserving the repeatable means for doing so, is a hard requirement for the ContextForge control-plane roadmap. It may remain abeyant during non-mutating #31 runtime/project-context readback planning because this slice must not mutate live/runtime/global services, registry state, systemd units, hooks, trust, Pi global config, or the legacy /home/dgk/workspace/legacy-controlplane-archive checkout. Abeyant does not mean optional: the next Serena/project-init provisioning juncture must generate or intentionally bind a cf-controlplane-scoped Serena backend such as server-instances/serena-cf-controlplane-d46fe58a2a20, or record an explicit compatibility decision with equivalent target-client-visible validation. Retirement requires a focused GitHub-tracked slice with documented approval boundaries, provisioning/readback evidence, and non-actions.
 <!-- governance-crud:end id=ai-20260617-0001 -->

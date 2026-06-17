@@ -13,7 +13,7 @@ import control_plane_contracts as contracts
 import control_plane_project_inspector_seed as seed
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 STAMP = "2026-05-30T20:21:54Z"
 
 

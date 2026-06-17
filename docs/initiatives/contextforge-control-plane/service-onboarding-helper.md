@@ -4,7 +4,7 @@ Issue #52 requests a stateful helper process for onboarding new MCP services
 into the cf-controlplane service offering. This document records the first
 source-only contract for that helper. It is not an implementation and it must
 not mutate ContextForge, Docker, client, global, service, registry, systemd,
-hook, trust, secret, Pi, or legacy `context-portal` state.
+hook, trust, secret, Pi, or legacy archive state.
 
 ## Outcome
 
@@ -139,5 +139,5 @@ Each completed helper session should emit a structured record with:
 The helper must default to source-only planning. It must not register services,
 start or stop containers, mutate systemd units, write global/client config,
 copy secrets, change trust state, clean registry records, or touch the legacy
-`/home/dgk/workspace/context-portal` checkout unless a later step has explicit
+`/home/dgk/workspace/legacy-controlplane-archive` checkout unless a later step has explicit
 approval for that exact surface.

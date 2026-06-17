@@ -15,7 +15,7 @@ import control_plane_service_handoffs as handoffs
 import control_plane_service_management as management
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 STAMP = "2026-05-30T23:00:00Z"
 
 

@@ -18,7 +18,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_URI = "contextforge://diagnostics/serena-stale-units/v1"
-COMPATIBILITY_OPERATOR_UNIT = "contextforge-serena-context-portal.service"
+COMPATIBILITY_OPERATOR_UNIT = "contextforge-serena-cf-controlplane-d46fe58a2a20.service"
 TEST_UNIT_PREFIX = "contextforge-serena-test-new-proj-"
 SERENA_UNIT_PREFIX = "contextforge-serena-"
 SYSTEMCTL_LIST_PATTERNS = ("contextforge-serena-test*", "contextforge*serena*")

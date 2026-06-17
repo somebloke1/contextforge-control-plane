@@ -8,7 +8,8 @@ registry mutation, hook trust changes, global config writes, Pi install/reload,
 and ContextForge runtime mutations still require fresh explicit approval and
 readback evidence.
 
-Proper project naming is ContextForge. `context-portal` is a legacy path,
+Proper project naming is ContextForge. `cf-controlplane` is the canonical
+workspace slug and path for this repository; predecessor checkout names are legacy paths,
 runtime slug, and compatibility identifier where exact paths, service names,
 hashes, or historical evidence require it.
 
@@ -17,7 +18,7 @@ hashes, or historical evidence require it.
 Clean operating tree:
 
 ```text
-/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
+/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance
 branch: dev-root
 head: 9aa732b9f5d89d4663f37be1418d98f8e736f6a8
 status: synchronized with origin/dev-root
@@ -26,7 +27,7 @@ status: synchronized with origin/dev-root
 Legacy dirty checkout:
 
 ```text
-/home/dgk/workspace/context-portal
+/home/dgk/workspace/legacy-controlplane-archive
 branch: codex/contextforge-wrapper-lifecycle
 head: ae5a4349bdcaa552e2073369df185fa1bdd7f61f
 ```
@@ -87,7 +88,7 @@ Current read-only issue #15 evidence:
   `validation_pending`/`mixed`.
 - Merged PR #24 completed the first approved source-only pass and retargets
   project-local active surfaces to
-  `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`.
+  `/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance`.
   The corrected readiness report now classifies the primary root as `valid`
   with recommended action `resume_validation` and the comparison legacy root as
   `valid` with recommended action `suppress`.
@@ -121,7 +122,7 @@ source-only branch:
   or additional project-local state beyond the approved Strategy 1 source pass;
 - stopping/restarting services or killing processes;
 - renaming, deleting, cleaning, resetting, or rebasing
-  `/home/dgk/workspace/context-portal`;
+  `/home/dgk/workspace/legacy-controlplane-archive`;
 - installing a new Serena backend or changing the existing Serena service
   registration.
 
@@ -130,7 +131,7 @@ source-only branch:
 Use `scripts/plan_codex_global_config_migration.py` before asking for or
 applying any user-global Codex config/trust migration. The tool is read-only by
 default: it parses `~/.codex/config.toml`, classifies remaining legacy
-`/home/dgk/workspace/context-portal` entries, and emits target values plus
+`/home/dgk/workspace/legacy-controlplane-archive` entries, and emits target values plus
 readback commands without writing global config, granting hook trust, reloading
 Codex, or mutating services. Apply and rollback modes require explicit
 `--approval-acknowledged` and must be used only after an operator approval is
@@ -141,8 +142,8 @@ Current read-only evidence after PR #28:
 ```sh
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
   scripts/plan_codex_global_config_migration.py \
-  --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
-  --legacy-root /home/dgk/workspace/context-portal \
+  --target-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance \
+  --legacy-root /home/dgk/workspace/legacy-controlplane-archive \
   --pretty
 ```
 
@@ -197,8 +198,8 @@ cached token material, run:
 ```sh
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
   scripts/plan_codex_global_config_migration.py \
-  --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
-  --legacy-root /home/dgk/workspace/context-portal \
+  --target-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance \
+  --legacy-root /home/dgk/workspace/legacy-controlplane-archive \
   --inspect-contextforge-prompt-state \
   --pretty
 ```
@@ -215,7 +216,7 @@ effects until this preflight is understood.
 
 The intended active-target migration, if approved, is to replace active global
 helper/hook paths with
-`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`, add
+`/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance`, add
 clean-root project trust while retaining legacy trust for rollback by default,
 create a pre-change backup, and verify by readback. Do not treat approval for
 active global entries as approval to remove legacy project trust, prune
@@ -229,8 +230,8 @@ global config/trust write, must use:
 ```sh
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
   scripts/plan_codex_global_config_migration.py \
-  --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
-  --legacy-root /home/dgk/workspace/context-portal \
+  --target-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance \
+  --legacy-root /home/dgk/workspace/legacy-controlplane-archive \
   --approval-acknowledged \
   --approval-ref "issue-15 operator approval, YYYY-MM-DD" \
   --apply \
@@ -262,14 +263,14 @@ transition is ready for runtime verification:
 ```sh
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
   scripts/plan_codex_global_config_migration.py \
-  --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
-  --legacy-root /home/dgk/workspace/context-portal \
+  --target-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance \
+  --legacy-root /home/dgk/workspace/legacy-controlplane-archive \
   --approval-acknowledged \
   --approval-ref "issue-15 operator approval, YYYY-MM-DD" \
   --pretty
-rg -n "context-portal|contextforge-slices|contextforge-helper|codex_project_init_hook" ~/.codex/config.toml
+rg -n "cf-controlplane|legacy-controlplane-slices|contextforge-helper|codex_project_init_hook" ~/.codex/config.toml
 cd /home/dgk && codex mcp list --json
-codex -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp list --json
+codex -C /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance mcp list --json
 ```
 
 If the operator separately approves removal of legacy trust or pruning of
@@ -281,26 +282,26 @@ flag, for example `--remove-legacy-trust --remove-legacy-trust-approved` or
 ## Path-Bound Operating Surfaces
 
 These tracked clean-tree files currently bind operational behavior to
-`/home/dgk/workspace/context-portal` and must be included in any approved
+`/home/dgk/workspace/legacy-controlplane-archive` and must be included in any approved
 rebind plan:
 
 | Surface | Current role | Rebind concern |
 | --- | --- | --- |
 | `.codex/config.toml` | Project-local Codex MCP and hook activation surface. | All MCP `command`, `args`, and `cwd` entries point at the legacy checkout. Live dirty config differs from clean tracked config and must be preserved before any replacement. |
 | `.project/context_forge_state.json` | Project-init authority. | Contains `project.root` and `root_hash`; a new filesystem root is a different project identity, not a blind path edit. |
-| `server-instances/serena-context-portal/instance.json` | Serena backend manifest and ContextForge registration metadata. | Contains project root, root hash, Codex config path, LSP paths, and scope notes for the legacy root. |
-| `server-instances/serena-context-portal/run-server.sh` | User-systemd Serena backend launch script. | Starts Serena with `--project /home/dgk/workspace/context-portal` and legacy-local `SERENA_HOME`/`lsp.env` paths. |
-| `server-instances/serena-context-portal/lsp.env` | Local LSP environment for Serena. | Contains absolute legacy-root LSP paths; treat as local runtime/config state, not a generic source template. |
+| `server-instances/serena-cf-controlplane-d46fe58a2a20/instance.json` | Serena backend manifest and ContextForge registration metadata. | Contains project root, root hash, Codex config path, LSP paths, and scope notes for the legacy root. |
+| `server-instances/serena-cf-controlplane-d46fe58a2a20/run-server.sh` | User-systemd Serena backend launch script. | Starts Serena with `--project /home/dgk/workspace/legacy-controlplane-archive` and legacy-local `SERENA_HOME`/`lsp.env` paths. |
+| `server-instances/serena-cf-controlplane-d46fe58a2a20/lsp.env` | Local LSP environment for Serena. | Contains absolute legacy-root LSP paths; treat as local runtime/config state, not a generic source template. |
 | `server-instances/mentality/instance.json` | Governance service manifest. | `backend.working_directory` points at the legacy checkout, even though tools require an explicit `repo` argument. |
-| `.serena/project.yml` | Serena project metadata for the clean source tree. | `project_name` is still `context-portal`; decide whether this remains a compatibility name or changes under a new root identity. |
-| `.codex/skills/*` references | Agent operating instructions. | Some project-local skills intentionally name `/home/dgk/workspace/context-portal` as the current target. If the active root changes, these instructions must change with it or they will retrain the operating agent back to the legacy path. |
-| `scripts/register_serena_context_portal_service.py` | Serena registration helper. | Description/tags still express the legacy scoped backend; registration mutation is approval-gated. |
+| `.serena/project.yml` | Serena project metadata for the clean source tree. | `project_name` is still `cf-controlplane`; decide whether this remains a compatibility name or changes under a new root identity. |
+| `.codex/skills/*` references | Agent operating instructions. | Some project-local skills intentionally name `/home/dgk/workspace/legacy-controlplane-archive` as the current target. If the active root changes, these instructions must change with it or they will retrain the operating agent back to the legacy path. |
+| `scripts/register_serena_cf_controlplane_service.py` | Serena registration helper. | Description/tags still express the legacy scoped backend; registration mutation is approval-gated. |
 | `scripts/register_project_init_prompt.py` | Registered project-init guidance examples. | Prompt examples and sample project state paths still use the legacy root and can mislead future helper-mediated activation if not updated after a root decision. |
-| `scripts/install_user_systemd.py` | User systemd unit generator. | Uses dynamic repo paths for units, but the Serena unit name/description retain `context-portal` compatibility naming. |
+| `scripts/install_user_systemd.py` | User systemd unit generator. | Uses dynamic repo paths for units, but the Serena unit name/description retain `cf-controlplane` compatibility naming. |
 | Codex hook entries in `.codex/config.toml` | PreCompact and compact SessionStart continuity hooks. | Hook command uses `git rev-parse --show-toplevel`, so it follows the active project root, but Codex Desktop must trust the hook in the clean project context before relying on it. |
 
 Historical docs, tests, and fixtures also contain
-`/home/dgk/workspace/context-portal`. Do not rewrite those wholesale. Many are
+`/home/dgk/workspace/legacy-controlplane-archive`. Do not rewrite those wholesale. Many are
 intentional historical evidence, compatibility slugs, or fixed-fixture roots.
 
 ## Rebind Strategy Decision
@@ -310,8 +311,8 @@ An approved retirement must choose one strategy before mutation.
 The current parent-owned approval question is:
 
 > Approve a compatibility rebind of the path-bound local surfaces from
-> `/home/dgk/workspace/context-portal` to
-> `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`,
+> `/home/dgk/workspace/legacy-controlplane-archive` to
+> `/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance`,
 > with verification only and no reset, delete, rename, service/process restart,
 > global trust change, registry mutation, or Pi install/reload in the first
 > pass?
@@ -323,8 +324,8 @@ install/reload, checkout deletion, checkout rename, or final retirement.
 
 ### Strategy 1: Compatibility Rebind
 
-Keep existing compatibility service names such as `serena-context-portal` and
-`serena_context_portal_server`, but change their active project root to the
+Keep existing compatibility service names such as `serena-cf-controlplane-d46fe58a2a20` and
+`serena_cf_controlplane_d46fe58a2a20_server`, but change their active project root to the
 clean worktree.
 
 Use when the user wants the fastest operating-surface cleanup and accepts that
@@ -337,7 +338,7 @@ Required approval scope:
   regeneration, or an explicitly approved compatibility migration plan;
 - update Serena run script/manifest/LSP local paths for the clean root;
 - update project-local skill references that currently instruct agents to use
-  `/home/dgk/workspace/context-portal`;
+  `/home/dgk/workspace/legacy-controlplane-archive`;
 - update project-init prompt examples so future activation guidance does not
   point back at the legacy root;
 - reinstall/reload affected user systemd units and restart Serena only after
@@ -347,8 +348,8 @@ Required approval scope:
 First-pass source status:
 
 - Merged PR #24 retargets the source/project-local surfaces listed above and
-  preserves compatibility identifiers such as `serena-context-portal`,
-  `serena_context_portal_server`, and project name `context-portal`.
+  preserves compatibility identifiers such as `serena-cf-controlplane-d46fe58a2a20`,
+  `serena_cf_controlplane_d46fe58a2a20_server`, and project name `cf-controlplane`.
 - Helper-owned repair updated `.project/context_forge_state.json` to the clean
   root and left target-client validation pending. It did not overwrite
   unmanaged `.codex/config.toml`, mutate user-global trust, mutate ContextForge
@@ -358,7 +359,7 @@ First-pass source status:
 
 Risk:
 
-- The service name remains historically `context-portal` while the active
+- The service name remains historically `cf-controlplane` while the active
   project root becomes the clean ContextForge worktree.
 - Because `.project/context_forge_state.json` encodes a root hash, direct
   path-string replacement is not a safe implementation strategy.
@@ -389,7 +390,7 @@ Risk:
 
 ### Strategy 3: Archival-Only Deferral
 
-Keep `/home/dgk/workspace/context-portal` as the live compatibility root for
+Keep `/home/dgk/workspace/legacy-controlplane-archive` as the live compatibility root for
 now, but declare it archival/compatibility debt and require all new source work
 to continue from clean `dev-root`.
 
@@ -414,26 +415,26 @@ Before any approved mutation:
 1. Capture a fresh preservation snapshot of the legacy checkout:
 
    ```sh
-   git -C /home/dgk/workspace/context-portal status --short --branch
-   git -C /home/dgk/workspace/context-portal diff --binary > /tmp/contextforge-dirty-tracked.diff
-   git -C /home/dgk/workspace/context-portal ls-files --others --exclude-standard -z \
+   git -C /home/dgk/workspace/legacy-controlplane-archive status --short --branch
+   git -C /home/dgk/workspace/legacy-controlplane-archive diff --binary > /tmp/contextforge-dirty-tracked.diff
+   git -C /home/dgk/workspace/legacy-controlplane-archive ls-files --others --exclude-standard -z \
      > /tmp/contextforge-dirty-untracked.zlist
    ```
 
 2. Verify the clean root is synchronized:
 
    ```sh
-   git -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance status --short --branch
-   git -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance rev-parse HEAD origin/dev-root
+   git -C /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance status --short --branch
+   git -C /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance rev-parse HEAD origin/dev-root
    ```
 
 3. Run the read-only rebind preflight planner:
 
    ```sh
-   PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python \
+   PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python \
      scripts/plan_dirty_checkout_rebind.py \
-     --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
-     --legacy-root /home/dgk/workspace/context-portal \
+     --target-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance \
+     --legacy-root /home/dgk/workspace/legacy-controlplane-archive \
      --client-type codex --client-type pi
    ```
 
@@ -445,15 +446,15 @@ Before any approved mutation:
    needed:
 
    ```sh
-   rg -n "/home/dgk/workspace/context-portal|/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance" \
-     /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.codex/config.toml \
-     /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.codex/skills \
-     /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.project/context_forge_state.json \
-     /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/server-instances/serena-context-portal \
-     /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/server-instances/mentality/instance.json \
-     /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/register_project_init_prompt.py \
-     /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/scripts/register_serena_context_portal_service.py \
-     /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance/.serena
+   rg -n "/home/dgk/workspace/legacy-controlplane-archive|/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance" \
+     /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance/.codex/config.toml \
+     /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance/.codex/skills \
+     /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance/.project/context_forge_state.json \
+     /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance/server-instances/serena-cf-controlplane-d46fe58a2a20 \
+     /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance/server-instances/mentality/instance.json \
+     /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance/scripts/register_project_init_prompt.py \
+     /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance/scripts/register_serena_cf_controlplane_service.py \
+     /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance/.serena
    ```
 
 5. Confirm the user selected Strategy 1 or Strategy 2 and approved the exact
@@ -466,10 +467,10 @@ Before any approved mutation:
 6. Run the read-only readiness reconciler:
 
    ```sh
-   PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python \
+   PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python \
      scripts/inspect_project_init_readiness.py \
-     --project-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
-     --compare-root /home/dgk/workspace/context-portal \
+     --project-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance \
+     --compare-root /home/dgk/workspace/legacy-controlplane-archive \
      --client-type codex --client-type pi
    ```
 
@@ -502,7 +503,7 @@ only the intended stable surface, and verifies by readback.
 4. Verify Codex project-local hooks from the clean root:
 
    ```sh
-   codex -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
+   codex -C /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance
    ```
 
    In the new session, inspect `/hooks` and approve only the clean-root
@@ -514,8 +515,8 @@ only the intended stable surface, and verifies by readback.
    ```sh
    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
      scripts/plan_codex_global_config_migration.py \
-     --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
-     --legacy-root /home/dgk/workspace/context-portal \
+     --target-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance \
+     --legacy-root /home/dgk/workspace/legacy-controlplane-archive \
      --pretty
    ```
 
@@ -531,22 +532,22 @@ creates a backup, preserves legacy trust/hook-state by default, reports
    clean-project MCP readbacks:
 
    ```sh
-   rg -n "context-portal|contextforge-slices|contextforge-helper|codex_project_init_hook" ~/.codex/config.toml
+   rg -n "cf-controlplane|legacy-controlplane-slices|contextforge-helper|codex_project_init_hook" ~/.codex/config.toml
    PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
      scripts/plan_codex_global_config_migration.py \
-     --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance \
-     --legacy-root /home/dgk/workspace/context-portal \
+     --target-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance \
+     --legacy-root /home/dgk/workspace/legacy-controlplane-archive \
      --approval-acknowledged \
      --approval-ref "issue-15 operator approval, YYYY-MM-DD" \
      --pretty
    cd /home/dgk && codex mcp list --json
-   codex -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp list --json
+   codex -C /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance mcp list --json
    ```
 
 6. Verify MCP startup from the clean root:
 
    ```sh
-   codex -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp list
+   codex -C /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance mcp list
    ```
 
 7. Verify ContextForge and canonical service health before retiring anything:
@@ -554,7 +555,7 @@ creates a backup, preserves legacy trust/hook-state by default, reports
    ```sh
    curl -fsS http://127.0.0.1:4444/health
    systemctl --user --no-pager --plain status contextforge-gateway.service
-   systemctl --user --no-pager --plain status contextforge-serena-context-portal.service
+   systemctl --user --no-pager --plain status contextforge-serena-cf-controlplane-d46fe58a2a20.service
    ```
 
 8. Verify target-client-visible project behavior. For Codex, a clean-root
@@ -565,10 +566,10 @@ creates a backup, preserves legacy trust/hook-state by default, reports
 9. Verify the operating-agent surface:
 
    ```sh
-   rg -n "/home/dgk/workspace/context-portal" \
+   rg -n "/home/dgk/workspace/legacy-controlplane-archive" \
      .codex/config.toml .project/context_forge_state.json .codex/skills \
-     server-instances/serena-context-portal server-instances/mentality/instance.json \
-     scripts/register_project_init_prompt.py scripts/register_serena_context_portal_service.py \
+     server-instances/serena-cf-controlplane-d46fe58a2a20 server-instances/mentality/instance.json \
+     scripts/register_project_init_prompt.py scripts/register_serena_cf_controlplane_service.py \
      .serena || true
    ```
 
@@ -583,7 +584,7 @@ creates a backup, preserves legacy trust/hook-state by default, reports
 Until the legacy checkout is archived and the clean-root path is proven stable,
 rollback is path selection, not destructive restoration:
 
-1. Start Codex from `/home/dgk/workspace/context-portal`.
+1. Start Codex from `/home/dgk/workspace/legacy-controlplane-archive`.
 2. Use the preserved snapshot under
    `run/dirty-state-preservation/20260616T114116Z/` or a fresher snapshot to
    recover unmerged local files if needed.

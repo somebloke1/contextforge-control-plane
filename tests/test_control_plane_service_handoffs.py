@@ -13,7 +13,7 @@ import control_plane_contracts as contracts
 import control_plane_service_handoffs as handoffs
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 
 
 def candidate_descriptor() -> dict[str, object]:

@@ -17,7 +17,7 @@
     ],
     "command": "serena",
     "env": {
-      "SERENA_HOME": "server-instances/serena-context-portal/run/serena-home"
+      "SERENA_HOME": "server-instances/serena-cf-controlplane-d46fe58a2a20/run/serena-home"
     },
     "env_vars": [
       "SERENA_HOME"
@@ -43,21 +43,21 @@
   "contextforge": {
     "gateway": {
       "id": "6737c3908d3a4bb098d829a5a4e5327f",
-      "name": "serena-context-portal",
+      "name": "serena-cf-controlplane-d46fe58a2a20",
       "transport": "STREAMABLEHTTP",
       "url": "http://localhost:9108/mcp"
     },
     "virtual_server": {
       "grouping": "canonical",
       "id": "c14f033a68f34b9ba26870bfede42cbf",
-      "name": "serena_context_portal_server"
+      "name": "serena_cf_controlplane_d46fe58a2a20_server"
     }
   },
   "enabled": true,
   "hash": "42304ce73dad",
-  "instance_slug": "serena-context-portal",
+  "instance_slug": "serena-cf-controlplane-d46fe58a2a20",
   "kind": "mcp",
-  "label": "context-portal",
+  "label": "cf-controlplane",
   "lsp": {
     "advisory_status": "instance_scaffold_ready",
     "backend_options": [
@@ -99,47 +99,47 @@
     "install_implemented": false,
     "instance_scope": {
       "created": true,
-      "env_file": "/home/dgk/workspace/cf-controlplane/server-instances/serena-context-portal/lsp.env",
-      "instance_dir": "/home/dgk/workspace/cf-controlplane/server-instances/serena-context-portal",
-      "lsp_tools_dir": "/home/dgk/workspace/cf-controlplane/server-instances/serena-context-portal/lsp-tools",
-      "manifest_path": "/home/dgk/workspace/cf-controlplane/server-instances/serena-context-portal/lsp-tools/manifest.json"
+      "env_file": "/home/dgk/workspace/cf-controlplane/server-instances/serena-cf-controlplane-d46fe58a2a20/lsp.env",
+      "instance_dir": "/home/dgk/workspace/cf-controlplane/server-instances/serena-cf-controlplane-d46fe58a2a20",
+      "lsp_tools_dir": "/home/dgk/workspace/cf-controlplane/server-instances/serena-cf-controlplane-d46fe58a2a20/lsp-tools",
+      "manifest_path": "/home/dgk/workspace/cf-controlplane/server-instances/serena-cf-controlplane-d46fe58a2a20/lsp-tools/manifest.json"
     },
     "language": "python",
     "updated_at": "2026-05-29T21:35:32.858737+00:00"
   },
   "mcp_url": "http://127.0.0.1:9108/mcp",
-  "name": "serena-context-portal",
+  "name": "serena-cf-controlplane-d46fe58a2a20",
   "port": 9108,
   "project_root_hash": "d46fe58a2a2061e88f722eb5d4e2f546fd09e6d46d4f9f4410c0ad40e65572cf",
   "registration": {
     "registered_tools": [
-      "serena-context-portal-delete-memory",
-      "serena-context-portal-edit-memory",
-      "serena-context-portal-find-declaration",
-      "serena-context-portal-find-implementations",
-      "serena-context-portal-find-referencing-symbols",
-      "serena-context-portal-find-symbol",
-      "serena-context-portal-get-current-config",
-      "serena-context-portal-get-diagnostics-for-file",
-      "serena-context-portal-get-symbols-overview",
-      "serena-context-portal-initial-instructions",
-      "serena-context-portal-insert-after-symbol",
-      "serena-context-portal-insert-before-symbol",
-      "serena-context-portal-list-memories",
-      "serena-context-portal-onboarding",
-      "serena-context-portal-open-dashboard",
-      "serena-context-portal-read-memory",
-      "serena-context-portal-rename-memory",
-      "serena-context-portal-rename-symbol",
-      "serena-context-portal-replace-symbol-body",
-      "serena-context-portal-safe-delete-symbol",
-      "serena-context-portal-search-for-pattern",
-      "serena-context-portal-write-memory"
+      "serena-cf-controlplane-d46fe58a2a20-delete-memory",
+      "serena-cf-controlplane-d46fe58a2a20-edit-memory",
+      "serena-cf-controlplane-d46fe58a2a20-find-declaration",
+      "serena-cf-controlplane-d46fe58a2a20-find-implementations",
+      "serena-cf-controlplane-d46fe58a2a20-find-referencing-symbols",
+      "serena-cf-controlplane-d46fe58a2a20-find-symbol",
+      "serena-cf-controlplane-d46fe58a2a20-get-current-config",
+      "serena-cf-controlplane-d46fe58a2a20-get-diagnostics-for-file",
+      "serena-cf-controlplane-d46fe58a2a20-get-symbols-overview",
+      "serena-cf-controlplane-d46fe58a2a20-initial-instructions",
+      "serena-cf-controlplane-d46fe58a2a20-insert-after-symbol",
+      "serena-cf-controlplane-d46fe58a2a20-insert-before-symbol",
+      "serena-cf-controlplane-d46fe58a2a20-list-memories",
+      "serena-cf-controlplane-d46fe58a2a20-onboarding",
+      "serena-cf-controlplane-d46fe58a2a20-open-dashboard",
+      "serena-cf-controlplane-d46fe58a2a20-read-memory",
+      "serena-cf-controlplane-d46fe58a2a20-rename-memory",
+      "serena-cf-controlplane-d46fe58a2a20-rename-symbol",
+      "serena-cf-controlplane-d46fe58a2a20-replace-symbol-body",
+      "serena-cf-controlplane-d46fe58a2a20-safe-delete-symbol",
+      "serena-cf-controlplane-d46fe58a2a20-search-for-pattern",
+      "serena-cf-controlplane-d46fe58a2a20-write-memory"
     ],
     "review_completed": [
       "confirmed Serena CLI is installed and initialized",
       "confirmed native streamable HTTP CLI flags",
-      "installed and started contextforge-serena-context-portal.service",
+      "installed and started contextforge-serena-cf-controlplane-d46fe58a2a20.service",
       "preserved existing web-search service on port 9107",
       "registered through stock ContextForge APIs",
       "verified direct and ContextForge virtual /mcp endpoints",
@@ -149,17 +149,17 @@
     "status": "registered",
     "verified": {
       "contextforge_registration": "registered gateway 6737c3908d3a4bb098d829a5a4e5327f and virtual server c14f033a68f34b9ba26870bfede42cbf with 23 tools",
-      "contextforge_sse": "listed 23 serena-context-portal tools from /servers/c14f033a68f34b9ba26870bfede42cbf/sse",
-      "contextforge_streamable_http": "listed 23 serena-context-portal tools from /servers/c14f033a68f34b9ba26870bfede42cbf/mcp/",
-      "contextforge_tool_call": "called serena-context-portal-search-for-pattern against AGENTS.md successfully",
-      "contextforge_tool_scope": "virtual server lists 22 tools and does not expose serena-context-portal-activate-project",
+      "contextforge_sse": "listed 23 serena-cf-controlplane-d46fe58a2a20 tools from /servers/c14f033a68f34b9ba26870bfede42cbf/sse",
+      "contextforge_streamable_http": "listed 23 serena-cf-controlplane-d46fe58a2a20 tools from /servers/c14f033a68f34b9ba26870bfede42cbf/mcp/",
+      "contextforge_tool_call": "called serena-cf-controlplane-d46fe58a2a20-search-for-pattern against AGENTS.md successfully",
+      "contextforge_tool_scope": "virtual server lists 22 tools and does not expose serena-cf-controlplane-d46fe58a2a20-activate-project",
       "direct_sse": "http://127.0.0.1:9108/sse returned HTTP 404; Serena 1.5.3 native streamable HTTP does not expose /sse in this mode",
       "direct_streamable_http": "listed 23 Serena tools from http://127.0.0.1:9108/mcp",
       "direct_tool_call": "called search_for_pattern against AGENTS.md successfully",
       "requested_port": "9107 was occupied by the existing web-search bridge; runtime port adjusted to 9108",
       "serena_init": "serena init completed successfully with LSP backend",
       "serena_install": "serena-agent 1.5.3 installed with uv tool install -p 3.13 serena-agent",
-      "systemd": "contextforge-serena-context-portal.service active and listening on 127.0.0.1:9108"
+      "systemd": "contextforge-serena-cf-controlplane-d46fe58a2a20.service active and listening on 127.0.0.1:9108"
     }
   },
   "schema_version": 1,
@@ -170,14 +170,14 @@
     "scope_type": "single_workspace_code_intelligence",
     "workspace_root": "/home/dgk/workspace/cf-controlplane"
   },
-  "server_name": "serena_context_portal_server",
+  "server_name": "serena_cf_controlplane_d46fe58a2a20_server",
   "service": "serena",
-  "slug": "serena-context-portal",
+  "slug": "serena-cf-controlplane-d46fe58a2a20",
   "source": "Serena MCP backend scoped to the ContextForge operator repository",
   "state_layout": {
     "notes": "The operator-owned service instance and caller-owned project metadata are separate roles. They happen to point at the same checkout for this instance, but the same split applies when publishing Serena for any other workspace.",
     "project_metadata": ".serena/",
-    "serena_service_home": "server-instances/serena-context-portal/run/serena-home"
+    "serena_service_home": "server-instances/serena-cf-controlplane-d46fe58a2a20/run/serena-home"
   },
   "tool_policy": {
     "contextforge_excluded_original_tool_names": [
@@ -186,6 +186,6 @@
     "single_project_mode": false,
     "source_level_exclusion": "not_applied_v1_contextforge_virtual_filter_is_authoritative"
   },
-  "unit": "contextforge-serena-context-portal.service",
+  "unit": "contextforge-serena-cf-controlplane-d46fe58a2a20.service",
   "updated_at": "2026-05-29T21:35:32.858815+00:00"
 }

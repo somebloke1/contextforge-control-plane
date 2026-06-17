@@ -59,7 +59,7 @@ class ControlPlaneProjectStateTests(unittest.TestCase):
                 state_lib.validate_project_root(root, denied_roots={root})
 
     def test_symlink_escape_is_rejected_before_state_read(self) -> None:
-        link = state_lib.WORKSPACE_ROOT / "context-portal-project-state-symlink-escape"
+        link = state_lib.WORKSPACE_ROOT / "cf-controlplane-project-state-symlink-escape"
         if link.exists() or link.is_symlink():
             link.unlink()
         try:

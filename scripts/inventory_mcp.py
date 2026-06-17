@@ -265,7 +265,7 @@ def discover() -> dict[str, Any]:
     entries: list[dict[str, Any]] = [
         {
             "name": "mentality",
-            "client": "context-portal",
+            "client": "cf-controlplane",
             "source": str(REPO_ROOT / "scripts/governance_mcp.py"),
             "config_path": "static.repo_local",
             "enabled": True,

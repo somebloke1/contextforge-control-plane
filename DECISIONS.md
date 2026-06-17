@@ -9,7 +9,7 @@ metadata, tags, and `governance-crud` comment anchors.
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: governance,crud,mcp,continuity
@@ -25,7 +25,7 @@ durable repo-local governance registries. Manage them with
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: git,hooks,python,uv
@@ -38,7 +38,7 @@ Keep main protected by tracked hooks in .githooks/, keep core.hooksPath set to .
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,mcpgateway,stock,architecture
@@ -55,7 +55,7 @@ stock application rather than reimplementing its runtime responsibilities.
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: mcp,transport,bridge,contextforge
@@ -72,7 +72,7 @@ HTTP-only servers need only SSE exposure.
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: verification,sequence,contextforge,operations
@@ -88,7 +88,7 @@ commands, service state, admin API/UI behavior, and endpoint probes.
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: secrets,systemd,local-state,security
@@ -105,7 +105,7 @@ cannot write `/etc/systemd/system`, `/opt`, or `/var/lib` without sudo.
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,registration,stdio,governance,verification
@@ -118,7 +118,7 @@ The first external service class proof uses stock package behavior only. scripts
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: server-instances,contextforge,backends,registration,operations
@@ -131,7 +131,7 @@ Every service exposed through ContextForge must have a concrete upstream backend
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: https,tls,self-signed,contextforge,local-runtime
@@ -144,7 +144,7 @@ Superseded by dec-20260528-0043 for this workstation. The local gateway original
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: server-instances,contextforge,backends,architecture
@@ -157,7 +157,7 @@ server-instances/<service-slug>/ directories are the operational homes for backe
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,admin-ui,install,upstream,stock
@@ -170,7 +170,7 @@ The PyPI wheel for mcp-contextforge-gateway 1.0.2 installed successfully but did
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: server-instances,ports,bridges,inventory
@@ -183,7 +183,7 @@ This pre-deduplication port allocation policy is superseded by dec-20260528-0019
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,registration,stdio,fetch-mcp,verification
@@ -196,7 +196,7 @@ opencode-fetch-mcp was a controlled stdio registration proof. It is superseded b
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,registration,stdio,filesystem,verification
@@ -209,7 +209,7 @@ opencode-filesystem was a controlled stdio bridge proof. It is superseded by dec
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,registration,stdio,code-index,verification
@@ -222,7 +222,7 @@ opencode-code-index was a controlled stdio bridge proof. It is superseded by dec
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,registration,stdio,filesystem,verification
@@ -235,7 +235,7 @@ gemini-cli filesystem was a controlled stdio bridge proof. It is superseded by d
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,registration,stdio,code-index,verification
@@ -248,7 +248,7 @@ gemini-cli code-index was a controlled stdio bridge proof. It is superseded by d
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,registration,exa,deduplication,native
@@ -261,7 +261,7 @@ Superseded by dec-20260528-0030. The standard hosted Exa MCP gateway at https://
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,inventory,deduplication,naming,governance
@@ -274,7 +274,7 @@ MCP client configs from Codex, Claude, Gemini, and OpenCode are discovery source
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,scope,exclusion,deduplication
@@ -287,7 +287,7 @@ Per user direction, fetch, zai-mcp-server, gemini-tools, and filesystem MCP serv
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,scope,exclusion,code-index
@@ -300,7 +300,7 @@ Per user direction, code-index MCP services are out of current registration scop
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,governance,naming,registration
@@ -313,7 +313,7 @@ The repository-local governance MCP service is now named mentality. The prior go
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,context7,deduplication,registration,verification
@@ -326,7 +326,7 @@ Registered one canonical context7 service instead of one per assistant config. N
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,systemd,user-service,verification
@@ -339,7 +339,7 @@ Installed user-level systemd units for the canonical local ContextForge stack: c
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,exa,registration,remote,verification
@@ -352,7 +352,7 @@ Superseded by dec-20260528-0030. Exa Search is no longer represented as a canoni
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,openzeppelin,solidity,remote,verification
@@ -365,7 +365,7 @@ An enabled user-added OpenZeppelin Solidity Contracts gateway was present at htt
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,registry,cleanup,verification
@@ -378,7 +378,7 @@ Registry cleanup and service replacement are now governed by the canonical activ
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,csrf,admin-ui,configuration,local-runtime
@@ -391,7 +391,7 @@ The stock Admin UI uses an HttpOnly `jwt_token` session cookie for interactive a
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,api,database,operations
@@ -404,7 +404,7 @@ ContextForge registry state must be changed through ContextForge API or Admin UI
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,exa,server-instances
@@ -417,7 +417,7 @@ The Exa Search ContextForge service now points at the local server-instances/exa
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,prompts,resources,tool-guidance,api
@@ -430,7 +430,7 @@ For each active canonical MCP tool, register one succinct reusable prompt and on
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,content-security,sanitization,prompts,resources
@@ -443,7 +443,7 @@ ContextForge resource and prompt writes pass through stock content-security vali
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,clients,mcp,ssh-tmux,http
@@ -456,7 +456,7 @@ Client configs route through canonical ContextForge services without client-deri
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,github,registration,opencode,systemd,http
@@ -469,7 +469,7 @@ OpenCode direct stdio GitHub MCP entry using @modelcontextprotocol/server-github
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,web-search,registration,client-config
@@ -482,7 +482,7 @@ The standalone MCP server in /home/dgk/workspace/web_search is now promoted to a
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,pi,mcp-bridge,client-config
@@ -495,7 +495,7 @@ Active PI MCP bridge sources now keep their PI-facing tool names while routing b
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,opencode,http,auth
@@ -508,7 +508,7 @@ Superseded by dec-20260528-0043. OpenCode supports headers on remote MCP entries
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,gemini-cli,claude-code,http,auth
@@ -521,7 +521,7 @@ Superseded by dec-20260528-0043. Gemini CLI and Claude Code support direct strea
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,scope,inventory,client-config
@@ -534,7 +534,7 @@ Canonical service manifests now include explicit scope metadata. Among registere
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,middleware,rate-limit,plugins,http
@@ -547,7 +547,7 @@ ContextForge middleware is relevant for gateway policy but does not change the d
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,claude-desktop,client-config,http,wrapper
@@ -560,7 +560,7 @@ Keep Claude Desktop canonical MCP entries on scripts/contextforge_mcp_wrapper.py
 
 - Ledger: decisions
 - Status: superseded
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,opencode,gemini-cli,claude-code,tls,client-config
@@ -573,7 +573,7 @@ Superseded by dec-20260528-0043. The wrapper fallback was correct while the loca
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,http,opencode,gemini-cli,claude-code,client-config
@@ -586,7 +586,7 @@ For this local workstation, reliable direct MCP operation is more important than
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,anythingllm,context7,deduplication,client-config
@@ -599,7 +599,7 @@ The expanded global inventory found AnythingLLM configured with a context7 MCP s
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-06-16
 - Tags: inventory,claude-code,workspace,filesystem,exclusion
@@ -612,12 +612,12 @@ The workspace inventory now treats project-root .claude.json files as Claude Cod
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-29
 - Updated: 2026-05-29
 - Tags: contextforge,serena,codex,project-scope,client-config
 
-Serena remains exposed through ContextForge, but it must not be a global Codex MCP server because the backend is stateful and scoped to one workspace. The global `~/.codex/config.toml` Serena entry was removed, and the context-portal project-local `.codex/config.toml` now owns the `serena` MCP entry that launches `scripts/contextforge_mcp_wrapper.py serena_context_portal_server` with cwd `/home/dgk/workspace/context-portal`. The ContextForge virtual server excludes Serena's `activate_project` tool; project selection is controlled by the service and client project configuration, not by an LLM-callable project switch that could target `/` or `/home/dgk`. Current verification: `codex mcp list` from `/home/dgk` shows no Serena entry, `codex mcp list` from `/home/dgk/workspace/context-portal` shows one ContextForge-backed `serena` entry, and a wrapper `tools/list` smoke test reports 22 tools without `serena-context-portal-activate-project`.
+Serena remains exposed through ContextForge, but it must not be a global Codex MCP server because the backend is stateful and scoped to one workspace. The global `~/.codex/config.toml` Serena entry was removed, and the cf-controlplane project-local `.codex/config.toml` now owns the `serena` MCP entry that launches `scripts/contextforge_mcp_wrapper.py serena_cf_controlplane_d46fe58a2a20_server` with cwd `/home/dgk/workspace/legacy-controlplane-archive`. The ContextForge virtual server excludes Serena's `activate_project` tool; project selection is controlled by the service and client project configuration, not by an LLM-callable project switch that could target `/` or `/home/dgk`. Current verification: `codex mcp list` from `/home/dgk` shows no Serena entry, `codex mcp list` from `/home/dgk/workspace/legacy-controlplane-archive` shows one ContextForge-backed `serena` entry, and a wrapper `tools/list` smoke test reports 22 tools without `serena-cf-controlplane-d46fe58a2a20-activate-project`.
 <!-- governance-crud:end id=dec-20260529-0046 -->
 
 <!-- governance-crud:start id=dec-20260529-0047 -->
@@ -625,12 +625,12 @@ Serena remains exposed through ContextForge, but it must not be a global Codex M
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-29
 - Updated: 2026-05-29
 - Tags: contextforge,serena,codex,project-init,hooks
 
-Project initialization is now delivered by the global Codex SessionStart/UserPromptSubmit hook /home/dgk/workspace/context-portal/scripts/codex_project_init_hook.py, which renders ContextForge prompt project_init_prompt and writes idempotency state under the ignored run/ directory. The hook rejects /, /home/dgk, /home/dgk/workspace, and symlink escapes after realpath, and fails open when ContextForge is unavailable.
+Project initialization is now delivered by the global Codex SessionStart/UserPromptSubmit hook /home/dgk/workspace/legacy-controlplane-archive/scripts/codex_project_init_hook.py, which renders ContextForge prompt project_init_prompt and writes idempotency state under the ignored run/ directory. The hook rejects /, /home/dgk, /home/dgk/workspace, and symlink escapes after realpath, and fails open when ContextForge is unavailable.
 
 Serena provisioning is centralized in scripts/manage_serena_project_instance.py. It derives serena-<slug>-<hash> from uid:canonical_project_root, reserves a user-local port, creates server-instances/<instance>/, installs a user systemd unit wanted by contextforge.target, registers a ContextForge gateway and project-specific virtual server, filters activate_project from that virtual server, and writes the project .codex/config.toml alias serena last.
 
@@ -642,12 +642,12 @@ Verification on 2026-05-29 created two disposable workspace projects concurrentl
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-29
 - Updated: 2026-05-29
 - Tags: contextforge,serena,verification,systemd,codex
 
-Added a safe verify command to scripts/manage_serena_project_instance.py that reconciles the current per-project Serena manifest, user unit, port, ContextForge gateway and virtual server, project-local Codex config, absence of home-level serena, and optional Codex app-server MCP tool calls. Live verification on 2026-05-29 for /home/dgk/workspace/context-portal passed through serena_context_portal_server with 22 app-server tools, no activate tool, get-current-config on the context-portal project, and {} diagnostics for scripts/contextforge_mcp_wrapper.py. Updated generated user units so Serena services order after and want contextforge-gateway.service; reapplied user-unit templates without restarting, and both contextforge-gateway.service and contextforge-serena-context-portal.service remained active. The new-project Codex trust policy remains open under oq-20260529-0001; no broad automatic trust was added.
+Added a safe verify command to scripts/manage_serena_project_instance.py that reconciles the current per-project Serena manifest, user unit, port, ContextForge gateway and virtual server, project-local Codex config, absence of home-level serena, and optional Codex app-server MCP tool calls. Live verification on 2026-05-29 for /home/dgk/workspace/legacy-controlplane-archive passed through serena_cf_controlplane_d46fe58a2a20_server with 22 app-server tools, no activate tool, get-current-config on the cf-controlplane project, and {} diagnostics for scripts/contextforge_mcp_wrapper.py. Updated generated user units so Serena services order after and want contextforge-gateway.service; reapplied user-unit templates without restarting, and both contextforge-gateway.service and contextforge-serena-cf-controlplane-d46fe58a2a20.service remained active. The new-project Codex trust policy remains open under oq-20260529-0001; no broad automatic trust was added.
 <!-- governance-crud:end id=dec-20260529-0048 -->
 
 <!-- governance-crud:start id=dec-20260529-0049 -->
@@ -655,12 +655,12 @@ Added a safe verify command to scripts/manage_serena_project_instance.py that re
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-29
 - Updated: 2026-05-29
 - Tags: contextforge,serena,project-init,lsp,verification
 
-Implemented empty-project Serena initialization improvements. The Serena manager now supports explicit --language on create/status/verify, create --verify --app-server, project-root-aware app-server verification, robust mcpServerStatus/list parsing for result.data/result.servers/list shapes, exposed-tool-only activate_project checks, language state reporting, manager-owned temporary LSP probe files, and safe needs_user_language_choice output for empty projects. Prompt/resource guidance was refreshed through ContextForge APIs so future agents ask for a language on empty projects and use manager commands instead of ad hoc app-server probes. Live checks passed for context-portal and test-new-proj, and no automatic Codex project trust was added.
+Implemented empty-project Serena initialization improvements. The Serena manager now supports explicit --language on create/status/verify, create --verify --app-server, project-root-aware app-server verification, robust mcpServerStatus/list parsing for result.data/result.servers/list shapes, exposed-tool-only activate_project checks, language state reporting, manager-owned temporary LSP probe files, and safe needs_user_language_choice output for empty projects. Prompt/resource guidance was refreshed through ContextForge APIs so future agents ask for a language on empty projects and use manager commands instead of ad hoc app-server probes. Live checks passed for cf-controlplane and test-new-proj, and no automatic Codex project trust was added.
 <!-- governance-crud:end id=dec-20260529-0049 -->
 
 <!-- governance-crud:start id=dec-20260529-0050 -->
@@ -668,7 +668,7 @@ Implemented empty-project Serena initialization improvements. The Serena manager
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-29
 - Updated: 2026-05-29
 - Tags: serena,project-init,codex
@@ -681,7 +681,7 @@ Empty project initialization now uses manager status preflight before provisioni
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-30
 - Updated: 2026-05-30
 - Tags: contextforge,control-plane,mvs,acceptance,governance
@@ -694,7 +694,7 @@ Adopt the ContextForge control-plane RFC minimal viable slice, roadmap, and acce
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-30
 - Updated: 2026-05-30
 - Tags: contextforge,project-state,migration,project-init
@@ -707,7 +707,7 @@ Project initialization state belongs in .project/context_forge_state.json. Legac
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-30
 - Updated: 2026-05-30
 - Tags: contextforge,consent,audit,verification,project-init
@@ -720,7 +720,7 @@ Mutating control-plane operations require typed consent receipts, adapter-indepe
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-30
 - Updated: 2026-05-30
 - Tags: contextforge,catalog,service-management,control-plane
@@ -733,7 +733,7 @@ Normal project initialization and the general control-plane MCP surface must not
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-30
 - Updated: 2026-05-30
 - Tags: contextforge,governance,memory,serena,service-memory
@@ -746,7 +746,7 @@ Governance ledgers remain authoritative for decisions, open questions, parked in
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-30
 - Updated: 2026-05-30
 - Tags: contextforge,auth,tokens,trust,remote-exposure
@@ -759,7 +759,7 @@ The v1 local profile uses loopback authenticated HTTP with wrapper fallback wher
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-31
 - Updated: 2026-05-31
 - Tags: contextforge,project-init,idempotency,service-identity,cleanup
@@ -772,7 +772,7 @@ Project-init service selection, approval, application, readback, validation, cle
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-31
 - Updated: 2026-05-31
 - Tags: contextforge,project-init,inference-testing,validation,evaluator
@@ -785,7 +785,7 @@ Project-init validation must prove the target client can see and call the expect
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-31
 - Updated: 2026-05-31
 - Tags: contextforge,project-init,ux,reload,options
@@ -798,12 +798,12 @@ Every project-init prompt that presents user options must number the options and
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-06-16
 - Updated: 2026-06-16
 - Tags: contextforge,naming,documentation,governance
 
-Use ContextForge, Context Forge, or contextforge as the project name in human-facing documentation and coordination artifacts. Treat context-portal as a legacy filesystem path, historical slug, or current runtime identifier only where exact paths, service names, project hashes, registry ids, or compatibility surfaces require it. Do not rename live services, project-state identities, Serena slugs, GitHub repository names, or filesystem paths as part of ordinary cleanup; any such migration requires a separate explicit plan, approval, rollback story, and runtime readback evidence.
+Use ContextForge, Context Forge, or contextforge as the project name in human-facing documentation and coordination artifacts. Treat `cf-controlplane` as the canonical workspace slug and filesystem path for this repository. Retired predecessor workspace names are legacy identifiers only where exact historical evidence, service names, project hashes, registry ids, or compatibility surfaces require a neutral reference. Do not rename live services, project-state identities, Serena slugs, GitHub repository names, or filesystem paths as part of ordinary cleanup; any such migration requires a separate explicit plan, approval, rollback story, and runtime readback evidence.
 <!-- governance-crud:end id=dec-20260616-0001 -->
 
 <!-- governance-crud:start id=dec-20260616-0002 -->
@@ -871,7 +871,7 @@ copying secrets into Git; preservation and approval boundaries still apply.
 - Updated: 2026-06-17
 - Tags: dependencies,venv,tooling,operator-approval
 
-The user explicitly approved the operating agent to install software and Python/venv libraries needed to support scoped ContextForge control-plane development and validation work in /home/dgk/workspace/cf-controlplane. Use the project Python policy by default: create or repair the ignored local .venv with uv venv .venv when needed, install Python dependencies with uv pip install --python .venv/bin/python ..., and keep installed environments, caches, secrets, OAuth state, runtime evidence, service state, and generated local artifacts out of Git unless separately promoted as sanitized source. This approval does not authorize global Codex config mutation, hook trust/state mutation, runtime secret/OAuth/trust copy, service/process/systemd/registry/Pi global config mutation, destructive git operations, mutation of /home/dgk/workspace/context-portal, or helper/project-init apply steps that require challenge approval.
+The user explicitly approved the operating agent to install software and Python/venv libraries needed to support scoped ContextForge control-plane development and validation work in /home/dgk/workspace/cf-controlplane. Use the project Python policy by default: create or repair the ignored local .venv with uv venv .venv when needed, install Python dependencies with uv pip install --python .venv/bin/python ..., and keep installed environments, caches, secrets, OAuth state, runtime evidence, service state, and generated local artifacts out of Git unless separately promoted as sanitized source. This approval does not authorize global Codex config mutation, hook trust/state mutation, runtime secret/OAuth/trust copy, service/process/systemd/registry/Pi global config mutation, destructive git operations, mutation of /home/dgk/workspace/legacy-controlplane-archive, or helper/project-init apply steps that require challenge approval.
 <!-- governance-crud:end id=dec-20260617-0001 -->
 
 <!-- governance-crud:start id=dec-20260617-0002 -->
@@ -901,16 +901,16 @@ For the indefinite cf-controlplane development path, use only the Pi and OpenCod
 <!-- governance-crud:end id=dec-20260617-0003 -->
 
 <!-- governance-crud:start id=dec-20260617-0004 -->
-## dec-20260617-0004: Retire context-portal naming through GitHub-tracked slices
+## dec-20260617-0004: Retire cf-controlplane naming through GitHub-tracked slices
 
 - Ledger: decisions
 - Status: accepted
 - Repository: /home/dgk/workspace/cf-controlplane
 - Created: 2026-06-17
 - Updated: 2026-06-17
-- Tags: naming,context-portal,github,compatibility,migration
+- Tags: naming,cf-controlplane,github,compatibility,migration
 
-`context-portal` is legacy naming. In cf-controlplane work, treat `context-portal` names as compatibility or historical identifiers only until they can be eliminated safely. As agents encounter active `context-portal` naming, they should use GitHub issues or PR-linked issue comments to track and gradually retire it in focused, reviewable slices. Do not perform broad opportunistic renames that could break service identities, registry records, Serena tool names, project-state compatibility, or historical evidence; classify each occurrence as active, compatibility, or historical before changing it.
+Retired predecessor workspace naming is legacy naming. In cf-controlplane work, treat references to predecessor workspace names as historical or compatibility identifiers only until they can be eliminated safely. As agents encounter active predecessor naming, they should use GitHub issues or PR-linked issue comments to track and gradually retire it in focused, reviewable slices. Do not perform broad opportunistic renames that could break service identities, registry records, Serena tool names, project-state compatibility, or historical evidence; classify each occurrence as active, compatibility, or historical before changing it.
 <!-- governance-crud:end id=dec-20260617-0004 -->
 
 <!-- governance-crud:start id=dec-20260617-0005 -->

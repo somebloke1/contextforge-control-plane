@@ -18,7 +18,7 @@ Last refreshed: 2026-06-16 from clean branch
   - Claude Desktop: 7
   - Codex Terminal: 2
   - Codex project-local configs: 52
-  - ContextForge repo-local service: 1 (`context-portal` inventory label)
+  - ContextForge repo-local service: 1 (`cf-controlplane` inventory label)
   - Gemini CLI: 1
   - OpenCode: 1 global, 6 project-local
   - Pi Coding Assistant package settings: 125

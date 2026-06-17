@@ -14,7 +14,7 @@ import control_plane_contracts as contracts
 import control_plane_project_state as project_state
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 STAMP = "2026-05-30T21:00:00Z"
 FUTURE = "2026-05-31T21:00:00Z"
 PAST = "2026-05-29T21:00:00Z"
@@ -23,7 +23,7 @@ PAST = "2026-05-29T21:00:00Z"
 def base_state(*, revision: int = 7, status: str = "uninitialized") -> dict[str, object]:
     return {
         "meta": {"revision": revision},
-        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "context-portal"},
+        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "cf-controlplane"},
         "status": status,
         "decisions": {},
         "services": {},
@@ -39,7 +39,7 @@ def base_plan(*, state: dict[str, object] | None = None, target_digest: str = "s
         "schema_version": 1,
         "surface": "propose_project_init",
         "planner": "control_plane_project_planner",
-        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "context-portal"},
+        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "cf-controlplane"},
         "plan_id": "project-init-fixture",
         "status": "planned_non_mutating",
         "mutation_allowed": False,

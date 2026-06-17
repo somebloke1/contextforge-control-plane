@@ -95,7 +95,7 @@ single `--project` root, owns project-local code intelligence state, and should
 have a canonical cf-controlplane instance such as
 `server-instances/serena-cf-controlplane-d46fe58a2a20` unless a separate
 GitHub-tracked compatibility decision explicitly keeps the legacy
-`serena-context-portal` identity with target-client-visible validation and
+`serena-cf-controlplane-d46fe58a2a20` identity with target-client-visible validation and
 retirement conditions.
 
 `project-inspector` is the next plausible non-Serena project-scoped proof

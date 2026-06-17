@@ -14,27 +14,27 @@ import control_plane_contextforge_binding as binding
 import control_plane_contracts as contracts
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 STAMP = "2026-05-30T22:00:00Z"
 
 
 def contract_card(*, instantiation_class: str = "instance_per_project", mutates_shared: bool = False) -> dict[str, Any]:
     return {
-        "card_id": "project-inspector-context-portal",
+        "card_id": "project-inspector-cf-controlplane",
         "schema_uri": "contextforge://control-plane/schemas/service-binding-contract-card/v1",
         "service_family": "project-inspector",
-        "service_binding": "project-inspector:context-portal",
+        "service_binding": "project-inspector:cf-controlplane",
         "instantiation_class": instantiation_class,
         "authority_boundary": "project root bound backend and ContextForge virtual server",
         "project_scope": {"root": PROJECT_ROOT},
         "credential_scope": None,
         "resource_scope": None,
         "caller_or_session_scope": None,
-        "backend_instance_ref": ref("backend-manifests/project-inspector-context-portal"),
-        "contextforge_gateway": {"canonical_name": "project-inspector-context-portal"},
-        "virtual_server": {"canonical_name": "project-inspector-context-portal-codex"},
+        "backend_instance_ref": ref("backend-manifests/project-inspector-cf-controlplane"),
+        "contextforge_gateway": {"canonical_name": "project-inspector-cf-controlplane"},
+        "virtual_server": {"canonical_name": "project-inspector-cf-controlplane-codex"},
         "client_adapter_refs": [ref("client-adapters/codex-v1")],
-        "semantic_tool_policy_ref": ref("semantic-tool-policies/project-inspector-context-portal"),
+        "semantic_tool_policy_ref": ref("semantic-tool-policies/project-inspector-cf-controlplane"),
         "transport_profile": {
             "native_transports": ["streamable_http", "sse"],
             "required_endpoint_verification": ["/mcp", "/sse"],
@@ -54,7 +54,7 @@ def semantic_policy(*, status: str = "compiled", target_client: str = "codex", s
     return {
         "policy_id": "project-inspector-policy",
         "schema_uri": "contextforge://control-plane/schemas/semantic-tool-policy/v1",
-        "service_binding": "project-inspector:context-portal",
+        "service_binding": "project-inspector:cf-controlplane",
         "risk_classes": ["read_only"],
         "scope_impacts": ["none"],
         "approval_gates": [],
@@ -91,7 +91,7 @@ def conformance(*, status: str = "passing_conformance", client_name: str = "code
         "status": status,
         "decision": "allow_target_client_proof" if status == "passing_conformance" else "block_target_client_proof",
         "project_root": PROJECT_ROOT,
-        "service_binding": "project-inspector:context-portal",
+        "service_binding": "project-inspector:cf-controlplane",
         "blockers": [] if status == "passing_conformance" else [{"name": "list_tools_proof", "message": "missing"}],
         "generated_at": STAMP,
         "redaction_status": "passed",
@@ -104,7 +104,7 @@ def negative_checks(*, status: str = "passed") -> list[dict[str, Any]]:
             "check": "excluded_tool_absent",
             "layer": "contextforge_virtual_server",
             "probe": "readback_server_tools",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "virtual_server_id": "vs-project-inspector",
             "target_client": None,
             "tool_id": "cf-tool-set-root",
@@ -119,7 +119,7 @@ def negative_checks(*, status: str = "passed") -> list[dict[str, Any]]:
             "check": "excluded_tool_absent",
             "layer": "target_client",
             "probe": "list_tools_and_call_tool",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "virtual_server_id": "vs-project-inspector",
             "target_client": "codex",
             "tool_id": "cf-tool-set-root",
@@ -134,7 +134,7 @@ def negative_checks(*, status: str = "passed") -> list[dict[str, Any]]:
             "check": "compiled_association_exact_match",
             "layer": "contextforge_virtual_server",
             "probe": "readback_server_tools",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "virtual_server_id": "vs-project-inspector",
             "expected_tool_ids": ["cf-tool-root-info"],
             "status": status,
@@ -172,10 +172,10 @@ class ControlPlaneContextForgeBindingTests(unittest.TestCase):
     def test_registration_intent_preserves_contextforge_as_authority(self) -> None:
         intent = binding.build_contextforge_registration_intent(
             plan_id="plan-project-inspector",
-            service_binding="project-inspector:context-portal",
+            service_binding="project-inspector:cf-controlplane",
             contract_card=contract_card(),
-            backend_manifest_ref=ref("backend-manifests/project-inspector-context-portal"),
-            gateway_name="project-inspector-context-portal",
+            backend_manifest_ref=ref("backend-manifests/project-inspector-cf-controlplane"),
+            gateway_name="project-inspector-cf-controlplane",
             gateway_url="http://127.0.0.1:7890/mcp",
             upstream_transport="streamable_http",
             consent_receipt_refs=receipt_refs(),
@@ -191,10 +191,10 @@ class ControlPlaneContextForgeBindingTests(unittest.TestCase):
     def test_virtual_server_association_uses_compiled_policy_and_trace_requirements(self) -> None:
         intent = binding.build_virtual_server_association_intent(
             plan_id="plan-project-inspector",
-            service_binding="project-inspector:context-portal",
+            service_binding="project-inspector:cf-controlplane",
             contract_card=contract_card(),
-            virtual_server_name="project-inspector-context-portal-codex",
-            gateway_ref=ref("gateways/project-inspector-context-portal"),
+            virtual_server_name="project-inspector-cf-controlplane-codex",
+            gateway_ref=ref("gateways/project-inspector-cf-controlplane"),
             semantic_tool_policy=semantic_policy(),
             consent_receipt_refs=receipt_refs(),
             generated_at=STAMP,
@@ -255,10 +255,10 @@ class ControlPlaneContextForgeBindingTests(unittest.TestCase):
     def test_catalog_promotion_shared_identity_mutation_and_global_trust_bundling_block(self) -> None:
         promotion = binding.build_contextforge_registration_intent(
             plan_id="plan-project-inspector",
-            service_binding="project-inspector:context-portal",
+            service_binding="project-inspector:cf-controlplane",
             contract_card=contract_card(),
-            backend_manifest_ref=ref("backend-manifests/project-inspector-context-portal"),
-            gateway_name="project-inspector-context-portal",
+            backend_manifest_ref=ref("backend-manifests/project-inspector-cf-controlplane"),
+            gateway_name="project-inspector-cf-controlplane",
             gateway_url="http://127.0.0.1:7890/mcp",
             upstream_transport="streamable_http",
             requested_operation_class="catalog_promotion",
@@ -266,10 +266,10 @@ class ControlPlaneContextForgeBindingTests(unittest.TestCase):
         )
         shared_mutation = binding.build_virtual_server_association_intent(
             plan_id="plan-project-inspector",
-            service_binding="project-inspector:context-portal",
+            service_binding="project-inspector:cf-controlplane",
             contract_card=contract_card(instantiation_class="shared_canonical", mutates_shared=True),
-            virtual_server_name="project-inspector-context-portal-codex",
-            gateway_ref=ref("gateways/project-inspector-context-portal"),
+            virtual_server_name="project-inspector-cf-controlplane-codex",
+            gateway_ref=ref("gateways/project-inspector-cf-controlplane"),
             semantic_tool_policy=semantic_policy(),
             generated_at=STAMP,
         )
@@ -327,9 +327,9 @@ class ControlPlaneContextForgeBindingTests(unittest.TestCase):
         return binding.build_client_binding_intent(
             plan_id="plan-project-inspector",
             project_root=PROJECT_ROOT,
-            service_binding="project-inspector:context-portal",
+            service_binding="project-inspector:cf-controlplane",
             target_client="codex",
-            virtual_server_ref=ref("virtual-servers/project-inspector-context-portal-codex"),
+            virtual_server_ref=ref("virtual-servers/project-inspector-cf-controlplane-codex"),
             semantic_tool_policy=policy or semantic_policy(),
             conformance_result=conformance_result or conformance(),
             consent_receipt_refs=receipts or receipt_refs(),

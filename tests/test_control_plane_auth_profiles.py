@@ -15,7 +15,7 @@ import control_plane_authorization as authorization
 import control_plane_project_state as project_state
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 STAMP = "2026-05-30T23:00:00Z"
 FUTURE = "2026-05-31T23:00:00Z"
 PAST = "2026-05-29T23:00:00Z"
@@ -25,7 +25,7 @@ RAW_TOKEN = "Bearer " + ("T" * 32)
 def base_plan() -> dict[str, object]:
     state = {
         "meta": {"revision": 1},
-        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "context-portal"},
+        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "cf-controlplane"},
         "status": "uninitialized",
         "decisions": {},
         "services": {},
@@ -36,7 +36,7 @@ def base_plan() -> dict[str, object]:
         "schema_version": 1,
         "surface": "token_lifecycle",
         "planner": "control_plane_auth_profiles",
-        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "context-portal"},
+        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "cf-controlplane"},
         "plan_id": "token-lifecycle-fixture",
         "status": "planned_non_mutating",
         "mutation_allowed": False,
@@ -140,9 +140,9 @@ class ControlPlaneAuthProfileTests(unittest.TestCase):
     def test_local_assistant_token_profile_requires_least_privilege_negative_denials(self) -> None:
         token_profile = {
             "admin": False,
-            "allowed_virtual_servers": ["project-inspector:context-portal"],
+            "allowed_virtual_servers": ["project-inspector:cf-controlplane"],
             "allowed_workflows": ["read_only_inspection", "propose_project_init", "verify_project_binding"],
-            "allowed_operations": ["virtual_server:project-inspector:context-portal:list_tools"],
+            "allowed_operations": ["virtual_server:project-inspector:cf-controlplane:list_tools"],
             "denied_operations": sorted(profiles.FORBIDDEN_LOCAL_TOKEN_OPERATION_CLASSES),
             "negative_probes": [
                 {"operation": "catalog_crud", "allowed": False},
@@ -154,7 +154,7 @@ class ControlPlaneAuthProfileTests(unittest.TestCase):
         }
         decision = profiles.validate_local_assistant_token_profile(
             token_profile,
-            approved_virtual_servers=["project-inspector:context-portal"],
+            approved_virtual_servers=["project-inspector:cf-controlplane"],
         )
 
         self.assertEqual("allow", decision["decision"])
@@ -163,14 +163,14 @@ class ControlPlaneAuthProfileTests(unittest.TestCase):
     def test_local_assistant_token_profile_blocks_admin_catalog_token_and_unrelated_access(self) -> None:
         token_profile = {
             "is_admin": True,
-            "allowed_virtual_servers": ["project-inspector:context-portal", "other-project"],
+            "allowed_virtual_servers": ["project-inspector:cf-controlplane", "other-project"],
             "allowed_workflows": ["read_only_inspection", "remote_only_workflow"],
             "allowed_operations": ["catalog_crud", "token_admin", "unapproved_apply"],
             "negative_probes": [{"operation": "catalog_crud", "allowed": True}],
         }
         decision = profiles.validate_local_assistant_token_profile(
             token_profile,
-            approved_virtual_servers=["project-inspector:context-portal"],
+            approved_virtual_servers=["project-inspector:cf-controlplane"],
         )
 
         self.assertEqual("block", decision["decision"])

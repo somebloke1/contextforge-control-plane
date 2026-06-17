@@ -27,7 +27,7 @@ import plan_codex_global_config_migration as codex_global_plan
 import plan_dirty_checkout_rebind as dirty_rebind
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
-import register_serena_context_portal_service as serena_registration
+import register_serena_cf_controlplane_service as serena_registration
 
 
 CONSENT_REFS = ["run/consent-receipts/receipt-project-local-config.json"]
@@ -71,7 +71,7 @@ class ProjectInitCommonTests(unittest.TestCase):
         self.assertEqual(root / "dev", common.validate_project_root(root / "dev", require_workspace=True))
 
     def test_symlink_escape_is_not_a_safe_workspace_project(self) -> None:
-        link = common.WORKSPACE_ROOT / "context-portal-test-symlink-escape"
+        link = common.WORKSPACE_ROOT / "cf-controlplane-test-symlink-escape"
         if link.exists() or link.is_symlink():
             link.unlink()
         try:
@@ -97,7 +97,7 @@ class ProjectInitCommonTests(unittest.TestCase):
                 common.write_project_env(root, {"SECRET_TOKEN": "nope"})
 
     def test_identity_is_deterministic_for_uid_and_root(self) -> None:
-        root = Path("/home/dgk/workspace/context-portal").resolve()
+        root = Path("/home/dgk/workspace/legacy-controlplane-archive").resolve()
         self.assertEqual(common.project_root_hash(root, uid=1000), common.project_root_hash(root, uid=1000))
         self.assertNotEqual(common.project_root_hash(root, uid=1000), common.project_root_hash(root, uid=1001))
 
@@ -130,7 +130,7 @@ class ProjectInitReadinessInspectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             primary = base / "clean-dev-root"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             primary.mkdir()
             legacy.mkdir()
 
@@ -171,7 +171,7 @@ class ProjectInitReadinessInspectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             primary = base / "clean-dev-root"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             primary.mkdir()
             legacy.mkdir()
             project_state.write_state_atomic(primary, project_state.default_state(primary, status="initialized"))
@@ -268,8 +268,9 @@ class ProjectInitReadinessInspectorTests(unittest.TestCase):
 
     def test_activation_artifacts_report_legacy_config_without_writing(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
-            root = Path(tmp).resolve()
-            legacy = root.parent / "contextforge-slices" / "repo-local-skills-and-governance" / "missing-fixture-root"
+            root = Path(tmp).resolve() / "cf-controlplane"
+            root.mkdir()
+            legacy = project_state.WORKSPACE_ROOT / "legacy-controlplane-slices" / "repo-local-skills-and-governance" / "missing-fixture-root"
             write_fake_python(root)
             project_state.write_state_atomic(root, project_state.default_state(root, status="initialized"))
             config = root / ".codex" / "config.toml"
@@ -282,10 +283,11 @@ args = ["{legacy}/scripts/contextforge_helper_mcp.py"]
 """.lstrip(),
                 encoding="utf-8",
             )
-            legacy_serena = root / "server-instances" / "serena-context-portal"
+            identity = common.project_identity(root)
+            legacy_serena = root / "server-instances" / identity.instance_slug
             legacy_serena.mkdir(parents=True)
             (legacy_serena / "instance.json").write_text(
-                json.dumps({"canonical_project_root": str(legacy), "name": "serena-context-portal"}),
+                json.dumps({"canonical_project_root": str(legacy), "name": identity.instance_slug}),
                 encoding="utf-8",
             )
             before = {
@@ -310,8 +312,7 @@ args = ["{legacy}/scripts/contextforge_helper_mcp.py"]
         self.assertEqual("blocked", report["status"])
         self.assertIn("codex_config_legacy_root_references", report["blockers"])
         self.assertIn("codex_config_missing_mcp_path", report["blockers"])
-        self.assertIn("serena_project_instance_not_provisioned", report["warnings"])
-        self.assertIn("legacy_serena_project_instance_present", report["warnings"])
+        self.assertIn("serena_project_instance_root_mismatch", report["warnings"])
         artifacts = report["activation_artifacts"]
         self.assertTrue(artifacts["python_environment"]["is_executable"])
         self.assertEqual(1, artifacts["codex_config"]["mcp_server_count"])
@@ -323,7 +324,7 @@ args = ["{legacy}/scripts/contextforge_helper_mcp.py"]
             root = Path(tmp).resolve()
             write_fake_python(root)
             state = project_state.default_state(root, status="initialized")
-            state["project"]["name"] = "context-portal"
+            state["project"]["name"] = "cf-controlplane"
             project_state.write_state_atomic(root, state)
 
             report = readiness.build_report(
@@ -345,7 +346,7 @@ args = ["{legacy}/scripts/contextforge_helper_mcp.py"]
             result = serena_registration.main([])
 
         self.assertEqual(2, result)
-        self.assertIn("Refusing to mutate legacy/live ContextForge Serena registration", stderr.getvalue())
+        self.assertIn("Refusing to mutate live ContextForge Serena registration", stderr.getvalue())
         read_env.assert_not_called()
         token.assert_not_called()
         ensure_gateway.assert_not_called()
@@ -356,7 +357,7 @@ class DirtyCheckoutRebindPlannerTests(unittest.TestCase):
         (target / ".codex" / "skills" / "contextforge-project-init").mkdir(parents=True)
         (target / ".project").mkdir(parents=True)
         (target / ".serena").mkdir(parents=True)
-        (target / "server-instances" / "serena-context-portal").mkdir(parents=True)
+        (target / "server-instances" / "serena-cf-controlplane-d46fe58a2a20").mkdir(parents=True)
         (target / "server-instances" / "mentality").mkdir(parents=True)
         (target / "scripts").mkdir(parents=True)
 
@@ -364,7 +365,7 @@ class DirtyCheckoutRebindPlannerTests(unittest.TestCase):
             f"""
 [mcp_servers.serena]
 command = "{legacy}/.venv/bin/python"
-args = ["{legacy}/scripts/contextforge_mcp_wrapper.py", "serena_context_portal_server"]
+args = ["{legacy}/scripts/contextforge_mcp_wrapper.py", "serena_cf_controlplane_d46fe58a2a20_server"]
 cwd = "{legacy}"
 """.lstrip(),
             encoding="utf-8",
@@ -375,10 +376,10 @@ cwd = "{legacy}"
             json.dumps(written_legacy, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        (target / "server-instances" / "serena-context-portal" / "instance.json").write_text(
+        (target / "server-instances" / "serena-cf-controlplane-d46fe58a2a20" / "instance.json").write_text(
             json.dumps(
                 {
-                    "name": "serena-context-portal",
+                    "name": "serena-cf-controlplane-d46fe58a2a20",
                     "canonical_project_root": str(legacy),
                     "codex_config_path": str(legacy / ".codex" / "config.toml"),
                     "scope": {"workspace_root": str(legacy)},
@@ -388,19 +389,19 @@ cwd = "{legacy}"
             + "\n",
             encoding="utf-8",
         )
-        (target / "server-instances" / "serena-context-portal" / "run-server.sh").write_text(
+        (target / "server-instances" / "serena-cf-controlplane-d46fe58a2a20" / "run-server.sh").write_text(
             f'#!/usr/bin/env bash\nexec serena-mcp-server --project "{legacy}"\n',
             encoding="utf-8",
         )
-        (target / "server-instances" / "serena-context-portal" / "lsp.env").write_text(
-            f'PATH="{legacy}/server-instances/serena-context-portal/lsp-tools/bin:$PATH"\n',
+        (target / "server-instances" / "serena-cf-controlplane-d46fe58a2a20" / "lsp.env").write_text(
+            f'PATH="{legacy}/server-instances/serena-cf-controlplane-d46fe58a2a20/lsp-tools/bin:$PATH"\n',
             encoding="utf-8",
         )
         (target / "server-instances" / "mentality" / "instance.json").write_text(
             json.dumps({"backend": {"working_directory": str(legacy)}}, indent=2) + "\n",
             encoding="utf-8",
         )
-        (target / ".serena" / "project.yml").write_text('project_name: "context-portal"\n', encoding="utf-8")
+        (target / ".serena" / "project.yml").write_text('project_name: "cf-controlplane"\n', encoding="utf-8")
         (target / ".codex" / "skills" / "contextforge-project-init" / "SKILL.md").write_text(
             f"Use project_root={legacy}\n",
             encoding="utf-8",
@@ -409,12 +410,12 @@ cwd = "{legacy}"
             f'PROJECT_ROOT = "{legacy}"\n',
             encoding="utf-8",
         )
-        (target / "scripts" / "register_serena_context_portal_service.py").write_text(
+        (target / "scripts" / "register_serena_cf_controlplane_service.py").write_text(
             f'DESCRIPTION = "Serena scoped to {legacy}"\n',
             encoding="utf-8",
         )
         (target / "scripts" / "install_user_systemd.py").write_text(
-            'UNIT = "contextforge-serena-context-portal.service"\n',
+            'UNIT = "contextforge-serena-cf-controlplane-d46fe58a2a20.service"\n',
             encoding="utf-8",
         )
 
@@ -422,7 +423,7 @@ cwd = "{legacy}"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "clean-root"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             self._write_minimal_surfaces(target, legacy)
@@ -462,11 +463,11 @@ cwd = "{legacy}"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "clean-root"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             self._write_minimal_surfaces(target, legacy)
-            (target / "scripts" / "register_serena_context_portal_service.py").unlink()
+            (target / "scripts" / "register_serena_cf_controlplane_service.py").unlink()
 
             report = dirty_rebind.build_report(
                 target_root=target,
@@ -483,7 +484,7 @@ cwd = "{legacy}"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "clean-root"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             self._write_minimal_surfaces(target, legacy)
@@ -514,7 +515,7 @@ cwd = "{legacy}"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "clean-root"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             self._write_minimal_surfaces(target, legacy)
@@ -587,7 +588,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -622,7 +623,7 @@ trusted_hash = "sha256:sessionstart"
         stale_hardcoded_readback = (
             "codex -C "
             + "/home/dgk/workspace/"
-            + "contextforge-slices/repo-local-skills-and-governance mcp list --json"
+            + "legacy-controlplane-slices/repo-local-skills-and-governance mcp list --json"
         )
         self.assertNotIn(
             stale_hardcoded_readback,
@@ -633,7 +634,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -665,7 +666,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -745,7 +746,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -767,7 +768,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -810,7 +811,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -839,7 +840,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -868,7 +869,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -894,7 +895,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -917,7 +918,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -949,7 +950,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -978,7 +979,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -1010,7 +1011,7 @@ trusted_hash = "sha256:sessionstart"
     def test_global_config_rollback_refuses_live_config_as_backup(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             legacy.mkdir()
             config = base / "codex-config.toml"
             self._write_global_config(config, legacy)
@@ -1031,7 +1032,7 @@ trusted_hash = "sha256:sessionstart"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "repo-local-skills-and-governance"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -1102,7 +1103,7 @@ trust_level = "trusted"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "cf-controlplane"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -1145,7 +1146,7 @@ trust_level = "trusted"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "cf-controlplane"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -1185,7 +1186,7 @@ trust_level = "trusted"
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
             target = base / "cf-controlplane"
-            legacy = base / "context-portal"
+            legacy = base / "legacy-controlplane-archive"
             target.mkdir()
             legacy.mkdir()
             config = base / "codex-config.toml"
@@ -1340,11 +1341,11 @@ class SerenaManagerTests(unittest.TestCase):
 
     def test_legacy_manifest_project_root_is_detected(self) -> None:
         data = {
-            "scope": {"workspace_root": "/home/dgk/workspace/context-portal"},
+            "scope": {"workspace_root": "/home/dgk/workspace/legacy-controlplane-archive"},
             "backend": {"args": ["--project", "/wrong"]},
         }
         self.assertEqual(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             serena_manager.manifest_project_root(data),
         )
 
@@ -1841,7 +1842,7 @@ class SerenaManagerTests(unittest.TestCase):
             init_hook.resource_record_is_fresh(
                 {
                     "id": "resource-v1",
-                    "uri": "contextforge://context-portal/project-init/v1",
+                    "uri": "contextforge://cf-controlplane/project-init/v1",
                     "tags": ["contextforge", "project-init", common.PROMPT_VERSION],
                 }
             )

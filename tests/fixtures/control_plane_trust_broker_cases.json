@@ -1,5 +1,5 @@
 {
-  "project_root": "/home/dgk/workspace/context-portal",
+  "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
   "resolved_at": "2026-05-30T22:30:00Z",
   "client": "codex",
   "trust_surface": "codex_project_root_trust",
@@ -8,7 +8,7 @@
       "name": "trusted_codex_project_root",
       "evidence": {
         "state": "trusted",
-        "root": "/home/dgk/workspace/context-portal",
+        "root": "/home/dgk/workspace/legacy-controlplane-archive",
         "client": "codex",
         "trust_surface": "codex_project_root_trust",
         "last_probe": "codex-trust-readback"
@@ -23,7 +23,7 @@
       "name": "untrusted_codex_project_root",
       "evidence": {
         "state": "untrusted",
-        "root": "/home/dgk/workspace/context-portal",
+        "root": "/home/dgk/workspace/legacy-controlplane-archive",
         "client": "codex",
         "trust_surface": "codex_project_root_trust",
         "last_probe": "codex-trust-readback"
@@ -38,7 +38,7 @@
       "name": "declined_codex_project_root",
       "evidence": {
         "state": "declined",
-        "root": "/home/dgk/workspace/context-portal",
+        "root": "/home/dgk/workspace/legacy-controlplane-archive",
         "client": "codex",
         "trust_surface": "codex_project_root_trust",
         "last_probe": "codex-trust-readback"
@@ -53,7 +53,7 @@
       "name": "pending_restart_codex_project_root",
       "evidence": {
         "state": "trusted_requires_restart",
-        "root": "/home/dgk/workspace/context-portal",
+        "root": "/home/dgk/workspace/legacy-controlplane-archive",
         "client": "codex",
         "trust_surface": "codex_project_root_trust",
         "last_probe": "codex-trust-readback"

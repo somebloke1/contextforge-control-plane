@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "project_root": "/home/dgk/workspace/context-portal",
+  "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
   "resolved_at": "2026-05-30T00:00:00Z",
   "cases": [
     {
@@ -160,7 +160,7 @@
         "scope": {
           "static_repo_local": true,
           "scope_type": "repo_governance",
-          "workspace_root": "/home/dgk/workspace/context-portal",
+          "workspace_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "governance_authority": [
             "DECISIONS.md",
             "ABEYANT_INTENTIONS.md",
@@ -182,13 +182,13 @@
       }
     },
     {
-      "name": "serena_context_portal_instance_per_project_fixture_only",
+      "name": "serena_cf_controlplane_instance_per_project_fixture_only",
       "description": "Serena remains project-instance scoped, but this fixture must not provision or mutate anything.",
       "expectation": "instance_per_project",
       "evidence": {
         "type": "real_local_manifest",
         "source_paths": [
-          "server-instances/serena-context-portal/instance.json",
+          "server-instances/serena-cf-controlplane-d46fe58a2a20/instance.json",
           "CONTEXTFORGE_SERENA_PROJECT_INIT_HANDOFF.md"
         ],
         "notes": [
@@ -198,25 +198,25 @@
       },
       "descriptor": {
         "service_family": "serena",
-        "canonical_service": "serena-context-portal",
+        "canonical_service": "serena-cf-controlplane-d46fe58a2a20",
         "service": "serena",
         "name": "serena",
-        "slug": "serena-context-portal",
+        "slug": "serena-cf-controlplane-d46fe58a2a20",
         "instantiation_class": "instance_per_project",
         "native_transports": [
           "streamable_http"
         ],
         "scope": {
           "scope_type": "single_workspace_code_intelligence",
-          "workspace_root": "/home/dgk/workspace/context-portal"
+          "workspace_root": "/home/dgk/workspace/legacy-controlplane-archive"
         },
         "contextforge": {
           "gateway": {
-            "name": "serena-context-portal",
+            "name": "serena-cf-controlplane-d46fe58a2a20",
             "transport": "STREAMABLEHTTP"
           },
           "virtual_server": {
-            "name": "serena_context_portal_server",
+            "name": "serena_cf_controlplane_d46fe58a2a20_server",
             "grouping": "canonical"
           }
         },

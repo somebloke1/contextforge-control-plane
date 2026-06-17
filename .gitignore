@@ -51,15 +51,15 @@ server-instances/*/run/
 server-instances/*/logs/
 server-instances/*/*.local.json
 server-instances/serena-*/
-!server-instances/serena-context-portal/
-!server-instances/serena-context-portal/README.md
-!server-instances/serena-context-portal/instance.json
-!server-instances/serena-context-portal/lsp.env
-!server-instances/serena-context-portal/lsp-tools/
-server-instances/serena-context-portal/lsp-tools/*
-!server-instances/serena-context-portal/lsp-tools/manifest.json
-!server-instances/serena-context-portal/probe.sh
-!server-instances/serena-context-portal/run-server.sh
+!server-instances/serena-cf-controlplane-d46fe58a2a20/
+!server-instances/serena-cf-controlplane-d46fe58a2a20/README.md
+!server-instances/serena-cf-controlplane-d46fe58a2a20/instance.json
+!server-instances/serena-cf-controlplane-d46fe58a2a20/lsp.env
+!server-instances/serena-cf-controlplane-d46fe58a2a20/lsp-tools/
+server-instances/serena-cf-controlplane-d46fe58a2a20/lsp-tools/*
+!server-instances/serena-cf-controlplane-d46fe58a2a20/lsp-tools/manifest.json
+!server-instances/serena-cf-controlplane-d46fe58a2a20/probe.sh
+!server-instances/serena-cf-controlplane-d46fe58a2a20/run-server.sh
 
 # MCP/client generated local state
 .code_index/

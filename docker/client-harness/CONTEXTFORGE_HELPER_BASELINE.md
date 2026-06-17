@@ -118,4 +118,4 @@ This contract does not approve or perform:
 - user-global OpenCode/Pi config mutation.
 - helper approve/apply/recovery state mutation.
 - `.project/context_forge_state.json` mutation.
-- legacy `/home/dgk/workspace/context-portal` mutation.
+- legacy `/home/dgk/workspace/legacy-controlplane-archive` mutation.

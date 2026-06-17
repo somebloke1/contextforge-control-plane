@@ -14,13 +14,13 @@ import control_plane_project_planner as planner
 import control_plane_project_state as project_state
 
 
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 
 
 def base_state(*, status: str = "uninitialized", decisions: dict[str, object] | None = None) -> dict[str, object]:
     return {
         "meta": {"revision": 7},
-        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "context-portal"},
+        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "cf-controlplane"},
         "status": status,
         "decisions": decisions or {},
         "services": {},
