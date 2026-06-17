@@ -266,6 +266,7 @@ def _raw_state_summary(root: Path, raw_state: Mapping[str, Any] | None, read_err
         "read_error": None,
         "raw_status": raw_state.get("status"),
         "meta_revision": (raw_state.get("meta") or {}).get("revision") if isinstance(raw_state.get("meta"), Mapping) else None,
+        "project_name": project.get("name"),
         "project_root": project.get("root"),
         "project_root_hash": project.get("root_hash"),
         "root_match": project_state.root_match_details(dict(raw_state), root),
@@ -388,6 +389,8 @@ def _readiness_findings(
     primary_status = str(primary.get("readiness_status") or "")
     state = primary.get("state") if isinstance(primary.get("state"), Mapping) else {}
     root_match = state.get("root_match") if isinstance(state.get("root_match"), Mapping) else {}
+    expected_project_name = Path(primary_root).name if primary_root else ""
+    state_project_name = str(state.get("project_name") or "")
     state_client_bindings = [
         binding
         for client_state in (state.get("client_states") or {}).values()
@@ -411,6 +414,10 @@ def _readiness_findings(
         warnings.append("primary_project_state_missing")
     elif primary_status != "valid":
         warnings.append(f"primary_project_state_{primary_status or 'unknown'}")
+
+    if state_project_name and expected_project_name and state_project_name != expected_project_name:
+        blockers.append("project_state_name_mismatch")
+        next_actions.append("Retire stale project.name values through a focused project-state migration before claiming activation readiness.")
 
     compare_roots = roots[1:]
     if any(str(root.get("readiness_status") or "") == "valid" for root in compare_roots):

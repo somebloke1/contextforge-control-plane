@@ -418,13 +418,16 @@ Status as of branch `codex/issue-37-activation-readiness`:
   `/home/dgk/workspace/cf-controlplane`, and
   `.project/context_forge_state.json` records the `cf-controlplane` root;
 - helper/readiness evidence reports no active old-root config blockers;
-- `.project/context_forge_state.json` revision 12 marks project status
+- `.project/context_forge_state.json` revision 13 marks project status
   `initialized`, Codex activation `verified`, and validation `passed` after an
   operator-directed state repair because the helper refused a redundant
-  validation record for a non-pending job;
+  validation record for a non-pending job, followed by a delegated-review
+  repair of stale `project.name` metadata;
 - Serena remains a compatibility decision: the existing
   `server-instances/serena-context-portal/**` files are rooted at
-  `cf-controlplane` but retain the old compatibility slug and tool names.
+  `cf-controlplane` but retain the old compatibility slug and tool names; the
+  paired registration helper is fail-closed unless a future approved slice
+  passes an explicit live-registration flag.
 
 Activation-readiness evidence on this branch:
 
@@ -435,7 +438,7 @@ Activation-readiness evidence on this branch:
   /home/dgk/workspace/cf-controlplane --client-type codex --no-processes`
   reports no blockers and records only the Serena provisioning and
   compatibility-identifier warnings;
-- `tests.test_project_init_scripts -v` ran 72 tests OK,
+- `tests.test_project_init_scripts -v` ran 74 tests OK,
   `tests.test_project_init_activation_workflow -v` ran 78 tests OK,
   `tests.test_control_plane_project_state -v` ran 31 tests OK, script
   `py_compile` passed, and `git diff --check` passed;

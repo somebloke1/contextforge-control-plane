@@ -26,6 +26,7 @@ import plan_codex_global_config_migration as codex_global_plan
 import plan_dirty_checkout_rebind as dirty_rebind
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
+import register_serena_context_portal_service as serena_registration
 
 
 CONSENT_REFS = ["run/consent-receipts/receipt-project-local-config.json"]
@@ -315,6 +316,38 @@ args = ["{legacy}/scripts/contextforge_helper_mcp.py"]
         self.assertEqual(1, artifacts["codex_config"]["mcp_server_count"])
         self.assertTrue(artifacts["codex_config"]["mcp_servers"][0]["legacy_bound"])
         self.assertEqual("serena", artifacts["serena_project_instance"]["expected"]["service_binding"].split(":", 1)[0])
+
+    def test_project_name_mismatch_blocks_readiness(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            write_fake_python(root)
+            state = project_state.default_state(root, status="initialized")
+            state["project"]["name"] = "context-portal"
+            project_state.write_state_atomic(root, state)
+
+            report = readiness.build_report(
+                project_root=root,
+                client_types=("codex",),
+                include_processes=False,
+            )
+
+        self.assertEqual("blocked", report["status"])
+        self.assertIn("project_state_name_mismatch", report["blockers"])
+
+    def test_serena_compatibility_registration_refuses_live_mutation_by_default(self) -> None:
+        with (
+            mock.patch.object(serena_registration.gateway, "_read_env") as read_env,
+            mock.patch.object(serena_registration.gateway, "_token") as token,
+            mock.patch.object(serena_registration, "ensure_gateway") as ensure_gateway,
+            contextlib.redirect_stderr(io.StringIO()) as stderr,
+        ):
+            result = serena_registration.main([])
+
+        self.assertEqual(2, result)
+        self.assertIn("Refusing to mutate legacy/live ContextForge Serena registration", stderr.getvalue())
+        read_env.assert_not_called()
+        token.assert_not_called()
+        ensure_gateway.assert_not_called()
 
 
 class DirtyCheckoutRebindPlannerTests(unittest.TestCase):

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import sys
 import time
 import urllib.error
@@ -16,6 +17,7 @@ GATEWAY_NAME = "serena-context-portal"
 SERVER_NAME = "serena_context_portal_server"
 GATEWAY_URL = "http://localhost:9108/mcp"
 EXCLUDED_ORIGINAL_TOOL_NAMES = {"activate_project"}
+LIVE_REGISTRATION_APPROVAL = "--allow-live-legacy-serena-registration"
 
 
 def api_request(method: str, path: str, *, token: str, body: dict[str, Any] | None = None) -> Any:
@@ -137,7 +139,31 @@ def ensure_server(token: str, tool_ids: list[str]) -> dict[str, Any]:
     return api_request("POST", "/servers", token=token, body={"server": body, "visibility": "public"})
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        LIVE_REGISTRATION_APPROVAL,
+        action="store_true",
+        help=(
+            "Explicitly allow this compatibility helper to mutate the legacy/live "
+            "Serena ContextForge gateway/server records. Use only after a separate "
+            "operator approval for that live surface."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    if not args.allow_live_legacy_serena_registration:
+        print(
+            "Refusing to mutate legacy/live ContextForge Serena registration. "
+            f"This compatibility helper is non-mutating by default; rerun with "
+            f"{LIVE_REGISTRATION_APPROVAL} only after explicit operator approval.",
+            file=sys.stderr,
+        )
+        return 2
+
     config = gateway._read_env(gateway.CONFIG_ENV)
     token = gateway._token(config["PLATFORM_ADMIN_EMAIL"], config["PLATFORM_ADMIN_PASSWORD"])
 

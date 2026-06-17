@@ -138,11 +138,11 @@
     "created_at": "2026-05-31T00:52:51Z",
     "last_audit_record": null,
     "last_plan_id": "project-init-activation-9cf2603a77b620fb",
-    "revision": 12,
+    "revision": 13,
     "schema_uri": "contextforge://control-plane/project-state/v1",
     "schema_version": 1,
-    "updated_at": "2026-06-17T09:34:19Z",
-    "updated_by": "operating_agent_user_directed_validation_marker"
+    "updated_at": "2026-06-17T10:00:48Z",
+    "updated_by": "operating_agent_project_name_repair"
   },
   "migration": {
     "client_config_migrations": {
@@ -173,7 +173,7 @@
   "open_items": [],
   "project": {
     "display_root": null,
-    "name": "context-portal",
+    "name": "cf-controlplane",
     "root": "/home/dgk/workspace/cf-controlplane",
     "root_hash": "d46fe58a2a2061e88f722eb5d4e2f546fd09e6d46d4f9f4410c0ad40e65572cf"
   },
@@ -715,7 +715,7 @@
           "contextforge-service-1c0fb210b9aa8a8797287e69"
         ],
         "status": "validation_pending",
-        "updated_at": "2026-06-17T09:34:19Z",
+        "updated_at": "2026-06-17T10:00:48Z",
         "validation_status": "pending"
       },
       "codex": {
@@ -738,7 +738,7 @@
           "contextforge-service-cb9b90887f519a07988356c9"
         ],
         "status": "verified",
-        "updated_at": "2026-06-17T09:34:19Z",
+        "updated_at": "2026-06-17T10:00:48Z",
         "validation_status": "passed",
         "x_operator_direction": "user explicitly instructed the operating agent on 2026-06-17 to mark project-local activation validated and handle deeper validation separately"
       }

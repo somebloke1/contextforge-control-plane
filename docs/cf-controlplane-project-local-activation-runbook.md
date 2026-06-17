@@ -46,11 +46,12 @@ surface was exercised.
   reports no blockers for activation-readiness, with remaining warnings for
   Serena provisioning and compatibility identifiers.
 - `.project/context_forge_state.json` is rooted at
-  `/home/dgk/workspace/cf-controlplane` and revision 12 marks the Codex
+  `/home/dgk/workspace/cf-controlplane` and revision 13 marks the Codex
   project-local activation state `initialized`, with the current Codex job
-  `verified` and validation status `passed`.
+  `verified` and validation status `passed`; `project.name` is
+  `cf-controlplane`.
 - Regression evidence for the activation-readiness branch:
-  `tests.test_project_init_scripts -v` ran 72 tests OK,
+  `tests.test_project_init_scripts -v` ran 74 tests OK,
   `tests.test_project_init_activation_workflow -v` ran 78 tests OK,
   `tests.test_control_plane_project_state -v` ran 31 tests OK,
   `py_compile` passed for the touched scripts, and `git diff --check` passed.
@@ -67,7 +68,7 @@ surface was exercised.
 | `.codex/skills/contextforge-project-init/**` | Must use `cf-controlplane` root for future helper flows | Track source corrections. |
 | `.codex/skills/contextforge-governance/references/ledger-shape.md` | Must use `cf-controlplane` as the repository path template | Track source correction. |
 | `.codex/config.toml` | Project-local activation surface | Retargeted on `codex/issue-37-activation-readiness`; `codex -C ... mcp list --json` reads expected project-local entries. |
-| `.project/context_forge_state.json` | Helper-owned project-init state | Rooted at `cf-controlplane`; revision 12 marks Codex project-local activation verified/passed per operator-directed state repair after helper refused a redundant validation record. |
+| `.project/context_forge_state.json` | Helper-owned project-init state | Rooted at `cf-controlplane`; revision 13 marks Codex project-local activation verified/passed and repairs stale project naming after delegated review. |
 | `server-instances/serena-context-portal/**` | Compatibility Serena evidence with `cf-controlplane` root | Do not silently rename. Classify as compatibility or replace with a generated `serena-cf-controlplane-<hash>` instance in a later approved slice. |
 | `contextforge://context-portal/...` resource ids | Compatibility decision pending | Do not silently rename. Record whether retained as compatibility ids or migrated. |
 | Runtime env/evidence/trust/OAuth/hook-state | Local-only runtime state | Do not copy into Git. Recreate or recapture only after explicit approval. |
@@ -84,8 +85,8 @@ Before claiming issue #37 complete, the operating agent should prove:
    branch evidence: no active config references remain.
 3. `.project/context_forge_state.json` represents `cf-controlplane`, or the
    helper reports a clear recovery/activation plan for reaching that state.
-   Current branch evidence: root/root hash match `cf-controlplane`; state is
-   `initialized` with Codex activation `verified`/`passed`.
+   Current branch evidence: root/root hash/name match `cf-controlplane`; state
+   is `initialized` with Codex activation `verified`/`passed`.
 4. The Serena project instance state is either regenerated for
    `cf-controlplane` or explicitly retained as legacy compatibility evidence.
    Current branch evidence: retained as compatibility evidence only; no new
