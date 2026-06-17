@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "project_root": "/home/dgk/workspace/cf-controlplane",
+  "cases": [
+    {
+      "name": "serena_project_scoped_stdio_dev_docker_gate",
+      "descriptor": {
+        "candidate_service": "serena",
+        "operator_goal": "Provide project-scoped code intelligence through ContextForge for cf-controlplane.",
+        "source_evidence": [
+          {
+            "type": "local_path",
+            "ref": "server-instances/serena-cf-controlplane-d46fe58a2a20/instance.json"
+          },
+          {
+            "type": "issue",
+            "ref": "#50"
+          }
+        ],
+        "classification": {
+          "plan_type": "dev_docker_proof",
+          "localization_type": "project_scoped",
+          "functional_type": "code_intelligence",
+          "transport_type": "stdio",
+          "state_type": "project_metadata",
+          "approval_type": "docker_dev_surface"
+        },
+        "feasibility": {
+          "confidence": "medium",
+          "notes": [
+            "Serena is project-scoped and must not be treated as a shared global service."
+          ]
+        },
+        "footprint_plan": {
+          "service_slug": "serena-cf-controlplane-d46fe58a2a20",
+          "files": [
+            "server-instances/serena-cf-controlplane-d46fe58a2a20/"
+          ],
+          "docker_surfaces": [
+            "ContextForge dev Docker",
+            "Pi client Docker",
+            "OpenCode client Docker"
+          ],
+          "tests": [
+            "tests/test_project_init_scripts.py"
+          ]
+        }
+      }
+    },
+    {
+      "name": "native_http_shared_docs_source_only",
+      "descriptor": {
+        "candidate_service": "docs-search",
+        "operator_goal": "Expose a shared documentation lookup service through ContextForge.",
+        "source_evidence": [
+          {
+            "type": "upstream_doc",
+            "ref": "https://example.invalid/docs-search/mcp"
+          }
+        ],
+        "classification": {
+          "plan_type": "source_only_scaffolding",
+          "localization_type": "shared_canonical",
+          "functional_type": "search_retrieval",
+          "transport_type": "streamable_http",
+          "state_type": "stateless",
+          "approval_type": "source_only"
+        }
+      }
+    },
+    {
+      "name": "missing_evidence_prompts_questions",
+      "descriptor": {
+        "candidate_service": "unknown-service",
+        "operator_goal": "Investigate a possible MCP service.",
+        "api_key": "plain-test-value"
+      }
+    }
+  ]
+}
