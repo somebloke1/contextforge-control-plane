@@ -139,3 +139,8 @@ W12-C is documentation and evidence indexing only. It does not mark D17 or Wave
 - Accepted blocker remediation, if any.
 - Root update of D17 only after W12-QA/root gate passes.
 - Wave 13 governance closeout and release readiness for D18.
+
+Current status authority: this section is historical Wave 12-C gate context.
+`release-readiness-report.md` is the current D17/D18 authority and records
+D17 complete after Wave 12 QA/root adjudication, with D18 pending W13-QA/root
+adjudication.
