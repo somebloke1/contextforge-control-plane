@@ -41,6 +41,7 @@ from project_init_common import (
 
 
 PORT_RANGE = range(9110, 9200)
+OPERATOR_RESERVED_PORTS = frozenset({9108})
 EXCLUDED_ORIGINAL_TOOL_NAMES = {"activate_project"}
 OWNER = "admin@contextforge.dev"
 VISIBILITY = "public"
@@ -747,6 +748,12 @@ def manifest_project_root(data: dict[str, Any]) -> str | None:
 
 def reserve_port(preferred: int | None = None) -> int:
     used = used_manifest_ports()
+    used.update(OPERATOR_RESERVED_PORTS)
+    if preferred in OPERATOR_RESERVED_PORTS:
+        raise RuntimeError(
+            f"Serena port {preferred} is reserved for the operator singleton "
+            "serena-context-portal and cannot be assigned to a per-project instance"
+        )
     if preferred is not None and preferred not in used and not socket_port_open(preferred):
         return preferred
     for port in PORT_RANGE:
