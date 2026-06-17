@@ -1,0 +1,171 @@
+name: contextforge-client-harness
+
+x-client-common: &client-common
+  tty: false
+  stdin_open: false
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - ./workspace:/workspace
+    - ./evidence:/evidence
+
+services:
+  base:
+    image: contextforge-client-base:bookworm
+    build:
+      context: ./base
+      args:
+        NODE_MAJOR: "${NODE_MAJOR:-24}"
+    profiles: ["build-only"]
+
+  codex-cli:
+    <<: *client-common
+    image: contextforge-client-codex-cli:${CODEX_CLI_VERSION:-latest}
+    build:
+      context: ./codex-cli
+      args:
+        BASE_IMAGE: contextforge-client-base:bookworm
+        CODEX_CLI_VERSION: "${CODEX_CLI_VERSION:-latest}"
+    volumes:
+      - codex-cli-home:/home/agent
+      - ./workspace:/workspace
+      - ./evidence:/evidence
+
+  codex-cli-authenticated:
+    <<: *client-common
+    image: contextforge-client-codex-cli:authenticated
+
+  claude-code:
+    <<: *client-common
+    image: contextforge-client-claude-code:${CLAUDE_CODE_VERSION:-latest}
+    build:
+      context: ./claude-code
+      args:
+        BASE_IMAGE: contextforge-client-base:bookworm
+        CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-latest}"
+    volumes:
+      - claude-code-home:/home/agent
+      - ./workspace:/workspace
+      - ./evidence:/evidence
+
+  gemini-cli:
+    <<: *client-common
+    image: contextforge-client-gemini-cli:${GEMINI_CLI_VERSION:-latest}
+    build:
+      context: ./gemini-cli
+      args:
+        BASE_IMAGE: contextforge-client-base:bookworm
+        GEMINI_CLI_VERSION: "${GEMINI_CLI_VERSION:-latest}"
+    environment:
+      GOOGLE_CLOUD_PROJECT: "${GOOGLE_CLOUD_PROJECT:-main-sunset-499523-m6}"
+      GOOGLE_CLOUD_LOCATION: "${GOOGLE_CLOUD_LOCATION:-us-central1}"
+      GOOGLE_GENAI_USE_VERTEXAI: "${GOOGLE_GENAI_USE_VERTEXAI:-true}"
+    volumes:
+      - gemini-cli-home:/home/agent
+      - ./workspace:/workspace
+      - ./evidence:/evidence
+
+  gemini-cli-authenticated:
+    <<: *client-common
+    image: contextforge-client-gemini-cli:authenticated
+    environment:
+      GOOGLE_CLOUD_PROJECT: "${GOOGLE_CLOUD_PROJECT:-main-sunset-499523-m6}"
+      GOOGLE_CLOUD_LOCATION: "${GOOGLE_CLOUD_LOCATION:-us-central1}"
+      GOOGLE_GENAI_USE_VERTEXAI: "${GOOGLE_GENAI_USE_VERTEXAI:-true}"
+
+  opencode:
+    <<: *client-common
+    image: contextforge-client-opencode:${OPENCODE_VERSION:-latest}
+    build:
+      context: ./opencode
+      args:
+        BASE_IMAGE: contextforge-client-base:bookworm
+        OPENCODE_VERSION: "${OPENCODE_VERSION:-latest}"
+    env_file:
+      - ./env/local-llama.env
+    environment:
+      OPENAI_API_KEY: "${LOCAL_LLAMA_KEY:-}"
+      LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
+      OPENCODE_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
+      LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
+      OPENCODE_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
+      LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
+      OPENCODE_CONFIG: /config/opencode/opencode.json
+    volumes:
+      - opencode-home:/home/agent
+      - ./config/opencode:/config/opencode:ro
+      - ./workspace:/workspace
+      - ./evidence:/evidence
+
+  opencode-alpine:
+    <<: *client-common
+    image: contextforge-client-opencode-alpine:${OPENCODE_VERSION:-latest}
+    build:
+      context: ./opencode-alpine
+      args:
+        OPENCODE_VERSION: "${OPENCODE_VERSION:-latest}"
+    env_file:
+      - ./env/local-llama.env
+    environment:
+      OPENAI_API_KEY: "${LOCAL_LLAMA_KEY:-}"
+      LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
+      OPENCODE_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
+      LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
+      OPENCODE_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
+      LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
+      OPENCODE_CONFIG: /config/opencode/opencode.json
+    volumes:
+      - opencode-alpine-home:/home/agent
+      - ./config/opencode:/config/opencode:ro
+      - ./workspace:/workspace
+      - ./evidence:/evidence
+
+  pi:
+    <<: *client-common
+    image: contextforge-client-pi:${PI_CODING_AGENT_VERSION:-latest}
+    build:
+      context: ./pi
+      args:
+        BASE_IMAGE: contextforge-client-base:bookworm
+        PI_CODING_AGENT_VERSION: "${PI_CODING_AGENT_VERSION:-latest}"
+    env_file:
+      - ./env/local-llama.env
+    environment:
+      LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
+      LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
+      LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
+      PI_CODING_AGENT_DIR: /home/agent/.pi/agent
+    volumes:
+      - pi-home:/home/agent
+      - ./config/pi:/config/pi:ro
+      - ./workspace:/workspace
+      - ./evidence:/evidence
+
+  pi-alpine:
+    <<: *client-common
+    image: contextforge-client-pi-alpine:${PI_CODING_AGENT_VERSION:-latest}
+    build:
+      context: ./pi-alpine
+      args:
+        PI_CODING_AGENT_VERSION: "${PI_CODING_AGENT_VERSION:-latest}"
+    env_file:
+      - ./env/local-llama.env
+    environment:
+      LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
+      LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
+      LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
+      PI_CODING_AGENT_DIR: /home/agent/.pi/agent
+    volumes:
+      - pi-alpine-home:/home/agent
+      - ./config/pi:/config/pi:ro
+      - ./workspace:/workspace
+      - ./evidence:/evidence
+
+volumes:
+  codex-cli-home:
+  claude-code-home:
+  gemini-cli-home:
+  opencode-home:
+  opencode-alpine-home:
+  pi-home:
+  pi-alpine-home:
