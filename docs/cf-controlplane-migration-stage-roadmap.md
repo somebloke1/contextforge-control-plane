@@ -462,6 +462,15 @@ global config still referenced that older clean-root helper path. The allowed
 next action is evidence capture or a concrete human approval/reload boundary,
 not implicit process termination or global config mutation.
 
+Docker integration is now tracked by issue #41. Stdio MCP servers need
+backend-local transceiver/gateway services for IP-to-IP communication with the
+ContextForge development Docker gateway; the gateway container should remain
+stock unless a concrete backend proves sidecar/transceiver locality is
+insufficient. The next Docker slice should start with a low-risk stdio backend
+such as `mentality`, expose `/mcp` and `/sse` on the reserved `9200-9299`
+range, register only with the dev Docker ContextForge surface, and validate
+through Pi/OpenCode client Docker surfaces.
+
 Non-actions preserved by this branch:
 
 - no global config change;

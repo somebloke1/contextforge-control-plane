@@ -147,6 +147,16 @@ path. Do not kill the process or rewrite global config as part of readback;
 route any required Codex Desktop project reload/new-session, hook trust, global
 config, or cleanup action through a concrete approval boundary.
 
+## Docker MCP Backend Boundary
+
+Issue #41 owns the dev Docker MCP backend/transceiver layer. Stdio MCP backends
+cannot be registered with the ContextForge dev Docker gateway through direct
+process-local stdio; they need a backend-local transceiver/gateway process that
+fronts stdio with packetized `/mcp` and `/sse` endpoints for IP-to-IP
+communication. Keep those services on the ContextForge development Docker
+surface, use the reserved `9200-9299` range, and continue to keep the
+legacy/live ContextForge surface read-only.
+
 ## Non-Actions
 
 Do not mutate the legacy checkout as part of this runbook. The legacy
