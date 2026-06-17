@@ -33,10 +33,17 @@ development Docker validation.
 ## Current Authority
 
 - Issue #37 is open and owns project-local operating-context activation.
-- Issue #31 is open and owns Codex runtime/project-context readback after the
-  global config migration.
+- Issue #31 is closed. It owns the completed global Codex config/helper cleanup
+  and runtime/project-context readback closure for this host. Final evidence is
+  issue #31 comment `4735909113`.
 - Issue #15 is closed. Its remaining practical concerns are now represented by
-  issue #37, issue #31, and the legacy archive policy.
+  issue #37, issue #50, and the legacy archive policy.
+- Issue #33 is closed. PR #47 merged the Serena operator-port guardrail, and
+  corrected closeout evidence is issue #33 comment `4736060615`.
+- Issue #41 is closed for the initial dev Docker MCP backend/transceiver layer.
+  The first stock transceiver path, OpenCode client Docker smoke, Pi client
+  Docker shim validation, and service-locality matrix are now merged. Corrected
+  closeout evidence is issue #41 comment `4736060708`.
 - PR #35, PR #36, PR #38, and PR #39 are merged. PR #39 merged the
   activation-readiness source-prep branch into `dev-root` at
   `5e336c66953ece50043d78a4ac70530980304531`.
@@ -60,9 +67,14 @@ development Docker validation.
 - PR #55 remains a draft project-init activation-job reconciliation slice unless
   explicitly promoted. It has current #4/#37 evidence, but does not retire the
   Serena provisioning or compatibility-identifier readiness warnings.
-- Issue #31 remains the owner for non-mutating Codex runtime/project-context
-  readback after the global config migration. Do not treat #37 source/readiness
-  packaging as proof of #31 runtime closure.
+- Issue #62 remains open and is packaged in draft PR #68 for source-only
+  Pi/OpenCode baseline helper launchers. Runtime Docker/client proof remains
+  separately approval-gated.
+- Issue #52 remains open and is packaged in draft PR #69 for the first
+  executable no-mutation service-onboarding record helper. It is source/docs/
+  tests/fixtures only and is not a long-running helper daemon.
+- Issue #50 remains open for canonical Serena runtime/service/client-visible
+  closure or an explicit validated compatibility decision.
 
 ## Current Calibration Evidence
 
@@ -183,8 +195,20 @@ approved provisioning juncture surfaces.
 
 ## Issue #31 Readback
 
-Use the read-only runtime inspector for current Codex runtime/project-context
-evidence:
+Issue #31 is closed. The final read-only runtime inspector evidence reported a
+clean target-root runtime after the approved global config/helper cleanup and
+exact-match stale helper process termination:
+
+```bash
+scripts/inspect_codex_runtime_readback.py \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --pretty
+```
+
+Final #31 evidence is issue #31 comment `4735909113`: `status: readback_clean`,
+no blockers, `foreign_count: 0`, and `legacy_count: 0`.
+
+Use the same inspector for future regression readback:
 
 ```bash
 scripts/inspect_codex_runtime_readback.py \
@@ -192,34 +216,32 @@ scripts/inspect_codex_runtime_readback.py \
   --config-path /home/dgk/.codex/config.toml
 ```
 
-The 2026-06-17 readback on `codex/issue-31-runtime-readback-plan` reported
-`status: blocked`. Both `codex mcp list --json` from the project cwd and
-`codex -C /home/dgk/workspace/cf-controlplane mcp list --json` had zero
-predecessor workspace or `legacy-controlplane-slices` transport references, but process
-inspection still found one live helper sourced from
-`/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance`.
-Global `~/.codex/config.toml` also still references that older clean-root helper
-path. Do not kill the process or rewrite global config as part of readback;
-route any required Codex Desktop project reload/new-session, hook trust, global
-config, or cleanup action through a concrete approval boundary.
+Future regressions should stop at the concrete boundary involved: Codex Desktop
+reload/new-session, hook trust/state, global config mutation, process cleanup,
+or client/runtime mutation. Do not convert this closed #31 state into broad
+authorization for unrelated runtime changes.
 
 ## Docker MCP Backend Boundary
 
-Issue #41 owns the dev Docker MCP backend/transceiver layer. Stdio MCP backends
-cannot be registered with the ContextForge dev Docker gateway through direct
-process-local stdio; they need a backend-local transceiver/gateway process that
-fronts stdio with packetized `/mcp` and `/sse` endpoints for IP-to-IP
-communication. Keep those services on the ContextForge development Docker
-surface, use the reserved `9200-9299` range, and continue to keep the
-legacy/live ContextForge surface read-only.
+Issue #41 is closed for the initial dev Docker MCP backend/transceiver layer.
+The merged layer proves the stock ContextForge bridge/transceiver path with the
+repo-local `mentality` stdio backend, ContextForge dev Docker registration,
+OpenCode client Docker smoke, and Pi client Docker shim validation. Future
+stdio MCP backends still cannot be registered with the ContextForge dev Docker
+gateway through direct process-local stdio; they need a backend-local
+transceiver/gateway process that fronts stdio with packetized `/mcp` and `/sse`
+endpoints for IP-to-IP communication. Keep those services on the ContextForge
+development Docker surface, use the reserved `9200-9299` range, and continue to
+keep the legacy/live ContextForge surface read-only.
 
 Pi is not a native MCP client. Pi validation must go through a Pi extension or
 API adapter surface, not direct `/mcp` or `/sse` consumption. The existing
 TypeScript global shim under `pi-extensions/contextforge-global-shim` is one
 candidate: it imports ContextForge virtual-server tools/prompts/resources and
 registers Pi-native `registerTool()` tools. A direct ContextForge API path is
-also acceptable if the stock API makes that simpler and stable enough. Issue
-#41 should evaluate those options before selecting the Pi validation adapter.
+also acceptable if the stock API makes that simpler and stable enough. #41 used
+the shim-first route; #62 now owns the remaining ordinary Pi/OpenCode baseline
+session availability gap.
 
 ## Non-Actions
 
