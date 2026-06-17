@@ -29,8 +29,10 @@ Current MVS status:
 
 - Wave 12 deterministic and inference evidence exists under ignored `run/`
   paths and is indexed by the runbook/checklist.
-- D17 remains pending until full W12 QA and root adjudication pass.
-- D18 remains pending for Wave 13 release-readiness work.
+- `docs/initiatives/contextforge-control-plane/release-readiness-report.md` is
+  the current D17/D18 status authority for this MVS track.
+- D0-D17 are complete after Wave 12 QA and root adjudication.
+- D18 remains pending W13-QA and root adjudication.
 - No artifact should claim live ContextForge/systemd/client endpoint proof
   unless a current probe or cited evidence artifact actually proves it.
 

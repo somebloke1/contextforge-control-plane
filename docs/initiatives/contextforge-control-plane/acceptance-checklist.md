@@ -2,9 +2,12 @@
 
 Run ID: `20260530T202154Z`
 
-This checklist maps the current Wave 12 evidence to the RFC/procedure
-acceptance criteria. It does not claim final acceptance. D17 remains pending
-until full W12-QA and root adjudication pass. D18 remains pending for Wave 13.
+This checklist maps Wave 12 evidence to the RFC/procedure acceptance criteria.
+It is historical Wave 12 gate evidence, not the current D17/D18 status
+authority. The current authority is
+`docs/initiatives/contextforge-control-plane/release-readiness-report.md`,
+which records D0-D17 complete after Wave 12 QA/root adjudication and D18
+pending W13-QA/root adjudication.
 
 ## Status Key
 
@@ -43,13 +46,12 @@ until full W12-QA and root adjudication pass. D18 remains pending for Wave 13.
 
 ## Remaining Gates
 
-- Full W12-QA must review W12-A, W12.z, and W12-C together.
-- Root must adjudicate W12-QA findings.
-- D17 must remain pending until the W12 root gate passes.
-- W13-A must apply only approved governance updates through the repository
-  governance tooling.
-- W13-B must produce the final release-readiness report.
-- W13-QA and final root acceptance remain pending.
+At the time this checklist was written, the remaining gates were W12-QA, root
+adjudication, W13 governance closeout, the final release-readiness report, and
+W13-QA/root acceptance. Those gates have advanced as recorded in
+`release-readiness-report.md`: D17 is complete, D18 remains pending W13-QA/root
+adjudication, and this checklist should be cited as Wave 12 historical
+evidence rather than current status authority.
 
 ## Out-Of-Scope Exclusions
 
