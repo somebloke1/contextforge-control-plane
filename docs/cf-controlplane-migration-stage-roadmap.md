@@ -423,11 +423,15 @@ Status as of branch `codex/issue-37-activation-readiness`:
   operator-directed state repair because the helper refused a redundant
   validation record for a non-pending job, followed by a delegated-review
   repair of stale `project.name` metadata;
-- Serena remains a compatibility decision: the existing
+- Serena remains a compatibility decision for this non-mutating slice, but
+  project-scoped Serena backend provisioning and the means to provision it
+  remain a hard requirement. The existing
   `server-instances/serena-context-portal/**` files are rooted at
   `cf-controlplane` but retain the old compatibility slug and tool names; the
   paired registration helper is fail-closed unless a future approved slice
-  passes an explicit live-registration flag.
+  passes an explicit live-registration flag. A later Serena/project-init slice
+  must generate a `cf-controlplane`-scoped backend or record an explicit
+  validated compatibility decision.
 
 Activation-readiness evidence on this branch:
 

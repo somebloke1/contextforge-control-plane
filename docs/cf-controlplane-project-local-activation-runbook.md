@@ -30,10 +30,12 @@ surface was exercised.
   global config migration.
 - Issue #15 is closed. Its remaining practical concerns are now represented by
   issue #37, issue #31, and the legacy archive policy.
-- PR #35 and PR #36 are merged. PR #38 is merged into `dev-root` at
-  `89dc9421d9b7f99a6b03869e88481ee318a308d9`.
-- Branch `codex/issue-37-activation-readiness` contains the next
-  activation-readiness transition from that merge commit.
+- PR #35, PR #36, PR #38, and PR #39 are merged. PR #39 merged the
+  activation-readiness source-prep branch into `dev-root` at
+  `5e336c66953ece50043d78a4ac70530980304531`.
+- Branch `codex/issue-31-runtime-readback-plan` contains the next
+  non-mutating runtime/project-context readback planning transition from that
+  merge commit.
 
 ## Current Calibration Evidence
 
@@ -69,7 +71,7 @@ surface was exercised.
 | `.codex/skills/contextforge-governance/references/ledger-shape.md` | Must use `cf-controlplane` as the repository path template | Track source correction. |
 | `.codex/config.toml` | Project-local activation surface | Retargeted on `codex/issue-37-activation-readiness`; `codex -C ... mcp list --json` reads expected project-local entries. |
 | `.project/context_forge_state.json` | Helper-owned project-init state | Rooted at `cf-controlplane`; revision 13 marks Codex project-local activation verified/passed and repairs stale project naming after delegated review. |
-| `server-instances/serena-context-portal/**` | Compatibility Serena evidence with `cf-controlplane` root | Do not silently rename. Classify as compatibility or replace with a generated `serena-cf-controlplane-<hash>` instance in a later approved slice. |
+| `server-instances/serena-context-portal/**` | Compatibility Serena evidence with `cf-controlplane` root | Do not silently rename. Serena backend provisioning and the means to provision it are an abeyant hard requirement, not optional. Classify as compatibility only until a later Serena/project-init slice generates `serena-cf-controlplane-<hash>` or records an explicit validated compatibility decision. |
 | `contextforge://context-portal/...` resource ids | Compatibility decision pending | Do not silently rename. Record whether retained as compatibility ids or migrated. |
 | Runtime env/evidence/trust/OAuth/hook-state | Local-only runtime state | Do not copy into Git. Recreate or recapture only after explicit approval. |
 
@@ -88,9 +90,10 @@ Before claiming issue #37 complete, the operating agent should prove:
    Current branch evidence: root/root hash/name match `cf-controlplane`; state
    is `initialized` with Codex activation `verified`/`passed`.
 4. The Serena project instance state is either regenerated for
-   `cf-controlplane` or explicitly retained as legacy compatibility evidence.
-   Current branch evidence: retained as compatibility evidence only; no new
-   Serena backend or service is provisioned.
+   `cf-controlplane` or explicitly retained as legacy compatibility evidence
+   under a GitHub-tracked Serena/project-init slice. Current branch evidence:
+   retained as compatibility evidence only; no new Serena backend or service is
+   provisioned. This defers a hard requirement; it does not retire it.
 5. Hook trust and project-local hook activation remain user-approved actions,
    not source-prep side effects.
 
@@ -116,9 +119,11 @@ Before claiming issue #37 complete, the operating agent should prove:
 ## Residual Risk
 
 This branch does not prove Codex Desktop project approval, hook trust, live
-wrapper process origin, OAuth state, ContextForge registry state, or Pi/OpenCode
-client behavior. Those are runtime/client readback gates for issue #31 or later
-focused branches.
+wrapper process origin, OAuth state, ContextForge registry state, Serena backend
+provisioning, or Pi/OpenCode client behavior. Those are runtime/client readback
+or Serena/project-init provisioning gates for issue #31 or later focused
+branches. Serena provisioning may remain parked only until the appropriate
+approved provisioning juncture surfaces.
 
 ## Non-Actions
 
