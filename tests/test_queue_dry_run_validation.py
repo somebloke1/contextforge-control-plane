@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import tempfile
 import unittest
@@ -78,9 +79,10 @@ class QueueDryRunValidationTests(unittest.TestCase):
         precompact_test = (REPO_ROOT / "tests" / "test_codex_precompact_continuity_hook.py").read_text(
             encoding="utf-8"
         )
+        expected_root = os.environ.get("CONTEXTFORGE_CONFIG_CONTRACT_ROOT", "/home/dgk/workspace/cf-controlplane")
 
-        self.assertIn('/home/dgk/workspace/cf-controlplane/.venv/bin/python', config)
-        self.assertIn('/home/dgk/workspace/cf-controlplane/scripts/contextforge_helper_mcp.py', config)
+        self.assertIn(f'{expected_root}/.venv/bin/python', config)
+        self.assertIn(f'{expected_root}/scripts/contextforge_helper_mcp.py', config)
         self.assertIn('"/home/dgk/workspace/cf-controlplane"', precompact_test)
         self.assertIn("CONTEXTFORGE_CONFIG_CONTRACT_ROOT", precompact_test)
         self.assertIn(
