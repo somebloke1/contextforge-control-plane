@@ -17,7 +17,11 @@ The legacy/live ContextForge surface is read-only for this runbook and for
 successor Docker/client work. Mutable ContextForge registration, endpoint, reset,
 and client-smoke experiments must target the isolated ContextForge development
 Docker surface plus Pi/OpenCode client Docker surfaces, not the legacy/live
-operator environment. Evidence must state which surface was exercised.
+operator environment. Pi and OpenCode are the client Docker surfaces for the
+indefinite development path; use the existing local llama.cpp-hosted Qwen 3.6
+A3B model as configuration/default state, not installation. Avoid Codex and
+Gemini client containers unless explicitly reopened. Evidence must state which
+surface was exercised.
 
 ## Current Authority
 

@@ -8,6 +8,9 @@ This roadmap stage governs the transition from the legacy working path
 
 The project name is ContextForge / Context Forge. `context-portal` is a
 deprecated path and compatibility identifier until the migration is complete.
+When active `context-portal` naming is encountered, classify it as active,
+compatibility, or historical and retire it through GitHub-tracked, reviewable
+slices rather than broad opportunistic renames.
 
 ## Supergoal: Cyclic Goal Refinement
 
@@ -77,8 +80,13 @@ claims, and evidence:
    work, and Docker development workflows to this surface.
 3. Client Docker test surfaces: separate Dockerized clients used as real
    integration foils against the ContextForge development Docker surface. For
-   now, only Pi and OpenCode are in scope. They use the already served local
-   Qwen/llama.cpp path as configuration, not installation.
+   the indefinite development path, only Pi and OpenCode are in scope unless
+   the user explicitly reopens another client. They use the already served
+   local llama.cpp-hosted Qwen 3.6 A3B model as configuration/default model
+   state, not installation.
+
+Avoid Codex and Gemini client containers for this development project; Pi and
+OpenCode are the preferred real client foils.
 
 Every evidence report must name the exercised surface: legacy/live read-only,
 ContextForge dev Docker, Pi client Docker, or OpenCode client Docker.
