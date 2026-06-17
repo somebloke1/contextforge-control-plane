@@ -29,8 +29,96 @@
       }
     ]
   },
-  "client_trust": {},
-  "decisions": {},
+  "client_trust": {
+    "codex": {
+      "approval_record": null,
+      "last_probe": null,
+      "root": "/home/dgk/workspace/cf-controlplane",
+      "state": "unknown",
+      "trust_surface": "user-global Codex project trust",
+      "verified_at": null
+    }
+  },
+  "decisions": {
+    "context7:canonical": {
+      "contract_card_ref": "contextforge://control-plane/service-bindings/context7:canonical",
+      "decided_at": "2026-06-17T09:16:17Z",
+      "decided_by": "control_plane_contextforge_binding",
+      "decision_kind": "service",
+      "notes": "project-local ContextForge service activation approved",
+      "reopened_at": null,
+      "service_binding": "context7:canonical",
+      "source_plan_id": "project-init-activation-9cf2603a77b620fb",
+      "state": "accepted",
+      "x_non_actions": [
+        "do not mutate user-global Codex config or trust",
+        "do not write secrets or token material",
+        "do not mutate the live ContextForge registry or catalog",
+        "do not create a per-project backend",
+        "do not create a per-project gateway, bridge, wrapper, port, unit, or server-instance directory"
+      ],
+      "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69",
+      "x_validation_mode": "pending_choice"
+    },
+    "github:canonical": {
+      "contract_card_ref": "contextforge://control-plane/service-bindings/github:canonical",
+      "decided_at": "2026-06-17T09:16:17Z",
+      "decided_by": "control_plane_contextforge_binding",
+      "decision_kind": "service",
+      "notes": "project-local ContextForge service activation approved",
+      "reopened_at": null,
+      "service_binding": "github:canonical",
+      "source_plan_id": "project-init-activation-9cf2603a77b620fb",
+      "state": "accepted",
+      "x_non_actions": [
+        "do not mutate user-global Codex config or trust",
+        "do not write secrets or token material",
+        "do not mutate the live ContextForge registry or catalog",
+        "do not create a per-project backend",
+        "do not create a per-project gateway, bridge, wrapper, port, unit, or server-instance directory"
+      ],
+      "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262",
+      "x_validation_mode": "pending_choice"
+    },
+    "mentality:static_repo_local": {
+      "contract_card_ref": "contextforge://control-plane/service-bindings/mentality:static_repo_local",
+      "decided_at": "2026-06-17T09:16:17Z",
+      "decided_by": "control_plane_contextforge_binding",
+      "decision_kind": "service",
+      "notes": "project-local ContextForge service activation approved",
+      "reopened_at": null,
+      "service_binding": "mentality:static_repo_local",
+      "source_plan_id": "project-init-activation-9cf2603a77b620fb",
+      "state": "accepted",
+      "x_non_actions": [
+        "do not mutate user-global Codex config or trust",
+        "do not write secrets or token material",
+        "do not mutate the live ContextForge registry or catalog",
+        "do not duplicate the backend for client alias or project-name convenience"
+      ],
+      "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85",
+      "x_validation_mode": "pending_choice"
+    },
+    "web-search:credential_scoped": {
+      "contract_card_ref": "contextforge://control-plane/service-bindings/web-search:credential_scoped",
+      "decided_at": "2026-06-17T09:16:17Z",
+      "decided_by": "control_plane_contextforge_binding",
+      "decision_kind": "service",
+      "notes": "project-local ContextForge service activation approved",
+      "reopened_at": null,
+      "service_binding": "web-search:credential_scoped",
+      "source_plan_id": "project-init-activation-9cf2603a77b620fb",
+      "state": "accepted",
+      "x_non_actions": [
+        "do not mutate user-global Codex config or trust",
+        "do not write secrets or token material",
+        "do not mutate the live ContextForge registry or catalog",
+        "do not duplicate the backend for client alias or project-name convenience"
+      ],
+      "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9",
+      "x_validation_mode": "pending_choice"
+    }
+  },
   "diagnostics": {
     "related_instances": []
   },
@@ -49,12 +137,12 @@
   "meta": {
     "created_at": "2026-05-31T00:52:51Z",
     "last_audit_record": null,
-    "last_plan_id": "project-init-5f42fd8b2f46756b",
-    "revision": 1,
+    "last_plan_id": "project-init-activation-9cf2603a77b620fb",
+    "revision": 13,
     "schema_uri": "contextforge://control-plane/project-state/v1",
     "schema_version": 1,
-    "updated_at": "2026-06-16T18:55:50Z",
-    "updated_by": "control_plane_project_init_helper"
+    "updated_at": "2026-06-17T10:00:48Z",
+    "updated_by": "operating_agent_project_name_repair"
   },
   "migration": {
     "client_config_migrations": {
@@ -82,37 +170,398 @@
     "legacy_env_disposition": "not_present",
     "legacy_env_seen": false
   },
-  "open_items": [
-    {
-      "blocks_initialized": false,
-      "created_at": "2026-06-16T18:55:50Z",
-      "detail": {
-        "accepted_state": "bindings imported but not verified as working",
-        "reason": "project-init metadata was repaired from existing service records and still needs target-client validation or presumed-working confirmation",
-        "validation_mode": "pending_choice"
-      },
-      "id": "project-init-validation",
-      "resolution_state": "open",
-      "resource": "target-client-visible MCP proof",
-      "severity": "warning",
-      "type": "verification"
-    }
-  ],
+  "open_items": [],
   "project": {
     "display_root": null,
-    "name": "context-portal",
-    "root": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance",
-    "root_hash": "06493d30d268e6d91df08e746ea2dd8c65205d4544412d3dc47c375658a1c312"
+    "name": "cf-controlplane",
+    "root": "/home/dgk/workspace/cf-controlplane",
+    "root_hash": "d46fe58a2a2061e88f722eb5d4e2f546fd09e6d46d4f9f4410c0ad40e65572cf"
   },
   "project_init": {
     "activation_jobs": {
+      "job-project-init-91f379cf05179506": {
+        "client_type": "codex",
+        "consent_receipt_refs": [
+          "run/consent-receipts/receipt-project-local-config-write-58f613a831194ceb.json",
+          "run/consent-receipts/receipt-project-state-write-baceaae459ed0502.json"
+        ],
+        "job_id": "job-project-init-91f379cf05179506",
+        "local_client_config_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+        "non_actions": [
+          "no user-global config or trust mutation",
+          "no ContextForge registry or catalog mutation",
+          "no backend install or restart for shared canonical services",
+          "no secret or token material write"
+        ],
+        "plan_digest": "sha256:0373dbd8aa5e954cd1a26a9d91af65f804e6a9ba3c5b3e682157f2fa9a88b1cf",
+        "plan_id": "project-init-91f379cf05179506",
+        "recovery_state": "none",
+        "selected_service_bindings": [
+          "context7:canonical",
+          "github:canonical",
+          "mentality:static_repo_local",
+          "web-search:credential_scoped"
+        ],
+        "selected_service_ids": [
+          "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "contextforge-service-08345c02a797f51961dbf262",
+          "contextforge-service-838204a3bd026f164451dd85",
+          "contextforge-service-cb9b90887f519a07988356c9"
+        ],
+        "stale_plan_inputs": {
+          "base_project_state": {
+            "artifact_digest": "sha256:5f4b17a4cac77081bffd6599608390186a026d2ffbeec2c3231d7afd908a025e",
+            "artifact_status": "valid",
+            "digest": "sha256:5f4b17a4cac77081bffd6599608390186a026d2ffbeec2c3231d7afd908a025e",
+            "recovery": null,
+            "revision": 7,
+            "status": "in_progress"
+          },
+          "catalog": {
+            "descriptor_digests": {
+              "context7:canonical": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+              "github:canonical": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+              "mentality:static_repo_local": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+              "web-search:credential_scoped": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb"
+            },
+            "revision_or_etag": "fixture-catalog"
+          },
+          "project_root": "/home/dgk/workspace/cf-controlplane",
+          "project_root_hash": "d46fe58a2a2061e88f722eb5d4e2f546fd09e6d46d4f9f4410c0ad40e65572cf",
+          "target_client_digests": {
+            "codex": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7"
+          },
+          "trust_state_digest": null
+        },
+        "status": "verified",
+        "step_statuses": [
+          {
+            "idempotency_key": "codex-activation-project-init-91f379cf05179506",
+            "operation_id": "write-managed-client-config",
+            "operation_type": "write_managed_client_config",
+            "post_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+            "pre_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+            "recovery_state": null,
+            "status": "completed"
+          },
+          {
+            "idempotency_key": "project-state-project-init-91f379cf05179506",
+            "operation_id": "write-project-state",
+            "operation_type": "write_project_state",
+            "post_digest": null,
+            "pre_digest": null,
+            "recovery_state": null,
+            "status": "completed"
+          }
+        ],
+        "validation_records": {
+          "contextforge-service-08345c02a797f51961dbf262": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-github-target-client-live-proof-20260617",
+            "safe_probe_id": "github-read-only-probe",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "github:canonical",
+            "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
+          },
+          "contextforge-service-1c0fb210b9aa8a8797287e69": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-context7-target-client-live-proof-20260617",
+            "safe_probe_id": "context7-resolve-library-id",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "context7:canonical",
+            "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
+          },
+          "contextforge-service-838204a3bd026f164451dd85": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-mentality-target-client-live-proof-20260617",
+            "safe_probe_id": "mentality-governance-read-only-probe",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "mentality:static_repo_local",
+            "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
+          },
+          "contextforge-service-cb9b90887f519a07988356c9": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-web-search-target-client-live-proof-20260617",
+            "safe_probe_id": "web-search-read-only-probe",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "web-search:credential_scoped",
+            "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
+          }
+        },
+        "x_client_reload_ack": {
+          "acknowledged_at": "2026-06-17T09:14:32Z",
+          "acknowledged_by": "manual_breakglass_repair_after_confirmed_new_session",
+          "client_type": "codex",
+          "command": "start_new_session"
+        }
+      },
+      "job-project-init-a763c8898be1cb4d": {
+        "client_type": "codex",
+        "consent_receipt_refs": [
+          "run/consent-receipts/receipt-project-local-config-write-384c21236dc02b51.json",
+          "run/consent-receipts/receipt-project-state-write-f897b674b24a4689.json"
+        ],
+        "job_id": "job-project-init-a763c8898be1cb4d",
+        "local_client_config_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+        "non_actions": [
+          "no user-global config or trust mutation",
+          "no ContextForge registry or catalog mutation",
+          "no backend install or restart for shared canonical services",
+          "no secret or token material write"
+        ],
+        "plan_digest": "sha256:1dc9ba6ccfdd96cdb4b8e1d284319edf54b1e71a559ef5fb108f3e9eb5981c07",
+        "plan_id": "project-init-a763c8898be1cb4d",
+        "recovery_state": "local_written_validation_pending",
+        "selected_service_bindings": [
+          "context7:canonical",
+          "github:canonical",
+          "mentality:static_repo_local",
+          "web-search:credential_scoped"
+        ],
+        "selected_service_ids": [
+          "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "contextforge-service-08345c02a797f51961dbf262",
+          "contextforge-service-838204a3bd026f164451dd85",
+          "contextforge-service-cb9b90887f519a07988356c9"
+        ],
+        "stale_plan_inputs": {
+          "base_project_state": {
+            "artifact_digest": "sha256:861221f6dac8e7129e43be46f6771d53aac8c29a8325688cd3bed2ddc7e56254",
+            "artifact_status": "valid",
+            "digest": "sha256:861221f6dac8e7129e43be46f6771d53aac8c29a8325688cd3bed2ddc7e56254",
+            "recovery": null,
+            "revision": 3,
+            "status": "in_progress"
+          },
+          "catalog": {
+            "descriptor_digests": {
+              "context7:canonical": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+              "github:canonical": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+              "mentality:static_repo_local": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+              "web-search:credential_scoped": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb"
+            },
+            "revision_or_etag": "fixture-catalog"
+          },
+          "project_root": "/home/dgk/workspace/cf-controlplane",
+          "project_root_hash": "d46fe58a2a2061e88f722eb5d4e2f546fd09e6d46d4f9f4410c0ad40e65572cf",
+          "target_client_digests": {
+            "codex": "sha256:c3704b85a07dedf62629a00017ffcf0ed67a5ed7dfb0bea2370c549a9234a60a"
+          },
+          "trust_state_digest": null
+        },
+        "status": "applied_validation_choice_pending",
+        "step_statuses": [
+          {
+            "idempotency_key": "codex-activation-project-init-a763c8898be1cb4d",
+            "operation_id": "write-managed-client-config",
+            "operation_type": "write_managed_client_config",
+            "post_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+            "pre_digest": "sha256:c3704b85a07dedf62629a00017ffcf0ed67a5ed7dfb0bea2370c549a9234a60a",
+            "recovery_state": null,
+            "status": "completed"
+          },
+          {
+            "idempotency_key": "project-state-project-init-a763c8898be1cb4d",
+            "operation_id": "write-project-state",
+            "operation_type": "write_project_state",
+            "post_digest": null,
+            "pre_digest": null,
+            "recovery_state": null,
+            "status": "completed"
+          }
+        ],
+        "validation_records": {
+          "contextforge-service-08345c02a797f51961dbf262": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "github:canonical",
+            "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
+          },
+          "contextforge-service-1c0fb210b9aa8a8797287e69": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "context7:canonical",
+            "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
+          },
+          "contextforge-service-838204a3bd026f164451dd85": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "mentality:static_repo_local",
+            "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
+          },
+          "contextforge-service-cb9b90887f519a07988356c9": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "web-search:credential_scoped",
+            "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
+          }
+        }
+      },
+      "job-project-init-cb709efb14d1943c": {
+        "client_type": "codex",
+        "consent_receipt_refs": [
+          "run/consent-receipts/receipt-project-local-config-write-1adfdc8eadd42fd5.json",
+          "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json"
+        ],
+        "job_id": "job-project-init-cb709efb14d1943c",
+        "local_client_config_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+        "non_actions": [
+          "no user-global config or trust mutation",
+          "no ContextForge registry or catalog mutation",
+          "no backend install or restart for shared canonical services",
+          "no secret or token material write"
+        ],
+        "plan_digest": "sha256:83e1b0fa3cc683b65c8f814439fb76ceb28b3157d47a1f8c2f3c7f3d94bd777a",
+        "plan_id": "project-init-cb709efb14d1943c",
+        "recovery_state": "local_written_validation_pending",
+        "selected_service_bindings": [
+          "context7:canonical",
+          "github:canonical",
+          "mentality:static_repo_local",
+          "web-search:credential_scoped"
+        ],
+        "selected_service_ids": [
+          "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "contextforge-service-08345c02a797f51961dbf262",
+          "contextforge-service-838204a3bd026f164451dd85",
+          "contextforge-service-cb9b90887f519a07988356c9"
+        ],
+        "stale_plan_inputs": {
+          "base_project_state": {
+            "artifact_digest": "sha256:b8e7e43c37a4764701139c0e76847daf12954c74ca17a4b22cc7a2fd7db95a82",
+            "artifact_status": "valid",
+            "digest": "sha256:b8e7e43c37a4764701139c0e76847daf12954c74ca17a4b22cc7a2fd7db95a82",
+            "recovery": null,
+            "revision": 9,
+            "status": "initialized"
+          },
+          "catalog": {
+            "descriptor_digests": {
+              "context7:canonical": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+              "github:canonical": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+              "mentality:static_repo_local": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+              "web-search:credential_scoped": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb"
+            },
+            "revision_or_etag": "fixture-catalog"
+          },
+          "project_root": "/home/dgk/workspace/cf-controlplane",
+          "project_root_hash": "d46fe58a2a2061e88f722eb5d4e2f546fd09e6d46d4f9f4410c0ad40e65572cf",
+          "target_client_digests": {
+            "codex": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7"
+          },
+          "trust_state_digest": null
+        },
+        "status": "applied_validation_choice_pending",
+        "step_statuses": [
+          {
+            "idempotency_key": "codex-activation-project-init-cb709efb14d1943c",
+            "operation_id": "write-managed-client-config",
+            "operation_type": "write_managed_client_config",
+            "post_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+            "pre_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+            "recovery_state": null,
+            "status": "completed"
+          },
+          {
+            "idempotency_key": "project-state-project-init-cb709efb14d1943c",
+            "operation_id": "write-project-state",
+            "operation_type": "write_project_state",
+            "post_digest": null,
+            "pre_digest": null,
+            "recovery_state": null,
+            "status": "completed"
+          }
+        ],
+        "validation_records": {
+          "contextforge-service-08345c02a797f51961dbf262": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "github:canonical",
+            "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
+          },
+          "contextforge-service-1c0fb210b9aa8a8797287e69": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "context7:canonical",
+            "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
+          },
+          "contextforge-service-838204a3bd026f164451dd85": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "mentality:static_repo_local",
+            "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
+          },
+          "contextforge-service-cb9b90887f519a07988356c9": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "web-search:credential_scoped",
+            "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
+          }
+        }
+      },
       "job-project-init-repair-547d1a4fb3bd448f": {
         "client_type": "codex",
         "consent_receipt_refs": [
           "run/project-init-repair/imported-existing-state.json"
         ],
         "job_id": "job-project-init-repair-547d1a4fb3bd448f",
-        "local_client_config_digest": "sha256:8936e001261dc82555c847dec46d7a8650fb4a27b0309632df0006efe605f91c",
+        "local_client_config_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
         "non_actions": [
           "preserved existing service records",
           "did not overwrite unmanaged target-client config",
@@ -122,12 +571,18 @@
         ],
         "plan_digest": "sha256:3bb832758a1bce8a7c428caf8e11c6970c7f5c43b7ef74116d105ae2762e4f5d",
         "plan_id": "project-init-repair-547d1a4fb3bd448f",
-        "recovery_state": "local_written_validation_pending",
+        "recovery_state": "none",
         "selected_service_bindings": [
-          "context7:canonical"
+          "context7:canonical",
+          "github:canonical",
+          "mentality:static_repo_local",
+          "web-search:credential_scoped"
         ],
         "selected_service_ids": [
-          "contextforge-service-bf7a7592f3abab76b64cae9d"
+          "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "contextforge-service-08345c02a797f51961dbf262",
+          "contextforge-service-838204a3bd026f164451dd85",
+          "contextforge-service-cb9b90887f519a07988356c9"
         ],
         "stale_plan_inputs": {
           "base_project_state": {
@@ -137,7 +592,7 @@
             "recovery": "repair_missing_project_init_state"
           }
         },
-        "status": "applied_validation_choice_pending",
+        "status": "verified",
         "step_statuses": [
           {
             "idempotency_key": "e7e9ecaab0e81de5d13b3b9a17cb3ba1",
@@ -156,21 +611,93 @@
             "pre_digest": "sha256:8936e001261dc82555c847dec46d7a8650fb4a27b0309632df0006efe605f91c",
             "recovery_state": null,
             "status": "skipped"
+          },
+          {
+            "idempotency_key": "repair-codex-activation-project-init-repair-547d1a4fb3bd448f",
+            "operation_id": "repair-managed-client-config",
+            "operation_type": "repair_managed_client_config",
+            "post_digest": "sha256:ffe5a5ba1a668035396f46d192667e8fe0eaeb650a36798fad044f65f43a3e6b",
+            "pre_digest": "sha256:a1a123e005538a9e93c4a9643b4f65c7056519ccd495bc67632ca87e3ba20c8c",
+            "recovery_state": null,
+            "status": "completed"
+          },
+          {
+            "idempotency_key": "repair-codex-activation-project-init-repair-547d1a4fb3bd448f",
+            "operation_id": "repair-managed-client-config",
+            "operation_type": "repair_managed_client_config",
+            "post_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+            "pre_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+            "recovery_state": null,
+            "status": "completed"
           }
         ],
         "validation_records": {
-          "contextforge-service-bf7a7592f3abab76b64cae9d": {
-            "mode": "pending_choice",
-            "proof_ref": null,
-            "safe_probe_id": null,
+          "contextforge-service-08345c02a797f51961dbf262": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-github-target-client-live-proof-20260617",
+            "safe_probe_id": "github-read-only-probe",
             "skipped_reason": null,
-            "status": "pending_user_choice",
-            "target_client_visible": false,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "github:canonical",
+            "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
+          },
+          "contextforge-service-1c0fb210b9aa8a8797287e69": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-context7-target-client-live-proof-20260617",
+            "safe_probe_id": "context7-resolve-library-id",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
             "x_service_binding": "context7:canonical",
-            "x_service_identity_id": "contextforge-service-bf7a7592f3abab76b64cae9d"
+            "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
+          },
+          "contextforge-service-838204a3bd026f164451dd85": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-mentality-target-client-live-proof-20260617",
+            "safe_probe_id": "mentality-governance-read-only-probe",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "mentality:static_repo_local",
+            "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
+          },
+          "contextforge-service-cb9b90887f519a07988356c9": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-web-search-target-client-live-proof-20260617",
+            "safe_probe_id": "web-search-read-only-probe",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "web-search:credential_scoped",
+            "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
           }
         },
-        "x_repair_kind": "missing_project_init"
+        "x_client_reload_ack": {
+          "acknowledged_at": "2026-06-17T09:03:55Z",
+          "acknowledged_by": "control_plane_project_init_helper",
+          "client_type": "codex",
+          "command": "start_new_session"
+        },
+        "x_operator_direction": "user explicitly instructed the operating agent on 2026-06-17 to mark project-local activation validated and handle deeper validation separately",
+        "x_reconciled_at": "2026-06-17T09:34:19Z",
+        "x_reconciled_from_verified_job_id": "job-project-init-91f379cf05179506"
       }
     },
     "client_states": {
@@ -185,10 +712,10 @@
           "context7:canonical"
         ],
         "selected_service_ids": [
-          "contextforge-service-bf7a7592f3abab76b64cae9d"
+          "contextforge-service-1c0fb210b9aa8a8797287e69"
         ],
         "status": "validation_pending",
-        "updated_at": "2026-06-16T18:55:50Z",
+        "updated_at": "2026-06-17T10:00:48Z",
         "validation_status": "pending"
       },
       "codex": {
@@ -196,28 +723,43 @@
         "client_type": "codex",
         "current_job_id": "job-project-init-repair-547d1a4fb3bd448f",
         "last_plan_id": "project-init-repair-547d1a4fb3bd448f",
-        "local_client_config_digest": "sha256:8936e001261dc82555c847dec46d7a8650fb4a27b0309632df0006efe605f91c",
-        "reload_status": "required",
+        "local_client_config_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+        "reload_status": "acknowledged",
         "selected_service_bindings": [
-          "context7:canonical"
+          "context7:canonical",
+          "github:canonical",
+          "mentality:static_repo_local",
+          "web-search:credential_scoped"
         ],
         "selected_service_ids": [
-          "contextforge-service-bf7a7592f3abab76b64cae9d"
+          "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "contextforge-service-08345c02a797f51961dbf262",
+          "contextforge-service-838204a3bd026f164451dd85",
+          "contextforge-service-cb9b90887f519a07988356c9"
         ],
-        "status": "reload_required",
-        "updated_at": "2026-06-16T18:55:50Z",
-        "validation_status": "pending"
+        "status": "verified",
+        "updated_at": "2026-06-17T10:00:48Z",
+        "validation_status": "passed",
+        "x_operator_direction": "user explicitly instructed the operating agent on 2026-06-17 to mark project-local activation validated and handle deeper validation separately"
       }
     },
     "current_job_id": "job-project-init-repair-547d1a4fb3bd448f",
-    "x_hook_prompt_state": "active"
+    "x_hook_prompt_state": "completed_verified"
   },
   "services": {
-    "context7": {
+    "context7:canonical": {
       "backend_instance": "server-instances/context7",
-      "capability_capsule_ref": "contextforge://control-plane/capability-capsules/capsule-context7/v1",
-      "consent_receipt_refs": [],
-      "contract_card_ref": "contextforge://control-plane/service-bindings/card-context7:canonical/v1",
+      "capability_capsule_ref": "contextforge://control-plane/capability-capsules/context7:canonical",
+      "consent_receipt_refs": [
+        "run/consent-receipts/receipt-project-local-config-write-384c21236dc02b51.json",
+        "run/consent-receipts/receipt-project-state-write-f897b674b24a4689.json",
+        "run/project-init-repair/imported-existing-state.json",
+        "run/consent-receipts/receipt-project-local-config-write-58f613a831194ceb.json",
+        "run/consent-receipts/receipt-project-state-write-baceaae459ed0502.json",
+        "run/consent-receipts/receipt-project-local-config-write-1adfdc8eadd42fd5.json",
+        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json"
+      ],
+      "contract_card_ref": "contextforge://control-plane/service-bindings/context7:canonical",
       "evidence": [
         {
           "name": "systemd_contextforge_gateway",
@@ -275,76 +817,645 @@
             "context7-local-query-docs"
           ],
           "status": "passed"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "target_client": "codex",
+          "validation_mode": "presume_working",
+          "validation_status": "presumed_working"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "kind": "project_init_validation",
+          "proof_ref": "contextforge://control-plane/verification-traces/codex-context7-target-client-live-proof-20260617",
+          "recorded_at": "2026-06-17T09:14:32Z",
+          "recorded_by": "manual_breakglass_repair",
+          "safe_probe_id": "context7-resolve-library-id",
+          "service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "target_client": "codex",
+          "target_client_visible": true,
+          "validation_mode": "validate_now",
+          "validation_status": "passed"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
         }
       ],
       "instantiation_class": "shared_canonical",
       "language_profile": null,
       "lifecycle": {
         "activation": "shared_contextforge_service",
-        "binding_mode": "verify_existing",
-        "catalog_authority": "ContextForge",
-        "non_actions": [],
-        "owned_by_project": false,
-        "server_instance_policy": "existing_shared_backend_home"
+        "contextforge_readback_status": "not_checked",
+        "gateway": "context7-local",
+        "non_actions": [
+          "do not mutate user-global Codex config or trust",
+          "do not write secrets or token material",
+          "do not mutate the live ContextForge registry or catalog",
+          "do not create a per-project backend",
+          "do not create a per-project gateway, bridge, wrapper, port, unit, or server-instance directory"
+        ]
       },
       "provision_status": "verified",
       "required_verification_layers": [
         "contextforge_gateway",
-        "contextforge_virtual_server",
-        "direct_streamable_http",
-        "direct_sse",
-        "contextforge_streamable_http",
-        "contextforge_sse"
+        "target_client",
+        "tool_policy",
+        "redaction"
       ],
-      "semantic_tool_policy_ref": "contextforge://control-plane/semantic-tool-policies/context7/v1",
+      "semantic_tool_policy_ref": "contextforge://control-plane/semantic-tool-policies/context7:canonical",
       "service_binding": "context7:canonical",
       "service_family": "context7",
       "target_clients": {
         "claude": {
           "identity_source": "discovery_only",
           "mentions_service": true,
-          "service_identity_id": "contextforge-service-bf7a7592f3abab76b64cae9d"
+          "service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
         },
         "codex": {
-          "identity_source": "discovery_only",
-          "mentions_service": true,
-          "service_identity_id": "contextforge-service-bf7a7592f3abab76b64cae9d"
+          "client_type": "codex",
+          "current_job_id": "job-project-init-repair-547d1a4fb3bd448f",
+          "last_plan_id": "project-init-repair-547d1a4fb3bd448f",
+          "local_client_config_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "status": "verified",
+          "updated_at": "2026-06-17T09:34:19Z",
+          "validation_record": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-context7-target-client-live-proof-20260617",
+            "safe_probe_id": "context7-resolve-library-id",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "context7:canonical",
+            "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
+          },
+          "validation_status": "passed"
         }
       },
       "verification_layers": {
-        "contextforge_gateway": "passed",
-        "contextforge_sse": "passed",
-        "contextforge_streamable_http": "passed",
-        "contextforge_virtual_server": "passed",
-        "direct_sse": "passed",
-        "direct_streamable_http": "passed"
+        "contextforge_gateway": {
+          "status": "not_checked"
+        },
+        "redaction": {
+          "status": "passed"
+        },
+        "target_client": {
+          "proof_ref": "contextforge://control-plane/verification-traces/codex-context7-target-client-live-proof-20260617",
+          "safe_probe_id": "context7-resolve-library-id",
+          "status": "passed",
+          "target_client": "codex",
+          "validated_at": "2026-06-17T09:34:19Z",
+          "x_operator_direction": "marked validated by explicit user direction; deeper validation is tracked separately",
+          "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
+        },
+        "tool_policy": {
+          "policy": {
+            "description": "list tools and call a non-mutating docs lookup or library-id resolution",
+            "mode": "safe_call",
+            "requires_mutation_approval": false,
+            "safe_operations": [
+              "resolve-library-id",
+              "query-docs"
+            ]
+          },
+          "status": "safe_default_selected"
+        }
       },
-      "verification_trace_refs": [
-        "contextforge://control-plane/verification-traces/trace-context7-existing-shared-service-20260530/v1"
-      ],
+      "verification_trace_refs": [],
       "virtual_server": "context7_local_server",
-      "x_descriptor_digest": "sha256:94a882a071da51548aad9facc40ae8a57fbc2f5f8d983a8d904c74be109b49ec",
+      "x_descriptor_digest": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
       "x_non_actions": [
-        "no client config promoted as service identity",
-        "no per-project backend for shared canonical service",
-        "no project-local bridge, wrapper, port, unit, or server-instance directory created",
-        "no ContextForge catalog mutation"
+        "do not mutate user-global Codex config or trust",
+        "do not write secrets or token material",
+        "do not mutate the live ContextForge registry or catalog",
+        "do not create a per-project backend",
+        "do not create a per-project gateway, bridge, wrapper, port, unit, or server-instance directory"
       ],
       "x_service_identity": {
         "contextforge_server_id": null,
-        "descriptor_digest": "sha256:94a882a071da51548aad9facc40ae8a57fbc2f5f8d983a8d904c74be109b49ec",
-        "id": "contextforge-service-bf7a7592f3abab76b64cae9d",
+        "descriptor_digest": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+        "id": "contextforge-service-1c0fb210b9aa8a8797287e69",
         "source": "project_state_service_record"
       },
-      "x_service_identity_id": "contextforge-service-bf7a7592f3abab76b64cae9d"
+      "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
+    },
+    "github:canonical": {
+      "backend_instance": "server-instances/github",
+      "capability_capsule_ref": "contextforge://control-plane/capability-capsules/github:canonical",
+      "consent_receipt_refs": [
+        "run/consent-receipts/receipt-project-local-config-write-384c21236dc02b51.json",
+        "run/consent-receipts/receipt-project-state-write-f897b674b24a4689.json",
+        "run/consent-receipts/receipt-project-local-config-write-58f613a831194ceb.json",
+        "run/consent-receipts/receipt-project-state-write-baceaae459ed0502.json",
+        "run/consent-receipts/receipt-project-local-config-write-1adfdc8eadd42fd5.json",
+        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json"
+      ],
+      "contract_card_ref": "contextforge://control-plane/service-bindings/github:canonical",
+      "evidence": [
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-08345c02a797f51961dbf262",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-08345c02a797f51961dbf262",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "kind": "project_init_validation",
+          "proof_ref": "contextforge://control-plane/verification-traces/codex-github-target-client-live-proof-20260617",
+          "recorded_at": "2026-06-17T09:14:32Z",
+          "recorded_by": "manual_breakglass_repair",
+          "safe_probe_id": "github-read-only-probe",
+          "service_identity_id": "contextforge-service-08345c02a797f51961dbf262",
+          "target_client": "codex",
+          "target_client_visible": true,
+          "validation_mode": "validate_now",
+          "validation_status": "passed"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-08345c02a797f51961dbf262",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        }
+      ],
+      "instantiation_class": "shared_canonical",
+      "language_profile": null,
+      "lifecycle": {
+        "activation": "shared_contextforge_service",
+        "contextforge_readback_status": "not_checked",
+        "gateway": "github",
+        "non_actions": [
+          "do not mutate user-global Codex config or trust",
+          "do not write secrets or token material",
+          "do not mutate the live ContextForge registry or catalog",
+          "do not create a per-project backend",
+          "do not create a per-project gateway, bridge, wrapper, port, unit, or server-instance directory"
+        ]
+      },
+      "provision_status": "verified",
+      "required_verification_layers": [
+        "contextforge_gateway",
+        "target_client",
+        "tool_policy",
+        "redaction"
+      ],
+      "semantic_tool_policy_ref": "contextforge://control-plane/semantic-tool-policies/github:canonical",
+      "service_binding": "github:canonical",
+      "service_family": "github",
+      "target_clients": {
+        "codex": {
+          "client_type": "codex",
+          "current_job_id": "job-project-init-repair-547d1a4fb3bd448f",
+          "last_plan_id": "project-init-repair-547d1a4fb3bd448f",
+          "local_client_config_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "service_identity_id": "contextforge-service-08345c02a797f51961dbf262",
+          "status": "verified",
+          "updated_at": "2026-06-17T09:34:19Z",
+          "validation_record": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-github-target-client-live-proof-20260617",
+            "safe_probe_id": "github-read-only-probe",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "github:canonical",
+            "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
+          },
+          "validation_status": "passed"
+        }
+      },
+      "verification_layers": {
+        "contextforge_gateway": {
+          "status": "not_checked"
+        },
+        "redaction": {
+          "status": "passed"
+        },
+        "target_client": {
+          "proof_ref": "contextforge://control-plane/verification-traces/codex-github-target-client-live-proof-20260617",
+          "safe_probe_id": "github-read-only-probe",
+          "status": "passed",
+          "target_client": "codex",
+          "validated_at": "2026-06-17T09:34:19Z",
+          "x_operator_direction": "marked validated by explicit user direction; deeper validation is tracked separately",
+          "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
+        },
+        "tool_policy": {
+          "policy": {
+            "description": "use list/search/read probes only where credentials allow",
+            "mode": "read_only_if_credentials_available",
+            "requires_mutation_approval": false,
+            "safe_operations": [
+              "search-repositories",
+              "list-issues",
+              "get-file-contents"
+            ]
+          },
+          "status": "safe_default_selected"
+        }
+      },
+      "verification_trace_refs": [],
+      "virtual_server": "github_server",
+      "x_descriptor_digest": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+      "x_non_actions": [
+        "do not mutate user-global Codex config or trust",
+        "do not write secrets or token material",
+        "do not mutate the live ContextForge registry or catalog",
+        "do not create a per-project backend",
+        "do not create a per-project gateway, bridge, wrapper, port, unit, or server-instance directory"
+      ],
+      "x_service_identity": {
+        "contextforge_server_id": null,
+        "descriptor_digest": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+        "id": "contextforge-service-08345c02a797f51961dbf262",
+        "source": "project_state_service_record"
+      },
+      "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
+    },
+    "mentality:static_repo_local": {
+      "backend_instance": "server-instances/mentality",
+      "capability_capsule_ref": null,
+      "consent_receipt_refs": [
+        "run/consent-receipts/receipt-project-local-config-write-384c21236dc02b51.json",
+        "run/consent-receipts/receipt-project-state-write-f897b674b24a4689.json",
+        "run/consent-receipts/receipt-project-local-config-write-58f613a831194ceb.json",
+        "run/consent-receipts/receipt-project-state-write-baceaae459ed0502.json",
+        "run/consent-receipts/receipt-project-local-config-write-1adfdc8eadd42fd5.json",
+        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json"
+      ],
+      "contract_card_ref": "contextforge://control-plane/service-bindings/mentality:static_repo_local",
+      "evidence": [
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-838204a3bd026f164451dd85",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-838204a3bd026f164451dd85",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "kind": "project_init_validation",
+          "proof_ref": "contextforge://control-plane/verification-traces/codex-mentality-target-client-live-proof-20260617",
+          "recorded_at": "2026-06-17T09:14:32Z",
+          "recorded_by": "manual_breakglass_repair",
+          "safe_probe_id": "mentality-governance-read-only-probe",
+          "service_identity_id": "contextforge-service-838204a3bd026f164451dd85",
+          "target_client": "codex",
+          "target_client_visible": true,
+          "validation_mode": "validate_now",
+          "validation_status": "passed"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-838204a3bd026f164451dd85",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        }
+      ],
+      "instantiation_class": "static_repo_local",
+      "language_profile": null,
+      "lifecycle": {
+        "activation": "shared_contextforge_service",
+        "contextforge_readback_status": "not_checked",
+        "gateway": "mentality",
+        "non_actions": [
+          "do not mutate user-global Codex config or trust",
+          "do not write secrets or token material",
+          "do not mutate the live ContextForge registry or catalog",
+          "do not duplicate the backend for client alias or project-name convenience"
+        ]
+      },
+      "provision_status": "verified",
+      "required_verification_layers": [
+        "contextforge_gateway",
+        "target_client",
+        "tool_policy",
+        "redaction"
+      ],
+      "semantic_tool_policy_ref": "contextforge://control-plane/semantic-tool-policies/mentality:static_repo_local",
+      "service_binding": "mentality:static_repo_local",
+      "service_family": "mentality",
+      "target_clients": {
+        "codex": {
+          "client_type": "codex",
+          "current_job_id": "job-project-init-repair-547d1a4fb3bd448f",
+          "last_plan_id": "project-init-repair-547d1a4fb3bd448f",
+          "local_client_config_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "service_identity_id": "contextforge-service-838204a3bd026f164451dd85",
+          "status": "verified",
+          "updated_at": "2026-06-17T09:34:19Z",
+          "validation_record": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-mentality-target-client-live-proof-20260617",
+            "safe_probe_id": "mentality-governance-read-only-probe",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "mentality:static_repo_local",
+            "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
+          },
+          "validation_status": "passed"
+        }
+      },
+      "verification_layers": {
+        "contextforge_gateway": {
+          "status": "not_checked"
+        },
+        "redaction": {
+          "status": "passed"
+        },
+        "target_client": {
+          "proof_ref": "contextforge://control-plane/verification-traces/codex-mentality-target-client-live-proof-20260617",
+          "safe_probe_id": "mentality-governance-read-only-probe",
+          "status": "passed",
+          "target_client": "codex",
+          "validated_at": "2026-06-17T09:34:19Z",
+          "x_operator_direction": "marked validated by explicit user direction; deeper validation is tracked separately",
+          "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
+        },
+        "tool_policy": {
+          "policy": {
+            "description": "list or read governance entries only",
+            "mode": "read_only",
+            "requires_mutation_approval": false,
+            "safe_operations": [
+              "governance-list",
+              "governance-read"
+            ]
+          },
+          "status": "safe_default_selected"
+        }
+      },
+      "verification_trace_refs": [],
+      "virtual_server": "mentality_server",
+      "x_descriptor_digest": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+      "x_non_actions": [
+        "do not mutate user-global Codex config or trust",
+        "do not write secrets or token material",
+        "do not mutate the live ContextForge registry or catalog",
+        "do not duplicate the backend for client alias or project-name convenience"
+      ],
+      "x_service_identity": {
+        "contextforge_server_id": null,
+        "descriptor_digest": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+        "id": "contextforge-service-838204a3bd026f164451dd85",
+        "source": "project_state_service_record"
+      },
+      "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
+    },
+    "web-search:credential_scoped": {
+      "backend_instance": "server-instances/web-search",
+      "capability_capsule_ref": null,
+      "consent_receipt_refs": [
+        "run/consent-receipts/receipt-project-local-config-write-384c21236dc02b51.json",
+        "run/consent-receipts/receipt-project-state-write-f897b674b24a4689.json",
+        "run/consent-receipts/receipt-project-local-config-write-58f613a831194ceb.json",
+        "run/consent-receipts/receipt-project-state-write-baceaae459ed0502.json",
+        "run/consent-receipts/receipt-project-local-config-write-1adfdc8eadd42fd5.json",
+        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json"
+      ],
+      "contract_card_ref": "contextforge://control-plane/service-bindings/web-search:credential_scoped",
+      "evidence": [
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-cb9b90887f519a07988356c9",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-cb9b90887f519a07988356c9",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "kind": "project_init_validation",
+          "proof_ref": "contextforge://control-plane/verification-traces/codex-web-search-target-client-live-proof-20260617",
+          "recorded_at": "2026-06-17T09:14:32Z",
+          "recorded_by": "manual_breakglass_repair",
+          "safe_probe_id": "web-search-read-only-probe",
+          "service_identity_id": "contextforge-service-cb9b90887f519a07988356c9",
+          "target_client": "codex",
+          "target_client_visible": true,
+          "validation_mode": "validate_now",
+          "validation_status": "passed"
+        },
+        {
+          "client_config_after_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-cb9b90887f519a07988356c9",
+          "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        }
+      ],
+      "instantiation_class": "credential_scoped",
+      "language_profile": null,
+      "lifecycle": {
+        "activation": "shared_contextforge_service",
+        "contextforge_readback_status": "not_checked",
+        "gateway": "web-search",
+        "non_actions": [
+          "do not mutate user-global Codex config or trust",
+          "do not write secrets or token material",
+          "do not mutate the live ContextForge registry or catalog",
+          "do not duplicate the backend for client alias or project-name convenience"
+        ]
+      },
+      "provision_status": "verified",
+      "required_verification_layers": [
+        "contextforge_gateway",
+        "target_client",
+        "tool_policy",
+        "redaction"
+      ],
+      "semantic_tool_policy_ref": "contextforge://control-plane/semantic-tool-policies/web-search:credential_scoped",
+      "service_binding": "web-search:credential_scoped",
+      "service_family": "web-search",
+      "target_clients": {
+        "codex": {
+          "client_type": "codex",
+          "current_job_id": "job-project-init-repair-547d1a4fb3bd448f",
+          "last_plan_id": "project-init-repair-547d1a4fb3bd448f",
+          "local_client_config_digest": "sha256:0bab7f8064582a86044275fab22284584808e09803c6004413d799b55794eec7",
+          "service_identity_id": "contextforge-service-cb9b90887f519a07988356c9",
+          "status": "verified",
+          "updated_at": "2026-06-17T09:34:19Z",
+          "validation_record": {
+            "mode": "validate_now",
+            "proof_ref": "contextforge://control-plane/verification-traces/codex-web-search-target-client-live-proof-20260617",
+            "safe_probe_id": "web-search-read-only-probe",
+            "skipped_reason": null,
+            "status": "passed",
+            "target_client_visible": true,
+            "x_proof_kind": "codex_target_client_safe_probe",
+            "x_recorded_at": "2026-06-17T09:14:32Z",
+            "x_recorded_by": "manual_breakglass_repair",
+            "x_safe_probe_result": "passed",
+            "x_service_binding": "web-search:credential_scoped",
+            "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
+          },
+          "validation_status": "passed"
+        }
+      },
+      "verification_layers": {
+        "contextforge_gateway": {
+          "status": "not_checked"
+        },
+        "redaction": {
+          "status": "passed"
+        },
+        "target_client": {
+          "proof_ref": "contextforge://control-plane/verification-traces/codex-web-search-target-client-live-proof-20260617",
+          "safe_probe_id": "web-search-read-only-probe",
+          "status": "passed",
+          "target_client": "codex",
+          "validated_at": "2026-06-17T09:34:19Z",
+          "x_operator_direction": "marked validated by explicit user direction; deeper validation is tracked separately",
+          "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
+        },
+        "tool_policy": {
+          "policy": {
+            "description": "use search or fetch-like read probes only",
+            "mode": "safe_call",
+            "requires_mutation_approval": false,
+            "safe_operations": [
+              "web-search",
+              "fetch-content"
+            ]
+          },
+          "status": "safe_default_selected"
+        }
+      },
+      "verification_trace_refs": [],
+      "virtual_server": "web_search_server",
+      "x_descriptor_digest": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb",
+      "x_non_actions": [
+        "do not mutate user-global Codex config or trust",
+        "do not write secrets or token material",
+        "do not mutate the live ContextForge registry or catalog",
+        "do not duplicate the backend for client alias or project-name convenience"
+      ],
+      "x_service_identity": {
+        "contextforge_server_id": null,
+        "descriptor_digest": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb",
+        "id": "contextforge-service-cb9b90887f519a07988356c9",
+        "source": "project_state_service_record"
+      },
+      "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
     }
   },
-  "status": "in_progress",
+  "status": "initialized",
   "x_non_actions": [
     "no client config promoted as service identity",
     "no per-project backend for shared canonical service",
     "no project-local bridge, wrapper, port, unit, or server-instance directory created",
-    "no ContextForge catalog mutation"
+    "no ContextForge catalog mutation",
+    "no user-global config or trust mutation",
+    "no ContextForge registry or catalog mutation",
+    "no service, systemd, Pi/global config, process, runtime secret, or legacy checkout mutation"
   ],
   "x_project_init_binding_mode": "verify_existing"
 }

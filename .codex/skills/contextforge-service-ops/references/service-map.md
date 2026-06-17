@@ -20,7 +20,7 @@ Canonical service set:
 | `github` | `server-instances/github` | stdio bridged on `127.0.0.1:9106` |
 | `web-search` | `server-instances/web-search` | local backend bridged on `127.0.0.1:9107` |
 | `openzeppelin-solidity-contracts` | `server-instances/openzeppelin-solidity-contracts` | remote native streamable HTTP |
-| `serena-context-portal` | `server-instances/serena-context-portal` | legacy project-scoped native HTTP, currently `127.0.0.1:9108`; regenerate or compatibility-classify before `cf-controlplane` migration |
+| `serena` | project-specific `server-instances/serena-<slug>-<hash>` under `/home/dgk/workspace/cf-controlplane` | project-scoped native HTTP; regenerate or compatibility-classify any older Serena directory before activation |
 
 Important scripts:
 

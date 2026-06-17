@@ -3,7 +3,7 @@
 Canonical Serena MCP backend for the ContextForge operator repository.
 
 This instance runs Serena as a native streamable HTTP MCP server scoped to
-`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`. Serena is project-scoped and stateful, so
+`/home/dgk/workspace/cf-controlplane`. Serena is project-scoped and stateful, so
 this backend is only for that caller workspace and should not be shared for
 unrelated workspaces.
 

@@ -15,7 +15,7 @@
     "args": [
       "scripts/governance_mcp.py"
     ],
-    "working_directory": "/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"
+    "working_directory": "/home/dgk/workspace/cf-controlplane"
   },
   "bridge": {
     "needed": true,

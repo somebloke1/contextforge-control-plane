@@ -679,7 +679,7 @@ def build_report(
         "readback_commands": [
             "rg -n \"context-portal|contextforge-slices|contextforge-helper|codex_project_init_hook\" ~/.codex/config.toml",
             "cd /home/dgk && codex mcp list --json",
-            "codex -C /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp list --json",
+            f"codex -C {target_text} mcp list --json",
         ],
     }
 

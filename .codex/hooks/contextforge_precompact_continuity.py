@@ -221,13 +221,13 @@ def build_snapshot(payload: dict[str, Any], *, cwd: Path | None = None, now: str
         "repo_root": str(repo_root),
         "cwd": str(actual_cwd),
         "project_name": "ContextForge",
-        "legacy_path_name": "context-portal",
+        "active_repo_root": str(repo_root),
         "mission": (
             "Preserve ContextForge project-local continuity evidence without overriding the active task, "
             "the user-selected goal, or Codex's default compaction summary."
         ),
         "continuity_protocol": [
-            "After compaction, re-anchor on ContextForge naming; treat context-portal as a legacy path/runtime identifier only.",
+            "After compaction, re-anchor on ContextForge naming and the active repository root; copied, migration, or legacy checkout paths are non-authoritative until freshly verified.",
             "Refresh current evidence before trusting roadmap claims, memory, or stale summaries.",
             "Preserve unrelated dirty work and keep branch/PR slices isolated from dev-root.",
             "Keep the default Codex compaction prompt intact; this hook is additive continuity state only.",

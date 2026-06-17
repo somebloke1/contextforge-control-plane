@@ -62,8 +62,8 @@ user for the real decision point.
 Every subagent prompt must include:
 
 - objective and roadmap/issue slice;
-- project root and naming boundary: ContextForge is the proper name;
-  `context-portal` is a legacy path/runtime identifier only;
+- project root and naming boundary: ContextForge is the proper name, and
+  `/home/dgk/workspace/cf-controlplane` is the active repository root;
 - allowed files/systems/tools;
 - forbidden edits and forbidden decisions;
 - expected artifact or output format;

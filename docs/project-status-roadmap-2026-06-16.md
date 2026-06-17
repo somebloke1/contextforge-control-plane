@@ -332,10 +332,11 @@ The immediate problem is integration hygiene:
   PR #23 at `726d7cf`, and PR #24 at `9aa732b`; post-merge roadmap updates
   include `6054319` and `4a9e496`.
 - The canonical source-edit clone is now
-  `/home/dgk/workspace/cf-controlplane`, with the current source-prep branch
-  rooted in `dev-root`. The legacy `/home/dgk/workspace/context-portal`
-  checkout remains archive/compatibility evidence, not the place for new source
-  truth.
+  `/home/dgk/workspace/cf-controlplane`. PR #38 source-prep is merged, and the
+  current #37 activation-readiness branch is
+  `codex/issue-37-activation-readiness` from `dev-root`. The legacy
+  `/home/dgk/workspace/context-portal` checkout remains archive/compatibility
+  evidence, not the place for new source truth.
 - GitHub has tracking issues #2-#5 for the remaining original active fronts,
   plus issue #37 for `cf-controlplane` project-local activation and issue #31
   for Codex runtime/project-context readback. Issue #1, issue #6, issue #11,

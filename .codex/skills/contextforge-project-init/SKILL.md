@@ -38,11 +38,11 @@ validation.
 ## Hard Boundaries
 
 - `.project/context_forge_state.json` is the project-init authority.
-- During the `cf-controlplane` migration, the current repository root is
-  `/home/dgk/workspace/cf-controlplane`. Older
-  `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`
-  references are compatibility or blocker evidence only; do not use them as
-  the active helper target for new activation work.
+- The active repository root is `/home/dgk/workspace/cf-controlplane`.
+  Any copied, migration, or legacy checkout path in config, state, docs, or
+  generated prompt material is non-authoritative blocker evidence. Do not use
+  it as the helper target, wrapper command root, client cwd, or Serena backend
+  root for new activation work.
 - Client configs and extension files are discovery or activation surfaces, not
   service identity.
 - Mutate only helper-approved project-local activation state.

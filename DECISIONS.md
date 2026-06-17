@@ -811,9 +811,9 @@ Use ContextForge, Context Forge, or contextforge as the project name in human-fa
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
+- Repository: /home/dgk/workspace/cf-controlplane
 - Created: 2026-06-16
-- Updated: 2026-06-16
+- Updated: 2026-06-17
 - Tags: agent-operations,roadmap,skills,hooks,worktrees,continuity
 
 The active Codex operating surface is project-critical state, not incidental
@@ -860,3 +860,55 @@ Clean-worktree test hermeticity is tracked by issue #14. This decision does
 not authorize destructive cleanup, reset, rebase, global hook installation, or
 copying secrets into Git; preservation and approval boundaries still apply.
 <!-- governance-crud:end id=dec-20260616-0002 -->
+
+<!-- governance-crud:start id=dec-20260617-0001 -->
+## dec-20260617-0001: Allow scoped dependency installation for control-plane work
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-17
+- Updated: 2026-06-17
+- Tags: dependencies,venv,tooling,operator-approval
+
+The user explicitly approved the operating agent to install software and Python/venv libraries needed to support scoped ContextForge control-plane development and validation work in /home/dgk/workspace/cf-controlplane. Use the project Python policy by default: create or repair the ignored local .venv with uv venv .venv when needed, install Python dependencies with uv pip install --python .venv/bin/python ..., and keep installed environments, caches, secrets, OAuth state, runtime evidence, service state, and generated local artifacts out of Git unless separately promoted as sanitized source. This approval does not authorize global Codex config mutation, hook trust/state mutation, runtime secret/OAuth/trust copy, service/process/systemd/registry/Pi global config mutation, destructive git operations, mutation of /home/dgk/workspace/context-portal, or helper/project-init apply steps that require challenge approval.
+<!-- governance-crud:end id=dec-20260617-0001 -->
+
+<!-- governance-crud:start id=dec-20260617-0002 -->
+## dec-20260617-0002: Separate live, development, and client Docker ContextForge surfaces
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-17
+- Updated: 2026-06-17
+- Tags: contextforge,surface-boundaries,docker,clients,operations
+
+ContextForge work must distinguish three surfaces. The legacy/live ContextForge surface is the currently active user/operator environment and is strictly read-only: no registry writes, service registration, prompt/resource upserts, token/team/admin changes, env edits, process restarts, service stops/starts, database writes, config rewrites, hook/trust changes, port changes, or cleanup actions. It may be used only for non-mutating evidence such as health/readiness checks, config/path inspection, process/socket inspection, logs, diagnostics, and comparison. The ContextForge development Docker surface is the isolated mutable gateway/app surface for cf-controlplane validation, with separate ports, volumes, env, registry state, credentials, and test data. Registration tests, endpoint validation, resettable integration work, and other mutable experiments belong there. Client Docker test surfaces are separate Dockerized client foils against the development Docker surface; for now they are Pi and OpenCode only and use the already served local Qwen/llama.cpp path as configuration, not installation. Evidence and claims must name the exercised surface: legacy/live read-only, ContextForge dev Docker, Pi client Docker, or OpenCode client Docker.
+<!-- governance-crud:end id=dec-20260617-0002 -->
+
+<!-- governance-crud:start id=dec-20260617-0003 -->
+## dec-20260617-0003: Use Pi and OpenCode client Docker surfaces with local Qwen
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-17
+- Updated: 2026-06-17
+- Tags: clients,docker,opencode,pi,llama-cpp,qwen
+
+For the indefinite cf-controlplane development path, use only the Pi and OpenCode client Docker surfaces unless the user explicitly reopens another client. Both clients should use the existing local llama.cpp-hosted Qwen 3.6 A3B model as configuration/default model state, not as an installation task. Avoid Codex and Gemini client containers for this development project because Pi and OpenCode are the preferred real client foils.
+<!-- governance-crud:end id=dec-20260617-0003 -->
+
+<!-- governance-crud:start id=dec-20260617-0004 -->
+## dec-20260617-0004: Retire context-portal naming through GitHub-tracked slices
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-17
+- Updated: 2026-06-17
+- Tags: naming,context-portal,github,compatibility,migration
+
+`context-portal` is legacy naming. In cf-controlplane work, treat `context-portal` names as compatibility or historical identifiers only until they can be eliminated safely. As agents encounter active `context-portal` naming, they should use GitHub issues or PR-linked issue comments to track and gradually retire it in focused, reviewable slices. Do not perform broad opportunistic renames that could break service identities, registry records, Serena tool names, project-state compatibility, or historical evidence; classify each occurrence as active, compatibility, or historical before changing it.
+<!-- governance-crud:end id=dec-20260617-0004 -->
