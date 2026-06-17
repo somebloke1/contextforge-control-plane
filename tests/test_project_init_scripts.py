@@ -1061,6 +1061,25 @@ trusted_hash = "sha256:sessionstart"
 
 
 class SerenaManagerTests(unittest.TestCase):
+    def test_operator_reserved_port_is_not_per_project_allocatable(self) -> None:
+        self.assertNotIn(9108, serena_manager.PORT_RANGE)
+        self.assertIn(9108, serena_manager.OPERATOR_RESERVED_PORTS)
+
+        with (
+            mock.patch.object(serena_manager, "used_manifest_ports", return_value=set()),
+            mock.patch.object(serena_manager, "socket_port_open", return_value=False),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "operator singleton"):
+                serena_manager.reserve_port(preferred=9108)
+
+    def test_operator_reserved_port_is_skipped_if_range_changes(self) -> None:
+        with (
+            mock.patch.object(serena_manager, "PORT_RANGE", range(9108, 9111)),
+            mock.patch.object(serena_manager, "used_manifest_ports", return_value=set()),
+            mock.patch.object(serena_manager, "socket_port_open", return_value=False),
+        ):
+            self.assertEqual(9109, serena_manager.reserve_port())
+
     def test_gemini_project_init_hook_uses_gemini_lifecycle_events(self) -> None:
         self.assertEqual({"SessionStart", "BeforeAgent"}, set(gemini_project_init_hook.GEMINI_HOOK_EVENTS))
         self.assertEqual({"experimental.chat.system.transform", "session.created"}, set(opencode_project_init_hook.OPENCODE_HOOK_EVENTS))
