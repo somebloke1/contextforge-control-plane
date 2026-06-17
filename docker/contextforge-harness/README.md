@@ -10,6 +10,9 @@ startup alone does not register MCP services.
 Service locality and the first MCP integration path are defined in
 `SERVICE_LOCALITY.md`.
 
+Evidence freshness and PR citation rules for this harness are defined in
+`../../docs/dev-docker-client-evidence-freshness-protocol.md`.
+
 ## Runtime
 
 - Image: `ghcr.io/ibm/mcp-context-forge:v1.0.3`
