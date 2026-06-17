@@ -336,6 +336,21 @@ Goal-maintenance output:
 
 - refine the next formal goal to Codex operating-artifact activation.
 
+Status as of 2026-06-17:
+
+- Complete for Git clone creation. PR #35 was marked ready and merged into
+  `dev-root` as `75aa437573ac3a8be38f584ab629da2bb0cfa814`.
+- `/home/dgk/workspace/cf-controlplane` is a clean `dev-root` clone at that
+  merge commit.
+- Path scans found no `cf-control-plane-target`, `cf-controlplane-target`, or
+  stale `cf-control-plane` target naming.
+- The clone is not yet the live Codex operating substrate because
+  `.codex/config.toml`, `.project/context_forge_state.json`,
+  `server-instances/serena-context-portal/**`, and project-init resource
+  identifiers still require retarget, regeneration, or explicit compatibility
+  classification.
+- GitHub evidence is recorded on issue #15 and issue #31.
+
 Immediate switch rule:
 
 - after the clone validates, stop normal implementation in `context-portal`;
@@ -414,7 +429,22 @@ The candidate stack can replace the current live ContextForge only after:
 
 ## Current Next Move
 
-Continue Subgoal 1 by integrating the artifact disposition report with GitHub
-issue #15 and linked issue #31. Do not clone or copy runtime state before this
-classification, GitHub-gate reconciliation, and path-bound operational blocker
-handling are complete.
+Continue Subgoal 5 by activating project-local Codex operating artifacts for
+`/home/dgk/workspace/cf-controlplane`.
+
+The next transition is not runtime recreation. First, retarget or regenerate the
+project-local Codex config and project-state artifacts for the new root, keep
+runtime secrets/evidence local-only, then have the user open/approve the
+`cf-controlplane` Codex project and verify hooks, skills, governance, and
+project-local MCP paths from that project context.
+
+Do not treat issue #15 cleanup or issue #31 runtime verification as complete
+until the new project context proves it is no longer using hidden
+`context-portal` or `contextforge-slices` operating paths.
+
+Source-edit boundary: after this clone, any new migration documentation,
+configuration source, hook, skill, harness, or governance change belongs in
+`/home/dgk/workspace/cf-controlplane` unless the user explicitly directs a
+legacy compatibility edit. Do not create new source truth in the legacy
+`/home/dgk/workspace/context-portal` directory that would not be reflected in
+the cloned workspace.
