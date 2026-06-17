@@ -51,28 +51,24 @@ development Docker validation.
   port guardrails, #48 stale Serena user-unit inspector, #49 ContextForge
   cleanup inspector, and #51 project MCP container/locality matrix merged in
   that order. The merge-tip evidence is issue #37 comment `4734271745`.
-- PR #59 remains the focused draft follow-up for #56. It refreshes the
-  project-local precompact/helper path contract after the primary queue merge
-  and still requires an explicit operator decision before promotion or merge.
-- The remaining refreshed activation-readiness queue is #59, #65, #61, #64,
-  #63, #53, and #55, followed by this PR #54 as the final docs-only runbook
-  refresh. Issue #37 comment `4735200531` records the queue-order dry merge
-  through #55 and the current evidence boundary.
-- PR #53 records the guided MCP service-onboarding helper taxonomy for #52. It
-  remains important but lower priority because #52 is high impact and
-  low-to-medium priority. It has been refreshed against current `dev-root` and
-  the active queue; do not treat it as runtime activation evidence.
-- PR #54 is this runbook/status refresh. It is docs-only, should stay last in
-  the refresh order, and should not be treated as runtime activation evidence.
-- PR #55 remains a draft project-init activation-job reconciliation slice unless
-  explicitly promoted. It has current #4/#37 evidence, but does not retire the
-  Serena provisioning or compatibility-identifier readiness warnings.
 - Issue #62 remains open and is packaged in draft PR #68 for source-only
   Pi/OpenCode baseline helper launchers. Runtime Docker/client proof remains
   separately approval-gated.
 - Issue #52 remains open and is packaged in draft PR #69 for the first
   executable no-mutation service-onboarding record helper. It is source/docs/
   tests/fixtures only and is not a long-running helper daemon.
+- PR #70 is this runbook/status refresh. It is docs-only and should not be
+  treated as runtime activation evidence.
+- Issue #2 remains open and is packaged in draft PR #71. The stale Serena unit
+  inspector now classifies retired runtime-surface units and paths as migration
+  blockers, not cleanup candidates.
+- Issue #5 remains open and is packaged in draft PR #72. The read-only
+  ContextForge cleanup inspector now separates retired project-surface registry
+  records from ordinary orphan DELETE candidates.
+- The current activation-readiness review queue is #68, #69, #70, #71, and
+  #72. Issue #37 comment `4736139800` records the five-PR dry merge and
+  current evidence boundary. No PR in this queue is approved for merge or draft
+  promotion by this runbook.
 - Issue #50 remains open for canonical Serena runtime/service/client-visible
   closure or an explicit validated compatibility decision.
 
@@ -106,29 +102,28 @@ development Docker validation.
   post-merge touched-suite validation passed 98 tests, `py_compile`, and
   `git diff --check`. Durable merge evidence is issue #37 comment
   `4734271745`.
-- PR #59 was refreshed after the primary queue merge. Its current head is
-  `d56782bfa2491c6827739a00a175a8a722a1d379`, base is `dev-root`
-  `274871322c2455cfab8e716d831043171eea1291`, and canonical workspace
-  validation passed the focused precompact config test, full unittest discovery
-  with 505 tests, `py_compile`, and `git diff --check`. Durable evidence is PR
-  #59 comment `4734298590` and issue #56 comment `4734298713`.
-- PR #65, #61, #64, #63, #53, and #55 were refreshed after the primary queue
-  merge. The current recommended order is `#59 -> #65 -> #61 -> #64 -> #63 ->
-  #53 -> #55`, then this PR #54 last.
-- The queue-order dry merge through #55 applied cleanly and passed 150
-  queue-owned tests, `py_compile`, and `git diff --check`. The #59 precompact
-  config assertion is location-sensitive in arbitrary temp worktrees, so it was
-  verified separately in the canonical checkout with
-  `tests.test_codex_precompact_continuity_hook -v` running 17 tests OK.
-  Durable evidence is issue #37 comment `4735200531`.
-- PR #55 read-only inspector evidence still reports `status: attention_required`
-  with warnings `serena_project_instance_not_provisioned` and
-  `project_init_compatibility_identifiers_present`. Its activation-job
-  reconciliation summary has `current_verified_jobs=1`,
-  `current_validation_pending_jobs=0`, `superseded_pending_jobs=2`, and
-  `attention_required_jobs=0`. Durable #4 evidence is comment `4735196608`.
-- Earlier five- and six-PR dry-run evidence for #53/#54 remains useful history
-  but is no longer current merge evidence after #47, #48, #49, and #51 landed.
+- PR #68 adds source-only Pi/OpenCode baseline launchers and project-init
+  fixture coverage for #62. It does not prove Docker/client runtime behavior.
+  Durable issue evidence is #62 comment `4735996680`.
+- PR #69 adds the first no-mutation service-onboarding record helper for #52.
+  It records classifications, lifecycle planning, and evidence boundaries but is
+  not a daemon or service installer. Durable issue evidence is #52 comment
+  `4736046051`.
+- PR #71 hardens the stale Serena unit inspector for #2. Its read-only audit
+  reports `status: attention_required`, eleven retired runtime-surface blockers,
+  and zero cleanup candidates. Durable issue evidence is #2 comment
+  `4736111304`; #50 was also updated because this affects Serena closure.
+- PR #72 hardens the read-only ContextForge cleanup inspector for #5. Its live
+  API readback leaves one ordinary orphan prompt DELETE candidate and separates
+  two retired project-surface registry records into a blocker list. Durable
+  issue evidence is #5 comment `4736136201`.
+- The current five-PR queue-order dry merge #68 -> #69 -> #70 -> #71 -> #72
+  applied cleanly from `origin/dev-root@4cc252f1cd1770f2e574b443e0471b94960a611f`
+  and passed 133 queue-owned tests plus `git diff --check`. Durable evidence is
+  issue #37 comment `4736139800`.
+- Earlier queue dry-run evidence remains useful history but is no longer the
+  current merge recommendation after #31/#33/#41 closure and the #68-#72
+  packaging work.
 
 ## Source-Prep Classification
 
