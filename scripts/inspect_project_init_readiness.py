@@ -37,6 +37,14 @@ SERENA_APPROVAL_BOUNDARY = (
     "GitHub-tracked Serena/project-init slice with explicit approval before "
     "any live registry, service, systemd, or global client state changes."
 )
+PENDING_ACTIVATION_JOB_STATUSES = frozenset(
+    {
+        "applied_validation_choice_pending",
+        "validation_choice_pending",
+        "validation_pending",
+    }
+)
+NON_BLOCKING_CLIENT_STATUSES = frozenset({"verified", "presumed_working", "disabled"})
 
 
 def _canonical(path: str | Path) -> Path:
@@ -273,11 +281,15 @@ def _activation_job_summary(job: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "job_id": job.get("job_id"),
         "client_type": job.get("client_type"),
+        "plan_id": job.get("plan_id"),
         "status": job.get("status"),
         "recovery_state": job.get("recovery_state"),
+        "local_client_config_digest": job.get("local_client_config_digest"),
         "selected_service_ids": [str(value) for value in job.get("selected_service_ids") or []],
         "selected_service_bindings": [str(value) for value in job.get("selected_service_bindings") or []],
         "validation_status_counts": _status_counts(record_statuses),
+        "x_reconciled_from_verified_job_id": job.get("x_reconciled_from_verified_job_id"),
+        "x_operator_direction": job.get("x_operator_direction"),
     }
 
 
@@ -292,6 +304,124 @@ def _client_state_summary(state: Mapping[str, Any]) -> dict[str, Any]:
         "selected_service_bindings": [str(value) for value in state.get("selected_service_bindings") or []],
         "selected_service_ids": [str(value) for value in state.get("selected_service_ids") or []],
         "local_client_config_digest": state.get("local_client_config_digest"),
+        "x_operator_direction": state.get("x_operator_direction"),
+    }
+
+
+def _service_signature(record: Mapping[str, Any]) -> tuple[str, ...]:
+    bindings = [str(value) for value in record.get("selected_service_bindings") or [] if value]
+    if bindings:
+        return tuple(sorted(bindings))
+    return tuple(sorted(str(value) for value in record.get("selected_service_ids") or [] if value))
+
+
+def _job_reconciliation(
+    job: Mapping[str, Any],
+    *,
+    client_state: Mapping[str, Any] | None,
+    current_job: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    job_id = str(job.get("job_id") or "")
+    current_job_id = str((client_state or {}).get("current_job_id") or "")
+    job_status = str(job.get("status") or "unknown")
+    client_status = str((client_state or {}).get("status") or "unknown")
+    job_signature = _service_signature(job)
+    current_signature = _service_signature(client_state or current_job or {})
+    same_selected_services = bool(job_signature and current_signature and job_signature == current_signature)
+
+    if current_job_id and job_id == current_job_id:
+        if client_status == "verified":
+            classification = "current_verified"
+            recommended_disposition = "keep_current_verified"
+            blocking = False
+        elif client_status == "presumed_working":
+            classification = "current_presumed_working"
+            recommended_disposition = "keep_current_presumed_working"
+            blocking = False
+        else:
+            classification = "current_validation_pending"
+            recommended_disposition = "resolve_current_validation_choice"
+            blocking = True
+    elif job_status in PENDING_ACTIVATION_JOB_STATUSES and client_status in NON_BLOCKING_CLIENT_STATUSES and same_selected_services:
+        classification = "superseded_by_current_client_state"
+        recommended_disposition = "retain_as_historical_audit_trail"
+        blocking = False
+    elif job_status in PENDING_ACTIVATION_JOB_STATUSES:
+        classification = "pending_validation_attention_required"
+        recommended_disposition = "resolve_or_explicitly_retain"
+        blocking = True
+    else:
+        classification = "historical_terminal_or_informational"
+        recommended_disposition = "retain_as_historical_audit_trail"
+        blocking = False
+
+    return {
+        "job_id": job.get("job_id"),
+        "client_type": job.get("client_type"),
+        "status": job.get("status"),
+        "recovery_state": job.get("recovery_state"),
+        "classification": classification,
+        "recommended_disposition": recommended_disposition,
+        "blocking": blocking,
+        "same_selected_services_as_current": same_selected_services,
+    }
+
+
+def _activation_job_reconciliation(
+    job_summaries: Sequence[Mapping[str, Any]],
+    client_states: Mapping[str, Mapping[str, Any]],
+    current_job_id: str | None,
+) -> dict[str, Any]:
+    jobs_by_id = {str(job.get("job_id")): job for job in job_summaries if job.get("job_id")}
+    clients: dict[str, Any] = {}
+    all_clients = sorted(
+        {
+            str(job.get("client_type") or "")
+            for job in job_summaries
+            if job.get("client_type")
+        }
+        | {str(client) for client in client_states}
+    )
+    for client in all_clients:
+        client_state = client_states.get(client, {})
+        client_current_job_id = str(client_state.get("current_job_id") or current_job_id or "")
+        current_job = jobs_by_id.get(client_current_job_id)
+        client_jobs = [
+            _job_reconciliation(job, client_state=client_state, current_job=current_job)
+            for job in job_summaries
+            if str(job.get("client_type") or "") == client
+        ]
+        classifications = [str(job.get("classification") or "unknown") for job in client_jobs]
+        clients[client] = {
+            "client_status": client_state.get("status"),
+            "validation_status": client_state.get("validation_status"),
+            "current_job_id": client_current_job_id or None,
+            "current_job_status": current_job.get("status") if isinstance(current_job, Mapping) else None,
+            "classification_counts": _status_counts(classifications),
+            "jobs": client_jobs,
+        }
+
+    all_reconciliations = [
+        job
+        for client in clients.values()
+        for job in client.get("jobs", [])
+        if isinstance(job, Mapping)
+    ]
+    return {
+        "summary": {
+            "current_verified_jobs": sum(1 for job in all_reconciliations if job.get("classification") == "current_verified"),
+            "current_presumed_working_jobs": sum(1 for job in all_reconciliations if job.get("classification") == "current_presumed_working"),
+            "current_validation_pending_jobs": sum(1 for job in all_reconciliations if job.get("classification") == "current_validation_pending"),
+            "superseded_pending_jobs": sum(1 for job in all_reconciliations if job.get("classification") == "superseded_by_current_client_state"),
+            "attention_required_jobs": sum(1 for job in all_reconciliations if job.get("blocking") is True),
+        },
+        "policy": {
+            "source_ready": "tracked source/config/state is inspectable without mutation",
+            "validation_pending": "current target-client validation choice or reload remains unresolved",
+            "presumed_working": "operator accepted skip-validation state without target-client proof",
+            "verified": "target-client-visible validation passed or operator-directed project-local validation was recorded",
+        },
+        "clients": clients,
     }
 
 
@@ -313,7 +443,7 @@ def _raw_state_summary(root: Path, raw_state: Mapping[str, Any] | None, read_err
         for job in jobs.values()
         if isinstance(job, Mapping)
     ]
-    return {
+    state_summary = {
         "state_path": str(path),
         "exists": True,
         "digest": project_state.state_file_artifact_digest(root),
@@ -336,6 +466,12 @@ def _raw_state_summary(root: Path, raw_state: Mapping[str, Any] | None, read_err
         ),
         "activation_jobs": sorted(job_summaries, key=lambda item: str(item.get("job_id") or "")),
     }
+    state_summary["activation_job_reconciliation"] = _activation_job_reconciliation(
+        state_summary["activation_jobs"],
+        state_summary["client_states"],
+        str(project_init.get("current_job_id") or "") or None,
+    )
+    return state_summary
 
 
 def inspect_root(root: str | Path, *, label: str, client_types: Sequence[str]) -> dict[str, Any]:
@@ -458,6 +594,8 @@ def _readiness_findings(
         for binding in activation_job.get("selected_service_bindings") or []
     ]
     selected_bindings = [str(binding) for binding in state_client_bindings + state_job_bindings]
+    reconciliation = state.get("activation_job_reconciliation") if isinstance(state.get("activation_job_reconciliation"), Mapping) else {}
+    reconciliation_summary = reconciliation.get("summary") if isinstance(reconciliation.get("summary"), Mapping) else {}
 
     if primary_status == "invalid_blocked":
         blockers.append("primary_project_state_invalid_blocked")
@@ -472,6 +610,12 @@ def _readiness_findings(
     if state_project_name and expected_project_name and state_project_name != expected_project_name:
         blockers.append("project_state_name_mismatch")
         next_actions.append("Retire stale project.name values through a focused project-state migration before claiming activation readiness.")
+
+    if int(reconciliation_summary.get("attention_required_jobs") or 0):
+        warnings.append("project_init_activation_jobs_need_reconciliation")
+        next_actions.append(
+            "Use roots[0].state.activation_job_reconciliation to resolve current validation choices or explicitly retain historical pending jobs."
+        )
 
     compare_roots = roots[1:]
     if any(str(root.get("readiness_status") or "") == "valid" for root in compare_roots):
