@@ -13,7 +13,7 @@ validation.
 ## Required Sequence
 
 1. Call `get_project_context` or `cf_project_init_get_context` with:
-   - `project_root=/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`
+   - `project_root=<current repository root>`
    - `client_type=codex` unless the user explicitly targets Pi or another client.
 2. Call `list_available_capabilities` or `cf_project_init_list_capabilities`.
 3. If services are not selected, ask exactly one service-selection question using
@@ -38,6 +38,11 @@ validation.
 ## Hard Boundaries
 
 - `.project/context_forge_state.json` is the project-init authority.
+- During the `cf-controlplane` migration, the current repository root is
+  `/home/dgk/workspace/cf-controlplane`. Older
+  `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`
+  references are compatibility or blocker evidence only; do not use them as
+  the active helper target for new activation work.
 - Client configs and extension files are discovery or activation surfaces, not
   service identity.
 - Mutate only helper-approved project-local activation state.

@@ -7,9 +7,32 @@ dependencies, risks, and GitHub cleanup plan after reviewing the eight most
 recent ContextForge-related sessions and re-checking the current local repo,
 runtime, and GitHub state.
 
-## Evidence Snapshot
+## 2026-06-17 `cf-controlplane` Handoff Update
 
-Current local checks used for this snapshot:
+The canonical source-edit workspace is now
+`/home/dgk/workspace/cf-controlplane`. New source truth belongs there unless
+the user explicitly directs a legacy compatibility edit.
+
+Current tracker topology:
+
+- issue #15 is closed; it is historical retirement context, not the active
+  blocker for ordinary `cf-controlplane` work;
+- issue #37 is open and owns project-local Codex operating-context activation
+  for `/home/dgk/workspace/cf-controlplane`;
+- issue #31 is open and owns Codex runtime/project-context readback after the
+  approved global config migration;
+- issue #2, issue #3, issue #4, issue #5, and issue #33 remain separate
+  roadmap fronts where still open.
+
+The evidence snapshot below is historical through the 2026-06-16 roadmap pass.
+Commands that mention `/home/dgk/workspace/context-portal` or
+`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`
+record how that pass was verified. They are not current operating commands for
+the `cf-controlplane` project-local activation slice.
+
+## Historical Evidence Snapshot Through 2026-06-16
+
+Historical local checks used for this snapshot:
 
 - `git status --short --branch`
 - `git log --oneline origin/dev-root..dev-root`
@@ -251,10 +274,11 @@ work.
   `dev-root` source state is root-mismatched/blocked, legacy live state is
   schema-valid with Codex verified and Pi validation-pending/mixed, and
   helper/wrapper processes still source from the legacy dirty checkout. Issue
-  #4 remains open; issue #15 dirty checkout rebind and issue #3 Pi
-  install/reload remain real decision points for the user, not hidden agent
-  actions.
-- Dirty checkout retirement remains open under issue #15. The current authority
+  #4 remains open; issue #37 project-local operating-context activation, issue
+  #31 runtime readback, and issue #3 Pi install/reload remain real decision
+  points for the user, not hidden agent actions.
+- Dirty checkout retirement is closed under issue #15 and its remaining
+  practical concerns have moved to issue #37 and issue #31. The authority
   snapshot is `run/dirty-state-preservation/20260616T114116Z/` in the clean
   `dev-root` controller worktree: 35 tracked dirty files and 41 untracked paths
   were preserved, checksum verification passed, and byte comparison against
@@ -282,9 +306,9 @@ work.
   `contextforge-helper` binding so the clean root shadows that stale global
   entry without editing global config. Post-merge readback reported 11 MCP
   entries and zero legacy-bound items.
-  Compatibility slugs remain intact. Cleanup remains open until
-  `/home/dgk/workspace/context-portal` is either explicitly archival-only or
-  safely rebound/retired without losing preserved local work. Merged PR
+  Compatibility slugs remain intact. The legacy checkout remains archive and
+  compatibility evidence until the `cf-controlplane` project context is proven,
+  but it is no longer the source-edit location for new work. Merged PR
   [#19](https://github.com/somebloke1/contextforge-control-plane/pull/19) adds
   `docs/dirty-checkout-retirement-runbook.md` so any later approval can execute
   a defined strategy instead of ad-hoc path edits.
@@ -307,14 +331,18 @@ The immediate problem is integration hygiene:
   `74bdbc4`, PR #20 at `bcf55ce`, PR #21 at `36a1639`, PR #22 at `52d758e`,
   PR #23 at `726d7cf`, and PR #24 at `9aa732b`; post-merge roadmap updates
   include `6054319` and `4a9e496`.
-- The clean controller worktree is `dev-root`; the legacy
-  `/home/dgk/workspace/context-portal` checkout still carries a very large dirty
-  worktree and should be treated as archival until explicitly rebound or retired.
+- The canonical source-edit clone is now
+  `/home/dgk/workspace/cf-controlplane`, with the current source-prep branch
+  rooted in `dev-root`. The legacy `/home/dgk/workspace/context-portal`
+  checkout remains archive/compatibility evidence, not the place for new source
+  truth.
 - GitHub has tracking issues #2-#5 for the remaining original active fronts,
-  plus issue #15 for dirty checkout retirement. Issue #1, issue #6, issue #11,
-  issue #12, and issue #14 are closed after wrapper lifecycle cleanup,
+  plus issue #37 for `cf-controlplane` project-local activation and issue #31
+  for Codex runtime/project-context readback. Issue #1, issue #6, issue #11,
+  issue #12, issue #14, and issue #15 are closed after wrapper lifecycle cleanup,
   inventory/service-management triage, post-restart hook activation,
-  precompact hardening, and clean-worktree test hermeticity were verified. PR
+  precompact hardening, clean-worktree test hermeticity, and dirty-checkout
+  retirement transfer were verified. PR
   #7, PR #8, PR #9, PR #10, PR #13, PR #16, PR #17, PR #18, PR #19, and PR
   #20 are merged foundational/runtime slices.
 - Runtime reliability cleanup is retired through PR #7 and post-merge evidence.
@@ -476,7 +504,7 @@ Risks:
 - Issue #4 cannot close on the Strategy 1 source patch alone. The clean tracked
   state is now valid on `dev-root`, but target-client validation, any
   runtime helper/wrapper source change, and any systemd/Serena reload/readback
-  remain issue #15 approval-gated operator-path work.
+  remain issue #37/#31 approval-gated operator-path work.
 - The project-local helper shadow does not retire global Codex migration debt.
   `~/.codex/config.toml` still contains legacy `contextforge-helper`,
   SessionStart/UserPromptSubmit project-init hook commands, project trust, and
@@ -1012,7 +1040,7 @@ extraction if current evidence proves a better review boundary.
 - Debt policy: issue #25 can close after PR #26 merge readback because the
   repo-standard assets are on `dev-root` and raw snapshot promotion remains
   explicitly rejected unless separately sanitized. Operator-path validation now
-  returns to issue #15.
+  returns to issue #37 and issue #31.
 
 #### Wrapper lifecycle cleanup -> issue #1
 
@@ -1373,8 +1401,9 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
 6. Treat issue #25 continuity standardization as retired through PR #26 unless
    new continuity evidence shows the repo-standard assets are insufficient or
    raw transitional snapshots are being normalized as target architecture.
-7. Continue issue #15 dirty-checkout retirement before starting new
-   inward-facing work. The user selected Strategy 1 and PR #24 completed the
+7. Continue issue #37 project-local activation and issue #31 runtime readback
+   before starting new inward-facing work. Issue #15 is closed. The user
+   selected Strategy 1 and PR #24 completed the
    first source-only compatibility rebind pass, and PR #27 completed the
    clean-root `contextforge-helper` shadow so Codex MCP readback no longer
    depends on the legacy helper binding. PR #28 completed the read-only global
@@ -1393,12 +1422,10 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    execution, hook approval/toggle, prompt/resource upsert,
    token-cache/login write, service/process/systemd/registry/Pi mutation,
    legacy trust removal, hook-state pruning, or legacy checkout cleanup occurred.
-   Choose the next separately approved operator-path step: verify/open Codex
-   Desktop in the clean-root project context, decide explicit legacy
-   project-local config disposition, perform systemd/Serena reload/readback,
-   perform ContextForge registration readback, or decide archival disposition of
-   the legacy checkout. Do not bundle those runtime/global/check-out actions
-   into ordinary source work.
+   The next separately approved operator-path step is #37: prepare
+   `/home/dgk/workspace/cf-controlplane` project-local operating artifacts,
+   then have the user open/approve that project and update #31 with readback.
+   Do not bundle runtime/global/check-out actions into ordinary source work.
 8. Review stale Serena test units and #33 Serena dynamic-port risk after
    explicit approval for stop/disable/remove actions or any runtime unit
    changes. Treat #33 as non-blocking for #30 unless future evidence proves the
