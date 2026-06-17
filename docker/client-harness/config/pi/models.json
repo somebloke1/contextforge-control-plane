@@ -1,0 +1,29 @@
+{
+  "providers": {
+    "local-llama-qwen": {
+      "baseUrl": "$LOCAL_LLAMA_BASE_URL",
+      "api": "openai-completions",
+      "apiKey": "$LOCAL_LLAMA_KEY",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {
+          "id": "qwen3.6-a3b",
+          "name": "Qwen 3.6 A3B via host llama.cpp",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 65536,
+          "maxTokens": 8192,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        }
+      ]
+    }
+  }
+}

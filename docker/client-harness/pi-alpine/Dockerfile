@@ -1,0 +1,35 @@
+FROM alpine:3.22
+
+ARG PI_CODING_AGENT_VERSION=latest
+ARG USERNAME=agent
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_AUDIT=false
+ENV PI_CODING_AGENT_DIR=/home/agent/.pi/agent
+
+RUN apk add --no-cache \
+      bash \
+      ca-certificates \
+      curl \
+      git \
+      jq \
+      nodejs \
+      npm \
+      openssh-client \
+      python3 \
+      tini \
+    && addgroup -g "${USER_GID}" "${USERNAME}" \
+    && adduser -D -u "${USER_UID}" -G "${USERNAME}" -s /bin/bash "${USERNAME}" \
+    && mkdir -p /workspace /evidence \
+    && chown -R "${USERNAME}:${USERNAME}" /workspace /evidence \
+    && npm install -g "@earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION}" \
+    && npm cache clean --force
+
+USER ${USERNAME}
+WORKDIR /workspace
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["pi", "--version"]

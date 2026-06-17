@@ -85,3 +85,18 @@ Thumbs.db
 *.log
 *.trace
 *.prof
+
+# Local disposable client-container harness state
+!docker/client-harness/env/
+!docker/client-harness/env/local-llama.env.example
+docker/client-harness/env/local-llama.env
+docker/client-harness/evidence/
+docker/client-harness/workspace/*
+!docker/client-harness/workspace/.gitkeep
+
+# Local disposable ContextForge container harness state
+!docker/contextforge-harness/env/
+!docker/contextforge-harness/env/contextforge.env.example
+docker/contextforge-harness/env/contextforge.env
+docker/contextforge-harness/env/api-token.env
+docker/contextforge-harness/evidence/
