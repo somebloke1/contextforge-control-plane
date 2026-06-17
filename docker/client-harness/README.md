@@ -3,6 +3,9 @@
 Local, headless Debian client containers for validating assistant clients
 without binding runtime state to the stable Codex launch checkout.
 
+Evidence freshness and PR citation rules for this harness are defined in
+`../../docs/dev-docker-client-evidence-freshness-protocol.md`.
+
 This harness intentionally does not build or select a ContextForge server
 container. It only prepares client surfaces:
 
