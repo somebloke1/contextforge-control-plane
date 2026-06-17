@@ -873,3 +873,16 @@ copying secrets into Git; preservation and approval boundaries still apply.
 
 The user explicitly approved the operating agent to install software and Python/venv libraries needed to support scoped ContextForge control-plane development and validation work in /home/dgk/workspace/cf-controlplane. Use the project Python policy by default: create or repair the ignored local .venv with uv venv .venv when needed, install Python dependencies with uv pip install --python .venv/bin/python ..., and keep installed environments, caches, secrets, OAuth state, runtime evidence, service state, and generated local artifacts out of Git unless separately promoted as sanitized source. This approval does not authorize global Codex config mutation, hook trust/state mutation, runtime secret/OAuth/trust copy, service/process/systemd/registry/Pi global config mutation, destructive git operations, mutation of /home/dgk/workspace/context-portal, or helper/project-init apply steps that require challenge approval.
 <!-- governance-crud:end id=dec-20260617-0001 -->
+
+<!-- governance-crud:start id=dec-20260617-0002 -->
+## dec-20260617-0002: Separate live, development, and client Docker ContextForge surfaces
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-17
+- Updated: 2026-06-17
+- Tags: contextforge,surface-boundaries,docker,clients,operations
+
+ContextForge work must distinguish three surfaces. The legacy/live ContextForge surface is the currently active user/operator environment and is strictly read-only: no registry writes, service registration, prompt/resource upserts, token/team/admin changes, env edits, process restarts, service stops/starts, database writes, config rewrites, hook/trust changes, port changes, or cleanup actions. It may be used only for non-mutating evidence such as health/readiness checks, config/path inspection, process/socket inspection, logs, diagnostics, and comparison. The ContextForge development Docker surface is the isolated mutable gateway/app surface for cf-controlplane validation, with separate ports, volumes, env, registry state, credentials, and test data. Registration tests, endpoint validation, resettable integration work, and other mutable experiments belong there. Client Docker test surfaces are separate Dockerized client foils against the development Docker surface; for now they are Pi and OpenCode only and use the already served local Qwen/llama.cpp path as configuration, not installation. Evidence and claims must name the exercised surface: legacy/live read-only, ContextForge dev Docker, Pi client Docker, or OpenCode client Docker.
+<!-- governance-crud:end id=dec-20260617-0002 -->

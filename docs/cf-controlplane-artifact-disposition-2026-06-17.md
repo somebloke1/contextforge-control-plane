@@ -30,6 +30,16 @@ or archived.
   project-local operating-context activation and runtime readback are not
   complete.
 
+## Surface Boundary
+
+This disposition separates legacy/live evidence from mutable validation. The
+legacy/live ContextForge surface may be inspected read-only, but must not be
+mutated. The ContextForge development Docker surface owns mutable registration,
+endpoint, resettable integration, and gateway/app validation. Pi client Docker
+and OpenCode client Docker are the only current client foils, and they target
+the development Docker surface using the already served local Qwen/llama.cpp
+model path as configuration. Evidence must identify the exercised surface.
+
 ## Evidence Commands
 
 - `git status --short --branch`

@@ -13,6 +13,12 @@ runtime secret/evidence copies, service or systemd changes, registry/catalog
 changes, Pi/global config changes, process termination, or mutation of the
 legacy `/home/dgk/workspace/context-portal` checkout.
 
+The legacy/live ContextForge surface is read-only for this runbook and for
+successor Docker/client work. Mutable ContextForge registration, endpoint, reset,
+and client-smoke experiments must target the isolated ContextForge development
+Docker surface plus Pi/OpenCode client Docker surfaces, not the legacy/live
+operator environment. Evidence must state which surface was exercised.
+
 ## Current Authority
 
 - Issue #37 is open and owns project-local operating-context activation.

@@ -58,6 +58,31 @@ the candidate ContextForge stack for validation.
 Do not silently repoint global Codex config, Codex Desktop, project hooks, or
 the root operating agent to the candidate gateway.
 
+## ContextForge Surface Separation
+
+Keep these ContextForge surfaces distinct in code, docs, issues, PRs, runtime
+claims, and evidence:
+
+1. Legacy/live ContextForge surface: the currently active user/operator
+   environment. It is strictly read-only. Do not perform registry writes,
+   service registration, prompt/resource upserts, token/team/admin changes,
+   env edits, process restarts, service stops/starts, database writes, config
+   rewrites, hook/trust changes, port changes, or cleanup actions. Use it only
+   for non-mutating evidence such as health/readiness checks, config/path
+   inspection, process/socket inspection, logs, diagnostics, and comparison.
+2. ContextForge development Docker surface: the isolated mutable gateway/app
+   surface for `cf-controlplane` validation. It must use separate ports,
+   volumes, env, registry state, credentials, and test data. Default mutable
+   experiments, registration tests, endpoint validation, resettable integration
+   work, and Docker development workflows to this surface.
+3. Client Docker test surfaces: separate Dockerized clients used as real
+   integration foils against the ContextForge development Docker surface. For
+   now, only Pi and OpenCode are in scope. They use the already served local
+   Qwen/llama.cpp path as configuration, not installation.
+
+Every evidence report must name the exercised surface: legacy/live read-only,
+ContextForge dev Docker, Pi client Docker, or OpenCode client Docker.
+
 ## GitHub Operating Protocol
 
 The GitHub issue/branch/PR pattern used in the legacy workspace must resume
