@@ -134,31 +134,36 @@ make it look clean.
 
 ### GitHub Dirty-Retirement Gate
 
-GitHub issue #15 is the authoritative completion indicator for retiring the
+GitHub issue #15 was the authoritative completion indicator for retiring the
 dirty `context-portal` checkout as an agent operating surface:
 
 - <https://github.com/somebloke1/contextforge-control-plane/issues/15>
 
-If issue #15 remains open, dirty-checkout retirement is not complete. If a
-linked follow-up issue records a required acceptance gate for #15, that linked
-issue is also completion-blocking until closed or explicitly superseded in #15.
+Current issue #15 state: closed. Its remaining practical concerns have been
+transferred to the specific successor gates that own them:
+
+- issue #37 owns `cf-controlplane` project-local Codex operating-context
+  activation;
+- issue #31 owns Codex runtime/project-context readback after the global config
+  migration;
+- issue #2, issue #3, issue #4, issue #5, and issue #33 continue to own their
+  original service/project-init/Pi/registry/Serena work where still open.
 
 Current refreshed evidence on 2026-06-17:
 
-- issue #15 is open;
+- issue #15 is closed;
+- issue #37 is open for `cf-controlplane` project-local activation;
 - issue #31 is open for Codex `pending_restart` and runtime readback after the
   approved global config migration;
 - issue #31 now distinguishes the state precisely: the global config/trust
   migration is verified at disk and fresh CLI readback level, but active
   Codex Desktop project-local wrapper processes still come from the legacy
-  `context-portal` project because this Desktop thread remains rooted there;
-- therefore the dirty-checkout cleanup may be partially advanced, but it is not
-  complete and must not be reported as complete.
+  `context-portal` project because this Desktop thread remains rooted there.
 
 The archive-insurance posture remains valid only as an interim operating
-strategy. It does not close issue #15 unless GitHub state is updated with
-accepted evidence, residual risk, and any successor issue that explicitly owns
-the remaining retirement condition.
+strategy. It does not complete issue #37 or issue #31 until the new
+`cf-controlplane` project context proves hooks, skills, MCP paths, and runtime
+readback from the new root.
 
 ### Cleanup Semantics
 
@@ -214,7 +219,7 @@ Acceptance evidence:
   decision;
 - remaining dirty artifacts are explicitly classified as archive-only unless
   evidence shows they are essential;
-- issue #15 and any linked blocker issues are read and reconciled into this
+- issue #15 and any successor blocker issues are read and reconciled into this
   roadmap before the subgoal is claimed complete;
 - no unrelated dirty work is reset, deleted, or discarded.
 
@@ -230,7 +235,7 @@ Current disposition report:
 
 Current blockers:
 
-- issue #15 remains open;
+- issue #15 is closed; remaining operating-context work is owned by issue #37;
 - issue #31 remains open;
 - `.codex/config.toml` and `.project/context_forge_state.json` still encode
   legacy `context-portal` operational identity and must not migrate as-is.
@@ -241,7 +246,7 @@ Current blockers:
 
 Current gate status:
 
-- Issue #15 cleanup is not complete while any cleanup gate in
+- Issue #37 activation is not complete while any activation gate in
   `docs/cf-controlplane-artifact-disposition-2026-06-17.md` is `FAIL`.
 - Subgoal 1 may close only after each `FAIL` or `PENDING` gate has an owner and
   next action, so moving to Git curation cannot be mistaken for cleanup
@@ -349,7 +354,7 @@ Status as of 2026-06-17:
   `server-instances/serena-context-portal/**`, and project-init resource
   identifiers still require retarget, regeneration, or explicit compatibility
   classification.
-- GitHub evidence is recorded on issue #15 and issue #31.
+- GitHub evidence is recorded on issue #15, issue #31, and issue #37.
 
 Immediate switch rule:
 
@@ -365,6 +370,22 @@ Immediate switch rule:
 Outcome: `cf-controlplane` has curated project-local hooks, skills, and
 governance artifacts, with operational path references corrected and hooks
 approved at the project level.
+
+Runbook:
+
+- `docs/cf-controlplane-project-local-activation-runbook.md`
+
+Status as of this source-prep branch:
+
+- branch `codex/issue-37-cf-controlplane-operating-context` prepares the
+  project-local activation instructions and runbook from
+  `/home/dgk/workspace/cf-controlplane`;
+- it does not retarget `.codex/config.toml`, regenerate
+  `.project/context_forge_state.json`, mutate hook trust, copy runtime state,
+  touch services/systemd/registry/Pi/global config/processes, or edit the
+  legacy checkout;
+- publishing the branch or opening a draft PR is the next GitHub coordination
+  step when approved.
 
 Acceptance evidence:
 
@@ -438,7 +459,7 @@ runtime secrets/evidence local-only, then have the user open/approve the
 `cf-controlplane` Codex project and verify hooks, skills, governance, and
 project-local MCP paths from that project context.
 
-Do not treat issue #15 cleanup or issue #31 runtime verification as complete
+Do not treat issue #37 activation or issue #31 runtime verification as complete
 until the new project context proves it is no longer using hidden
 `context-portal` or `contextforge-slices` operating paths.
 
