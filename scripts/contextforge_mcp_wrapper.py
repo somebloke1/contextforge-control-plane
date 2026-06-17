@@ -18,10 +18,10 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CONFIG_ENV = REPO_ROOT / "config" / "contextforge.env"
+CONFIG_ENV = Path(os.environ.get("CONTEXTFORGE_CONFIG_ENV", REPO_ROOT / "config" / "contextforge.env"))
 TLS_CERT = REPO_ROOT / "config" / "tls" / "contextforge-local.crt"
-TOKEN_CACHE = REPO_ROOT / "run" / "contextforge-wrapper-token.local.json"
-TOKEN_LOCK = REPO_ROOT / "run" / "contextforge-wrapper-token.local.lock"
+TOKEN_CACHE = Path(os.environ.get("CONTEXTFORGE_TOKEN_CACHE", REPO_ROOT / "run" / "contextforge-wrapper-token.local.json"))
+TOKEN_LOCK = Path(os.environ.get("CONTEXTFORGE_TOKEN_LOCK", f"{TOKEN_CACHE}.lock"))
 GATEWAY_BASE = os.environ.get(
     "CONTEXTFORGE_BASE_URL",
     "http://127.0.0.1:4444",
@@ -236,10 +236,12 @@ def _login_token(email: str, password: str) -> str:
     return token
 
 
-def _token(email: str, password: str) -> str:
+def _token(email: str | None, password: str | None) -> str:
     env_token = os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
     if env_token:
         return env_token.removeprefix("Bearer ").strip()
+    if not email or not password:
+        raise RuntimeError(f"missing PLATFORM_ADMIN_EMAIL or PLATFORM_ADMIN_PASSWORD in {CONFIG_ENV}")
 
     cached = _cached_token()
     if cached:
@@ -269,7 +271,7 @@ def _jsonrpc_error(request_id: Any, message: str, code: int, data: Any = None) -
     return {"jsonrpc": "2.0", "id": request_id, "error": error}
 
 
-def _install_transport_shim(stock_wrapper: Any, lifecycle: WrapperLifecycle, email: str, password: str) -> None:
+def _install_transport_shim(stock_wrapper: Any, lifecycle: WrapperLifecycle, email: str | None, password: str | None) -> None:
     """Patch stock wrapper forwarding to be id/session aware for streamable HTTP."""
 
     session: dict[str, str | None] = {"mcp_session_id": None}
@@ -296,7 +298,7 @@ def _install_transport_shim(stock_wrapper: Any, lifecycle: WrapperLifecycle, ema
                 session["mcp_session_id"] = resp.headers["mcp-session-id"]
             status = resp.status_code
             ctype = (resp.headers.get("Content-Type") or "").lower()
-            if status == 401 and refresh_allowed:
+            if status == 401 and refresh_allowed and email and password:
                 token = _login_token(email, password)
                 settings.auth_header = f"Bearer {token}"
                 os.environ["MCP_AUTH"] = settings.auth_header
@@ -363,7 +365,7 @@ def _install_transport_shim(stock_wrapper: Any, lifecycle: WrapperLifecycle, ema
     stock_wrapper.forward_once = forward_once
 
 
-def _run_stock_wrapper(lifecycle: WrapperLifecycle, email: str, password: str) -> int:
+def _run_stock_wrapper(lifecycle: WrapperLifecycle, email: str | None, password: str | None) -> int:
     """Run stock ContextForge's stdio wrapper with local lifecycle guards."""
 
     original_stdin = sys.stdin
@@ -414,12 +416,9 @@ def main() -> int:
         return 2
 
     server_name = sys.argv[1]
-    env = _read_env(CONFIG_ENV)
+    env = _read_env(CONFIG_ENV) if CONFIG_ENV.exists() else {}
     email = env.get("PLATFORM_ADMIN_EMAIL")
     password = env.get("PLATFORM_ADMIN_PASSWORD")
-    if not email or not password:
-        print(f"missing PLATFORM_ADMIN_EMAIL or PLATFORM_ADMIN_PASSWORD in {CONFIG_ENV}", file=sys.stderr)
-        return 1
 
     try:
         token = _token(email, password)
