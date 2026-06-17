@@ -99,8 +99,20 @@ harness yet. They are installed and version-checked only.
 
 See `CONTEXTFORGE_HELPER_BASELINE.md` for the Pi/OpenCode baseline contract
 that closes the gap between specialized ContextForge smoke scripts and ordinary
-ad hoc client sessions. The current contract is source/test-only: runtime proof
-still requires separate approval to rebuild or run Docker client containers.
+ad hoc client sessions.
+
+The harness-owned baseline launchers are:
+
+```sh
+scripts/start-pi-contextforge-baseline.sh
+scripts/start-opencode-contextforge-baseline.sh
+```
+
+They mount this repository read-only at `/repo`, keep generated client state in
+the client container/workspace volumes, keep Pi/OpenCode on the configured local
+Qwen model path, and avoid host Pi/OpenCode global config mutation. Runtime
+proof still requires separate approval to rebuild or run Docker client
+containers.
 
 ## OpenCode ContextForge Dev Gateway Smoke
 

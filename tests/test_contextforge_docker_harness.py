@@ -140,6 +140,17 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("/opt/contextforge-wrapper-venv/bin/python", dockerfile)
         self.assertIn('MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"', compose)
 
+    def test_opencode_image_provisions_container_local_contextforge_helper_runtime(self) -> None:
+        dockerfile = (ROOT / "docker/client-harness/opencode/Dockerfile").read_text(encoding="utf-8")
+        compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
+
+        self.assertIn("python3-venv", dockerfile)
+        self.assertIn("/opt/contextforge-helper-venv", dockerfile)
+        self.assertIn("mcp-contextforge-gateway==${MCP_CONTEXTFORGE_GATEWAY_VERSION}", dockerfile)
+        self.assertIn("CONTEXTFORGE_HELPER_PYTHON=/opt/contextforge-helper-venv/bin/python", dockerfile)
+        self.assertIn('MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"', compose)
+        self.assertIn("CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py", compose)
+
     def test_pi_dev_smoke_uses_shim_against_dev_gateway(self) -> None:
         source = (ROOT / "docker/client-harness/scripts/smoke-pi-contextforge-dev.sh").read_text(encoding="utf-8")
 
@@ -189,13 +200,78 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
 
         self.assertIn("Pi remains shim-first", contract)
+        self.assertIn("scripts/start-pi-contextforge-baseline.sh", contract)
+        self.assertIn("config/pi/start-contextforge-baseline.sh", contract)
         self.assertIn("pi-extensions/contextforge-global-shim/index.ts", contract)
         self.assertIn("cf_project_init_*", contract)
         self.assertIn("avoid writing `~/.pi`, requiring `/reload`, or mutating host/global Pi state", contract)
         self.assertIn("project-local harness fixture", contract)
+        self.assertIn("contextforge-helper", contract)
+        self.assertIn("container-local Python environment", contract)
+        self.assertIn("scripts/start-opencode-contextforge-baseline.sh", contract)
+        self.assertIn("config/opencode/start-contextforge-baseline.sh", contract)
+        self.assertIn("config/opencode/plugins/contextforge-project-init.js", contract)
         self.assertIn("docker/client-harness/config/opencode", contract)
         self.assertIn("scripts/opencode_project_init_hook.py", contract)
         self.assertIn("avoid user-global OpenCode config or plugin writes", contract)
+
+    def test_client_helper_baseline_compose_mounts_repo_only_for_pi_and_opencode(self) -> None:
+        compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
+
+        self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE: /config/opencode/plugins/contextforge-project-init.js", compose)
+        self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_TARGET: /workspace/.opencode/plugins/contextforge-project-init.js", compose)
+        self.assertIn("CONTEXTFORGE_OPENCODE_HOOK: /repo/scripts/opencode_project_init_hook.py", compose)
+        self.assertIn("CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python", compose)
+        self.assertIn("CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py", compose)
+        self.assertIn("CONTEXTFORGE_PI_SHIM_EXTENSION: /repo/pi-extensions/contextforge-global-shim/index.ts", compose)
+        self.assertIn("CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py", compose)
+
+        for service in ("opencode", "pi"):
+            match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
+            self.assertIsNotNone(match, service)
+            self.assertIn("- ../..:/repo:ro", match.group(0))
+
+        for service in ("codex-cli", "claude-code", "gemini-cli"):
+            match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
+            self.assertIsNotNone(match, service)
+            self.assertNotIn("- ../..:/repo:ro", match.group(0))
+
+    def test_pi_baseline_launcher_loads_shim_without_host_global_mutation(self) -> None:
+        container_launcher = (ROOT / "docker/client-harness/config/pi/start-contextforge-baseline.sh").read_text(encoding="utf-8")
+        host_launcher = (ROOT / "docker/client-harness/scripts/start-pi-contextforge-baseline.sh").read_text(encoding="utf-8")
+
+        self.assertIn("--extension \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\"", container_launcher)
+        self.assertIn("--provider local-llama-qwen", container_launcher)
+        self.assertIn("--model qwen3.6-a3b", container_launcher)
+        self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON:=/opt/contextforge-wrapper-venv/bin/python", container_launcher)
+        self.assertIn("CONTEXTFORGE_PI_SHIM_WRAPPER:=/repo/scripts/contextforge_mcp_wrapper.py", container_launcher)
+        self.assertIn("docker compose -f compose.yml run --rm --no-deps", host_launcher)
+        self.assertIn("-v \"${REPO_ROOT}:/repo:ro\"", host_launcher)
+        self.assertNotIn("/home/dgk/.pi", container_launcher + host_launcher)
+        self.assertNotIn("/home/agent/.pi/agent/extensions", container_launcher + host_launcher)
+
+    def test_opencode_baseline_launcher_installs_project_plugin_fixture(self) -> None:
+        container_launcher = (ROOT / "docker/client-harness/config/opencode/start-contextforge-baseline.sh").read_text(encoding="utf-8")
+        host_launcher = (ROOT / "docker/client-harness/scripts/start-opencode-contextforge-baseline.sh").read_text(encoding="utf-8")
+        plugin = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").read_text(encoding="utf-8")
+        opencode_config = (ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8")
+
+        self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE:=/config/opencode/plugins/contextforge-project-init.js", container_launcher)
+        self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_TARGET:=/workspace/.opencode/plugins/contextforge-project-init.js", container_launcher)
+        self.assertIn("cp \"${CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE}\" \"${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}\"", container_launcher)
+        self.assertIn("exec opencode \"$@\"", container_launcher)
+        self.assertIn("docker compose -f compose.yml run --rm --no-deps", host_launcher)
+        self.assertIn("-v \"${REPO_ROOT}:/repo:ro\"", host_launcher)
+        self.assertIn("experimental.chat.system.transform", plugin)
+        self.assertIn("spawnSync", plugin)
+        self.assertIn("CONTEXTFORGE_OPENCODE_HOOK", plugin)
+        self.assertIn("opencode_project_init_hook.py", plugin)
+        self.assertIn('"contextforge-helper"', opencode_config)
+        self.assertIn('"{env:CONTEXTFORGE_HELPER_PYTHON}"', opencode_config)
+        self.assertIn('"{env:CONTEXTFORGE_HELPER_SCRIPT}"', opencode_config)
+        self.assertIn("contextforge-client-harness-runtime", opencode_config)
+        self.assertNotIn("/home/dgk/.config/opencode", container_launcher + host_launcher + plugin)
+        self.assertNotIn("opencode mcp add", container_launcher + host_launcher + plugin)
 
     def test_client_helper_baseline_contract_requires_future_runtime_evidence(self) -> None:
         contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
