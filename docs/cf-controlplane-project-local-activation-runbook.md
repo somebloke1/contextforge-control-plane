@@ -83,8 +83,10 @@ development Docker validation.
   `mentality`, and `web_search` from this checkout.
 - `scripts/inspect_project_init_readiness.py --project-root
   /home/dgk/workspace/cf-controlplane --client-type codex --no-processes`
-  reports no blockers for activation-readiness, with remaining warnings for
-  Serena provisioning and compatibility identifiers.
+  reports `status: ready` with no blockers and no warnings. This proves
+  canonical source/readiness only; #50 still owns Serena runtime ownership,
+  ContextForge virtual-server readback, project-local Codex `serena`
+  visibility, and target-client-visible validation.
 - `.project/context_forge_state.json` is rooted at
   `/home/dgk/workspace/cf-controlplane` and revision 13 marks the Codex
   project-local activation state `initialized`, with the current Codex job
@@ -142,7 +144,7 @@ development Docker validation.
 | `.codex/skills/contextforge-governance/references/ledger-shape.md` | Must use `cf-controlplane` as the repository path template | Track source correction. |
 | `.codex/config.toml` | Project-local activation surface | Retargeted on `codex/issue-37-activation-readiness`; `codex -C ... mcp list --json` reads expected project-local entries. |
 | `.project/context_forge_state.json` | Helper-owned project-init state | Rooted at `cf-controlplane`; revision 13 marks Codex project-local activation verified/passed and repairs stale project naming after delegated review. |
-| `server-instances/serena-cf-controlplane-d46fe58a2a20/**` | Compatibility Serena evidence with `cf-controlplane` root | Do not silently rename. Serena backend provisioning and the means to provision it are an abeyant hard requirement, not optional. Classify as compatibility only until a later Serena/project-init slice generates `serena-cf-controlplane-<hash>` or records an explicit validated compatibility decision. |
+| `server-instances/serena-cf-controlplane-d46fe58a2a20/**` | Canonical Serena source/readiness evidence | Manifest exists and is rooted at `cf-controlplane`; do not treat this as runtime/client closure. #50 still owns service ownership, ContextForge virtual-server readback, project-local Codex `serena` visibility, and target-client-visible validation. |
 | `contextforge://cf-controlplane/...` resource ids | Compatibility decision pending | Do not silently rename. Record whether retained as compatibility ids or migrated. |
 | Runtime env/evidence/trust/OAuth/hook-state | Local-only runtime state | Do not copy into Git. Recreate or recapture only after explicit approval. |
 
