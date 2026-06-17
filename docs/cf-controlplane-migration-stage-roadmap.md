@@ -384,8 +384,12 @@ Status as of this source-prep branch:
   `.project/context_forge_state.json`, mutate hook trust, copy runtime state,
   touch services/systemd/registry/Pi/global config/processes, or edit the
   legacy checkout;
-- publishing the branch or opening a draft PR is the next GitHub coordination
-  step when approved.
+- draft PR #38 publishes the branch for review:
+  <https://github.com/somebloke1/contextforge-control-plane/pull/38>;
+- PR #38 is source-prep only and leaves environment setup, `.codex/config.toml`
+  retarget, `.project/context_forge_state.json` regeneration/migration, Serena
+  compatibility or regeneration, Codex project approval, and #31 runtime
+  readback as later approval-gated transitions.
 
 Acceptance evidence:
 
