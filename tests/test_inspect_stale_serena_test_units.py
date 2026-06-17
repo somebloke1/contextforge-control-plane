@@ -41,7 +41,7 @@ EXACT_TEST_UNITS = (
 
 
 class SerenaStaleUnitInspectorTests(unittest.TestCase):
-    def test_report_classifies_canonical_project_and_test_units(self) -> None:
+    def test_report_classifies_compatibility_project_and_test_units(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             cat_dir = root / "cat"
@@ -79,7 +79,7 @@ ExecStart={instance_dir}/run-server.sh --project {project_root}
 
         by_unit = {unit["unit"]: unit for unit in report["units"]}
         self.assertEqual(
-            "retain_canonical_operator",
+            "retain_compatibility_operator",
             by_unit["contextforge-serena-context-portal.service"]["classification"],
         )
         self.assertEqual(
@@ -205,6 +205,14 @@ ExecStart={instance_dir}/run-server.sh --project {project_root}
         report = json.loads(result.stdout)
         self.assertEqual(inspector.SCHEMA_URI, report["schema_uri"])
         self.assertIn("ContextForge registry cleanup require separate explicit approval", report["approval_boundary"])
+
+    def test_runbook_classifies_context_portal_unit_as_compatibility(self) -> None:
+        runbook = (REPO_ROOT / "docs" / "contextforge-wrapper-lifecycle-runbook.md").read_text(encoding="utf-8")
+
+        self.assertIn("compatibility Serena", runbook)
+        self.assertIn("not proof of canonical `cf-controlplane` Serena\nprovisioning", runbook)
+        self.assertIn("Do not stop\n`contextforge-serena-context-portal.service`", runbook)
+        self.assertNotIn("is the canonical Serena\nbackend for this repository", runbook)
 
 
 if __name__ == "__main__":
