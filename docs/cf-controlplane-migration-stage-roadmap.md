@@ -466,10 +466,12 @@ Docker integration is now tracked by issue #41. Stdio MCP servers need
 backend-local transceiver/gateway services for IP-to-IP communication with the
 ContextForge development Docker gateway; the gateway container should remain
 stock unless a concrete backend proves sidecar/transceiver locality is
-insufficient. The next Docker slice should start with a low-risk stdio backend
-such as `mentality`, expose `/mcp` and `/sse` on the reserved `9200-9299`
-range, register only with the dev Docker ContextForge surface, and validate
-through Pi/OpenCode client Docker surfaces.
+insufficient. The next Docker slice should try the stock ContextForge-provided
+bridge/transceiver path first, likely `python -m mcpgateway.translate`, before
+adding custom wrapper logic. Start with a low-risk stdio backend such as
+`mentality`, expose `/mcp` and `/sse` on the reserved `9200-9299` range,
+register only with the dev Docker ContextForge surface, and validate through
+Pi/OpenCode client Docker surfaces.
 
 Non-actions preserved by this branch:
 
