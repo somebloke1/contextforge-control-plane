@@ -161,6 +161,54 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertNotIn("127.0.0.1:4444", source)
         self.assertNotIn("/home/dgk/.pi", source)
 
+    def test_client_helper_baseline_contract_records_issue_62_gap(self) -> None:
+        contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docker/client-harness/README.md").read_text(encoding="utf-8")
+
+        self.assertIn("Issue #62 identified a real gap", contract)
+        self.assertIn("ordinary ad hoc client sessions", contract)
+        self.assertIn("specialized ContextForge smoke flows", contract)
+        self.assertIn("docker/client-harness/scripts/smoke-pi-contextforge-dev.sh", contract)
+        self.assertIn("docker/client-harness/scripts/smoke-opencode-contextforge-dev.sh", contract)
+        self.assertIn("CONTEXTFORGE_HELPER_BASELINE.md", readme)
+
+    def test_client_helper_baseline_contract_limits_surface_and_mutations(self) -> None:
+        contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
+
+        self.assertIn("Pi client Docker", contract)
+        self.assertIn("OpenCode client Docker", contract)
+        self.assertIn("local llama.cpp Qwen model path", contract)
+        self.assertIn("ContextForge development Docker surface", contract)
+        self.assertIn("Codex CLI, Claude Code, and Gemini CLI client expansion", contract)
+        self.assertIn("Host Pi install, host Pi reload, or user-global Pi extension mutation", contract)
+        self.assertIn("User-global OpenCode config or plugin mutation", contract)
+        self.assertIn("Legacy/live ContextForge registry, token, service, or process mutation", contract)
+        self.assertIn("Runtime Docker rebuild/run proof", contract)
+
+    def test_client_helper_baseline_contract_defines_pi_and_opencode_routes(self) -> None:
+        contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
+
+        self.assertIn("Pi remains shim-first", contract)
+        self.assertIn("pi-extensions/contextforge-global-shim/index.ts", contract)
+        self.assertIn("cf_project_init_*", contract)
+        self.assertIn("avoid writing `~/.pi`, requiring `/reload`, or mutating host/global Pi state", contract)
+        self.assertIn("project-local harness fixture", contract)
+        self.assertIn("docker/client-harness/config/opencode", contract)
+        self.assertIn("scripts/opencode_project_init_hook.py", contract)
+        self.assertIn("avoid user-global OpenCode config or plugin writes", contract)
+
+    def test_client_helper_baseline_contract_requires_future_runtime_evidence(self) -> None:
+        contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
+
+        self.assertIn("separately approved validation", contract)
+        self.assertIn("Pi ad hoc session lists or can invoke", contract)
+        self.assertIn("OpenCode ad hoc session receives project-init helper/hook context", contract)
+        self.assertIn("Both clients continue using the local llama.cpp Qwen model path", contract)
+        self.assertIn("revoked before exit", contract)
+        self.assertIn("Docker build/run/rebuild operations", contract)
+        self.assertIn("ContextForge registry or token mutation", contract)
+        self.assertIn("helper approve/apply/recovery state mutation", contract)
+
 
 if __name__ == "__main__":
     unittest.main()
