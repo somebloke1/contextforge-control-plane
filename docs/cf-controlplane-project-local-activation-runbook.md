@@ -40,9 +40,18 @@ development Docker validation.
 - PR #35, PR #36, PR #38, and PR #39 are merged. PR #39 merged the
   activation-readiness source-prep branch into `dev-root` at
   `5e336c66953ece50043d78a4ac70530980304531`.
-- Branch `codex/issue-31-runtime-readback-plan` contains the next
-  non-mutating runtime/project-context readback planning transition from that
-  merge commit.
+- The current activation-readiness queue is split into focused PRs from
+  `dev-root`: #47 Serena port guardrails, #48 stale Serena user-unit
+  inspector, #49 ContextForge cleanup inspector, and #51 project MCP
+  container/locality matrix. Keep that order unless current GitHub state or an
+  explicit operator instruction changes it.
+- PR #53 records the guided MCP service-onboarding helper taxonomy for #52. It
+  is ready but lower priority than the activation-readiness queue because #52
+  is high impact and low-to-medium priority. Keep #53 visible after #47, #48,
+  #49, and #51 unless the operator explicitly reprioritizes #52.
+- Issue #31 remains the owner for non-mutating Codex runtime/project-context
+  readback after the global config migration. Do not treat #37 source/readiness
+  packaging as proof of #31 runtime closure.
 
 ## Current Calibration Evidence
 
@@ -69,6 +78,12 @@ development Docker validation.
   fixes it and adds a regression. Remaining `context-portal` and
   `contextforge-slices` references are historical evidence, compatibility
   identifiers, or explicit readiness-inspector needles.
+- Current ready-queue evidence is recorded in GitHub before merge: the tested
+  dry-run order was #47, #48, #49, #51, and #53, with 103 touched-suite tests,
+  `py_compile`, and `git diff --check` passing. Durable evidence references are
+  issue #37 comment `4733338931`, PR #53 comment `4733339045`, issue #52
+  comment `4733339161`, issue #52 priority comment `4733373332`, and issue #37
+  roll-up comment `4733377101`.
 
 ## Source-Prep Classification
 
