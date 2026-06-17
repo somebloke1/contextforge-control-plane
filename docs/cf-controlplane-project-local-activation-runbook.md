@@ -65,8 +65,11 @@ development Docker validation.
 - Issue #5 remains open and is packaged in draft PR #72. The read-only
   ContextForge cleanup inspector now separates retired project-surface registry
   records from ordinary orphan DELETE candidates.
-- The current activation-readiness review queue is #68, #69, #70, #71, and
-  #72. Issue #37 comment `4736139800` records the five-PR dry merge and
+- Issue #50 remains open and is packaged in draft PR #73 for source-only
+  Serena verifier diagnostics. The verifier now distinguishes an open canonical
+  port from a port owned by the canonical manifest process.
+- The current activation-readiness review queue is #68, #69, #70, #71, #72,
+  and #73. Issue #37 comment `4736205570` records the six-PR dry merge and
   current evidence boundary. No PR in this queue is approved for merge or draft
   promotion by this runbook.
 - Issue #50 remains open for canonical Serena runtime/service/client-visible
@@ -117,12 +120,18 @@ development Docker validation.
   API readback leaves one ordinary orphan prompt DELETE candidate and separates
   two retired project-surface registry records into a blocker list. Durable
   issue evidence is #5 comment `4736136201`.
-- The current five-PR queue-order dry merge #68 -> #69 -> #70 -> #71 -> #72
+- PR #73 hardens the Serena project-instance verifier for #50. Its read-only
+  host probe classifies the current port listener as `foreign_or_stale_owner`,
+  with no matching canonical PID. Durable issue evidence is #50 comment
+  `4736200559`; #2 was also updated because the listener evidence affects stale
+  Serena cleanup.
+- The current six-PR queue-order dry merge #68 -> #69 -> #70 -> #71 -> #72
+  -> #73
   applied cleanly from `origin/dev-root@4cc252f1cd1770f2e574b443e0471b94960a611f`
-  and passed 133 queue-owned tests plus `git diff --check`. Durable evidence is
-  issue #37 comment `4736139800`.
+  and passed 135 queue-owned tests plus `git diff --check`. Durable evidence is
+  issue #37 comment `4736205570`.
 - Earlier queue dry-run evidence remains useful history but is no longer the
-  current merge recommendation after #31/#33/#41 closure and the #68-#72
+  current merge recommendation after #31/#33/#41 closure and the #68-#73
   packaging work.
 
 ## Source-Prep Classification
