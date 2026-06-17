@@ -157,6 +157,14 @@ communication. Keep those services on the ContextForge development Docker
 surface, use the reserved `9200-9299` range, and continue to keep the
 legacy/live ContextForge surface read-only.
 
+Pi is not a native MCP client. Pi validation must go through a Pi extension or
+API adapter surface, not direct `/mcp` or `/sse` consumption. The existing
+TypeScript global shim under `pi-extensions/contextforge-global-shim` is one
+candidate: it imports ContextForge virtual-server tools/prompts/resources and
+registers Pi-native `registerTool()` tools. A direct ContextForge API path is
+also acceptable if the stock API makes that simpler and stable enough. Issue
+#41 should evaluate those options before selecting the Pi validation adapter.
+
 ## Non-Actions
 
 Do not mutate the legacy checkout as part of this runbook. The legacy

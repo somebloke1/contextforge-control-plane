@@ -473,6 +473,14 @@ adding custom wrapper logic. Start with a low-risk stdio backend such as
 register only with the dev Docker ContextForge surface, and validate through
 Pi/OpenCode client Docker surfaces.
 
+Pi validation needs a separate adapter decision because Pi does not natively
+consume MCP transports. Candidate paths are the existing TypeScript global shim
+under `pi-extensions/contextforge-global-shim`, which maps ContextForge
+virtual-server tools/prompts/resources into Pi-native `registerTool()` tools,
+or a direct ContextForge API integration if the stock API is easier and stable
+enough. Do not claim Pi client validation from backend `/mcp` or `/sse` checks
+alone.
+
 Non-actions preserved by this branch:
 
 - no global config change;
