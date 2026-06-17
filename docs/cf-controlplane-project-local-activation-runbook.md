@@ -40,9 +40,29 @@ development Docker validation.
 - PR #35, PR #36, PR #38, and PR #39 are merged. PR #39 merged the
   activation-readiness source-prep branch into `dev-root` at
   `5e336c66953ece50043d78a4ac70530980304531`.
-- Branch `codex/issue-31-runtime-readback-plan` contains the next
-  non-mutating runtime/project-context readback planning transition from that
-  merge commit.
+- The primary activation-readiness queue has landed on `dev-root`: #47 Serena
+  port guardrails, #48 stale Serena user-unit inspector, #49 ContextForge
+  cleanup inspector, and #51 project MCP container/locality matrix merged in
+  that order. The merge-tip evidence is issue #37 comment `4734271745`.
+- PR #59 remains the focused draft follow-up for #56. It refreshes the
+  project-local precompact/helper path contract after the primary queue merge
+  and still requires an explicit operator decision before promotion or merge.
+- The remaining refreshed activation-readiness queue is #59, #65, #61, #64,
+  #63, #53, and #55, followed by this PR #54 as the final docs-only runbook
+  refresh. Issue #37 comment `4735200531` records the queue-order dry merge
+  through #55 and the current evidence boundary.
+- PR #53 records the guided MCP service-onboarding helper taxonomy for #52. It
+  remains important but lower priority because #52 is high impact and
+  low-to-medium priority. It has been refreshed against current `dev-root` and
+  the active queue; do not treat it as runtime activation evidence.
+- PR #54 is this runbook/status refresh. It is docs-only, should stay last in
+  the refresh order, and should not be treated as runtime activation evidence.
+- PR #55 remains a draft project-init activation-job reconciliation slice unless
+  explicitly promoted. It has current #4/#37 evidence, but does not retire the
+  Serena provisioning or compatibility-identifier readiness warnings.
+- Issue #31 remains the owner for non-mutating Codex runtime/project-context
+  readback after the global config migration. Do not treat #37 source/readiness
+  packaging as proof of #31 runtime closure.
 
 ## Current Calibration Evidence
 
@@ -69,6 +89,34 @@ development Docker validation.
   fixes it and adds a regression. Remaining `context-portal` and
   `contextforge-slices` references are historical evidence, compatibility
   identifiers, or explicit readiness-inspector needles.
+- The approved primary queue was merged in order #47, #48, #49, #51. Final
+  `dev-root` readback was `274871322c2455cfab8e716d831043171eea1291`; the
+  post-merge touched-suite validation passed 98 tests, `py_compile`, and
+  `git diff --check`. Durable merge evidence is issue #37 comment
+  `4734271745`.
+- PR #59 was refreshed after the primary queue merge. Its current head is
+  `d56782bfa2491c6827739a00a175a8a722a1d379`, base is `dev-root`
+  `274871322c2455cfab8e716d831043171eea1291`, and canonical workspace
+  validation passed the focused precompact config test, full unittest discovery
+  with 505 tests, `py_compile`, and `git diff --check`. Durable evidence is PR
+  #59 comment `4734298590` and issue #56 comment `4734298713`.
+- PR #65, #61, #64, #63, #53, and #55 were refreshed after the primary queue
+  merge. The current recommended order is `#59 -> #65 -> #61 -> #64 -> #63 ->
+  #53 -> #55`, then this PR #54 last.
+- The queue-order dry merge through #55 applied cleanly and passed 150
+  queue-owned tests, `py_compile`, and `git diff --check`. The #59 precompact
+  config assertion is location-sensitive in arbitrary temp worktrees, so it was
+  verified separately in the canonical checkout with
+  `tests.test_codex_precompact_continuity_hook -v` running 17 tests OK.
+  Durable evidence is issue #37 comment `4735200531`.
+- PR #55 read-only inspector evidence still reports `status: attention_required`
+  with warnings `serena_project_instance_not_provisioned` and
+  `project_init_compatibility_identifiers_present`. Its activation-job
+  reconciliation summary has `current_verified_jobs=1`,
+  `current_validation_pending_jobs=0`, `superseded_pending_jobs=2`, and
+  `attention_required_jobs=0`. Durable #4 evidence is comment `4735196608`.
+- Earlier five- and six-PR dry-run evidence for #53/#54 remains useful history
+  but is no longer current merge evidence after #47, #48, #49, and #51 landed.
 
 ## Source-Prep Classification
 
