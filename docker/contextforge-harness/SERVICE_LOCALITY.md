@@ -77,6 +77,38 @@ Prefer one backend container per meaningful locality boundary:
 A shared backend container is acceptable only when those boundaries are
 intentionally the same.
 
+## Project-Scoped MCP Container Matrix
+
+Do not Dockerize every MCP backend by default. Choose a container shape from
+the backend's real service boundary:
+
+| Service class | Container default | Reason |
+| --- | --- | --- |
+| Shared canonical services such as `mentality`, `context7`, `playwright`, `ssh-tmux`, `exa-search`, `github`, `web-search`, and hosted/native services | Shared service or existing native endpoint | These services are not project-specific by default; duplicating them per project would create sibling identities, token scope drift, port churn, and extra lifecycle state without proving new behavior. |
+| Credential-scoped or user-scoped services | One backend or transceiver per credential or user when the backend cannot safely multiplex | Credential and local-user boundaries are service boundaries. A shared container is acceptable only when the credential scope and lifecycle are intentionally shared. |
+| Session-scoped or client-local services | One backend or transceiver per client-local state boundary only when required | Client config discovery is not service identity. Keep client-local state out of the gateway image and avoid per-client duplication unless runtime behavior materially differs. |
+| Project-scoped services | One backend or transceiver per project when the backend reads or writes project-local state | The project filesystem, project metadata, code index, language server state, and approval boundary are part of the service identity. |
+| Gateway-integrated services | Deferred exception | Installing MCP services into the gateway image requires a concrete backend that cannot be served by a backend-local container or host transceiver. |
+
+`Serena` is the current clear `instance_per_project` service. It starts with a
+single `--project` root, owns project-local code intelligence state, and should
+have a canonical cf-controlplane instance such as
+`server-instances/serena-cf-controlplane-d46fe58a2a20` unless a separate
+GitHub-tracked compatibility decision explicitly keeps the legacy
+`serena-context-portal` identity with target-client-visible validation and
+retirement conditions.
+
+`project-inspector` is the next plausible non-Serena project-scoped proof
+candidate, but only after an MCP backend and `server-instances/` manifest seed
+exist. Until then, treat it as a design candidate, not an implied runtime
+service.
+
+Runtime Docker or service work for these project-scoped services is not a
+documentation-only action. Creating containers, allocating ports, registering
+ContextForge gateways, changing systemd units, writing runtime state, or
+changing client config requires the explicit runtime approval boundary for that
+surface.
+
 ## Single-User Backends
 
 Some MCP backends are functionally single-user even when they can expose a
