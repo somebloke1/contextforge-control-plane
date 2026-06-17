@@ -735,11 +735,16 @@ service-management handoff and explicit approval.
 
 ### 7. Serena Project-Scoped Services
 
-Status: canonical Serena for this repo is active; stale test units remain.
+Status: historical legacy/live readback reported an active
+`contextforge-serena-context-portal.service`; under the current
+`cf-controlplane` migration docs, that service is compatibility evidence, not
+proof that canonical `cf-controlplane` Serena provisioning is complete. Stale
+test units remain.
 
 Current evidence:
 
-- `contextforge-serena-context-portal.service` is active.
+- Historical legacy/live readback reported
+  `contextforge-serena-context-portal.service` active.
 - `contextforge-serena-phronesis-devstack-cdb531b045e5.service` is active.
 - Eight `contextforge-serena-test-new-proj-*` units are active and enabled.
 - Matching test project directories still exist under `/home/dgk/workspace/`.
@@ -1086,15 +1091,20 @@ extraction if current evidence proves a better review boundary.
 - Outcome: disposable Serena test instances are classified and safely removed
   or explicitly retained.
 - Beneficiary: operators reading systemd, inventory, registry, and port state.
-- Current state: this repo's Serena unit is active; phronesis-devstack Serena is
-  active; eight `contextforge-serena-test-new-proj-*` units and matching
+- Current state: historical legacy/live readback reported the
+  `contextforge-serena-context-portal.service` compatibility unit active;
+  phronesis-devstack Serena is active; eight
+  `contextforge-serena-test-new-proj-*` units and matching
   workspace plus `server-instances/` directories exist. A read-only
   classification pass was recorded on issue #2 at
   `https://github.com/somebloke1/contextforge-control-plane/issues/2#issuecomment-4718131243`:
-  the context-portal unit is canonical, phronesis-devstack is intentionally
-  retained, and the eight `test-new-proj*` units are disposable candidates only
-  after explicit approval. The same pass found three empty `serena-tmp*`
-  server-instance directories with no installed or loaded user units.
+  the context-portal unit was treated as canonical in that historical runtime
+  pass, but current `cf-controlplane` docs reclassify it as compatibility
+  evidence pending canonical Serena provisioning or an explicit compatibility
+  decision. phronesis-devstack is intentionally retained, and the eight
+  `test-new-proj*` units are disposable candidates only after explicit approval.
+  The same pass found three empty `serena-tmp*` server-instance directories
+  with no installed or loaded user units.
 - Desired state: legitimate project-scoped Serena services remain active;
   disposable test units/directories/registry records are removed only after
   approval and exact-match readback.

@@ -136,3 +136,16 @@ Continue refining the ContextForge project-init flow from the current implementa
 
 Future project-init and governance workflows should generate identifiers programmatically from stable inputs or monotonic ledger state instead of leaving identifier choice to agent discretion. The generated scheme should deterministically avoid duplicate identifiers, preserve existing stable IDs, and make any collision handling explicit and repeatable so retries, resumes, and concurrent-looking edits do not mint conflicting service, plan, ledger, challenge, consent, or validation identifiers.
 <!-- governance-crud:end id=ai-20260609-0001 -->
+
+<!-- governance-crud:start id=ai-20260617-0001 -->
+## ai-20260617-0001: Provision cf-controlplane Serena backend
+
+- Ledger: abeyant-intentions
+- Status: parked
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-17
+- Updated: 2026-06-17
+- Tags: serena,project-init,backend-provisioning,hard-requirement
+
+Provisioning a canonical project-scoped Serena backend for /home/dgk/workspace/cf-controlplane, and preserving the repeatable means for doing so, is a hard requirement for the ContextForge control-plane roadmap. It may remain abeyant during non-mutating #31 runtime/project-context readback planning because this slice must not mutate live/runtime/global services, registry state, systemd units, hooks, trust, Pi global config, or the legacy /home/dgk/workspace/context-portal checkout. Abeyant does not mean optional: the next Serena/project-init provisioning juncture must generate or intentionally bind a cf-controlplane-scoped Serena backend such as server-instances/serena-cf-controlplane-d46fe58a2a20, or record an explicit compatibility decision with equivalent target-client-visible validation. Retirement requires a focused GitHub-tracked slice with documented approval boundaries, provisioning/readback evidence, and non-actions.
+<!-- governance-crud:end id=ai-20260617-0001 -->
