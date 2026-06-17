@@ -102,7 +102,27 @@ document:
 
 ## First Integration Path
 
-For the first service integration, use a backend-local transceiver before any
+For the first service integration, use the `mentality-transceiver` development
+sidecar before any gateway-container MCP install. It runs the stock
+ContextForge bridge against the repo-local governance MCP server:
+
+```sh
+docker compose -f docker/contextforge-harness/compose.yml up -d --build \
+  contextforge-gateway mentality-transceiver
+docker/contextforge-harness/scripts/probe-mentality-dev.py --direct-only
+docker/contextforge-harness/scripts/register_mentality_dev.py
+docker/contextforge-harness/scripts/probe-mentality-dev.py
+```
+
+The sidecar exposes host direct endpoints at `127.0.0.1:9201` and the gateway
+registers the compose-network URL `http://mentality-transceiver:9201/mcp`.
+The development harness env enables `SSRF_ALLOW_PRIVATE_NETWORKS=true` so the
+stock gateway can register compose-network upstreams. Keep that setting scoped
+to this isolated development surface. The virtual MCP probe uses a temporary
+server-scoped catalog token instead of the admin session JWT, then revokes that
+token after readback.
+
+For additional service integrations, use a backend-local transceiver before any
 gateway-container MCP install:
 
 1. choose one service with a clear backend home under `server-instances/`;

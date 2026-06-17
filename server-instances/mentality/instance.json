@@ -68,5 +68,22 @@
       "governance_update",
       "governance_delete"
     ]
+  },
+  "dev_docker": {
+    "compose_service": "mentality-transceiver",
+    "bridge": {
+      "provider": "mcpgateway.translate",
+      "host": "0.0.0.0",
+      "port": 9201,
+      "host_sse_url": "http://127.0.0.1:9201/sse",
+      "host_streamable_http_url": "http://127.0.0.1:9201/mcp",
+      "compose_streamable_http_url": "http://mentality-transceiver:9201/mcp"
+    },
+    "contextforge": {
+      "surface": "ContextForge development Docker",
+      "gateway_name": "mentality-dev-docker",
+      "virtual_server_name": "mentality_dev_docker_server"
+    },
+    "notes": "Development Docker registration belongs only to the isolated harness gateway on 127.0.0.1:4445."
   }
 }

@@ -912,3 +912,18 @@ For the indefinite cf-controlplane development path, use only the Pi and OpenCod
 
 `context-portal` is legacy naming. In cf-controlplane work, treat `context-portal` names as compatibility or historical identifiers only until they can be eliminated safely. As agents encounter active `context-portal` naming, they should use GitHub issues or PR-linked issue comments to track and gradually retire it in focused, reviewable slices. Do not perform broad opportunistic renames that could break service identities, registry records, Serena tool names, project-state compatibility, or historical evidence; classify each occurrence as active, compatibility, or historical before changing it.
 <!-- governance-crud:end id=dec-20260617-0004 -->
+
+<!-- governance-crud:start id=dec-20260617-0005 -->
+## dec-20260617-0005: Use stock bridge and Pi shim first for dev Docker validation
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-17
+- Updated: 2026-06-17
+- Tags: docker,pi,transceiver,contextforge,validation
+
+For issue #41, the first mutable integration path is the isolated ContextForge development Docker surface, not the legacy/live host ContextForge surface. Start with the stock ContextForge bridge/transceiver path (`python -m mcpgateway.translate`) and the low-risk repo-local `mentality` stdio MCP backend, exposed by the `mentality-transceiver` compose service on reserved port 9201. Register it only into the development gateway as `mentality-dev-docker` / `mentality_dev_docker_server` and validate direct `/mcp` plus virtual ContextForge `/mcp` behavior before adding custom wrapper logic.
+
+For Pi client validation, use the existing TypeScript global shim path under `pi-extensions/contextforge-global-shim` as the first validation route because Pi is not a native MCP client and the shim already maps ContextForge virtual-server tools into Pi-native extension tools. A direct ContextForge API adapter remains an option only if it proves simpler and does not introduce new token, secret, or global Pi mutation boundaries. Pi global install/upgrade and `/reload` remain explicit human approval boundaries.
+<!-- governance-crud:end id=dec-20260617-0005 -->
