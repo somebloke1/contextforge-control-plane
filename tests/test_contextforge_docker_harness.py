@@ -96,6 +96,23 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("contextforge-gateway", service_names)
         self.assertIn("mentality-transceiver", service_names)
 
+    def test_service_locality_records_project_scoped_container_matrix(self) -> None:
+        policy = (ROOT / "docker/contextforge-harness/SERVICE_LOCALITY.md").read_text(encoding="utf-8")
+
+        self.assertIn("Project-Scoped MCP Container Matrix", policy)
+        self.assertIn("Do not Dockerize every MCP backend by default", policy)
+        self.assertIn("Shared canonical services", policy)
+        self.assertIn("not project-specific by default", policy)
+        self.assertIn("Project-scoped services", policy)
+        self.assertIn("reads or writes project-local state", policy)
+        self.assertIn("`Serena` is the current clear `instance_per_project` service", policy)
+        self.assertIn("server-instances/serena-cf-controlplane-d46fe58a2a20", policy)
+        self.assertIn("`project-inspector`", policy)
+        self.assertIn("next plausible non-Serena project-scoped proof", policy)
+        self.assertIn("explicit runtime approval boundary", policy)
+        self.assertIn("Gateway-integrated services", policy)
+        self.assertIn("Deferred exception", policy)
+
     def test_opencode_dev_smoke_uses_ephemeral_contextforge_token(self) -> None:
         source = (ROOT / "docker/client-harness/scripts/smoke-opencode-contextforge-dev.sh").read_text(encoding="utf-8")
 
