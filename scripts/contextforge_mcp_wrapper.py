@@ -427,20 +427,22 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    try:
-        servers = _items(_request("GET", "/servers?include_inactive=true&limit=1000", token=token))
-    except Exception as exc:
-        _log_bootstrap_error(server_name, "contextforge_server_readback", exc)
-        print(str(exc), file=sys.stderr)
-        return 1
-    matches = [server for server in servers if server.get("name") == server_name]
-    if len(matches) != 1:
-        message = f"expected one virtual server named {server_name!r}, found {len(matches)}"
-        _log_bootstrap_error(server_name, "contextforge_server_match", message)
-        print(message, file=sys.stderr)
-        return 1
+    server_id = os.environ.get("CONTEXTFORGE_SERVER_ID", "").strip()
+    if not server_id:
+        try:
+            servers = _items(_request("GET", "/servers?include_inactive=true&limit=1000", token=token))
+        except Exception as exc:
+            _log_bootstrap_error(server_name, "contextforge_server_readback", exc)
+            print(str(exc), file=sys.stderr)
+            return 1
+        matches = [server for server in servers if server.get("name") == server_name]
+        if len(matches) != 1:
+            message = f"expected one virtual server named {server_name!r}, found {len(matches)}"
+            _log_bootstrap_error(server_name, "contextforge_server_match", message)
+            print(message, file=sys.stderr)
+            return 1
+        server_id = matches[0]["id"]
 
-    server_id = matches[0]["id"]
     os.environ["MCP_SERVER_URL"] = f"{GATEWAY_BASE}/servers/{server_id}/mcp/"
     os.environ["MCP_AUTH"] = f"Bearer {token}"
     if GATEWAY_BASE.startswith("https://"):

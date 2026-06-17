@@ -112,6 +112,38 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertNotIn("127.0.0.1:4444", source)
         self.assertNotIn("/home/dgk/.pi", source)
 
+    def test_pi_image_provisions_container_local_contextforge_wrapper_runtime(self) -> None:
+        dockerfile = (ROOT / "docker/client-harness/pi/Dockerfile").read_text(encoding="utf-8")
+        compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
+
+        self.assertIn("python3-venv", dockerfile)
+        self.assertIn("/opt/contextforge-wrapper-venv", dockerfile)
+        self.assertIn("mcp-contextforge-gateway==${MCP_CONTEXTFORGE_GATEWAY_VERSION}", dockerfile)
+        self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON", dockerfile)
+        self.assertIn("/opt/contextforge-wrapper-venv/bin/python", dockerfile)
+        self.assertIn('MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"', compose)
+
+    def test_pi_dev_smoke_uses_shim_against_dev_gateway(self) -> None:
+        source = (ROOT / "docker/client-harness/scripts/smoke-pi-contextforge-dev.sh").read_text(encoding="utf-8")
+
+        self.assertIn("surface=Pi client Docker", source)
+        self.assertIn("contextforge_surface=ContextForge dev Docker", source)
+        self.assertIn("CONTEXTFORGE_HOST_BASE_URL:-http://127.0.0.1:4445", source)
+        self.assertIn("CONTEXTFORGE_CONTAINER_BASE_URL:-http://host.docker.internal:4445", source)
+        self.assertIn("CONTEXTFORGE_DEV_SERVER_NAME:-mentality_dev_docker_server", source)
+        self.assertIn("cf_contextforge_pi_validate", source)
+        self.assertIn("pi-extensions/contextforge-global-shim/index.ts", source)
+        self.assertIn("CONTEXTFORGE_SERVER_ID", source)
+        self.assertIn("CONTEXTFORGE_BEARER_TOKEN", source)
+        self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON=/opt/contextforge-wrapper-venv/bin/python", source)
+        self.assertIn("CONTEXTFORGE_CONFIG_ENV=/tmp/missing-contextforge.env", source)
+        self.assertIn("CONTEXTFORGE_TOKEN_CACHE=/tmp/contextforge-wrapper-token.local.json", source)
+        self.assertIn("revoke_probe_token", source)
+        self.assertIn("probe_token_revoked", source)
+        self.assertIn("workspace/.project/context_forge_state.json", source)
+        self.assertNotIn("127.0.0.1:4444", source)
+        self.assertNotIn("/home/dgk/.pi", source)
+
 
 if __name__ == "__main__":
     unittest.main()
