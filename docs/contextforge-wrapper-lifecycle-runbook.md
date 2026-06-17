@@ -128,9 +128,9 @@ evidence identifies a separate service-side fault.
 
 ## Stale Serena Test Units
 
-The `contextforge-serena-context-portal.service` unit is the canonical Serena
-backend for this repository; `context-portal` is the current compatibility slug
-in that runtime identifier. Test units named
+The `contextforge-serena-context-portal.service` unit is compatibility Serena
+evidence for this repository, not proof of canonical `cf-controlplane` Serena
+provisioning. Test units named
 `contextforge-serena-test-new-proj-*.service` are disposable only after their
 instance directories and target project paths are confirmed to be stale test
 assets.
@@ -143,7 +143,7 @@ systemctl --user --no-pager --plain list-units 'contextforge-serena-test*' 'cont
 find server-instances -maxdepth 2 -name instance.json -path '*serena-test*' -print
 ```
 
-The inspector is read-only. It classifies canonical, project-scoped, and
+The inspector is read-only. It classifies compatibility, project-scoped, and
 `test-new-proj` Serena units, records that cleanup is not allowed from the
 inspection step, and prints the explicit approval boundary for any later stop,
 disable, unit-file removal, project-tree deletion, server-instance deletion, or

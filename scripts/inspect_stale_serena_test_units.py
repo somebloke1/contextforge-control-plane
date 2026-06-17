@@ -18,7 +18,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_URI = "contextforge://diagnostics/serena-stale-units/v1"
-CANONICAL_OPERATOR_UNIT = "contextforge-serena-context-portal.service"
+COMPATIBILITY_OPERATOR_UNIT = "contextforge-serena-context-portal.service"
 TEST_UNIT_PREFIX = "contextforge-serena-test-new-proj-"
 SERENA_UNIT_PREFIX = "contextforge-serena-"
 SYSTEMCTL_LIST_PATTERNS = ("contextforge-serena-test*", "contextforge*serena*")
@@ -207,9 +207,9 @@ def classify_unit(
     reasons: list[str] = []
 
     classification = "review_required"
-    if unit == CANONICAL_OPERATOR_UNIT:
-        classification = "retain_canonical_operator"
-        reasons.append("canonical operator Serena unit must not be stopped by stale test-unit cleanup")
+    if unit == COMPATIBILITY_OPERATOR_UNIT:
+        classification = "retain_compatibility_operator"
+        reasons.append("compatibility Serena unit must not be stopped by stale test-unit cleanup")
     elif unit.startswith(TEST_UNIT_PREFIX):
         evidence = {
             "unit_name_matches_test_pattern": True,
