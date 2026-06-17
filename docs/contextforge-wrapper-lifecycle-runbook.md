@@ -138,9 +138,16 @@ assets.
 Evidence capture:
 
 ```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/inspect_stale_serena_test_units.py
 systemctl --user --no-pager --plain list-units 'contextforge-serena-test*' 'contextforge*serena*'
 find server-instances -maxdepth 2 -name instance.json -path '*serena-test*' -print
 ```
+
+The inspector is read-only. It classifies canonical, project-scoped, and
+`test-new-proj` Serena units, records that cleanup is not allowed from the
+inspection step, and prints the explicit approval boundary for any later stop,
+disable, unit-file removal, project-tree deletion, server-instance deletion, or
+ContextForge registry cleanup.
 
 With explicit user approval, stop stale test units first, then disable them:
 
