@@ -23,6 +23,13 @@ A3B model as configuration/default state, not installation. Avoid Codex and
 Gemini client containers unless explicitly reopened. Evidence must state which
 surface was exercised.
 
+Pi integration architecture is recorded in
+`docs/pi-contextforge-integration-architecture.md`. In short: Pi remains a
+global TypeScript extension-shim client, direct ContextForge API use is valid
+for helper/control readback where public APIs support it, and stdio MCP
+backends need stock ContextForge gateway/transceiver endpoints for IP-to-IP
+development Docker validation.
+
 ## Current Authority
 
 - Issue #37 is open and owns project-local operating-context activation.
