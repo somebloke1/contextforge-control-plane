@@ -95,6 +95,13 @@ The OpenCode config follows the public OpenCode config/provider docs:
 The remaining launch-only clients are not configured against Qwen in this
 harness yet. They are installed and version-checked only.
 
+## ContextForge Helper Baseline
+
+See `CONTEXTFORGE_HELPER_BASELINE.md` for the Pi/OpenCode baseline contract
+that closes the gap between specialized ContextForge smoke scripts and ordinary
+ad hoc client sessions. The current contract is source/test-only: runtime proof
+still requires separate approval to rebuild or run Docker client containers.
+
 ## OpenCode ContextForge Dev Gateway Smoke
 
 After the ContextForge development Docker gateway and `mentality-transceiver`
