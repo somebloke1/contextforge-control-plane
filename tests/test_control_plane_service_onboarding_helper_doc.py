@@ -95,7 +95,7 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "copy secrets",
             "change trust state",
             "clean registry records",
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
         ]:
             self.assertIn(forbidden_surface, self.doc)
 

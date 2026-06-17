@@ -11,7 +11,7 @@ slice may update project-local tracked activation artifacts in this checkout,
 but it still does not authorize global Codex config writes, hook trust changes,
 runtime secret/evidence copies, service or systemd changes, registry/catalog
 changes, Pi/global config changes, process termination, or mutation of the
-legacy `/home/dgk/workspace/context-portal` checkout.
+legacy `/home/dgk/workspace/legacy-controlplane-archive` checkout.
 
 The legacy/live ContextForge surface is read-only for this runbook and for
 successor Docker/client work. Mutable ContextForge registration, endpoint, reset,
@@ -86,8 +86,8 @@ development Docker validation.
   `py_compile` passed for the touched scripts, and `git diff --check` passed.
 - Delegated stale-reference audit found one active stale old-root readback
   command in `scripts/plan_codex_global_config_migration.py`; this branch
-  fixes it and adds a regression. Remaining `context-portal` and
-  `contextforge-slices` references are historical evidence, compatibility
+  fixes it and adds a regression. Remaining `cf-controlplane` and
+  `legacy-controlplane-slices` references are historical evidence, compatibility
   identifiers, or explicit readiness-inspector needles.
 - The approved primary queue was merged in order #47, #48, #49, #51. Final
   `dev-root` readback was `274871322c2455cfab8e716d831043171eea1291`; the
@@ -126,8 +126,8 @@ development Docker validation.
 | `.codex/skills/contextforge-governance/references/ledger-shape.md` | Must use `cf-controlplane` as the repository path template | Track source correction. |
 | `.codex/config.toml` | Project-local activation surface | Retargeted on `codex/issue-37-activation-readiness`; `codex -C ... mcp list --json` reads expected project-local entries. |
 | `.project/context_forge_state.json` | Helper-owned project-init state | Rooted at `cf-controlplane`; revision 13 marks Codex project-local activation verified/passed and repairs stale project naming after delegated review. |
-| `server-instances/serena-context-portal/**` | Compatibility Serena evidence with `cf-controlplane` root | Do not silently rename. Serena backend provisioning and the means to provision it are an abeyant hard requirement, not optional. Classify as compatibility only until a later Serena/project-init slice generates `serena-cf-controlplane-<hash>` or records an explicit validated compatibility decision. |
-| `contextforge://context-portal/...` resource ids | Compatibility decision pending | Do not silently rename. Record whether retained as compatibility ids or migrated. |
+| `server-instances/serena-cf-controlplane-d46fe58a2a20/**` | Compatibility Serena evidence with `cf-controlplane` root | Do not silently rename. Serena backend provisioning and the means to provision it are an abeyant hard requirement, not optional. Classify as compatibility only until a later Serena/project-init slice generates `serena-cf-controlplane-<hash>` or records an explicit validated compatibility decision. |
+| `contextforge://cf-controlplane/...` resource ids | Compatibility decision pending | Do not silently rename. Record whether retained as compatibility ids or migrated. |
 | Runtime env/evidence/trust/OAuth/hook-state | Local-only runtime state | Do not copy into Git. Recreate or recapture only after explicit approval. |
 
 ## Pre-Open Checklist
@@ -137,18 +137,19 @@ Before claiming issue #37 complete, the operating agent should prove:
 1. The local Python environment exists, or `.codex/config.toml` does not point
    at a missing interpreter. Current branch evidence: exists.
 2. Project-local MCP command paths and `cwd` values no longer point at
-   `/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`
+   `/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance`
    unless that is deliberately classified as a compatibility bridge. Current
    branch evidence: no active config references remain.
 3. `.project/context_forge_state.json` represents `cf-controlplane`, or the
    helper reports a clear recovery/activation plan for reaching that state.
    Current branch evidence: root/root hash/name match `cf-controlplane`; state
    is `initialized` with Codex activation `verified`/`passed`.
-4. The Serena project instance state is either regenerated for
-   `cf-controlplane` or explicitly retained as legacy compatibility evidence
-   under a GitHub-tracked Serena/project-init slice. Current branch evidence:
-   retained as compatibility evidence only; no new Serena backend or service is
-   provisioned. This defers a hard requirement; it does not retire it.
+4. The Serena project instance state is rooted in `cf-controlplane` source and
+   later receives target-client-visible runtime validation under a
+   GitHub-tracked Serena/project-init slice. Current branch evidence: source
+   naming is canonical, but live runtime/service/registry validation remains
+   separately approval-gated. This defers a hard requirement; it does not retire
+   it.
 5. Hook trust and project-local hook activation remain user-approved actions,
    not source-prep side effects.
 
@@ -194,9 +195,9 @@ scripts/inspect_codex_runtime_readback.py \
 The 2026-06-17 readback on `codex/issue-31-runtime-readback-plan` reported
 `status: blocked`. Both `codex mcp list --json` from the project cwd and
 `codex -C /home/dgk/workspace/cf-controlplane mcp list --json` had zero
-`context-portal` or `contextforge-slices` transport references, but process
+predecessor workspace or `legacy-controlplane-slices` transport references, but process
 inspection still found one live helper sourced from
-`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`.
+`/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance`.
 Global `~/.codex/config.toml` also still references that older clean-root helper
 path. Do not kill the process or rewrite global config as part of readback;
 route any required Codex Desktop project reload/new-session, hook trust, global
@@ -223,7 +224,7 @@ also acceptable if the stock API makes that simpler and stable enough. Issue
 ## Non-Actions
 
 Do not mutate the legacy checkout as part of this runbook. The legacy
-`context-portal` workspace is archive/insurance and compatibility evidence, not
+`cf-controlplane` workspace is archive/insurance and compatibility evidence, not
 the source of new operating instructions.
 
 Do not use backend health, process presence, or registry contents alone as proof

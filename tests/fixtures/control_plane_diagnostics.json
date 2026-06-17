@@ -31,7 +31,7 @@
     "tokens": {
       "local_client": {
         "token_source": "ignored local file",
-        "token_path": "/home/dgk/workspace/context-portal/config/local-client-token",
+        "token_path": "/home/dgk/workspace/legacy-controlplane-archive/config/local-client-token",
         "token_file_preview": "fixture token file body"
       }
     },
@@ -59,7 +59,7 @@
       ]
     },
     "metadata": {
-      "project_root": "/home/dgk/workspace/context-portal",
+      "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
       "source_client": "codex",
       "source_client_auth_strength": "shared_token"
     }

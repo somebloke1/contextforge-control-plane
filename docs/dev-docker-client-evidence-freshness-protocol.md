@@ -29,7 +29,7 @@ A full #58 evidence refresh has these phases.
 
 1. Baseline the repository state:
    - record the branch, commit, dirty status, and PR or issue being refreshed;
-   - confirm the change is not using `/home/dgk/workspace/context-portal` as
+   - confirm the change is not using `/home/dgk/workspace/legacy-controlplane-archive` as
      the active source root;
    - confirm ignored evidence paths remain ignored.
 2. Validate ContextForge dev Docker gateway state:
@@ -151,6 +151,6 @@ This protocol does not authorize:
 - helper/project-init approve, apply, recovery, or validation-state mutation;
 - Serena provisioning;
 - broad renaming of compatibility identifiers;
-- editing `/home/dgk/workspace/context-portal`.
+- editing `/home/dgk/workspace/legacy-controlplane-archive`.
 
 Those operations require separate explicit approval naming the target surface.

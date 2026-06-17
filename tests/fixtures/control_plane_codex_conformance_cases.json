@@ -1,25 +1,25 @@
 {
   "version": 1,
   "generated_at": "2026-05-30T20:21:54Z",
-  "project_root": "/home/dgk/workspace/context-portal",
-  "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+  "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+  "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
   "auth_material_source": "project-local-contextforge-binding",
   "cases": [
     {
       "name": "codex_project_local_config_trusted_and_verified",
-      "expected_project_root": "/home/dgk/workspace/context-portal",
-      "expected_service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+      "expected_project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+      "expected_service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
       "expected_auth_material_source": "project-local-contextforge-binding",
       "evidence": {
         "client": {
           "name": "codex",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_generation": "cfg-002"
         },
         "config": {
           "surface": ".codex/config.toml",
           "scope": "project_local",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_by_client": true,
           "expected_generation": "cfg-002",
           "loaded_generation": "cfg-002",
@@ -28,7 +28,7 @@
         "trust": {
           "global_trust_required": true,
           "state": "verified",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "approval_evidence": "run/20260530T202154Z/trust-approval-redacted.json",
           "mutated_by_conformance": false
         },
@@ -46,22 +46,22 @@
         "list_tools": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/context-portal"],
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/legacy-controlplane-archive"],
           "tools": ["project_inspector__read_file"]
         },
         "call_tool": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "result_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
           "backend_health_only": false
         },
         "negative_visibility": {
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "wrong_root_visible": false,
           "denied_tools_visible": [],
           "backend_only_pass": false
@@ -75,19 +75,19 @@
     },
     {
       "name": "codex_trust_missing_blocks_without_mutation",
-      "expected_project_root": "/home/dgk/workspace/context-portal",
-      "expected_service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+      "expected_project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+      "expected_service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
       "expected_auth_material_source": "project-local-contextforge-binding",
       "evidence": {
         "client": {
           "name": "codex",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_generation": "cfg-002"
         },
         "config": {
           "surface": ".codex/config.toml",
           "scope": "project_local",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_by_client": true,
           "expected_generation": "cfg-002",
           "loaded_generation": "cfg-002",
@@ -96,7 +96,7 @@
         "trust": {
           "global_trust_required": true,
           "state": "missing",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "approval_evidence": "missing",
           "mutated_by_conformance": false
         },
@@ -114,22 +114,22 @@
         "list_tools": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/context-portal"],
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/legacy-controlplane-archive"],
           "tools": ["project_inspector__read_file"]
         },
         "call_tool": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "result_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
           "backend_health_only": false
         },
         "negative_visibility": {
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "wrong_root_visible": false,
           "denied_tools_visible": [],
           "backend_only_pass": false
@@ -144,19 +144,19 @@
     },
     {
       "name": "codex_stale_config_and_restart_required_blocks",
-      "expected_project_root": "/home/dgk/workspace/context-portal",
-      "expected_service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+      "expected_project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+      "expected_service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
       "expected_auth_material_source": "project-local-contextforge-binding",
       "evidence": {
         "client": {
           "name": "codex",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_generation": "cfg-001"
         },
         "config": {
           "surface": ".codex/config.toml",
           "scope": "project_local",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_by_client": true,
           "expected_generation": "cfg-002",
           "loaded_generation": "cfg-001",
@@ -165,7 +165,7 @@
         "trust": {
           "global_trust_required": true,
           "state": "verified",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "approval_evidence": "run/20260530T202154Z/trust-approval-redacted.json",
           "mutated_by_conformance": false
         },
@@ -183,22 +183,22 @@
         "list_tools": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/context-portal"],
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/legacy-controlplane-archive"],
           "tools": ["project_inspector__read_file"]
         },
         "call_tool": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "result_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
           "backend_health_only": false
         },
         "negative_visibility": {
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "wrong_root_visible": false,
           "denied_tools_visible": [],
           "backend_only_pass": false
@@ -212,19 +212,19 @@
     },
     {
       "name": "codex_backend_health_without_target_client_proof_fails",
-      "expected_project_root": "/home/dgk/workspace/context-portal",
-      "expected_service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+      "expected_project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+      "expected_service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
       "expected_auth_material_source": "project-local-contextforge-binding",
       "evidence": {
         "client": {
           "name": "codex",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_generation": "cfg-002"
         },
         "config": {
           "surface": ".codex/config.toml",
           "scope": "project_local",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_by_client": true,
           "expected_generation": "cfg-002",
           "loaded_generation": "cfg-002",
@@ -233,7 +233,7 @@
         "trust": {
           "global_trust_required": true,
           "state": "verified",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "approval_evidence": "run/20260530T202154Z/trust-approval-redacted.json",
           "mutated_by_conformance": false
         },
@@ -251,22 +251,22 @@
         "list_tools": {
           "client": "codex",
           "status": "failed",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "visible_service_bindings": [],
           "tools": []
         },
         "call_tool": {
           "client": "codex",
           "status": "failed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "result_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
           "backend_health_only": true
         },
         "negative_visibility": {
           "status": "failed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "wrong_root_visible": false,
           "denied_tools_visible": [],
           "backend_only_pass": true
@@ -281,19 +281,19 @@
     },
     {
       "name": "codex_wrong_auth_material_source_fails_closed",
-      "expected_project_root": "/home/dgk/workspace/context-portal",
-      "expected_service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+      "expected_project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+      "expected_service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
       "expected_auth_material_source": "project-local-contextforge-binding",
       "evidence": {
         "client": {
           "name": "codex",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_generation": "cfg-002"
         },
         "config": {
           "surface": ".codex/config.toml",
           "scope": "project_local",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_by_client": true,
           "expected_generation": "cfg-002",
           "loaded_generation": "cfg-002",
@@ -302,7 +302,7 @@
         "trust": {
           "global_trust_required": true,
           "state": "verified",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "approval_evidence": "run/20260530T202154Z/trust-approval-redacted.json",
           "mutated_by_conformance": false
         },
@@ -320,22 +320,22 @@
         "list_tools": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/context-portal"],
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/legacy-controlplane-archive"],
           "tools": ["project_inspector__read_file"]
         },
         "call_tool": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "result_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
           "backend_health_only": false
         },
         "negative_visibility": {
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "wrong_root_visible": false,
           "denied_tools_visible": [],
           "backend_only_pass": false
@@ -349,19 +349,19 @@
     },
     {
       "name": "codex_unmanaged_owned_block_blocks_mutation",
-      "expected_project_root": "/home/dgk/workspace/context-portal",
-      "expected_service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+      "expected_project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+      "expected_service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
       "expected_auth_material_source": "project-local-contextforge-binding",
       "evidence": {
         "client": {
           "name": "codex",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_generation": "cfg-002"
         },
         "config": {
           "surface": ".codex/config.toml",
           "scope": "project_local",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_by_client": true,
           "expected_generation": "cfg-002",
           "loaded_generation": "cfg-002",
@@ -370,7 +370,7 @@
         "trust": {
           "global_trust_required": true,
           "state": "verified",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "approval_evidence": "run/20260530T202154Z/trust-approval-redacted.json",
           "mutated_by_conformance": false
         },
@@ -388,22 +388,22 @@
         "list_tools": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/context-portal"],
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/legacy-controlplane-archive"],
           "tools": ["project_inspector__read_file"]
         },
         "call_tool": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "result_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
           "backend_health_only": false
         },
         "negative_visibility": {
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "wrong_root_visible": false,
           "denied_tools_visible": [],
           "backend_only_pass": false
@@ -417,19 +417,19 @@
     },
     {
       "name": "codex_wrong_root_visibility_fails_negative_check",
-      "expected_project_root": "/home/dgk/workspace/context-portal",
-      "expected_service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+      "expected_project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+      "expected_service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
       "expected_auth_material_source": "project-local-contextforge-binding",
       "evidence": {
         "client": {
           "name": "codex",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_generation": "cfg-002"
         },
         "config": {
           "surface": ".codex/config.toml",
           "scope": "project_local",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "loaded_by_client": true,
           "expected_generation": "cfg-002",
           "loaded_generation": "cfg-002",
@@ -438,7 +438,7 @@
         "trust": {
           "global_trust_required": true,
           "state": "verified",
-          "project_root": "/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
           "approval_evidence": "run/20260530T202154Z/trust-approval-redacted.json",
           "mutated_by_conformance": false
         },
@@ -456,22 +456,22 @@
         "list_tools": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/context-portal"],
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "visible_service_bindings": ["project-inspector:/home/dgk/workspace/legacy-controlplane-archive"],
           "tools": ["project_inspector__read_file"]
         },
         "call_tool": {
           "client": "codex",
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "result_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
           "backend_health_only": false
         },
         "negative_visibility": {
           "status": "passed",
-          "project_root": "/home/dgk/workspace/context-portal",
-          "service_binding": "project-inspector:/home/dgk/workspace/context-portal",
+          "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
+          "service_binding": "project-inspector:/home/dgk/workspace/legacy-controlplane-archive",
           "wrong_root_visible": true,
           "denied_tools_visible": [],
           "backend_only_pass": false

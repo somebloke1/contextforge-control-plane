@@ -2,7 +2,7 @@
 """Plan and safely apply ContextForge user-global Codex config migration.
 
 By default this report is non-mutating. It classifies stale
-``/home/dgk/workspace/context-portal`` entries in ``~/.codex/config.toml`` and
+``/home/dgk/workspace/legacy-controlplane-archive`` entries in ``~/.codex/config.toml`` and
 builds an approval-ready plan for moving active global Codex surfaces to the
 clean ContextForge worktree.
 """
@@ -22,7 +22,7 @@ from typing import Any, Mapping, Sequence
 
 
 REPORT_SCHEMA_URI = "contextforge://control-plane/codex-global-config-migration-plan/v1"
-DEFAULT_LEGACY_ROOT = Path("/home/dgk/workspace/context-portal")
+DEFAULT_LEGACY_ROOT = Path("/home/dgk/workspace/legacy-controlplane-archive")
 DEFAULT_CONFIG_PATH = Path("~/.codex/config.toml")
 BACKUP_SUFFIX = ".contextforge-backup"
 
@@ -677,7 +677,7 @@ def build_report(
             "no service, process, registry, catalog, Pi, or legacy checkout mutation is performed",
         ],
         "readback_commands": [
-            "rg -n \"context-portal|contextforge-slices|contextforge-helper|codex_project_init_hook\" ~/.codex/config.toml",
+            "rg -n \"cf-controlplane|legacy-controlplane-slices|contextforge-helper|codex_project_init_hook\" ~/.codex/config.toml",
             "cd /home/dgk && codex mcp list --json",
             f"codex -C {target_text} mcp list --json",
         ],

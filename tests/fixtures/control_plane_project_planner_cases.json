@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "project_root": "/home/dgk/workspace/context-portal",
+  "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
   "resolved_at": "2026-05-30T00:00:00Z",
   "cases": [
     {
@@ -12,8 +12,8 @@
             "revision": 14
           },
           "project": {
-            "root": "/home/dgk/workspace/context-portal",
-            "name": "context-portal"
+            "root": "/home/dgk/workspace/legacy-controlplane-archive",
+            "name": "cf-controlplane"
           },
           "status": "uninitialized",
           "decisions": {},
@@ -132,8 +132,8 @@
             "revision": 15
           },
           "project": {
-            "root": "/home/dgk/workspace/context-portal",
-            "name": "context-portal"
+            "root": "/home/dgk/workspace/legacy-controlplane-archive",
+            "name": "cf-controlplane"
           },
           "status": "uninitialized",
           "decisions": {
@@ -159,7 +159,7 @@
         "service_descriptors": [
           {
             "service_family": "serena",
-            "canonical_service": "serena-context-portal",
+            "canonical_service": "serena-cf-controlplane-d46fe58a2a20",
             "service": "serena",
             "name": "serena",
             "instantiation_class": "instance_per_project",
@@ -168,15 +168,15 @@
             ],
             "scope": {
               "scope_type": "single_workspace_code_intelligence",
-              "workspace_root": "/home/dgk/workspace/context-portal"
+              "workspace_root": "/home/dgk/workspace/legacy-controlplane-archive"
             },
             "contextforge": {
               "gateway": {
-                "name": "serena-context-portal",
+                "name": "serena-cf-controlplane-d46fe58a2a20",
                 "transport": "STREAMABLEHTTP"
               },
               "virtual_server": {
-                "name": "serena_context_portal_server"
+                "name": "serena_cf_controlplane_d46fe58a2a20_server"
               }
             },
             "registration": {
@@ -216,8 +216,8 @@
             "revision": 16
           },
           "project": {
-            "root": "/home/dgk/workspace/context-portal",
-            "name": "context-portal"
+            "root": "/home/dgk/workspace/legacy-controlplane-archive",
+            "name": "cf-controlplane"
           },
           "status": "disabled",
           "decisions": {},
@@ -274,8 +274,8 @@
             "revision": 17
           },
           "project": {
-            "root": "/home/dgk/workspace/context-portal",
-            "name": "context-portal"
+            "root": "/home/dgk/workspace/legacy-controlplane-archive",
+            "name": "cf-controlplane"
           },
           "status": "uninitialized",
           "decisions": {},
@@ -354,8 +354,8 @@
             "revision": 18
           },
           "project": {
-            "root": "/home/dgk/workspace/context-portal",
-            "name": "context-portal"
+            "root": "/home/dgk/workspace/legacy-controlplane-archive",
+            "name": "cf-controlplane"
           },
           "status": "uninitialized",
           "decisions": {},
@@ -424,8 +424,8 @@
             "revision": 19
           },
           "project": {
-            "root": "/home/dgk/workspace/context-portal",
-            "name": "context-portal"
+            "root": "/home/dgk/workspace/legacy-controlplane-archive",
+            "name": "cf-controlplane"
           },
           "status": "uninitialized",
           "decisions": {},

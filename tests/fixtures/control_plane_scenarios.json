@@ -9,7 +9,7 @@
         "cfcp-req-service-instantiation-distinction"
       ],
       "tested_agent_view": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "Initialize this project using existing ContextForge services when they already fit the project.",
         "available_tools": [
           {"name": "shell", "mode": "read-only"},
@@ -133,7 +133,7 @@
         "cfcp-req-secret-exclusion"
       ],
       "tested_agent_view": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "Prepare the project state plan and keep global client changes separate from local project state.",
         "available_tools": [
           {"name": "shell", "mode": "read-only"},
@@ -275,7 +275,7 @@
         "cfcp-req-tool-policy-negative-checks"
       ],
       "tested_agent_view": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "Verify the target client sees only the approved tool surface before recording success.",
         "available_tools": [
           {"name": "contextforge_api", "mode": "read-only"},
@@ -286,7 +286,7 @@
       "hidden_initial_conditions": {
         "filesystem": {},
         "contextforge_catalog": {
-          "virtual_server": "context-portal",
+          "virtual_server": "cf-controlplane",
           "excluded_tool": "scope_change_admin"
         },
         "client_configs": {
@@ -385,7 +385,7 @@
       "schema_uri": "contextforge://control-plane/schemas/requirement-scenario/v1",
       "requirement_ids": ["cfcp-req-inference-isolation"],
       "tested_agent_view": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "Plan the next safe project initialization step from the visible repository files.",
         "available_tools": [
           {"name": "shell", "mode": "read-only"}

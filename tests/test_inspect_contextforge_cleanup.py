@@ -51,7 +51,7 @@ class ContextForgeCleanupInspectorTests(unittest.TestCase):
     def test_manifest_classifies_cleanup_candidates_without_mutation(self) -> None:
         live = {
             "tools": [
-                _tool("tool-current", "serena-context-portal-search", "gw-serena-current", "serena-context-portal"),
+                _tool("tool-current", "serena-cf-controlplane-d46fe58a2a20-search", "gw-serena-current", "serena-cf-controlplane-d46fe58a2a20"),
                 _tool("tool-stale", "serena-test-search", "gw-serena-stale", "serena-test-new-proj-01"),
                 _tool("tool-phronesis", "serena-phronesis-search", "gw-serena-phronesis", "serena-phronesis-devstack"),
                 _tool("tool-orphan", "ssh-tmux-cleanup-dead-sessions", "gw-ssh", "ssh-tmux", original_name="cleanup_dead_sessions"),
@@ -60,7 +60,7 @@ class ContextForgeCleanupInspectorTests(unittest.TestCase):
             "servers": [
                 {
                     "id": "server-serena-current",
-                    "name": "serena_context_portal_server",
+                    "name": "serena_cf_controlplane_d46fe58a2a20_server",
                     "associatedToolIds": ["tool-current"],
                     "associatedPrompts": [],
                     "associatedResources": [],
@@ -88,7 +88,7 @@ class ContextForgeCleanupInspectorTests(unittest.TestCase):
             legacy_instances = root / "legacy"
             _instance(
                 current_instances,
-                "serena-context-portal",
+                "serena-cf-controlplane-d46fe58a2a20",
                 service="serena",
                 gateway_id="gw-serena-current",
                 project_root="/home/dgk/workspace/cf-controlplane",

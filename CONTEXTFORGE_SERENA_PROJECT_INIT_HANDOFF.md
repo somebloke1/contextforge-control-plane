@@ -1,7 +1,7 @@
 # ContextForge Project Init And Per-Project Serena Handoff
 
 Status timestamp: 2026-05-29 13:40 America/Chicago  
-Repository: `/home/dgk/workspace/context-portal`  
+Repository: `/home/dgk/workspace/legacy-controlplane-archive`
 Branch observed: `agent/contextforge-bootstrap`
 
 This artifact is a restart record for a new Codex agent. It describes the current implementation, live verification evidence, unresolved decisions, risks, and recommended next trajectories for the ContextForge-owned project initialization and per-project Serena integration.
@@ -25,23 +25,23 @@ Implemented:
 
 - ContextForge prompt and resource for project initialization:
   - Prompt: `project_init_prompt`
-  - Resource: `contextforge://context-portal/project-init/v1`
+  - Resource: `contextforge://cf-controlplane/project-init/v1`
 - ContextForge Serena-specific guidance:
   - Prompt: `serena_project_instance_guidance`
-  - Resource: `contextforge://context-portal/serena-project-instance-guidance/v1`
+  - Resource: `contextforge://cf-controlplane/serena-project-instance-guidance/v1`
   - Associated only to Serena-looking ContextForge virtual servers.
 - Global Codex hooks in `/home/dgk/.codex/config.toml`:
   - `SessionStart`, matcher `startup`
   - `UserPromptSubmit` fallback
   - Both are currently trusted by Codex app-server hook metadata.
 - Hook script:
-  - `/home/dgk/workspace/context-portal/scripts/codex_project_init_hook.py`
+  - `/home/dgk/workspace/legacy-controlplane-archive/scripts/codex_project_init_hook.py`
   - Renders ContextForge `project_init_prompt` and injects it as `hookSpecificOutput.additionalContext`.
   - Stores idempotency state in ignored runtime state under `run/`.
   - Rejects root, home, workspace root, and symlink escapes after canonicalization.
   - Fails open if ContextForge is unavailable.
 - Per-project Serena manager:
-  - `/home/dgk/workspace/context-portal/scripts/manage_serena_project_instance.py`
+  - `/home/dgk/workspace/legacy-controlplane-archive/scripts/manage_serena_project_instance.py`
   - Creates one ContextForge-owned Serena backend per canonical project root.
   - Creates `server-instances/serena-<slug>-<hash>/`.
   - Installs user systemd unit `contextforge-serena-<slug>-<hash>.service`.
@@ -53,12 +53,12 @@ Implemented:
 Current live evidence shows:
 
 - No global Codex `serena` server from `/home/dgk`.
-- Project-local `serena` in `/home/dgk/workspace/context-portal`.
-- ContextForge gateway and `contextforge-serena-context-portal.service` are active.
-- Codex app-server can start a thread rooted at `context-portal`, list the project-local Serena tools, and call Serena through the app-server MCP path.
+- Project-local `serena` in `/home/dgk/workspace/legacy-controlplane-archive`.
+- ContextForge gateway and `contextforge-serena-cf-controlplane-d46fe58a2a20.service` are active.
+- Codex app-server can start a thread rooted at `cf-controlplane`, list the project-local Serena tools, and call Serena through the app-server MCP path.
 - App-server Serena tool list has 22 tools and no activate-project exposure.
-- App-server `serena-context-portal-get-current-config` reports `Active project: context-portal` and `Language backend: LSP`.
-- App-server `serena-context-portal-get-diagnostics-for-file` on `scripts/contextforge_mcp_wrapper.py` returns `{}`.
+- App-server `serena-cf-controlplane-d46fe58a2a20-get-current-config` reports `Active project: cf-controlplane` and `Language backend: LSP`.
+- App-server `serena-cf-controlplane-d46fe58a2a20-get-diagnostics-for-file` on `scripts/contextforge_mcp_wrapper.py` returns `{}`.
 
 The largest remaining non-code policy gap is Codex project trust for newly initialized projects. Codex ignores project-local `.codex/config.toml` in untrusted projects until the project root is trusted. This is captured in `OPEN_QUESTIONS.md` as `oq-20260529-0001`.
 
@@ -72,7 +72,7 @@ Repository state is dirty and mostly reflects the broader ContextForge bootstrap
 
 ### Shared project-init helpers
 
-Path: `/home/dgk/workspace/context-portal/scripts/project_init_common.py`
+Path: `/home/dgk/workspace/legacy-controlplane-archive/scripts/project_init_common.py`
 
 Purpose:
 
@@ -85,9 +85,9 @@ Important constants:
 
 ```python
 PROJECT_INIT_PROMPT_NAME = "project_init_prompt"
-PROJECT_INIT_RESOURCE_URI = "contextforge://context-portal/project-init/v1"
+PROJECT_INIT_RESOURCE_URI = "contextforge://cf-controlplane/project-init/v1"
 SERENA_GUIDANCE_PROMPT_NAME = "serena_project_instance_guidance"
-SERENA_GUIDANCE_RESOURCE_URI = "contextforge://context-portal/serena-project-instance-guidance/v1"
+SERENA_GUIDANCE_RESOURCE_URI = "contextforge://cf-controlplane/serena-project-instance-guidance/v1"
 PROMPT_VERSION = "v1"
 ```
 
@@ -122,7 +122,7 @@ Important behavior:
 
 ### Prompt/resource registration
 
-Path: `/home/dgk/workspace/context-portal/scripts/register_project_init_prompt.py`
+Path: `/home/dgk/workspace/legacy-controlplane-archive/scripts/register_project_init_prompt.py`
 
 Purpose:
 
@@ -139,8 +139,8 @@ Important implementation detail:
 Run:
 
 ```bash
-/home/dgk/workspace/context-portal/.venv/bin/python \
-  /home/dgk/workspace/context-portal/scripts/register_project_init_prompt.py
+/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python \
+  /home/dgk/workspace/legacy-controlplane-archive/scripts/register_project_init_prompt.py
 ```
 
 Expected successful output shape:
@@ -156,7 +156,7 @@ verified_render_at=<iso timestamp>
 
 ### Codex project-init hook
 
-Path: `/home/dgk/workspace/context-portal/scripts/codex_project_init_hook.py`
+Path: `/home/dgk/workspace/legacy-controlplane-archive/scripts/codex_project_init_hook.py`
 
 Purpose:
 
@@ -169,9 +169,9 @@ Purpose:
 
 State:
 
-- Idempotency state: `/home/dgk/workspace/context-portal/run/project-init-hook-state.local.json`
-- Lock: `/home/dgk/workspace/context-portal/run/project-init-hook-state.local.lock`
-- Failure log: `/home/dgk/workspace/context-portal/run/project-init-hook.local.log`
+- Idempotency state: `/home/dgk/workspace/legacy-controlplane-archive/run/project-init-hook-state.local.json`
+- Lock: `/home/dgk/workspace/legacy-controlplane-archive/run/project-init-hook-state.local.lock`
+- Failure log: `/home/dgk/workspace/legacy-controlplane-archive/run/project-init-hook.local.log`
 
 Injection policy:
 
@@ -191,7 +191,7 @@ Stdout policy:
 
 ### Serena project instance manager
 
-Path: `/home/dgk/workspace/context-portal/scripts/manage_serena_project_instance.py`
+Path: `/home/dgk/workspace/legacy-controlplane-archive/scripts/manage_serena_project_instance.py`
 
 Purpose:
 
@@ -200,21 +200,21 @@ Purpose:
 Commands:
 
 ```bash
-/home/dgk/workspace/context-portal/.venv/bin/python \
-  /home/dgk/workspace/context-portal/scripts/manage_serena_project_instance.py identity \
+/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python \
+  /home/dgk/workspace/legacy-controlplane-archive/scripts/manage_serena_project_instance.py identity \
   --project-root /home/dgk/workspace/<project>
 
-/home/dgk/workspace/context-portal/.venv/bin/python \
-  /home/dgk/workspace/context-portal/scripts/manage_serena_project_instance.py status \
+/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python \
+  /home/dgk/workspace/legacy-controlplane-archive/scripts/manage_serena_project_instance.py status \
   --project-root /home/dgk/workspace/<project>
 
-/home/dgk/workspace/context-portal/.venv/bin/python \
-  /home/dgk/workspace/context-portal/scripts/manage_serena_project_instance.py create \
+/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python \
+  /home/dgk/workspace/legacy-controlplane-archive/scripts/manage_serena_project_instance.py create \
   --project-root /home/dgk/workspace/<project> \
   --require-workspace
 
-/home/dgk/workspace/context-portal/.venv/bin/python \
-  /home/dgk/workspace/context-portal/scripts/manage_serena_project_instance.py remove \
+/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python \
+  /home/dgk/workspace/legacy-controlplane-archive/scripts/manage_serena_project_instance.py remove \
   --project-root /home/dgk/workspace/<project> \
   --yes --delete-instance-dir --delete-contextforge-records
 ```
@@ -223,9 +223,9 @@ Creation order:
 
 1. Validate canonical project root.
 2. Derive deterministic identity.
-3. Take lock: `/home/dgk/workspace/context-portal/run/serena-instance-manager.local.lock`.
+3. Take lock: `/home/dgk/workspace/legacy-controlplane-archive/run/serena-instance-manager.local.lock`.
 4. Reserve port from `9110-9199`, checking existing manifests and live listeners.
-5. Create `/home/dgk/workspace/context-portal/server-instances/<instance>/`.
+5. Create `/home/dgk/workspace/legacy-controlplane-archive/server-instances/<instance>/`.
 6. Write executable `run-server.sh`.
 7. Write initial `instance.json`.
 8. Write user systemd unit under `/home/dgk/.config/systemd/user/`.
@@ -246,7 +246,7 @@ Systemd details:
 - `WantedBy=contextforge.target`
 - Generated `After=network.target contextforge.service`
 - `ExecStart=<instance-dir>/run-server.sh`
-- `WorkingDirectory=/home/dgk/workspace/context-portal`
+- `WorkingDirectory=/home/dgk/workspace/legacy-controlplane-archive`
 - PATH includes:
   - `/home/dgk/.nvm/versions/node/v24.12.0/bin`
   - `/home/dgk/.local/bin`
@@ -288,9 +288,9 @@ Project-local Codex config behavior:
 ```toml
 # contextforge-project-init-owner = "<server_name>"
 [mcp_servers.serena]
-command = "/home/dgk/workspace/context-portal/.venv/bin/python"
-args = ["/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py", "<server_name>"]
-cwd = "/home/dgk/workspace/context-portal"
+command = "/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python"
+args = ["/home/dgk/workspace/legacy-controlplane-archive/scripts/contextforge_mcp_wrapper.py", "<server_name>"]
+cwd = "/home/dgk/workspace/legacy-controlplane-archive"
 startup_timeout_ms = 60000
 tool_timeout_ms = 120000
 ```
@@ -311,7 +311,7 @@ matcher = "startup"
 
 [[hooks.SessionStart.hooks]]
 type = "command"
-command = "/home/dgk/workspace/context-portal/.venv/bin/python /home/dgk/workspace/context-portal/scripts/codex_project_init_hook.py"
+command = "/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python /home/dgk/workspace/legacy-controlplane-archive/scripts/codex_project_init_hook.py"
 timeout = 10
 statusMessage = "Checking ContextForge project init"
 
@@ -319,7 +319,7 @@ statusMessage = "Checking ContextForge project init"
 
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
-command = "/home/dgk/workspace/context-portal/.venv/bin/python /home/dgk/workspace/context-portal/scripts/codex_project_init_hook.py"
+command = "/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python /home/dgk/workspace/legacy-controlplane-archive/scripts/codex_project_init_hook.py"
 timeout = 10
 statusMessage = "Checking ContextForge project init"
 ```
@@ -343,17 +343,17 @@ trusted_hash = "sha256:0bbe16750e78137f70cf0a83ad95420a36dcc29d95501464f9227c209
 
 After this, app-server `hooks/list` reported both hooks as `trustStatus: trusted`.
 
-## Current Context-Portal Serena Runtime
+## Current Cf-Controlplane Serena Runtime
 
-Current project-local Codex MCP lookup from `/home/dgk/workspace/context-portal`:
+Current project-local Codex MCP lookup from `/home/dgk/workspace/legacy-controlplane-archive`:
 
 ```text
 serena
   enabled: true
   transport: stdio
-  command: /home/dgk/workspace/context-portal/.venv/bin/python
-  args: /home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py serena_context_portal_server
-  cwd: /home/dgk/workspace/context-portal
+  command: /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python
+  args: /home/dgk/workspace/legacy-controlplane-archive/scripts/contextforge_mcp_wrapper.py serena_cf_controlplane_d46fe58a2a20_server
+  cwd: /home/dgk/workspace/legacy-controlplane-archive
   env: -
 ```
 
@@ -366,9 +366,9 @@ Error: No MCP server named 'serena' found.
 Current user units:
 
 - `contextforge-gateway.service` is active.
-- `contextforge-serena-context-portal.service` is active.
+- `contextforge-serena-cf-controlplane-d46fe58a2a20.service` is active.
 
-Observed `contextforge-serena-context-portal.service` process shape:
+Observed `contextforge-serena-cf-controlplane-d46fe58a2a20.service` process shape:
 
 ```text
 /home/dgk/.local/bin/serena start-mcp-server \
@@ -376,7 +376,7 @@ Observed `contextforge-serena-context-portal.service` process shape:
   --host 127.0.0.1 \
   --port 9108 \
   --context codex \
-  --project /home/dgk/workspace/context-portal \
+  --project /home/dgk/workspace/legacy-controlplane-archive \
   --open-web-dashboard false
 ```
 
@@ -414,7 +414,7 @@ Interpretation:
 
 - Project-init prompt/resource are present.
 - Serena guidance prompt/resource are present.
-- Current `serena_context_portal_server` virtual server has 22 tools.
+- Current `serena_cf_controlplane_d46fe58a2a20_server` virtual server has 22 tools.
 - `activate_project` is not exposed by the virtual server.
 - `get_current_config` remains exposed.
 
@@ -424,7 +424,7 @@ Synthetic hook payloads were tested against `scripts/codex_project_init_hook.py`
 
 Verified:
 
-- `SessionStart` for `/home/dgk/workspace/context-portal` emitted valid JSON with additional context and substituted project root.
+- `SessionStart` for `/home/dgk/workspace/legacy-controlplane-archive` emitted valid JSON with additional context and substituted project root.
 - `UserPromptSubmit` with same session/project/version suppressed after SessionStart, proving idempotency.
 - Denied roots emitted nothing:
   - `/`
@@ -500,7 +500,7 @@ Interpretation:
 
 ### App-server actual Codex MCP path
 
-A real `codex app-server --listen stdio://` probe was run from `/home/dgk/workspace/context-portal`.
+A real `codex app-server --listen stdio://` probe was run from `/home/dgk/workspace/legacy-controlplane-archive`.
 
 Protocol shape:
 
@@ -511,7 +511,7 @@ Protocol shape:
 
 ```json
 {
-  "cwd": "/home/dgk/workspace/context-portal",
+  "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
   "ephemeral": true,
   "approvalPolicy": "never",
   "sandbox": "danger-full-access"
@@ -531,31 +531,31 @@ Protocol shape:
 
 Evidence:
 
-- `thread/start` returned cwd `/home/dgk/workspace/context-portal`.
-- `runtimeWorkspaceRoots` contained `/home/dgk/workspace/context-portal`.
-- `instructionSources` contained `/home/dgk/workspace/context-portal/AGENTS.md`.
+- `thread/start` returned cwd `/home/dgk/workspace/legacy-controlplane-archive`.
+- `runtimeWorkspaceRoots` contained `/home/dgk/workspace/legacy-controlplane-archive`.
+- `instructionSources` contained `/home/dgk/workspace/legacy-controlplane-archive/AGENTS.md`.
 - `hooks/list` reported the two project-init hooks as trusted.
 - `mcpServerStatus/list` returned a `serena` server.
 - Serena server exposed 22 tools.
 - No tool name contained `activate`.
 - Exposed get-config tool:
-  - `serena-context-portal-get-current-config`
+  - `serena-cf-controlplane-d46fe58a2a20-get-current-config`
 - Exposed diagnostics tool:
-  - `serena-context-portal-get-diagnostics-for-file`
+  - `serena-cf-controlplane-d46fe58a2a20-get-diagnostics-for-file`
 
-`mcpServer/tool/call` result for `serena-context-portal-get-current-config` contained:
+`mcpServer/tool/call` result for `serena-cf-controlplane-d46fe58a2a20-get-current-config` contained:
 
 ```text
 Current configuration:
 Serena version: 1.5.3
-Active project: context-portal
+Active project: cf-controlplane
 Language backend: LSP (global default: LSP)
 Active context: codex
 ```
 
 The same output listed `activate_project` as active inside Serena's own upstream configuration. This is expected and not a violation by itself: direct upstream Serena still has the tool internally, but the ContextForge virtual server and Codex-exposed app-server tool list do not expose it. The security boundary here is ContextForge virtual server filtering.
 
-`mcpServer/tool/call` result for `serena-context-portal-get-diagnostics-for-file` with:
+`mcpServer/tool/call` result for `serena-cf-controlplane-d46fe58a2a20-get-diagnostics-for-file` with:
 
 ```json
 {
@@ -857,8 +857,8 @@ Do not replace live probes with unit tests; add tests as regression protection.
    ```bash
    git status --short --branch
    codex mcp get serena
-   (cd /home/dgk/workspace/context-portal && codex mcp get serena)
-   systemctl --user --no-pager --plain status contextforge-gateway.service contextforge-serena-context-portal.service
+   (cd /home/dgk/workspace/legacy-controlplane-archive && codex mcp get serena)
+   systemctl --user --no-pager --plain status contextforge-gateway.service contextforge-serena-cf-controlplane-d46fe58a2a20.service
    ```
 
 2. Verify ContextForge registry again.
@@ -866,20 +866,20 @@ Do not replace live probes with unit tests; add tests as regression protection.
    Use the existing ContextForge auth helpers. Confirm:
 
    - `project_init_prompt` exists once.
-   - `contextforge://context-portal/project-init/v1` exists once.
+   - `contextforge://cf-controlplane/project-init/v1` exists once.
    - `serena_project_instance_guidance` exists once.
-   - `contextforge://context-portal/serena-project-instance-guidance/v1` exists once.
-   - `serena_context_portal_server` has 22 tools, no `activate_project`, and `get_current_config`.
+   - `contextforge://cf-controlplane/serena-project-instance-guidance/v1` exists once.
+   - `serena_cf_controlplane_d46fe58a2a20_server` has 22 tools, no `activate_project`, and `get_current_config`.
 
 3. Re-run app-server thread-level probe.
 
    The important current proof is:
 
-   - thread rooted at `/home/dgk/workspace/context-portal`,
+   - thread rooted at `/home/dgk/workspace/legacy-controlplane-archive`,
    - `mcpServerStatus/list` contains `serena`,
    - `serena` has 22 tools,
    - no activate tool is exposed,
-   - `mcpServer/tool/call` for `serena-context-portal-get-current-config` returns `Active project: context-portal`,
+   - `mcpServer/tool/call` for `serena-cf-controlplane-d46fe58a2a20-get-current-config` returns `Active project: cf-controlplane`,
    - diagnostics call returns `{}`.
 
 4. Decide or ask about Codex project trust.
@@ -896,10 +896,10 @@ Do not replace live probes with unit tests; add tests as regression protection.
 6. If preparing final completion, ensure evidence covers all required invariants:
 
    - Serena is not globally available from `/home/dgk`.
-   - Serena is project-local for `context-portal`.
+   - Serena is project-local for `cf-controlplane`.
    - ContextForge virtual server excludes `activate_project`.
    - Actual Codex-exposed Serena tools work after reload/restart.
-   - Active project is `context-portal`, not home/root.
+   - Active project is `cf-controlplane`, not home/root.
    - LSP result works through actual exposed tool path.
 
 ## Exact App-Server Probe Skeleton
@@ -912,7 +912,7 @@ import select
 import subprocess
 import time
 
-cwd = "/home/dgk/workspace/context-portal"
+cwd = "/home/dgk/workspace/legacy-controlplane-archive"
 proc = subprocess.Popen(
     ["codex", "app-server", "--listen", "stdio://"],
     stdin=subprocess.PIPE,
@@ -984,7 +984,7 @@ diag = call(
     {
         "threadId": thread_id,
         "server": "serena",
-        "tool": "serena-context-portal-get-diagnostics-for-file",
+        "tool": "serena-cf-controlplane-d46fe58a2a20-get-diagnostics-for-file",
         "arguments": {"relative_path": "scripts/contextforge_mcp_wrapper.py"},
     },
     60,
@@ -995,7 +995,7 @@ Remember to terminate the process after the probe.
 
 ## Current Completion Assessment
 
-As of this artifact, the current evidence is strong enough to say the implemented path works for the trusted `context-portal` project through the app-server MCP call path.
+As of this artifact, the current evidence is strong enough to say the implemented path works for the trusted `cf-controlplane` project through the app-server MCP call path.
 
 The broader project-init rollout is not fully closed because new arbitrary projects still encounter Codex project trust gating. That is an expected Codex behavior and a policy decision, not a failed ContextForge/Serena provisioning result.
 

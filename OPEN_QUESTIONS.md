@@ -8,7 +8,7 @@ immediate answer.
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,install,version,verification,answered
@@ -21,7 +21,7 @@ Installed and verified stock mcp-contextforge-gateway 1.0.2 in .venv. The local 
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: verification,health,admin-api,clean-server,answered
@@ -34,7 +34,7 @@ Clean local server proof passed on 2026-05-28 using ignored config/contextforge.
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-06-16
 - Tags: inventory,mcp,clients,registration,deduplication,answered
@@ -47,7 +47,7 @@ Read-only inventory is implemented in scripts/inventory_mcp.py and writes ignore
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: transport,bridge,sse,http,stdio,answered
@@ -60,7 +60,7 @@ Answered by the canonical service set, as revised by dec-20260528-0030, dec-2026
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: systemd,completion,admin-ui,endpoints,answered
@@ -73,7 +73,7 @@ Answered by current verification. User-level systemd units contextforge.target, 
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: https,tls,systemd,install,answered
@@ -86,7 +86,7 @@ Answered for the current local user-level systemd install by dec-20260528-0043. 
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: inventory,secrets,auth,bridges,answered
@@ -99,7 +99,7 @@ Answered by service selection and exclusions, as revised by dec-20260528-0030, d
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: server-instances,ports,bridges,operations
@@ -112,7 +112,7 @@ Answered for the current canonical service set, as revised by dec-20260528-0030,
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,virtual-servers,registration,ux,answered
@@ -125,7 +125,7 @@ Answered for the current installation: create one canonical virtual server per c
 
 - Ledger: open-questions
 - Status: open
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,packaging,admin-ui,systemd
@@ -138,7 +138,7 @@ The current local runtime depends on an ignored official source checkout because
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,admin-ui,csrf,tokens,local-runtime
@@ -151,7 +151,7 @@ Answered locally by dec-20260528-0028. ContextForge has two token classes here: 
 
 - Ledger: open-questions
 - Status: open
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-30
 - Tags: contextforge,content-security,upstream,prompts,resources
@@ -164,7 +164,7 @@ Local prompt/resource writes must keep stock ContextForge content-security valid
 
 - Ledger: open-questions
 - Status: open
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-30
 - Tags: inventory,candidates,pi,workspace,scope
@@ -177,7 +177,7 @@ Noncanonical discovered backends stay candidates or handoffs until service-manag
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,clients,http,oauth,auth,opencode,gemini-cli,claude-code
@@ -190,7 +190,7 @@ Answered by dec-20260528-0043. Do not wait for OpenCode OAuth repair for local o
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,opencode,http,tls,client-config
@@ -203,7 +203,7 @@ Operationally answered by dec-20260528-0043. OpenCode direct remote MCP entries 
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,claude-code,http,tls,client-config
@@ -216,7 +216,7 @@ Operationally answered by dec-20260528-0043. Claude Code does support direct HTT
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-28
 - Tags: contextforge,gemini-cli,http,tls,client-config
@@ -229,7 +229,7 @@ Operationally answered by dec-20260528-0043. Gemini CLI direct HTTP MCP entries 
 
 - Ledger: open-questions
 - Status: open
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-28
 - Updated: 2026-05-30
 - Tags: inventory,rest-api,workspace,scope
@@ -242,7 +242,7 @@ Non-assistant workspace REST APIs are not automatically promoted into ContextFor
 
 - Ledger: open-questions
 - Status: answered
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-29
 - Updated: 2026-05-30
 - Tags: codex,project-init,trust,serena,answered
@@ -255,7 +255,7 @@ Codex project trust may be handled only through brokered, separate human approva
 
 - Ledger: open-questions
 - Status: open
-- Repository: /home/dgk/workspace/context-portal
+- Repository: /home/dgk/workspace/legacy-controlplane-archive
 - Created: 2026-05-31
 - Updated: 2026-05-31
 - Tags: contextforge,project-init,validation,service-probes,skipped-services

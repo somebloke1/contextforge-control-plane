@@ -3,12 +3,12 @@
 Date: 2026-06-17
 
 This roadmap stage governs the transition from the legacy working path
-`/home/dgk/workspace/context-portal` to the canonical control-plane workspace
+`/home/dgk/workspace/legacy-controlplane-archive` to the canonical control-plane workspace
 `/home/dgk/workspace/cf-controlplane`.
 
-The project name is ContextForge / Context Forge. `context-portal` is a
+The project name is ContextForge / Context Forge. `cf-controlplane` is a
 deprecated path and compatibility identifier until the migration is complete.
-When active `context-portal` naming is encountered, classify it as active,
+When active `cf-controlplane` naming is encountered, classify it as active,
 compatibility, or historical and retire it through GitHub-tracked, reviewable
 slices rather than broad opportunistic renames.
 
@@ -154,7 +154,7 @@ session-local diagnostics, prompt caches, and other Codex runtime products.
 
 ### Legacy Workspace Archive
 
-The legacy `context-portal` checkout may remain as an accessible archive after
+The predecessor workspace checkout may remain as an accessible archive after
 the migration source is finalized. The archive is insurance for missed
 artifacts, not a blocker that forces every dirty file to be resolved before the
 clone.
@@ -168,7 +168,7 @@ make it look clean.
 ### GitHub Dirty-Retirement Gate
 
 GitHub issue #15 was the authoritative completion indicator for retiring the
-dirty `context-portal` checkout as an agent operating surface:
+dirty `cf-controlplane` checkout as an agent operating surface:
 
 - <https://github.com/somebloke1/contextforge-control-plane/issues/15>
 
@@ -191,7 +191,7 @@ Current refreshed evidence on 2026-06-17:
 - issue #31 now distinguishes the state precisely: the global config/trust
   migration is verified at disk and fresh CLI readback level, but active
   Codex Desktop project-local wrapper processes still come from the legacy
-  `context-portal` project because this Desktop thread remains rooted there.
+  `cf-controlplane` project because this Desktop thread remains rooted there.
 
 The archive-insurance posture remains valid only as an interim operating
 strategy. It does not complete issue #37 or issue #31 until the new
@@ -214,7 +214,7 @@ relationship:
 - hook approval state, trust state, generated continuity snapshots, OAuth
   state, Docker volumes, service DBs, live env files, and token caches remain
   local/runtime state unless an explicit promotion decision says otherwise;
-- absolute references to `/home/dgk/workspace/context-portal` are classified
+- absolute references to `/home/dgk/workspace/legacy-controlplane-archive` are classified
   before migration as historical, compatibility, archive-only, or operational
   blockers;
 - the legacy checkout may remain readable as insurance, but it must not remain
@@ -270,12 +270,12 @@ Current blockers:
 
 - issue #15 is closed; remaining operating-context work is owned by issue #37;
 - issue #31 remains open;
-- `.codex/config.toml` and `.project/context_forge_state.json` still encode
-  legacy `context-portal` operational identity and must not migrate as-is.
-- `server-instances/serena-context-portal/**`, `scripts/project_init_common.py`,
-  and `scripts/register_serena_context_portal_service.py` still require
-  compatibility classification or rewrite before `cf-controlplane` can rely on
-  them.
+- `.codex/config.toml` and `.project/context_forge_state.json` must encode the
+  canonical `cf-controlplane` operational identity before activation can rely
+  on them.
+- `server-instances/serena-cf-controlplane-d46fe58a2a20/**`, `scripts/project_init_common.py`,
+  and `scripts/register_serena_cf_controlplane_service.py` require source and
+  runtime readback before `cf-controlplane` can treat them as live validation.
 
 Current gate status:
 
@@ -300,7 +300,7 @@ Current integration rule:
   `origin/dev-root` and require selective integration from the clean source
   plus targeted path cleanup;
 - live `.codex/config.toml`, `.project/context_forge_state.json`, and
-  `server-instances/serena-context-portal/**` remain blocked from as-is
+  `server-instances/serena-cf-controlplane-d46fe58a2a20/**` remain blocked from as-is
   promotion.
 
 Acceptance evidence:
@@ -320,7 +320,7 @@ Goal-maintenance output:
 
 ### Subgoal 3: Wrap Up Legacy Git Operations
 
-Outcome: the legacy `context-portal` checkout has a Git-sound migration source
+Outcome: the predecessor checkout has a Git-sound migration source
 state, and further development in that checkout is paused except for emergency
 or explicitly approved fixes.
 
@@ -349,7 +349,7 @@ Acceptance evidence:
 - remaining local-only artifacts are all either ignored, copy-later, or
   approval-gated;
 - the roadmap records that the next step is to switch workspace, not continue
-  ordinary development in `context-portal`.
+  ordinary development in `cf-controlplane`.
 
 Goal-maintenance output:
 
@@ -384,14 +384,14 @@ Status as of 2026-06-17:
   stale `cf-control-plane` target naming.
 - The clone is not yet the live Codex operating substrate because
   `.codex/config.toml`, `.project/context_forge_state.json`,
-  `server-instances/serena-context-portal/**`, and project-init resource
+  `server-instances/serena-cf-controlplane-d46fe58a2a20/**`, and project-init resource
   identifiers still require retarget, regeneration, or explicit compatibility
   classification.
 - GitHub evidence is recorded on issue #15, issue #31, and issue #37.
 
 Immediate switch rule:
 
-- after the clone validates, stop normal implementation in `context-portal`;
+- after the clone validates, stop normal implementation in `cf-controlplane`;
 - switch control to a Codex project rooted at
   `/home/dgk/workspace/cf-controlplane` as soon as the user can create/open and
   approve that project;
@@ -426,7 +426,7 @@ Status as of branch `codex/issue-37-activation-readiness`:
 - Serena remains a compatibility decision for this non-mutating slice, but
   project-scoped Serena backend provisioning and the means to provision it
   remain a hard requirement. The existing
-  `server-instances/serena-context-portal/**` files are rooted at
+  `server-instances/serena-cf-controlplane-d46fe58a2a20/**` files are rooted at
   `cf-controlplane` but retain the old compatibility slug and tool names; the
   paired registration helper is fail-closed unless a future approved slice
   passes an explicit live-registration flag. A later Serena/project-init slice
@@ -457,7 +457,7 @@ runtime/project-context state. On 2026-06-17 it reported `status: blocked`:
 the two Codex MCP readbacks from `/home/dgk/workspace/cf-controlplane` had zero
 legacy-root transport references, but process inspection still found one live
 helper sourced from
-`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`, and
+`/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance`, and
 global config still referenced that older clean-root helper path. The allowed
 next action is evidence capture or a concrete human approval/reload boundary,
 not implicit process termination or global config mutation.
@@ -495,20 +495,20 @@ Acceptance evidence:
 - project-local hook list shows required hooks active after user approval;
 - any copied Codex runtime artifacts are non-secret, ignored when local-only,
   and non-redundant with clone-supplied project files;
-- path scan has no unintended `/home/dgk/workspace/context-portal`
+- path scan has no unintended `/home/dgk/workspace/legacy-controlplane-archive`
   operational dependencies;
 - a new Codex session can read the expected skills/governance from
   `cf-controlplane`.
 
 Goal-maintenance output:
 
-- retire `context-portal` as controller only after the clone proves this layer;
+- retire the predecessor workspace as controller only after the clone proves this layer;
 - refine the next formal goal to runtime recreation.
 
 Pause gate:
 
 - the current operating goal must pause when control needs to move from the
-  legacy `context-portal` Codex project to a Codex project rooted at
+  predecessor Codex project to a Codex project rooted at
   `/home/dgk/workspace/cf-controlplane`;
 - the user must create/open the new Codex workspace, approve project-local
   hooks/trust, and confirm the new session is ready;
@@ -562,12 +562,12 @@ runtime secrets/evidence local-only, and do not mutate global/runtime/legacy
 surfaces without a separate approval.
 
 Do not treat issue #37 activation or issue #31 runtime verification as complete
-until the new project context proves it is no longer using hidden
-`context-portal` or `contextforge-slices` operating paths.
+until the new project context proves it is no longer using hidden predecessor
+workspace or `legacy-controlplane-slices` operating paths.
 
 Source-edit boundary: after this clone, any new migration documentation,
 configuration source, hook, skill, harness, or governance change belongs in
 `/home/dgk/workspace/cf-controlplane` unless the user explicitly directs a
 legacy compatibility edit. Do not create new source truth in the legacy
-`/home/dgk/workspace/context-portal` directory that would not be reflected in
+`/home/dgk/workspace/legacy-controlplane-archive` directory that would not be reflected in
 the cloned workspace.

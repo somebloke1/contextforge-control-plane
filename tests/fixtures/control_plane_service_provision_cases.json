@@ -2,7 +2,7 @@
   "version": 1,
   "run_id": "20260530T202154Z",
   "resolved_at": "2026-05-30T22:30:00Z",
-  "project_root": "/home/dgk/workspace/context-portal",
+  "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
   "service_binding": "proof:project",
   "target_client": "codex",
   "plan_id": "w7c-proof-project-provision",

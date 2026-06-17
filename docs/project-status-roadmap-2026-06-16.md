@@ -25,8 +25,8 @@ Current tracker topology:
   roadmap fronts where still open.
 
 The evidence snapshot below is historical through the 2026-06-16 roadmap pass.
-Commands that mention `/home/dgk/workspace/context-portal` or
-`/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance`
+Commands that mention `/home/dgk/workspace/legacy-controlplane-archive` or
+`/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance`
 record how that pass was verified. They are not current operating commands for
 the `cf-controlplane` project-local activation slice.
 
@@ -46,27 +46,27 @@ Historical local checks used for this snapshot:
 - `curl -fsS -m 5 http://127.0.0.1:4444/health`
 - `curl -fsS -m 5 http://127.0.0.1:4444/ready`
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/diagnose_contextforge_wrappers.py process-report`
-- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/diagnose_contextforge_wrappers.py time-mentality-path --repo /home/dgk/workspace/context-portal --timeout 20`
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/diagnose_contextforge_wrappers.py time-mentality-path --repo /home/dgk/workspace/legacy-controlplane-archive --timeout 20`
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/inspect_contextforge_cleanup.py --output /tmp/contextforge-cleanup-current.json`
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/inventory_mcp.py`
 - `opencode mcp list`
 - `codex mcp list`
 - `tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck pi-extensions/contextforge-global-shim/index.ts`
-- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m unittest tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_extension_source_registers_bootstrap_helper_tools_without_bridge_reuse tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_global_shim_install_plan_is_explicit_and_non_mutating_by_default tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_shim_dry_run_imports_project_state_bindings_and_blocks_mutating_defaults tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_shim_dry_run_reports_explicit_validation_skip_when_no_safe_tool_matches tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_helper_cli_stdout_is_clean_json -v`
-- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python scripts/manage_pi_global_shim.py status`
-- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python scripts/manage_pi_global_shim.py plan`
-- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m py_compile scripts/inspect_project_init_readiness.py tests/test_project_init_scripts.py`
-- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m unittest tests.test_project_init_scripts -v`
-- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m unittest tests.test_project_init_activation_workflow -v`
-- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python scripts/inspect_project_init_readiness.py --project-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance --compare-root /home/dgk/workspace/context-portal --client-type codex --client-type pi`
-- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python -m unittest tests.test_project_init_scripts.ProjectInitReadinessInspectorTests tests.test_project_init_scripts.DirtyCheckoutRebindPlannerTests`
-- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/context-portal/.venv/bin/python scripts/plan_dirty_checkout_rebind.py --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance --legacy-root /home/dgk/workspace/context-portal --client-type codex --client-type pi --no-processes`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python -m unittest tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_extension_source_registers_bootstrap_helper_tools_without_bridge_reuse tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_global_shim_install_plan_is_explicit_and_non_mutating_by_default tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_shim_dry_run_imports_project_state_bindings_and_blocks_mutating_defaults tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_shim_dry_run_reports_explicit_validation_skip_when_no_safe_tool_matches tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_pi_helper_cli_stdout_is_clean_json -v`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python scripts/manage_pi_global_shim.py status`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python scripts/manage_pi_global_shim.py plan`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python -m py_compile scripts/inspect_project_init_readiness.py tests/test_project_init_scripts.py`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python -m unittest tests.test_project_init_scripts -v`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python -m unittest tests.test_project_init_activation_workflow -v`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python scripts/inspect_project_init_readiness.py --project-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance --compare-root /home/dgk/workspace/legacy-controlplane-archive --client-type codex --client-type pi`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python -m unittest tests.test_project_init_scripts.ProjectInitReadinessInspectorTests tests.test_project_init_scripts.DirtyCheckoutRebindPlannerTests`
+- `PYTHONDONTWRITEBYTECODE=1 /home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python scripts/plan_dirty_checkout_rebind.py --target-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance --legacy-root /home/dgk/workspace/legacy-controlplane-archive --client-type codex --client-type pi --no-processes`
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m py_compile scripts/plan_dirty_checkout_rebind.py tests/test_project_init_scripts.py scripts/contextforge_mcp_wrapper.py`
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_project_init_scripts.ProjectInitReadinessInspectorTests tests.test_project_init_scripts.DirtyCheckoutRebindPlannerTests`
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_project_init_scripts`
-- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/plan_dirty_checkout_rebind.py --target-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance --legacy-root /home/dgk/workspace/context-portal --client-type codex --client-type pi --no-processes --approval-acknowledged --approval-ref 'user approved Strategy 1 compatibility rebind first pass in thread'`
-- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/inspect_project_init_readiness.py --project-root /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance --compare-root /home/dgk/workspace/context-portal --client-type codex --client-type pi --no-processes`
-- `rg -n "/home/dgk/workspace/context-portal" .codex/config.toml .project/context_forge_state.json server-instances/serena-context-portal server-instances/mentality/instance.json .codex/skills scripts/register_project_init_prompt.py scripts/register_serena_context_portal_service.py .serena`
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/plan_dirty_checkout_rebind.py --target-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance --legacy-root /home/dgk/workspace/legacy-controlplane-archive --client-type codex --client-type pi --no-processes --approval-acknowledged --approval-ref 'user approved Strategy 1 compatibility rebind first pass in thread'`
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/inspect_project_init_readiness.py --project-root /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance --compare-root /home/dgk/workspace/legacy-controlplane-archive --client-type codex --client-type pi --no-processes`
+- `rg -n "/home/dgk/workspace/legacy-controlplane-archive" .codex/config.toml .project/context_forge_state.json server-instances/serena-cf-controlplane-d46fe58a2a20 server-instances/mentality/instance.json .codex/skills scripts/register_project_init_prompt.py scripts/register_serena_cf_controlplane_service.py .serena`
 - `git diff --check`
 - `gh pr view 24 --json number,state,mergedAt,mergeCommit,url,isDraft,headRefName,baseRefName`
 
@@ -239,7 +239,7 @@ work.
 - Retired hook activation coordination subgoal: issue #11 is closed after
   post-Codex Desktop-restart user-visible readback showed `PreCompact` and
   `SessionStart` enabled at the project level for
-  `/home/dgk/workspace/context-portal`. This is the intended non-global scope;
+  `/home/dgk/workspace/legacy-controlplane-archive`. This is the intended non-global scope;
   separate worktrees remain independently trusted by their `.codex/config.toml`
   path if they are actively used.
 - Retired wrapper lifecycle subgoal: issue #1 is closed by merged PR #7 at
@@ -302,7 +302,7 @@ work.
   followed up on clean-root operator readback at merge commit `6cccd0d`:
   `codex -C ... mcp list --json` originally showed `contextforge-helper`
   inherited from user-global `~/.codex/config.toml` and still bound to
-  `/home/dgk/workspace/context-portal`; PR #27 adds a project-local
+  `/home/dgk/workspace/legacy-controlplane-archive`; PR #27 adds a project-local
   `contextforge-helper` binding so the clean root shadows that stale global
   entry without editing global config. Post-merge readback reported 11 MCP
   entries and zero legacy-bound items.
@@ -335,7 +335,7 @@ The immediate problem is integration hygiene:
   `/home/dgk/workspace/cf-controlplane`. PR #38 source-prep is merged, and the
   current #37 activation-readiness branch is
   `codex/issue-37-activation-readiness` from `dev-root`. The legacy
-  `/home/dgk/workspace/context-portal` checkout remains archive/compatibility
+  `/home/dgk/workspace/legacy-controlplane-archive` checkout remains archive/compatibility
   evidence, not the place for new source truth.
 - GitHub has tracking issues #2-#5 for the remaining original active fronts,
   plus issue #37 for `cf-controlplane` project-local activation and issue #31
@@ -360,7 +360,7 @@ The immediate problem is integration hygiene:
 ## Naming Boundary
 
 The project name is ContextForge / Context Forge / `contextforge`.
-`context-portal` is deprecated as a human-facing project name. It still appears
+`cf-controlplane` is deprecated as a human-facing project name. It still appears
 as the current repository path, historical/runtime slug, Serena service slug,
 project hash input, ContextForge resource URI fragment, and GitHub repository
 name. Treat those occurrences as compatibility identifiers until a separate
@@ -468,23 +468,23 @@ Current evidence:
 - Live helper readback is now inspectable but not yet a close signal. PR #21
   originally classified the clean source worktree state as `invalid_blocked`
   because tracked `.project/context_forge_state.json` still attested
-  `/home/dgk/workspace/context-portal`. After merged PR #24, the clean-root
+  `/home/dgk/workspace/legacy-controlplane-archive`. After merged PR #24, the clean-root
   project state is repaired to the clean worktree and readiness reports primary
   `valid`/`resume_validation`; target-client validation and live process/runtime
   rebind are still pending.
 - Clean-root Codex MCP readback now passes through merged PR #27. On
   `dev-root` at `6cccd0d`, `codex -C
-  /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance mcp
+  /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance mcp
   list --json` reports `contextforge-helper`, `context7`, `mentality`, and
   `serena` sourced from the clean worktree path, with zero legacy-bound MCP
   items. The same check before PR #27 showed `contextforge-helper` inherited from global
   `~/.codex/config.toml` and still sourced from the legacy checkout.
-- The legacy live `/home/dgk/workspace/context-portal/.project/context_forge_state.json`
+- The legacy live `/home/dgk/workspace/legacy-controlplane-archive/.project/context_forge_state.json`
   is schema-valid, revision 10, and `initialized`; its current Codex client
   state is `verified` with validation `passed`, while Pi remains
   `validation_pending` with validation `mixed`. Historical activation-job
   counts are two `validation_pending` jobs and one `verified` job.
-- The project state still carries deprecated project label `context-portal`;
+- The project state still carries deprecated project label `cf-controlplane`;
   per `dec-20260616-0001`, that is naming debt unless a compatibility-safe
   migration is planned and approved.
 
@@ -509,7 +509,7 @@ Risks:
 - The project-local helper shadow does not retire global Codex migration debt.
   `~/.codex/config.toml` still contains legacy `contextforge-helper`,
   SessionStart/UserPromptSubmit project-init hook commands, project trust, and
-  hook trust-state records for `/home/dgk/workspace/context-portal`; changing
+  hook trust-state records for `/home/dgk/workspace/legacy-controlplane-archive`; changing
   those remains a separate user-approved global config/trust migration.
 - Merged PR
   [#28](https://github.com/somebloke1/contextforge-control-plane/pull/28)
@@ -628,7 +628,7 @@ Dependencies:
   fallback. The project-init prompt gate uses
   `CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT` or the approved repo-root parent rather
   than a hard-coded host workspace path. There is no hard-coded
-  `context-portal` root default.
+  `cf-controlplane` root default.
 - Installing/reloading the Pi global extension is user-global mutation and
   requires explicit approval.
 - Pi global shim status/plan/install must be idempotent. Re-running install
@@ -662,8 +662,8 @@ Current evidence:
   servers.
 - Current cleanup candidates:
   - delete prompt `project-init-prompt`
-  - delete resource `contextforge://context-portal/project-init/v15`
-  - delete resource `contextforge://context-portal/project-init/v14`
+  - delete resource `contextforge://cf-controlplane/project-init/v15`
+  - delete resource `contextforge://cf-controlplane/project-init/v14`
   - review 23 stale project-scoped Serena tools for the
     `serena-phronesis-devstack-cdb531b045e5` service before deletion
 
@@ -736,7 +736,7 @@ service-management handoff and explicit approval.
 ### 7. Serena Project-Scoped Services
 
 Status: historical legacy/live readback reported an active
-`contextforge-serena-context-portal.service`; under the current
+`contextforge-serena-cf-controlplane-d46fe58a2a20.service`; under the current
 `cf-controlplane` migration docs, that service is compatibility evidence, not
 proof that canonical `cf-controlplane` Serena provisioning is complete. Stale
 test units remain.
@@ -744,7 +744,7 @@ test units remain.
 Current evidence:
 
 - Historical legacy/live readback reported
-  `contextforge-serena-context-portal.service` active.
+  `contextforge-serena-cf-controlplane-d46fe58a2a20.service` active.
 - `contextforge-serena-phronesis-devstack-cdb531b045e5.service` is active.
 - Eight `contextforge-serena-test-new-proj-*` units are active and enabled.
 - Matching test project directories still exist under `/home/dgk/workspace/`.
@@ -819,7 +819,7 @@ Current GitHub state:
   - [#25: Standardize continuity and goal-loop artifacts as repo assets](https://github.com/somebloke1/contextforge-control-plane/issues/25)
 - Local `dev-root` and `origin/dev-root` are synchronized after the
   fast-tracked foundation merges and follow-up status-only roadmap updates.
-- Holding worktree `/home/dgk/workspace/context-portal` is on
+- Holding worktree `/home/dgk/workspace/legacy-controlplane-archive` is on
   `codex/contextforge-wrapper-lifecycle`, one commit beyond `dev-root`, and
   remains the intentionally dirty source for not-yet-extracted slices.
 - Branch `codex/wrapper-lifecycle-cleanup` was merged through PR #7; the remote
@@ -833,7 +833,7 @@ Current GitHub state:
   worktree has received the hardened hook and config, passed TOML/direct hook
   smoke checks, and has been user-approved in Codex. After a Codex Desktop
   restart, the user-visible project-level hook view for
-  `/home/dgk/workspace/context-portal` showed `PreCompact` and `SessionStart`
+  `/home/dgk/workspace/legacy-controlplane-archive` showed `PreCompact` and `SessionStart`
   enabled. That is the intended non-global scope; separate worktrees remain
   independently keyed by their own `.codex/config.toml` path and may require
   separate approval when actively used.
@@ -873,26 +873,26 @@ origin/dev-root and dev-root
   include 726d7cf Merge pull request #23
 
 merged runtime worktrees
-  /home/dgk/workspace/contextforge-slices/wrapper-lifecycle-cleanup
+  /home/dgk/workspace/legacy-controlplane-slices/wrapper-lifecycle-cleanup
     codex/wrapper-lifecycle-cleanup -> PR #7 merged, remote branch deleted
 
 open draft PR worktrees
-  /home/dgk/workspace/contextforge-slices/helper-multiclient-project-init
+  /home/dgk/workspace/legacy-controlplane-slices/helper-multiclient-project-init
     codex/helper-multiclient-project-init -> PR #10
 
 merged foundation worktrees
-  /home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance
+  /home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance
     dev-root -> PR #8, PR #9, PR #13, PR #23, and PR #24 merged
-  /home/dgk/workspace/contextforge-slices/precompact-continuity-hook
+  /home/dgk/workspace/legacy-controlplane-slices/precompact-continuity-hook
     codex/precompact-continuity-hook -> PR #9 merged, remote branch deleted
-  /home/dgk/workspace/contextforge-slices/precompact-conductor-pointer
+  /home/dgk/workspace/legacy-controlplane-slices/precompact-conductor-pointer
     codex/precompact-conductor-pointer -> PR #13 merged, remote branch deleted
 
 historical baseline shown before synchronization
   9d41c6b Add ContextForge control plane initiative plan
 
 holding worktree
-  /home/dgk/workspace/context-portal
+  /home/dgk/workspace/legacy-controlplane-archive
   codex/contextforge-wrapper-lifecycle
     ae5a434 Implement ContextForge helper project init workflow
     one commit beyond dev-root with many tracked modifications and untracked files
@@ -915,11 +915,11 @@ Phase 0: preserve local state.
   the capture commands must refresh the same named evidence files without
   deleting local changes.
 - Capture a current patch bundle before branch surgery:
-  `git diff > /tmp/context-portal-current-worktree.patch`
+  `git diff > /tmp/cf-controlplane-current-worktree.patch`
 - Capture untracked file inventory:
-  `git ls-files --others --exclude-standard > /tmp/context-portal-untracked-files.txt`
+  `git ls-files --others --exclude-standard > /tmp/cf-controlplane-untracked-files.txt`
 - Capture untracked file contents before branch surgery:
-  `git ls-files -z --others --exclude-standard | tar --null -T - -cf /tmp/context-portal-untracked-files.tar`
+  `git ls-files -z --others --exclude-standard | tar --null -T - -cf /tmp/cf-controlplane-untracked-files.tar`
 - Keep `codex/contextforge-wrapper-lifecycle` as the temporary holding branch
   until all slices are extracted.
 
@@ -950,12 +950,12 @@ extraction if current evidence proves a better review boundary.
 | `codex/dirty-checkout-retirement-runbook` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #19](https://github.com/somebloke1/contextforge-control-plane/pull/19) | Non-mutating rebind/retire runbook only; no local path mutation, service restart, registry mutation, hook approval, or checkout deletion. | `git diff --check`; sidecar path-bound surface audit; delegated PR review; no generated/local files tracked |
 | `codex/issue-15-current-rebind-contract` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #22](https://github.com/somebloke1/contextforge-control-plane/pull/22) | Post-PR #21 update to the dirty-checkout retirement contract: current `dev-root` evidence, read-only readiness evidence, Strategy 1 compatibility rebind approval question, Strategy 2 new-root identity, and Strategy 3 archival-only deferral. | `git diff --check`; preservation checksum verification; current dirty-vs-dev-root classification; readiness reconciler readback |
 | `codex/issue-15-rebind-preflight-planner` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #23](https://github.com/somebloke1/contextforge-control-plane/pull/23) | Read-only source planner for Strategy 1/2/3 approval: inventories path-bound local surfaces, embeds readiness reconciliation, and reports non-actions before any live rebind mutation. | focused planner/readiness tests; live planner JSON readback; `git diff --check`; no runtime mutation |
-| `codex/issue-15-strategy1-source-rebind` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #24](https://github.com/somebloke1/contextforge-control-plane/pull/24) | User-approved Strategy 1 first pass: retarget source/project-local path-bound operating surfaces from `/home/dgk/workspace/context-portal` to the clean worktree while preserving compatibility names and making no runtime/global/process/registry/Pi/checkout-disposition mutations. | planner with `--approval-acknowledged`; readiness with `--no-processes`; targeted legacy-root `rg`; `tests.test_project_init_scripts`; TOML parse; `git diff --check`; delegated source-surface audit |
+| `codex/issue-15-strategy1-source-rebind` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #24](https://github.com/somebloke1/contextforge-control-plane/pull/24) | User-approved Strategy 1 first pass: retarget source/project-local path-bound operating surfaces from `/home/dgk/workspace/legacy-controlplane-archive` to the clean worktree while preserving compatibility names and making no runtime/global/process/registry/Pi/checkout-disposition mutations. | planner with `--approval-acknowledged`; readiness with `--no-processes`; targeted legacy-root `rg`; `tests.test_project_init_scripts`; TOML parse; `git diff --check`; delegated source-surface audit |
 | `codex/issue-15-clean-helper-binding` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #27](https://github.com/somebloke1/contextforge-control-plane/pull/27) | Project-local `contextforge-helper` MCP binding and regression test so clean-root Codex sessions shadow the stale global helper entry instead of depending on the legacy checkout. Does not edit user-global config/trust or reload clients. | `codex -C ... mcp list --json`; `tests.test_codex_precompact_continuity_hook`; readiness with `--no-processes`; delegated legacy-binding audit |
 | `codex/issue-15-global-codex-migration-plan` | [#15](https://github.com/somebloke1/contextforge-control-plane/issues/15) / merged [PR #28](https://github.com/somebloke1/contextforge-control-plane/pull/28) | Read-only user-global Codex config/trust migration planner for stale `~/.codex/config.toml` entries. Classifies active replacements, historical hook-state provenance, clean-root trust/hook-state absence, target values, readback commands, and non-actions. Does not edit global config/trust or reload clients. | `scripts/plan_codex_global_config_migration.py`; focused planner tests; real global-config planner readback; `git diff --check` |
 | `codex/issue-29-global-codex-apply-rollback` | closed [#29](https://github.com/somebloke1/contextforge-control-plane/issues/29) / merged [PR #32](https://github.com/somebloke1/contextforge-control-plane/pull/32) | Idempotent apply/rollback tooling for the user-global Codex config/trust migration. Keeps planning read-only by default, requires explicit approval for writes/restores, creates pre-change backups, preserves legacy trust and hook-state provenance by default, de-duplicates partial migrations, requires separate paired approval for legacy trust removal or hook-state pruning, and reports `pending_restart` after writes. | 13 focused global config migration tests; 69 project-init tests; temp-config apply/plan/rollback smoke; real read-only planner readback; `git diff --check`; delegated read-only review |
 | `codex/issue-30-hook-retarget-preflight` | closed [#30](https://github.com/somebloke1/contextforge-control-plane/issues/30) / merged [PR #34](https://github.com/somebloke1/contextforge-control-plane/pull/34) | Read-only hook-retarget side-effect preflight for the user-global Codex config/trust migration. Identifies affected `SessionStart`/`UserPromptSubmit` commands, hook-state records, fresh hook-trust risk, and whether first hook execution is unknown/readback-required, read-only, or would upsert project-init prompt/resource metadata. Does not edit global config/trust, execute hooks, grant/revoke trust, log in, write token cache, reload Codex, or upsert ContextForge prompt/resource metadata. | 15 focused global config migration tests; 71 project-init tests; real read-only planner readback; optional no-token metadata-inspection negative probe; `git diff --check`; delegated read-only reviews |
-| `codex/issue-31-pending-restart-verification` | [#31](https://github.com/somebloke1/contextforge-control-plane/issues/31) | Runtime verification after the approved write-only user-global Codex config/trust migration. Disk now points the active global helper and global project-init hook commands at the clean root, clean-root project trust exists, and legacy trust/hook-state are preserved by policy. Post-restart evidence verifies the global helper and clean-root CLI project context, but the active Codex Desktop thread remains legacy-bound through `/home/dgk/workspace/context-portal/.codex/config.toml` project-local wrapper entries. | post-write planner readback; direct `~/.codex/config.toml` readback; global and clean-project `codex mcp list --json`; Codex Desktop process readback; clean-root Desktop context or legacy project-local disposition still required |
+| `codex/issue-31-pending-restart-verification` | [#31](https://github.com/somebloke1/contextforge-control-plane/issues/31) | Runtime verification after the approved write-only user-global Codex config/trust migration. Disk now points the active global helper and global project-init hook commands at the clean root, clean-root project trust exists, and legacy trust/hook-state are preserved by policy. Post-restart evidence verifies the global helper and clean-root CLI project context, but the active Codex Desktop thread remains legacy-bound through `/home/dgk/workspace/legacy-controlplane-archive/.codex/config.toml` project-local wrapper entries. | post-write planner readback; direct `~/.codex/config.toml` readback; global and clean-project `codex mcp list --json`; Codex Desktop process readback; clean-root Desktop context or legacy project-local disposition still required |
 | `codex/serena-stale-unit-cleanup` | [#2](https://github.com/somebloke1/contextforge-control-plane/issues/2) | documentation and cleanup plan for stale Serena test units, plus narrow manager fixes if needed. Runtime stop/disable actions should be recorded but not hidden in code commits. | systemd list/readback; manager tests if code changes |
 | `codex/serena-dynamic-port-reservation` | [#33](https://github.com/somebloke1/contextforge-control-plane/issues/33) / investigation commit `529b442` | Copilot investigation found that the per-project Serena manager already allocates dynamic ports from 9110-9199 with manifest/socket collision checks and per-instance units; static `9108` belongs to the canonical operator singleton and is not reused by the per-project provisioning flow. Remaining work is operational clarity and explicit guardrails, not a blocker for #31 or the global Codex migration. | `INVESTIGATION_SERENA_PORT_9108.md`; manager/source audit; README clarification; explicit operator-reserved port guard; optional instance audit script |
 | `codex/clean-worktree-test-hermeticity` | closed [#14](https://github.com/somebloke1/contextforge-control-plane/issues/14) / merged [PR #17](https://github.com/somebloke1/contextforge-control-plane/pull/17) | Unit-test and fixture cleanup so clean slice worktrees do not depend on ignored `.env` or `run/*registration.json` files. | focused adapter/classification tests; broad control-plane discovery; full `unittest discover` |
@@ -989,7 +989,7 @@ extraction if current evidence proves a better review boundary.
   `codex/contextforge-wrapper-lifecycle` holding worktree and direct smoke/TOML
   checks passed; the user subsequently approved those hooks. Post-restart
   Codex Desktop readback now confirms project-level `PreCompact` and
-  `SessionStart` activation for `/home/dgk/workspace/context-portal`.
+  `SessionStart` activation for `/home/dgk/workspace/legacy-controlplane-archive`.
 - Acceptance: completed. Hook tests prove session isolation, no-session event-only
   fallback, bounded event retention, bounded session retention, stale root
   latest cleanup, idempotent event ids, and sensitive value redaction; docs
@@ -1013,7 +1013,7 @@ extraction if current evidence proves a better review boundary.
 - Current state: complete through merged PR #26 at `5228bd7`. The existing
   hook, config, docs, tests, and snapshot schema are tracked; the currently
   active raw snapshot evidence was found under ignored
-  `/home/dgk/workspace/context-portal/run/codex-precompact-continuity/`.
+  `/home/dgk/workspace/legacy-controlplane-archive/run/codex-precompact-continuity/`.
   Turing's read-only sidecar audit confirmed this is the right split: repo
   tracks the contract and commands, while per-run evidence stays ignored.
 - Desired state: generated snapshots identify their schema, standard repo
@@ -1082,7 +1082,7 @@ extraction if current evidence proves a better review boundary.
 - Evidence: `tests/test_contextforge_mcp_wrapper.py`,
   `scripts/diagnose_contextforge_wrappers.py process-report`,
   `scripts/diagnose_contextforge_wrappers.py time-mentality-path --repo
-  /home/dgk/workspace/context-portal --timeout 20`, `codex mcp list`.
+  /home/dgk/workspace/legacy-controlplane-archive --timeout 20`, `codex mcp list`.
 - Debt policy: retired. Future wrapper regressions should open a new issue with
   fresh runtime evidence rather than reopening stale pre-merge counts.
 
@@ -1092,13 +1092,13 @@ extraction if current evidence proves a better review boundary.
   or explicitly retained.
 - Beneficiary: operators reading systemd, inventory, registry, and port state.
 - Current state: historical legacy/live readback reported the
-  `contextforge-serena-context-portal.service` compatibility unit active;
+  `contextforge-serena-cf-controlplane-d46fe58a2a20.service` compatibility unit active;
   phronesis-devstack Serena is active; eight
   `contextforge-serena-test-new-proj-*` units and matching
   workspace plus `server-instances/` directories exist. A read-only
   classification pass was recorded on issue #2 at
   `https://github.com/somebloke1/contextforge-control-plane/issues/2#issuecomment-4718131243`:
-  the context-portal unit was treated as canonical in that historical runtime
+  the cf-controlplane unit was treated as canonical in that historical runtime
   pass, but current `cf-controlplane` docs reclassify it as compatibility
   evidence pending canonical Serena provisioning or an explicit compatibility
   decision. phronesis-devstack is intentionally retained, and the eight
@@ -1108,7 +1108,7 @@ extraction if current evidence proves a better review boundary.
 - Desired state: legitimate project-scoped Serena services remain active;
   disposable test units/directories/registry records are removed only after
   approval and exact-match readback.
-- Invariants: do not stop `contextforge-serena-context-portal.service`; do not
+- Invariants: do not stop `contextforge-serena-cf-controlplane-d46fe58a2a20.service`; do not
   delete another workspace's legitimate Serena service; do not treat a path
   name alone as proof of disposability.
 - Dependencies: fresh systemd list, `server-instances/*/instance.json`
@@ -1289,7 +1289,7 @@ extraction if current evidence proves a better review boundary.
   closed issue
   [#6](https://github.com/somebloke1/contextforge-control-plane/issues/6).
   Inventory finds 207 entries, 203 enabled; local report is
-  ignored; `by_client.context-portal` is a deprecated label signal for the
+  ignored; `by_client.cf-controlplane` is a deprecated label signal for the
   repo-local ContextForge service.
 - Desired state: each noncanonical direct entry is classified as exclude,
   already covered, project-local only, or service-management candidate with a
@@ -1332,7 +1332,7 @@ extraction if current evidence proves a better review boundary.
 - Hidden work: `temp/roadmap-conductor-skill-design-20260616/` and `.tmp/`
   need promote/ignore/delete decisions before any PR.
 - Acceptance: ledger shape checks pass; docs no longer present deprecated
-  `context-portal` as project name outside compatibility/path contexts; PR
+  `cf-controlplane` as project name outside compatibility/path contexts; PR
   clearly lists included and excluded documentation artifacts.
 - Evidence: governance CRUD read/list, full tests or ledger-focused tests,
   `rg` naming audit, `git status --short`.
@@ -1429,7 +1429,7 @@ Do not open one giant PR from the current dirty branch. Recommended sequence:
    leaving the migration in `pending_restart`. The user then restarted Codex
    Desktop; global and clean-root CLI readbacks are clean-root aware, but the
    active Desktop thread still launched legacy project-local wrapper processes
-   from `/home/dgk/workspace/context-portal/.codex/config.toml`. No hook
+   from `/home/dgk/workspace/legacy-controlplane-archive/.codex/config.toml`. No hook
    execution, hook approval/toggle, prompt/resource upsert,
    token-cache/login write, service/process/systemd/registry/Pi mutation,
    legacy trust removal, hook-state pruning, or legacy checkout cleanup occurred.

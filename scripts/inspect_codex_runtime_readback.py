@@ -18,8 +18,8 @@ REPORT_SCHEMA_URI = "contextforge://control-plane/codex-runtime-readback-report/
 DEFAULT_PROJECT_ROOT = Path("/home/dgk/workspace/cf-controlplane")
 DEFAULT_CONFIG_PATH = Path("~/.codex/config.toml")
 DEFAULT_LEGACY_ROOTS = (
-    Path("/home/dgk/workspace/context-portal"),
-    Path("/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"),
+    Path("/home/dgk/workspace/legacy-controlplane-archive"),
+    Path("/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance"),
 )
 CODEX_RUNTIME_SCRIPT_NAMES = (
     "contextforge_helper_mcp.py",

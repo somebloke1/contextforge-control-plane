@@ -1,7 +1,7 @@
 {
   "version": 1,
   "run_id": "20260530T202154Z",
-  "project_root": "/home/dgk/workspace/context-portal",
+  "project_root": "/home/dgk/workspace/legacy-controlplane-archive",
   "resolved_at": "2026-05-30T20:21:54Z",
   "gateway_revision": "gateway-r1",
   "target_client_digest": "sha256:client-r1",

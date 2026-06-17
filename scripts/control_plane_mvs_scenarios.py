@@ -391,7 +391,7 @@ def _check_tool_policy_case(check: Mapping[str, Any]) -> dict[str, Any]:
 def _check_malicious_tool_metadata() -> dict[str, Any]:
     result = tool_policy.compile_tool_policy(
         service_binding="project-inspector:project",
-        virtual_server_id="project_inspector_context_portal",
+        virtual_server_id="project_inspector_cf_controlplane",
         target_client="codex",
         tools=[
             {
@@ -849,7 +849,7 @@ def _apply_base_state(fixture: Mapping[str, Any], *, revision: int | None = None
     root = fixture["project_root"]
     return {
         "meta": {"revision": revision},
-        "project": {"root": root, "root_hash": project_state.project_root_hash(root), "name": "context-portal"},
+        "project": {"root": root, "root_hash": project_state.project_root_hash(root), "name": "cf-controlplane"},
         "status": "uninitialized",
         "decisions": {},
         "services": {},
@@ -868,7 +868,7 @@ def _apply_base_plan(fixture: Mapping[str, Any]) -> dict[str, Any]:
         "project": {
             "root": fixture["project_root"],
             "root_hash": project_state.project_root_hash(fixture["project_root"]),
-            "name": "context-portal",
+            "name": "cf-controlplane",
         },
         "plan_id": fixture["plan_id"],
         "status": "planned_non_mutating",

@@ -1,8 +1,8 @@
 {
   "version": 1,
   "resolved_at": "2026-05-30T22:30:00Z",
-  "service_binding": "project-inspector:context-portal",
-  "virtual_server_id": "vs-project-inspector-context-portal",
+  "service_binding": "project-inspector:cf-controlplane",
+  "virtual_server_id": "vs-project-inspector-cf-controlplane",
   "target_client": "codex",
   "expected_gateway_revision": "gw-r1",
   "current_gateway_revision": "gw-r1",
@@ -17,7 +17,7 @@
             "tool_id": "cf-tool-list-files",
             "original_name": "list_files",
             "exposed_name": "project_inspector__list_files",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["codex"],
             "risk_classes": ["read_only"],
             "scope_impacts": ["project_scope_read"],
@@ -27,7 +27,7 @@
             "tool_id": "cf-tool-read-file",
             "original_name": "read_file",
             "exposed_name": "project_inspector__read_file",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["codex"],
             "risk_classes": ["read_only"],
             "scope_impacts": ["project_scope_read"],
@@ -52,7 +52,7 @@
             "tool_id": "cf-tool-activate-project",
             "original_name": "activate_project",
             "exposed_name": "project_inspector__activate_project",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["codex"],
             "risk_classes": ["scope_changing"],
             "scope_impacts": ["active_project"]
@@ -61,7 +61,7 @@
             "tool_id": "cf-tool-catalog-refresh",
             "original_name": "refresh_registry",
             "exposed_name": "project_inspector__refresh_registry",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["codex"],
             "risk_classes": ["catalog_admin"],
             "scope_impacts": ["catalog"]
@@ -70,7 +70,7 @@
             "tool_id": "cf-tool-trust-grant",
             "original_name": "grant_client_trust",
             "exposed_name": "project_inspector__grant_client_trust",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["codex"],
             "risk_classes": ["trust"],
             "scope_impacts": ["credential_scope"]
@@ -79,7 +79,7 @@
             "tool_id": "cf-tool-open-tunnel",
             "original_name": "open_remote_tunnel",
             "exposed_name": "project_inspector__open_remote_tunnel",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["codex"],
             "risk_classes": ["remote_exposure"],
             "scope_impacts": ["network_exposure"]
@@ -108,7 +108,7 @@
             "tool_id": "cf-tool-unknown",
             "original_name": "mystery",
             "exposed_name": "project_inspector__mystery",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["codex"]
           },
           {
@@ -140,7 +140,7 @@
             "tool_id": "cf-tool-list-files",
             "original_name": "list_files",
             "exposed_name": "project_inspector__list_files",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["claude"],
             "risk_classes": ["read_only"],
             "scope_impacts": ["project_scope_read"]
@@ -164,7 +164,7 @@
             "tool_id": "cf-tool-write-state",
             "original_name": "write_project_state",
             "exposed_name": "project_inspector__write_project_state",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["codex"],
             "risk_classes": ["write"],
             "scope_impacts": ["project_state"]
@@ -199,7 +199,7 @@
             "tool_id": "cf-tool-write-state",
             "original_name": "write_project_state",
             "exposed_name": "project_inspector__write_project_state",
-            "service_binding": "project-inspector:context-portal",
+            "service_binding": "project-inspector:cf-controlplane",
             "target_clients": ["codex"],
             "risk_classes": ["write"],
             "scope_impacts": ["project_state"],

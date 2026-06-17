@@ -13,11 +13,11 @@ import contextforge_mcp_wrapper as gateway
 
 
 OWNER = "admin@contextforge.dev"
-GATEWAY_NAME = "serena-context-portal"
-SERVER_NAME = "serena_context_portal_server"
+GATEWAY_NAME = "serena-cf-controlplane-d46fe58a2a20"
+SERVER_NAME = "serena_cf_controlplane_d46fe58a2a20_server"
 GATEWAY_URL = "http://localhost:9108/mcp"
 EXCLUDED_ORIGINAL_TOOL_NAMES = {"activate_project"}
-LIVE_REGISTRATION_APPROVAL = "--allow-live-legacy-serena-registration"
+LIVE_REGISTRATION_APPROVAL = "--allow-live-serena-registration"
 
 
 def api_request(method: str, path: str, *, token: str, body: dict[str, Any] | None = None) -> Any:
@@ -104,7 +104,7 @@ def resource_ids(token: str) -> list[str]:
         for resource in resources
         if isinstance(resource.get("id"), str)
         and (
-            str(resource.get("uri") or "").startswith("serena-context-portal://tools/")
+            str(resource.get("uri") or "").startswith("serena-cf-controlplane-d46fe58a2a20://tools/")
             or "serena" in (resource.get("tags") or [])
         )
     )
@@ -155,10 +155,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if not args.allow_live_legacy_serena_registration:
+    if not args.allow_live_serena_registration:
         print(
-            "Refusing to mutate legacy/live ContextForge Serena registration. "
-            f"This compatibility helper is non-mutating by default; rerun with "
+            "Refusing to mutate live ContextForge Serena registration. "
+            f"This helper is non-mutating by default; rerun with "
             f"{LIVE_REGISTRATION_APPROVAL} only after explicit operator approval.",
             file=sys.stderr,
         )

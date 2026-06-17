@@ -86,7 +86,7 @@ This architecture record does not authorize:
 - copying runtime secrets, OAuth state, bearer tokens, or trust state;
 - mutating legacy/live ContextForge registry, services, processes, systemd, or
   databases;
-- mutating `/home/dgk/workspace/context-portal`;
+- mutating `/home/dgk/workspace/legacy-controlplane-archive`;
 - merging the all-ready PR queue without explicit merge-sequence approval.
 
 ## Evidence To Claim Progress

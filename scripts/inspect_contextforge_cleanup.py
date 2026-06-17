@@ -139,7 +139,7 @@ def serena_manifest_sets(instances: list[dict[str, Any]]) -> tuple[dict[str, Any
         name = str(item.get("instance_dir_name") or item.get("slug") or "")
         if not name.startswith("serena-"):
             continue
-        if name == "serena-context-portal":
+        if name == "serena-cf-controlplane-d46fe58a2a20":
             current = item
         else:
             stale[name] = item

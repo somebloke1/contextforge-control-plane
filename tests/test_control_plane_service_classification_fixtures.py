@@ -54,7 +54,7 @@ class ControlPlaneServiceClassificationFixtureTests(unittest.TestCase):
             "context7_real_shared_canonical_capsule",
             "ssh_tmux_session_scoped_availability",
             "mentality_static_repo_local_governance",
-            "serena_context_portal_instance_per_project_fixture_only",
+            "serena_cf_controlplane_instance_per_project_fixture_only",
             "catalog_candidate_pi_web_access_handoff",
             "ambiguous_docs_service_blocks_mutation",
         }
@@ -137,7 +137,7 @@ class ControlPlaneServiceClassificationFixtureTests(unittest.TestCase):
         self.assertIn("do not let client-local memory supersede governance ledgers", result["non_actions"])
 
     def test_serena_is_instance_per_project_but_fixture_only(self) -> None:
-        result = self.classify("serena_context_portal_instance_per_project_fixture_only")
+        result = self.classify("serena_cf_controlplane_instance_per_project_fixture_only")
 
         contract = self.assert_valid_contract_card(result)
         self.assertEqual("classified", result["status"])

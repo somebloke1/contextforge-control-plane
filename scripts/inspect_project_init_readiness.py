@@ -25,13 +25,10 @@ HELPER_PROCESS_SCRIPT_NAMES = (
     "contextforge_mcp_wrapper.py",
 )
 LEGACY_ROOTS = (
-    Path("/home/dgk/workspace/contextforge-slices/repo-local-skills-and-governance"),
-    Path("/home/dgk/workspace/context-portal"),
+    Path("/home/dgk/workspace/legacy-controlplane-slices/repo-local-skills-and-governance"),
+    Path("/home/dgk/workspace/legacy-controlplane-archive"),
 )
-COMPATIBILITY_IDENTIFIER_NEEDLES = (
-    "contextforge://context-portal/",
-    "serena-context-portal",
-)
+COMPATIBILITY_IDENTIFIER_NEEDLES: tuple[str, ...] = ()
 SERENA_APPROVAL_BOUNDARY = (
     "Serena provisioning or compatibility retention must be handled in a "
     "GitHub-tracked Serena/project-init slice with explicit approval before "
@@ -164,15 +161,26 @@ def _summarize_codex_config(root: Path) -> dict[str, Any]:
 def _summarize_serena_identity(root: Path) -> dict[str, Any]:
     identity = common.project_identity(root)
     expected_instance = root / "server-instances" / identity.instance_slug
-    legacy_instance = root / "server-instances" / "serena-context-portal"
-    expected_manifest_exists = (expected_instance / "instance.json").exists()
-    legacy_manifest_exists = (legacy_instance / "instance.json").exists()
+    expected_manifest_path = expected_instance / "instance.json"
+    expected_manifest_exists = expected_manifest_path.exists()
+    expected_manifest_project_root = None
+    expected_manifest_read_error = None
     if expected_manifest_exists:
+        try:
+            manifest = json.loads(expected_manifest_path.read_text(encoding="utf-8"))
+            if isinstance(manifest, Mapping):
+                value = manifest.get("canonical_project_root")
+                if isinstance(value, str):
+                    expected_manifest_project_root = value
+        except (OSError, json.JSONDecodeError) as exc:
+            expected_manifest_read_error = f"{exc.__class__.__name__}: {exc}"
+    expected_manifest_root_matches = expected_manifest_project_root == str(root)
+    if expected_manifest_exists and expected_manifest_root_matches:
         readiness_status = "canonical_instance_present"
         classification = "canonical_cf_controlplane_serena_ready_for_validation"
-    elif legacy_manifest_exists:
-        readiness_status = "canonical_instance_missing_compatibility_present"
-        classification = "compatibility_evidence_not_provisioning_completion"
+    elif expected_manifest_exists:
+        readiness_status = "canonical_instance_root_mismatch"
+        classification = "canonical_instance_requires_reconciliation"
     else:
         readiness_status = "canonical_instance_missing"
         classification = "serena_hard_requirement_unmet"
@@ -184,12 +192,10 @@ def _summarize_serena_identity(root: Path) -> dict[str, Any]:
             "backend_instance": str(expected_instance.relative_to(root)),
             "instance_exists": expected_instance.exists(),
             "manifest_exists": expected_manifest_exists,
-        },
-        "legacy": {
-            "backend_instance": str(legacy_instance.relative_to(root)),
-            "instance_exists": legacy_instance.exists(),
-            "manifest_exists": legacy_manifest_exists,
-            "legacy_root_reference_counts": _tree_reference_counts(legacy_instance, LEGACY_ROOTS),
+            "manifest_project_root": expected_manifest_project_root,
+            "manifest_root_matches": expected_manifest_root_matches,
+            "manifest_read_error": expected_manifest_read_error,
+            "legacy_root_reference_counts": _tree_reference_counts(expected_instance, LEGACY_ROOTS),
         },
         "readiness_decision": {
             "status": readiness_status,
@@ -197,8 +203,7 @@ def _summarize_serena_identity(root: Path) -> dict[str, Any]:
             "hard_requirement": True,
             "approval_boundary": SERENA_APPROVAL_BOUNDARY,
             "retirement_condition": (
-                f"Generate and validate {identity.instance_slug} for "
-                f"{root}, or record an explicit validated compatibility decision."
+                f"Generate and validate {identity.instance_slug} for {root}."
             ),
         },
     }
@@ -207,8 +212,8 @@ def _summarize_serena_identity(root: Path) -> dict[str, Any]:
 def _compatibility_identifier_paths(root: Path) -> tuple[Path, ...]:
     return (
         root / "scripts" / "project_init_common.py",
-        root / "scripts" / "register_serena_context_portal_service.py",
-        root / "server-instances" / "serena-context-portal",
+        root / "scripts" / "register_serena_cf_controlplane_service.py",
+        root / "server-instances" / "serena-cf-controlplane-d46fe58a2a20",
     )
 
 
@@ -234,10 +239,9 @@ def _summarize_compatibility_identifiers(root: Path) -> dict[str, Any]:
                         "identifier": needle,
                         "count": count,
                         "classification": "compatibility_pending_retirement",
-                        "owner_issue": "#37",
+                        "owner_issue": "#66",
                         "retirement_condition": (
-                            "Retain only while compatibility naming is required, "
-                            "or retire in a focused GitHub-tracked slice."
+                            "Retired by issue #66 zero-reference naming cleanup."
                         ),
                     }
                 )
@@ -246,9 +250,9 @@ def _summarize_compatibility_identifiers(root: Path) -> dict[str, Any]:
         "reference_counts": counts,
         "references": sorted(references, key=lambda item: (str(item["path"]), str(item["identifier"]))),
         "policy": {
-            "classification_required": True,
+            "classification_required": False,
             "broad_rename_allowed": False,
-            "owner_issue": "#37",
+            "owner_issue": "#66",
             "approval_boundary": SERENA_APPROVAL_BOUNDARY,
         },
     }
@@ -663,23 +667,24 @@ def _readiness_findings(
 
     serena = activation_artifacts.get("serena_project_instance") if isinstance(activation_artifacts.get("serena_project_instance"), Mapping) else {}
     expected_serena = serena.get("expected") if isinstance(serena.get("expected"), Mapping) else {}
-    legacy_serena = serena.get("legacy") if isinstance(serena.get("legacy"), Mapping) else {}
-    legacy_serena_refs = sum(int(count) for count in (legacy_serena.get("legacy_root_reference_counts") or {}).values())
+    serena_root_refs = sum(int(count) for count in (expected_serena.get("legacy_root_reference_counts") or {}).values())
     serena_selected = any(binding.startswith("serena:") for binding in selected_bindings)
-    serena_legacy_present = bool(legacy_serena.get("instance_exists"))
-    if expected_serena.get("manifest_exists") is not True and (serena_selected or serena_legacy_present):
+    if expected_serena.get("manifest_exists") is not True and serena_selected:
         warnings.append("serena_project_instance_not_provisioned")
         next_actions.append(
-            "Open or update a GitHub-tracked Serena/project-init slice to generate the canonical cf-controlplane Serena instance or record an explicit validated compatibility decision."
+            "Open or update a GitHub-tracked Serena/project-init slice to generate the canonical cf-controlplane Serena instance."
         )
-    if legacy_serena.get("instance_exists") and legacy_serena_refs:
-        warnings.append("legacy_serena_project_instance_present")
+    if expected_serena.get("manifest_exists") is True and expected_serena.get("manifest_root_matches") is not True:
+        warnings.append("serena_project_instance_root_mismatch")
+        next_actions.append("Regenerate the canonical cf-controlplane Serena manifest for the current project root before relying on Serena readiness.")
+    if expected_serena.get("instance_exists") and serena_root_refs:
+        warnings.append("serena_project_instance_legacy_root_references")
 
     compatibility = activation_artifacts.get("compatibility_identifiers") if isinstance(activation_artifacts.get("compatibility_identifiers"), Mapping) else {}
     compatibility_refs = sum(int(count) for count in (compatibility.get("reference_counts") or {}).values())
     if compatibility_refs:
         warnings.append("project_init_compatibility_identifiers_present")
-        next_actions.append("Use the compatibility_identifiers.references report to retire active context-portal naming through focused GitHub-tracked slices; do not broad-rename compatibility/history.")
+        next_actions.append("Use the compatibility_identifiers.references report to retire any remaining legacy naming through focused GitHub-tracked slices; do not broad-rename compatibility/history.")
 
     if blockers:
         status = "blocked"

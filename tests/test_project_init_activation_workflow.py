@@ -114,7 +114,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         ]
 
         services = common.discover_contextforge_hosted_services(
-            project_root="/home/dgk/workspace/context-portal",
+            project_root="/home/dgk/workspace/legacy-controlplane-archive",
             contextforge_servers=readback,
         )
         by_alias = {service["codex_alias"]: service for service in services}
@@ -180,7 +180,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
     def test_codex_config_plan_writes_only_managed_project_local_wrapper_blocks(self) -> None:
         services = [service_descriptor("context7"), service_descriptor("web-search")]
         plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             services,
             existing_text="# existing local config\n",
         )
@@ -195,12 +195,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
     def test_codex_config_plan_replaces_multiple_owned_blocks_without_merging_sections(self) -> None:
         services = [service_descriptor("context7"), service_descriptor("github")]
         first = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             services,
             existing_text="",
         )
         second = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             services,
             existing_text=first["next_text"],
         )
@@ -212,7 +212,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_codex_config_plan_blocks_unmanaged_same_name(self) -> None:
         plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service_descriptor("context7")],
             existing_text="[mcp_servers.context7]\ncommand = \"npx\"\n",
         )
@@ -232,7 +232,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             "type = \"local\"\n"
         )
         plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [serena_descriptor()],
             existing_text=existing_text,
             replace_unmanaged_conflicts=True,
@@ -251,12 +251,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_codex_config_plan_noop_when_unmanaged_serena_block_already_matches_managed_block(self) -> None:
         first = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [serena_descriptor()],
             existing_text="",
         )
         second = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [serena_descriptor()],
             existing_text=first["next_text"],
             replace_unmanaged_conflicts=True,
@@ -271,7 +271,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_opencode_config_plan_writes_managed_mcp_and_plugin(self) -> None:
         plan = binding.plan_project_init_opencode_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service_descriptor("context7")],
             existing_text='{"$schema":"https://opencode.ai/config.json"}\n',
             plugin_existing_text="",
@@ -290,7 +290,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_opencode_config_plan_blocks_unmanaged_same_name(self) -> None:
         plan = binding.plan_project_init_opencode_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service_descriptor("context7")],
             existing_text=json.dumps({"mcp": {"context7": {"type": "remote", "url": "https://example.invalid/mcp"}}}),
             plugin_existing_text="",
@@ -300,10 +300,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("client_config_conflict", {item["type"] for item in plan["blockers"]})
 
     def test_state_records_presumed_validation_without_marking_target_client_verified(self) -> None:
-        state = project_state.default_state("/home/dgk/workspace/context-portal")
+        state = project_state.default_state("/home/dgk/workspace/legacy-controlplane-archive")
         service = service_descriptor("context7")
         config_plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service],
             existing_text="",
         )
@@ -330,11 +330,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         project_state.validate_state(next_state)
 
     def test_state_removes_contextforge_server_id_absent_from_current_readback(self) -> None:
-        state = project_state.default_state("/home/dgk/workspace/context-portal")
+        state = project_state.default_state("/home/dgk/workspace/legacy-controlplane-archive")
         service = service_descriptor("context7")
         service["contextforge_server_id"] = "ctx-old"
         config_plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service],
             existing_text="",
         )
@@ -369,10 +369,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         project_state.validate_state(second_state)
 
     def test_legacy_activation_job_bindings_normalize_to_service_ids(self) -> None:
-        state = project_state.default_state("/home/dgk/workspace/context-portal")
+        state = project_state.default_state("/home/dgk/workspace/legacy-controlplane-archive")
         service = service_descriptor("context7")
         config_plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service],
             existing_text="",
         )
@@ -401,7 +401,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("context7:canonical", normalized_job["validation_records"][normalized_id]["x_service_binding"])
 
     def test_state_rekeys_existing_service_record_by_binding_during_activation(self) -> None:
-        state = project_state.default_state("/home/dgk/workspace/context-portal")
+        state = project_state.default_state("/home/dgk/workspace/legacy-controlplane-archive")
         state["services"]["context7"] = {
             "service_family": "context7",
             "service_binding": "context7:canonical",
@@ -414,7 +414,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         }
         service = service_descriptor("context7")
         config_plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service],
             existing_text="",
         )
@@ -438,10 +438,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         project_state.validate_state(next_state)
 
     def test_state_marks_initialized_only_with_target_client_visible_validation(self) -> None:
-        state = project_state.default_state("/home/dgk/workspace/context-portal")
+        state = project_state.default_state("/home/dgk/workspace/legacy-controlplane-archive")
         service = service_descriptor("context7")
         config_plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service],
             existing_text="",
         )
@@ -470,10 +470,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         project_state.validate_state(next_state)
 
     def test_backend_only_validation_does_not_mark_initialized(self) -> None:
-        state = project_state.default_state("/home/dgk/workspace/context-portal")
+        state = project_state.default_state("/home/dgk/workspace/legacy-controlplane-archive")
         service = service_descriptor("context7")
         config_plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service],
             existing_text="",
         )
@@ -502,10 +502,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         project_state.validate_state(next_state)
 
     def test_pending_validation_choice_records_job_without_verified_status(self) -> None:
-        state = project_state.default_state("/home/dgk/workspace/context-portal")
+        state = project_state.default_state("/home/dgk/workspace/legacy-controlplane-archive")
         service = service_descriptor("context7")
         config_plan = binding.plan_project_init_codex_config_write(
-            "/home/dgk/workspace/context-portal",
+            "/home/dgk/workspace/legacy-controlplane-archive",
             [service],
             existing_text="",
         )
@@ -550,7 +550,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
     def test_helper_unavailable_stops_without_direct_write_fallback(self) -> None:
         for state in ["missing", "stale", "untrusted", "wrong_project_root", "read_only_plan_only"]:
             readiness = helper.helper_readiness(
-                project_root="/home/dgk/workspace/context-portal",
+                project_root="/home/dgk/workspace/legacy-controlplane-archive",
                 helper_state=state,
             )
 
@@ -1659,7 +1659,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("pending", written["services"]["web-search:canonical"]["verification_layers"]["target_client"]["status"])
 
     def test_contextforge_helper_mcp_exposes_readiness_tool(self) -> None:
-        result = contextforge_helper_mcp.get_project_context("/home/dgk/workspace/context-portal")
+        result = contextforge_helper_mcp.get_project_context("/home/dgk/workspace/legacy-controlplane-archive")
 
         self.assertTrue(result["ok"])
         self.assertEqual("contextforge-helper", result["helper"]["name"])

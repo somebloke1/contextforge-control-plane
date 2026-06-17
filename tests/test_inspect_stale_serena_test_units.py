@@ -16,14 +16,14 @@ import inspect_stale_serena_test_units as inspector
 
 LIST_UNITS = """\
 UNIT                                                       LOAD   ACTIVE SUB     DESCRIPTION
-contextforge-serena-context-portal.service                 loaded active running ContextForge Serena backend
+contextforge-serena-cf-controlplane-d46fe58a2a20.service                 loaded active running ContextForge Serena backend
 contextforge-serena-phronesis-devstack-cdb531b045e5.service loaded active running ContextForge Serena backend
 contextforge-serena-test-new-proj-01-53f38d98c1fc.service  loaded active running ContextForge Serena backend
 """
 
 LIST_UNIT_FILES = """\
 UNIT FILE                                                  STATE   PRESET
-contextforge-serena-context-portal.service                 enabled enabled
+contextforge-serena-cf-controlplane-d46fe58a2a20.service                 enabled enabled
 contextforge-serena-phronesis-devstack-cdb531b045e5.service enabled enabled
 contextforge-serena-test-new-proj-01-53f38d98c1fc.service  enabled enabled
 """
@@ -55,9 +55,9 @@ class SerenaStaleUnitInspectorTests(unittest.TestCase):
                 encoding="utf-8",
             )
             cats = {
-                "contextforge-serena-context-portal.service": f"""
+                "contextforge-serena-cf-controlplane-d46fe58a2a20.service": f"""
 [Service]
-ExecStart={root}/server-instances/serena-context-portal/run-server.sh
+ExecStart={root}/server-instances/serena-cf-controlplane-d46fe58a2a20/run-server.sh
 """,
                 "contextforge-serena-phronesis-devstack-cdb531b045e5.service": f"""
 [Service]
@@ -80,7 +80,7 @@ ExecStart={instance_dir}/run-server.sh --project {project_root}
         by_unit = {unit["unit"]: unit for unit in report["units"]}
         self.assertEqual(
             "retain_compatibility_operator",
-            by_unit["contextforge-serena-context-portal.service"]["classification"],
+            by_unit["contextforge-serena-cf-controlplane-d46fe58a2a20.service"]["classification"],
         )
         self.assertEqual(
             "retain_project_scoped_or_unknown",
@@ -206,12 +206,12 @@ ExecStart={instance_dir}/run-server.sh --project {project_root}
         self.assertEqual(inspector.SCHEMA_URI, report["schema_uri"])
         self.assertIn("ContextForge registry cleanup require separate explicit approval", report["approval_boundary"])
 
-    def test_runbook_classifies_context_portal_unit_as_compatibility(self) -> None:
+    def test_runbook_classifies_cf_controlplane_unit_as_compatibility(self) -> None:
         runbook = (REPO_ROOT / "docs" / "contextforge-wrapper-lifecycle-runbook.md").read_text(encoding="utf-8")
 
         self.assertIn("compatibility Serena", runbook)
         self.assertIn("not proof of canonical `cf-controlplane` Serena\nprovisioning", runbook)
-        self.assertIn("Do not stop\n`contextforge-serena-context-portal.service`", runbook)
+        self.assertIn("Do not stop\n`contextforge-serena-cf-controlplane-d46fe58a2a20.service`", runbook)
         self.assertNotIn("is the canonical Serena\nbackend for this repository", runbook)
 
 

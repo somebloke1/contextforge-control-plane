@@ -60,7 +60,7 @@ gateway or backend services.
 The old wrapper command line is:
 
 ```sh
-/home/dgk/workspace/context-portal/.venv/bin/python -m mcpgateway.wrapper --timeout 120
+/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python -m mcpgateway.wrapper --timeout 120
 ```
 
 That stock wrapper exits on stdin EOF, stdout failure, SIGINT, or SIGTERM. It
@@ -128,7 +128,7 @@ evidence identifies a separate service-side fault.
 
 ## Stale Serena Test Units
 
-The `contextforge-serena-context-portal.service` unit is compatibility Serena
+The `contextforge-serena-cf-controlplane-d46fe58a2a20.service` unit is compatibility Serena
 evidence for this repository, not proof of canonical `cf-controlplane` Serena
 provisioning. Test units named
 `contextforge-serena-test-new-proj-*.service` are disposable only after their
@@ -157,4 +157,4 @@ systemctl --user disable contextforge-serena-test-new-proj-01-53f38d98c1fc.servi
 ```
 
 Repeat per reviewed stale test unit. Do not stop
-`contextforge-serena-context-portal.service` as part of test-unit cleanup.
+`contextforge-serena-cf-controlplane-d46fe58a2a20.service` as part of test-unit cleanup.

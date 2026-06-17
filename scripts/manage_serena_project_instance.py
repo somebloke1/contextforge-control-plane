@@ -752,7 +752,7 @@ def reserve_port(preferred: int | None = None) -> int:
     if preferred in OPERATOR_RESERVED_PORTS:
         raise RuntimeError(
             f"Serena port {preferred} is reserved for the operator singleton "
-            "serena-context-portal and cannot be assigned to a per-project instance"
+            "serena-cf-controlplane-d46fe58a2a20 and cannot be assigned to a per-project instance"
         )
     if preferred is not None and preferred not in used and not socket_port_open(preferred):
         return preferred

@@ -4,7 +4,7 @@ Date: 2026-06-17
 
 This note is part of issue #37 activation readiness. It does not provision
 Serena, mutate live ContextForge, change global Codex config, alter systemd, or
-edit the legacy `/home/dgk/workspace/context-portal` checkout.
+edit the legacy `/home/dgk/workspace/legacy-controlplane-archive` checkout.
 
 ## Current State
 
@@ -19,7 +19,7 @@ serena:d46fe58a2a20
 ```
 
 That canonical backend home is absent on `dev-root`. The existing
-`server-instances/serena-context-portal` tree points at
+`server-instances/serena-cf-controlplane-d46fe58a2a20` tree points at
 `/home/dgk/workspace/cf-controlplane`, but its slug, ContextForge gateway name,
 virtual server name, and tool names are compatibility identifiers. Treat that
 tree as compatibility evidence only, not proof that canonical
@@ -27,7 +27,7 @@ tree as compatibility evidence only, not proof that canonical
 
 The caller-owned Serena metadata under `.serena/project.yml` is not a
 compatibility service slug. It should use the active project name
-`cf-controlplane`; stale `project_name: "context-portal"` values are now a
+`cf-controlplane`; stale `project_name: "cf-controlplane"` values are now a
 readiness concern in the dirty-checkout rebind preflight.
 
 ## Inspector Contract
@@ -37,11 +37,11 @@ readiness concern in the dirty-checkout rebind preflight.
 - `activation_artifacts.serena_project_instance.expected` for the canonical
   `cf-controlplane` Serena identity;
 - `activation_artifacts.serena_project_instance.legacy` for the compatibility
-  `serena-context-portal` tree;
+  `serena-cf-controlplane-d46fe58a2a20` tree;
 - `activation_artifacts.serena_project_instance.readiness_decision` with
   `hard_requirement: true`;
 - `activation_artifacts.compatibility_identifiers.references` with file-level
-  `contextforge://context-portal/` and `serena-context-portal` references.
+  `contextforge://cf-controlplane/` and `serena-cf-controlplane-d46fe58a2a20` references.
 
 Use this readback to classify and retire active legacy naming through
 GitHub-tracked slices. Do not broad-rename compatibility or historical

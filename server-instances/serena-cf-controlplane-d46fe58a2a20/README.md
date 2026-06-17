@@ -1,4 +1,4 @@
-# serena-context-portal
+# serena-cf-controlplane-d46fe58a2a20
 
 Compatibility Serena MCP backend evidence for the ContextForge operator
 repository.
@@ -8,11 +8,10 @@ This instance runs Serena as a native streamable HTTP MCP server scoped to
 this backend is only for that caller workspace and should not be shared for
 unrelated workspaces.
 
-The `serena-context-portal` slug is legacy compatibility naming. It is not proof
-that canonical `cf-controlplane` Serena provisioning is complete. A later
-Serena/project-init slice must either generate the canonical
-`serena-cf-controlplane-<hash>` backend or record an explicit compatibility
-decision with target-client-visible validation.
+The `serena-cf-controlplane-d46fe58a2a20` slug is the project-scoped Serena
+identity for this workspace root. This source artifact does not by itself prove
+that live Serena registration, systemd state, or target-client-visible
+validation has been refreshed after the naming cleanup.
 
 Keep the ownership boundary explicit:
 

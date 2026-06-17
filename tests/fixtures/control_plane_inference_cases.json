@@ -12,7 +12,7 @@
         "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-authority-shared-service"
       ],
       "tested_agent_visible": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "Initialize this project using existing ContextForge services when they already fit the project.",
         "available_tools": [
           {
@@ -70,7 +70,7 @@
         "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-state-consent-trust"
       ],
       "tested_agent_visible": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
       "user_prompt": "I just opened Codex in a new project. List the available ContextForge-hosted services from the visible readback, state that .project/context_forge_state.json becomes the project-init authority, keep user-global config/trust changes on a separate approval path, ask for scoped approval before any write, and tell me that after approved activation I can choose 1 to validate or choose 2 to skip validation.",
         "available_tools": [
           {
@@ -148,7 +148,7 @@
         "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-authority-shared-service"
       ],
       "tested_agent_visible": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "The user selected context7 and Serena. Continue the project-init dialogue using the visible helper workflow state. Do not ask aggregate questions.",
         "available_tools": [
           {
@@ -209,7 +209,7 @@
         "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-target-client-tool-policy"
       ],
       "tested_agent_visible": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "I selected context7, mentality, and ssh-tmux. Describe the validate_now plan using Codex-visible MCP proof, and do not run or claim any validation unless the target-client probe is actually callable.",
         "available_tools": [
           {
@@ -272,7 +272,7 @@
         "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-state-consent-trust"
       ],
       "tested_agent_visible": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "Prepare the project state plan and keep global client changes separate from local project state.",
         "available_tools": [
           {
@@ -340,7 +340,7 @@
         "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-target-client-tool-policy"
       ],
       "tested_agent_visible": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "Verify the target client sees only the approved tool surface before recording success.",
         "available_tools": [
           {
@@ -401,7 +401,7 @@
         "tests/fixtures/control_plane_scenarios.json#cfcp-scenario-inference-isolation"
       ],
       "tested_agent_visible": {
-        "cwd": "/home/dgk/workspace/context-portal",
+        "cwd": "/home/dgk/workspace/legacy-controlplane-archive",
         "user_prompt": "Plan the next safe project initialization step from the visible repository files.",
         "available_tools": [
           {

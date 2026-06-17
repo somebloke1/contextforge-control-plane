@@ -18,8 +18,8 @@ import diagnose_contextforge_wrappers as diagnostics
 class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
     def test_diagnostics_falls_back_to_wrapper_cmdline_server_name(self) -> None:
         cmdline = [
-            "/home/dgk/workspace/context-portal/.venv/bin/python",
-            "/home/dgk/workspace/context-portal/scripts/contextforge_mcp_wrapper.py",
+            "/home/dgk/workspace/legacy-controlplane-archive/.venv/bin/python",
+            "/home/dgk/workspace/legacy-controlplane-archive/scripts/contextforge_mcp_wrapper.py",
             "mentality_server",
         ]
 

@@ -17,7 +17,7 @@ import control_plane_trust_broker as broker
 
 
 FIXTURE_PATH = REPO_ROOT / "tests/fixtures/control_plane_trust_broker_cases.json"
-PROJECT_ROOT = "/home/dgk/workspace/context-portal"
+PROJECT_ROOT = "/home/dgk/workspace/legacy-controlplane-archive"
 STAMP = "2026-05-30T22:30:00Z"
 FUTURE = "2026-05-31T22:30:00Z"
 PAST = "2026-05-29T22:30:00Z"
@@ -27,7 +27,7 @@ SECRET_VALUE = "Bearer " + ("A" * 24)
 def base_plan() -> dict[str, Any]:
     state = {
         "meta": {"revision": 1},
-        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "context-portal"},
+        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "cf-controlplane"},
         "status": "uninitialized",
         "decisions": {},
         "services": {},
@@ -38,7 +38,7 @@ def base_plan() -> dict[str, Any]:
         "schema_version": 1,
         "surface": "codex_trust_broker",
         "planner": "control_plane_trust_broker",
-        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "context-portal"},
+        "project": {"root": PROJECT_ROOT, "root_hash": project_state.project_root_hash(PROJECT_ROOT), "name": "cf-controlplane"},
         "plan_id": "trust-plan-fixture",
         "status": "trust_approval_requested",
         "mutation_allowed": False,
