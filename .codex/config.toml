@@ -1,6 +1,6 @@
 [mcp_servers.contextforge-helper]
-command = ".venv/bin/python"
-args = ["scripts/contextforge_helper_mcp.py"]
+command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
+args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_helper_mcp.py"]
 
 [hooks]
 
