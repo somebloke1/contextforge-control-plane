@@ -40,15 +40,21 @@ development Docker validation.
 - PR #35, PR #36, PR #38, and PR #39 are merged. PR #39 merged the
   activation-readiness source-prep branch into `dev-root` at
   `5e336c66953ece50043d78a4ac70530980304531`.
-- The current activation-readiness queue is split into focused PRs from
-  `dev-root`: #47 Serena port guardrails, #48 stale Serena user-unit
-  inspector, #49 ContextForge cleanup inspector, and #51 project MCP
-  container/locality matrix. Keep that order unless current GitHub state or an
-  explicit operator instruction changes it.
+- The primary activation-readiness queue has landed on `dev-root`: #47 Serena
+  port guardrails, #48 stale Serena user-unit inspector, #49 ContextForge
+  cleanup inspector, and #51 project MCP container/locality matrix merged in
+  that order. The merge-tip evidence is issue #37 comment `4734271745`.
+- PR #59 remains the focused draft follow-up for #56. It refreshes the
+  project-local precompact/helper path contract after the primary queue merge
+  and still requires an explicit operator decision before promotion or merge.
 - PR #53 records the guided MCP service-onboarding helper taxonomy for #52. It
-  is ready but lower priority than the activation-readiness queue because #52
-  is high impact and low-to-medium priority. Keep #53 visible after #47, #48,
-  #49, and #51 unless the operator explicitly reprioritizes #52.
+  remains important but lower priority because #52 is high impact and
+  low-to-medium priority. Refresh #53 against the current `dev-root` before any
+  later promotion or merge decision.
+- PR #54 is this runbook/status refresh. It is docs-only and should not be
+  treated as runtime activation evidence.
+- PR #55 remains a draft project-init activation-job reconciliation slice unless
+  explicitly promoted.
 - Issue #31 remains the owner for non-mutating Codex runtime/project-context
   readback after the global config migration. Do not treat #37 source/readiness
   packaging as proof of #31 runtime closure.
@@ -78,12 +84,19 @@ development Docker validation.
   fixes it and adds a regression. Remaining `context-portal` and
   `contextforge-slices` references are historical evidence, compatibility
   identifiers, or explicit readiness-inspector needles.
-- Current ready-queue evidence is recorded in GitHub before merge: the tested
-  dry-run order was #47, #48, #49, #51, and #53, with 103 touched-suite tests,
-  `py_compile`, and `git diff --check` passing. Durable evidence references are
-  issue #37 comment `4733338931`, PR #53 comment `4733339045`, issue #52
-  comment `4733339161`, issue #52 priority comment `4733373332`, and issue #37
-  roll-up comment `4733377101`.
+- The approved primary queue was merged in order #47, #48, #49, #51. Final
+  `dev-root` readback was `274871322c2455cfab8e716d831043171eea1291`; the
+  post-merge touched-suite validation passed 98 tests, `py_compile`, and
+  `git diff --check`. Durable merge evidence is issue #37 comment
+  `4734271745`.
+- PR #59 was refreshed after the primary queue merge. Its current head is
+  `d56782bfa2491c6827739a00a175a8a722a1d379`, base is `dev-root`
+  `274871322c2455cfab8e716d831043171eea1291`, and canonical workspace
+  validation passed the focused precompact config test, full unittest discovery
+  with 505 tests, `py_compile`, and `git diff --check`. Durable evidence is PR
+  #59 comment `4734298590` and issue #56 comment `4734298713`.
+- Earlier five- and six-PR dry-run evidence for #53/#54 remains useful history
+  but is no longer current merge evidence after #47, #48, #49, and #51 landed.
 
 ## Source-Prep Classification
 
