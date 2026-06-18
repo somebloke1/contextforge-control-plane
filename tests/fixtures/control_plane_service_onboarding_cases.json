@@ -110,6 +110,7 @@
       "descriptor": {
         "candidate_service": "github",
         "operator_goal": "Represent a GitHub installation or token-scoped service binding without broadening credentials.",
+        "credential_boundary": "one GitHub installation or disposable token boundary per ContextForge service binding",
         "source_evidence": [
           {
             "type": "local_path",

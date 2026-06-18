@@ -136,6 +136,26 @@ Each completed helper session should emit a structured record with:
 - non-actions already preserved;
 - residual risks, retirement conditions, and next issue/PR steps.
 
+## Pre-Runtime Workflow Gate
+
+Every onboarding record includes a compact `pre_runtime_workflow_gate` before
+any runtime work. The gate is source-only and always records
+`runtime_work_allowed: false`. It summarizes:
+
+- known and missing dimensions for source evidence, canonical service identity,
+  scope/locality, transport, credential boundary, state footprint, approval
+  boundary, and validation-probe plan;
+- required pre-runtime evidence for each dimension;
+- planned validation probe layers such as native transport contract readback,
+  bridge transport smoke plan, credential scope negative readback, client session scope probe,
+  state footprint readback, approval-scoped runtime readback, and generated
+  artifact review;
+- stable blockers and questions for missing source, scope, transport,
+  credential, state, approval, or probe-plan evidence.
+
+The gate only plans probes. It does not call ContextForge, start services, run Docker,
+mutate registries, write client/global config, or execute validation commands.
+
 ## Source Helper CLI
 
 The first executable helper surface is source-only:
@@ -234,6 +254,8 @@ This emits a compact status summary for agent-human resumption, including:
 - known and open classification dimensions;
 - primary and secondary integration paradigms;
 - approval requirement and required approval types;
+- compact `pre_runtime_workflow_gate` state, including known/missing
+  dimensions and planned validation probe layers;
 - answered questions, next questions, next resume inputs, residual risks, and
   next issue/PR steps;
 - `mutation_allowed: false`.
@@ -267,7 +289,9 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboard
 `--session-template` returns a deterministic
 `service_onboarding_resume_template` containing compact session context, next
 questions, a descriptor patch scaffold for missing source evidence,
-classification values, feasibility notes, and footprint fields, plus rerun guidance for `--resume-session`.
+classification values, feasibility notes, footprint fields, and missing pre-runtime gate inputs
+such as credential boundary, scope boundary, state footprint, or validation probe plan,
+plus rerun guidance for `--resume-session`.
 It is read-only, does not rewrite the session record, and cannot be combined
 with descriptor input, previous-record input, session resume input,
 single-session status input, list input, or `--save-session`.
