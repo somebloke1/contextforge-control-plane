@@ -11,4 +11,5 @@ fi
 
 docker compose -f compose.yml run --rm --no-deps \
   -v "${REPO_ROOT}:/repo:ro" \
+  -v "${REPO_ROOT}:/workspace:ro" \
   pi /config/pi/start-contextforge-baseline.sh "$@"
