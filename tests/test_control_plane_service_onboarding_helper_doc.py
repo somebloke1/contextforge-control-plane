@@ -104,6 +104,7 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "`shared_stdio_bridge_dev_docker_gate`",
             "`github_credential_scoped_registry_gate`",
             "`ssh_tmux_client_session_local_bridge`",
+            "`openzeppelin_remote_native_hosted_source_only`",
         ]:
             self.assertIn(case_name, self.doc)
 
@@ -112,6 +113,10 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "credential, account, tenant, token, or installation boundary",
             "client-local state, live session, caller identity, or process authority",
             "without claiming durable project ownership",
+            "without claiming live",
+            "generated-code audit",
+            "deployment readiness",
+            "registry",
         ]:
             self.assertIn(phrase, self.doc)
 

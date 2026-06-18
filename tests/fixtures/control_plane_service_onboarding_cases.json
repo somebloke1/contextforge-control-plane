@@ -184,6 +184,60 @@
       }
     },
     {
+      "name": "openzeppelin_remote_native_hosted_source_only",
+      "descriptor": {
+        "candidate_service": "openzeppelin-solidity-contracts",
+        "operator_goal": "Plan a no-mutation ContextForge onboarding record for OpenZeppelin Solidity Contracts before any live client or registry validation.",
+        "source_evidence": [
+          {
+            "type": "local_path",
+            "ref": "server-instances/openzeppelin-solidity-contracts/instance.json"
+          },
+          {
+            "type": "source_contract",
+            "ref": "docs/safe-client-visible-validation-probes.md#OpenZeppelin-Solidity-Contracts-Probe-Contract"
+          },
+          {
+            "type": "issue",
+            "ref": "#113"
+          }
+        ],
+        "classification": {
+          "plan_type": "source_only_scaffolding",
+          "localization_type": "remote_native_hosted",
+          "functional_type": "remote_api_tool",
+          "transport_type": "streamable_http",
+          "state_type": "stateless",
+          "approval_type": "source_only"
+        },
+        "footprint_plan": {
+          "service_slug": "openzeppelin-solidity-contracts",
+          "files": [
+            "server-instances/openzeppelin-solidity-contracts/instance.json"
+          ],
+          "docs": [
+            "docs/safe-client-visible-validation-probes.md",
+            "docs/initiatives/contextforge-control-plane/service-onboarding-helper.md"
+          ],
+          "tests": [
+            "tests/test_control_plane_service_onboarding_helper.py",
+            "tests/test_safe_client_visible_validation_probes.py"
+          ],
+          "contextforge_surfaces": [
+            "ContextForge dev Docker registry after separate approval"
+          ],
+          "cleanup_or_rollback": [
+            "remove only future disposable dev registry binding or generated local evidence if a later approved runtime proof creates them"
+          ]
+        },
+        "residual_risks": [
+          "runtime/client validation is unproven until the exact target client lists and calls the ContextForge-visible OpenZeppelin probe",
+          "generated Solidity is not audited or deployable from this source-only onboarding record",
+          "registry state is unproven until a separately approved ContextForge dev registry readback exists"
+        ]
+      }
+    },
+    {
       "name": "missing_evidence_prompts_questions",
       "descriptor": {
         "candidate_service": "unknown-service",

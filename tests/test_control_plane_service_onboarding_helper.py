@@ -114,6 +114,38 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertIn("Pi client Docker", record["footprint_plan"]["client_surfaces"])  # type: ignore[index]
         self.assertIn("do not write global or client config", record["non_actions"])
 
+    def test_openzeppelin_real_service_fixture_is_source_only_handoff(self) -> None:
+        record = self.record("openzeppelin_remote_native_hosted_source_only")
+
+        self.assertEqual("ready_for_handoff", record["status"])
+        self.assertEqual("handoff", record["current_state"])
+        self.assertEqual("openzeppelin-solidity-contracts", record["candidate_service"])
+        self.assertFalse(record["mutation_allowed"])
+        self.assertFalse(record["approval_gate"]["approval_required"])  # type: ignore[index]
+        self.assertEqual("Direct native registration", record["integration_strategy"]["primary_paradigm"])  # type: ignore[index]
+        self.assertEqual("remote_native_hosted", record["classification"]["localization_type"]["value"])  # type: ignore[index]
+        self.assertEqual("remote_api_tool", record["classification"]["functional_type"]["value"])  # type: ignore[index]
+        self.assertEqual("streamable_http", record["classification"]["transport_type"]["value"])  # type: ignore[index]
+        self.assertEqual("stateless", record["classification"]["state_type"]["value"])  # type: ignore[index]
+        self.assertEqual("source_only", record["classification"]["approval_type"]["value"])  # type: ignore[index]
+        self.assertIn(
+            {"type": "local_path", "ref": "server-instances/openzeppelin-solidity-contracts/instance.json"},
+            record["source_evidence"],
+        )
+        self.assertIn("docs/safe-client-visible-validation-probes.md", record["footprint_plan"]["docs"])  # type: ignore[index]
+        self.assertIn(
+            "runtime/client validation is unproven until the exact target client lists and calls the ContextForge-visible OpenZeppelin probe",
+            record["residual_risks"],
+        )
+        self.assertIn(
+            "generated Solidity is not audited or deployable from this source-only onboarding record",
+            record["residual_risks"],
+        )
+        self.assertIn(
+            "registry state is unproven until a separately approved ContextForge dev registry readback exists",
+            record["residual_risks"],
+        )
+
     def test_missing_source_and_classification_evidence_emits_stable_questions_and_redacts(self) -> None:
         first = self.record("missing_evidence_prompts_questions")
         second = self.record("missing_evidence_prompts_questions")
