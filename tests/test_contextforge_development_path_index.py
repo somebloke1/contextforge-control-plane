@@ -34,7 +34,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
 
     def test_index_maps_current_open_issues_and_recent_prs(self) -> None:
         for reference in [
-            "#118: post-merge refresh for this development path index",
+            "#122: post-merge refresh for this development path index",
             "#52: guided MCP service-onboarding helper",
             "#3: host Pi global ContextForge shim prompt/resource parity",
             "#2: deferred Serena runtime blockers",
@@ -53,10 +53,13 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "#114 merged the #113 OpenZeppelin Solidity Contracts safe-probe policy",
             "#116 merged the #115 path-index refresh",
             "#117 merged the #52 service-onboarding session-status readback",
+            "#119 merged the #118 path-index refresh",
+            "#121 merged the #120 first real OpenZeppelin service-onboarding fixture",
             "closed #89",
-            "Recently closed path-setting issues include #115",
+            "Recently closed path-setting issues include #120",
         ]:
             self.assertIn(reference, self.index)
+        self.assertNotIn("#118: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#115: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#111: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#107: post-merge refresh for this development path index", self.index)
@@ -109,8 +112,11 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "`--session-status <session-id>`",
             "known/open classifications",
             "answered/next questions",
-            "first real onboarding record",
-            "richer local dialogue/session management",
+            "#121 merged the first real tracked service-onboarding fixture",
+            "`openzeppelin_remote_native_hosted_source_only`",
+            "generated Solidity audit/deployability",
+            "richer local\n  dialogue/session management",
+            "another selected service record",
         ]:
             self.assertIn(text, self.index)
 

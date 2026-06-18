@@ -67,8 +67,8 @@ or project-init apply/recovery state.
 
 Open issues:
 
-- #118: post-merge refresh for this development path index after the
-  service-onboarding session-status readback landed.
+- #122: post-merge refresh for this development path index after the first real
+  OpenZeppelin service-onboarding fixture landed.
 - #52: guided MCP service-onboarding helper.
 - #3: host Pi global ContextForge shim prompt/resource parity and live
   Pi-visible readback.
@@ -101,11 +101,15 @@ Recent PR topology:
   contract landed.
 - #117 merged the #52 service-onboarding session-status readback surface for
   compact no-mutation local session summaries.
+- #119 merged the #118 path-index refresh after the service-onboarding
+  session-status readback landed.
+- #121 merged the #120 first real OpenZeppelin service-onboarding fixture,
+  `openzeppelin_remote_native_hosted_source_only`.
 
-Recently closed path-setting issues include #115, #113, #111, #109, #107,
-#105, #103, #101, #99, #97, #95, #91, #89, #79, #83, #85, #62, #58, #50, #41,
-#37, #31, #25, and #66. They are evidence and history, not substitutes for
-current path ownership.
+Recently closed path-setting issues include #120, #118, #115, #113, #111,
+#109, #107, #105, #103, #101, #99, #97, #95, #91, #89, #79, #83, #85, #62,
+#58, #50, #41, #37, #31, #25, and #66. They are evidence and history, not
+substitutes for current path ownership.
 
 ## Named Development Paths
 
@@ -217,14 +221,19 @@ Current state:
   sessions through `--session-status <session-id>`, including current state,
   turn index, known/open classifications, paradigms, approval requirements,
   answered/next questions, residual risks, and next issue/PR steps.
+- #121 merged the first real tracked service-onboarding fixture,
+  `openzeppelin_remote_native_hosted_source_only`, for OpenZeppelin Solidity
+  Contracts. It is source/docs/tests-only and preserves that live client
+  validation, generated Solidity audit/deployability, Docker behavior,
+  ContextForge registry state, and long-running helper behavior are unproven.
 
 Near-term gap:
 
 - The current helper is still deterministic CLI tooling rather than a
-  long-running helper process. A later #52 slice should either use the helper
-  and status readback to produce a first real onboarding record for a selected
-  service or add richer local dialogue/session management on top of the ignored
-  store.
+  long-running helper process. A later #52 slice should either add richer local
+  dialogue/session management on top of the ignored store and status readback
+  or add another selected service record with similarly explicit no-overclaim
+  boundaries.
 
 ### Serena/Project-Scoped Service Lifecycle
 
