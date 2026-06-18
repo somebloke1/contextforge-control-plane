@@ -34,7 +34,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
 
     def test_index_maps_current_open_issues_and_recent_prs(self) -> None:
         for reference in [
-            "#122: post-merge refresh for this development path index",
+            "Open issues after this refresh",
             "#52: guided MCP service-onboarding helper",
             "#3: host Pi global ContextForge shim prompt/resource parity",
             "#2: deferred Serena runtime blockers",
@@ -55,10 +55,14 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "#117 merged the #52 service-onboarding session-status readback",
             "#119 merged the #118 path-index refresh",
             "#121 merged the #120 first real OpenZeppelin service-onboarding fixture",
+            "#123 merged the #122 path-index refresh",
+            "#125 merged the #124 service-onboarding session-list readback",
             "closed #89",
-            "Recently closed path-setting issues include #120",
+            "Recently closed path-setting issues include #124",
         ]:
             self.assertIn(reference, self.index)
+        self.assertNotIn("#126: post-merge refresh for this development path index", self.index)
+        self.assertNotIn("#122: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#118: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#115: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#111: post-merge refresh for this development path index", self.index)
@@ -115,7 +119,14 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "#121 merged the first real tracked service-onboarding fixture",
             "`openzeppelin_remote_native_hosted_source_only`",
             "generated Solidity audit/deployability",
+            "#125 merged compact read-only inventory",
+            "`--list-sessions`",
+            "`service_onboarding_session_list`",
+            "absent-store empty-list behavior",
+            "saved-record-name ordering",
+            "rejection of descriptor, resume, status, or\n  write options",
             "richer local\n  dialogue/session management",
+            "status readback, and\n  list readback",
             "another selected service record",
         ]:
             self.assertIn(text, self.index)

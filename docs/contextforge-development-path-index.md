@@ -65,10 +65,8 @@ or project-init apply/recovery state.
 
 ## Current GitHub Topology
 
-Open issues:
+Open issues after this refresh:
 
-- #122: post-merge refresh for this development path index after the first real
-  OpenZeppelin service-onboarding fixture landed.
 - #52: guided MCP service-onboarding helper.
 - #3: host Pi global ContextForge shim prompt/resource parity and live
   Pi-visible readback.
@@ -105,11 +103,15 @@ Recent PR topology:
   session-status readback landed.
 - #121 merged the #120 first real OpenZeppelin service-onboarding fixture,
   `openzeppelin_remote_native_hosted_source_only`.
+- #123 merged the #122 path-index refresh after the OpenZeppelin
+  service-onboarding fixture landed.
+- #125 merged the #124 service-onboarding session-list readback surface for
+  compact no-mutation local session inventory.
 
-Recently closed path-setting issues include #120, #118, #115, #113, #111,
-#109, #107, #105, #103, #101, #99, #97, #95, #91, #89, #79, #83, #85, #62,
-#58, #50, #41, #37, #31, #25, and #66. They are evidence and history, not
-substitutes for current path ownership.
+Recently closed path-setting issues include #124, #122, #120, #118, #115,
+#113, #111, #109, #107, #105, #103, #101, #99, #97, #95, #91, #89, #79,
+#83, #85, #62, #58, #50, #41, #37, #31, #25, and #66. They are evidence and
+history, not substitutes for current path ownership.
 
 ## Named Development Paths
 
@@ -196,8 +198,8 @@ Near-term gap:
 
 - The lab should add services through explicit onboarding records and bounded
   runtime approvals, not by broad container expansion. #52, including the
-  merged #87/#93/#94/#117 helper increments, is the current source-side feeder
-  for that work.
+  merged #87/#93/#94/#117/#125 helper increments, is the current source-side
+  feeder for that work.
 
 ### MCP Service Onboarding Lifecycle
 
@@ -226,14 +228,19 @@ Current state:
   Contracts. It is source/docs/tests-only and preserves that live client
   validation, generated Solidity audit/deployability, Docker behavior,
   ContextForge registry state, and long-running helper behavior are unproven.
+- #125 merged compact read-only inventory for saved local ignored sessions
+  through `--list-sessions`, including deterministic
+  `service_onboarding_session_list` output, absent-store empty-list behavior,
+  saved-record-name ordering, and rejection of descriptor, resume, status, or
+  write options.
 
 Near-term gap:
 
 - The current helper is still deterministic CLI tooling rather than a
   long-running helper process. A later #52 slice should either add richer local
-  dialogue/session management on top of the ignored store and status readback
-  or add another selected service record with similarly explicit no-overclaim
-  boundaries.
+  dialogue/session management on top of the ignored store, status readback, and
+  list readback, or add another selected service record with similarly explicit
+  no-overclaim boundaries.
 
 ### Serena/Project-Scoped Service Lifecycle
 
