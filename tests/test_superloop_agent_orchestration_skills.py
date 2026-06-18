@@ -100,6 +100,29 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
         ]:
             self.assertIn(text, self.controller)
 
+    def test_controller_skill_defines_worker_pool_cadence(self) -> None:
+        for text in [
+            "Worker Pool Cadence",
+            "three as a maximum concurrency cap",
+            "not a quota to keep full",
+            "when the controller would otherwise be idle",
+            "integrating returned reports",
+            "Keep one slot available for\nverification",
+            "do not duplicate worker-local\n   implementation or verification",
+            "only if controller administration is caught up",
+            "gpt-5.3-codex-spark",
+            "Trust the pipeline when evidence is clean",
+            "Worker-local commits are acceptable when the lease permits them",
+            "Treat the commit as a reviewable artifact",
+            "before\npushing, opening PRs, promoting drafts, merging, or closing issues",
+            "Do not allow\nworkers to commit on controller baselines",
+            "GitHub Project automation has latency",
+            "do not\nimmediately create a duplicate Project item",
+            "Set `Agent owner` only after the auto-added item is visible",
+            "record the pending reconciliation",
+        ]:
+            self.assertIn(text, self.controller)
+
     def test_worker_skill_enforces_assigned_scope_and_boundaries(self) -> None:
         for text in [
             "name: superloop-worker-agent",
@@ -124,6 +147,17 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
             "Mark the worker formal goal complete",
             "Create a refined worker successor goal only when",
             "must not use its formal goal to expand scope",
+        ]:
+            self.assertIn(text, self.worker)
+
+    def test_worker_skill_requires_exact_lease_identity_reporting(self) -> None:
+        for text in [
+            "Report the worker ID exactly as assigned",
+            "Do not substitute a rotating nickname",
+            "another agent's ID",
+            "lease_id_unavailable",
+            "do not write `unknown` without the observed identifier",
+            "agent_run_id: codex-agent:<lease-or-dispatcher-id> | lease_id_unavailable",
         ]:
             self.assertIn(text, self.worker)
 

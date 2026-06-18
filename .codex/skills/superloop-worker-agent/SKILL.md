@@ -52,6 +52,12 @@ Read your lease for `agent_run_id`, `controller_run_id`, `role`,
 `assigned_scope`, and `lease_state`. If these are missing, request a lease from
 the controller before starting nontrivial work.
 
+Report the worker ID exactly as assigned in the controller lease or dispatcher
+handle. Do not substitute a rotating nickname, another agent's ID, or a stale
+ID copied from prior context. If the runtime does not expose the ID, report the
+best available dispatcher/thread ID and mark the field
+`lease_id_unavailable`; do not write `unknown` without the observed identifier.
+
 ## Worker SuperLoop
 
 1. Re-read the worker formal goal and assigned work-unit lease.
@@ -126,7 +132,7 @@ Return a concise report:
 
 ```text
 Worker report:
-- agent_run_id:
+- agent_run_id: codex-agent:<lease-or-dispatcher-id> | lease_id_unavailable (<observed id/source>)
 - controller_run_id:
 - assigned_scope:
 - lease_state:
