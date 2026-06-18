@@ -517,18 +517,17 @@ def build_graphql_mutation(project_id: str, mutations: Sequence[Mapping[str, Any
     return "\n".join(lines)
 
 
-def targeted_readback_query(mutations: Sequence[Mapping[str, Any]]) -> str:
-    terms: list[str] = []
+def targeted_readback_queries(mutations: Sequence[Mapping[str, Any]]) -> list[str]:
+    queries: list[str] = []
     for mutation in mutations:
         title = mutation.get("title")
         if isinstance(title, str) and title.strip():
-            terms.append(title.strip())
+            queries.append(title.strip())
         else:
             target = mutation.get("target")
             if isinstance(target, str) and target.strip():
-                terms.append(target.strip())
-    unique_terms = list(dict.fromkeys(terms))
-    return " OR ".join(unique_terms)
+                queries.append(target.strip())
+    return list(dict.fromkeys(queries))
 
 
 def chunked(values: Sequence[Mapping[str, Any]], size: int) -> list[list[Mapping[str, Any]]]:
@@ -574,27 +573,33 @@ def apply_plan(
             }
         )
 
-    readback = None
-    readback_query = targeted_readback_query(mutations)
-    if isinstance(owner, str) and isinstance(project_number, int) and readback_query:
-        readback = parse_json_output(
-            runner(
-                [
-                    "gh",
-                    "project",
-                    "item-list",
-                    str(project_number),
-                    "--owner",
-                    owner,
-                    "--format",
-                    "json",
-                    "--query",
-                    readback_query,
-                    "--limit",
-                    str(max(20, len(mutations))),
-                ]
+    readbacks: list[dict[str, Any]] = []
+    readback_queries = targeted_readback_queries(mutations)
+    if isinstance(owner, str) and isinstance(project_number, int):
+        for readback_query in readback_queries:
+            readbacks.append(
+                {
+                    "query": readback_query,
+                    "result": parse_json_output(
+                        runner(
+                            [
+                                "gh",
+                                "project",
+                                "item-list",
+                                str(project_number),
+                                "--owner",
+                                owner,
+                                "--format",
+                                "json",
+                                "--query",
+                                readback_query,
+                                "--limit",
+                                "20",
+                            ]
+                        )
+                    ),
+                }
             )
-        )
     rate_limit = read_rate_limit_evidence(runner=runner)
 
     return {
@@ -604,10 +609,7 @@ def apply_plan(
         "applied": len(mutations),
         "batch_size": batch_size,
         "commands": commands,
-        "targeted_readback": {
-            "query": readback_query,
-            "result": readback,
-        },
+        "targeted_readback": readbacks,
         "rate_limit": rate_limit,
         "non_actions": ["apply mutates only GitHub Project item fields listed in the plan"],
     }
