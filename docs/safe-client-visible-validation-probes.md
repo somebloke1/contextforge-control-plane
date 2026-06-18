@@ -89,6 +89,30 @@ runtime validation. Wrong tools, unsupported proof kinds, missing target-client
 trace refs, backend-only proof, or failed probe output must produce a
 non-passing result instead of a validation claim.
 
+## Mentality Probe Contract
+
+Mentality has a known-safe source-level probe contract only for governance
+list/read proof. A future runtime validation may use this contract only when
+the exact target client can see the ContextForge-exposed Mentality governance
+tools.
+
+- Required proof layers: target-client `list-tools` evidence plus one
+  target-client safe `call-tool` result.
+- Allowed tool names: `mentality-governance-list`,
+  `mentality-governance-read`, `governance_list`, and `governance_read`.
+- Default payload: call `mentality-governance-list` with
+  `{"repo": "PROJECT_ROOT", "ledger": "decisions"}` or an equivalent
+  harmless governance listing for the selected project root.
+- Accepted proof kinds: `target_client_safe_probe_result` or
+  `pi_safe_probe_result`.
+- Required successful result shape: `status: passed`,
+  `target_client_visible: true`, `safe_probe_result: passed`,
+  `safe_probe_id: governance-list`, and at least one target-client trace
+  reference.
+- Forbidden substitutions: governance create, governance update, governance
+  delete, local ledger file reads used as validation proof, backend health,
+  direct registry checks, or direct bridge checks.
+
 ## Claim Rules
 
 - Record `validated` only after the exact target client lists and, where safe,
