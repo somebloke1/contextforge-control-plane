@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import contextforge_mcp_wrapper as gateway
+import control_plane_registry_discipline as registry_discipline
 import plan_contextforge_registry_recreation as planner
 
 
@@ -37,6 +38,7 @@ class HttpContextForgeClient:
         self.token = token
 
     def request(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+        registry_discipline.assert_public_contextforge_api_path(method, path)
         try:
             return gateway._request(method, path, token=self.token, body=body)
         except urllib.error.HTTPError as exc:
@@ -203,6 +205,14 @@ def run(
     results = [apply_service(service, client) if apply and client else plan_service(service) for service in services]
     return {
         "schema_uri": SCHEMA_URI,
+        "registry_mutation_discipline": registry_discipline.registry_mutation_discipline(
+            owner="apply_contextforge_registry_recreation",
+            operations=[
+                {"entity": "gateway", "operation": "upsert", "authority": "name+url"},
+                {"entity": "gateway_tools", "operation": "refresh", "authority": "gateway API readback"},
+                {"entity": "server", "operation": "upsert_associations", "authority": "server name + refreshed tool names"},
+            ],
+        ),
         "mutation_performed": apply,
         "apply_requested": apply,
         "service_count": len(results),
