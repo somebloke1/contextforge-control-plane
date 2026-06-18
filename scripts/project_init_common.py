@@ -498,6 +498,78 @@ def safe_validation_policy(service_family: str) -> dict[str, Any]:
     )
 
 
+def safe_probe_contract(service_family: str) -> dict[str, Any]:
+    policy = safe_validation_policy(service_family)
+    contract = policy.get("probe_contract")
+    return dict(contract) if isinstance(contract, dict) else {}
+
+
+def build_safe_probe_validation_result(
+    service_family: str,
+    *,
+    target_client: str,
+    tool_name: str | None,
+    verification_trace_refs: Iterable[str] | None,
+    proof_kind: str = "target_client_safe_probe_result",
+    safe_probe_id: str | None = None,
+    safe_probe_result: str = "passed",
+    status: str = "passed",
+    result_summary: str | None = None,
+) -> dict[str, Any]:
+    """Shape already-observed safe probe proof into project-init result JSON.
+
+    This helper does not call ContextForge or any target client. It only accepts
+    metadata from a caller that already observed target-client-visible proof.
+    """
+    contract = safe_probe_contract(service_family)
+    trace_refs = [str(ref) for ref in (verification_trace_refs or []) if str(ref)]
+    selected_probe_id = safe_probe_id or str((contract.get("default_probe") or {}).get("safe_probe_id") or "")
+    result = {
+        "status": "pending",
+        "target_client_visible": False,
+        "proof_kind": proof_kind,
+        "safe_probe_result": safe_probe_result,
+        "safe_probe_id": selected_probe_id,
+        "target_client": target_client,
+        "tool_name": tool_name,
+        "verification_trace_refs": trace_refs,
+    }
+    if result_summary:
+        result["result_summary"] = result_summary
+
+    if not contract:
+        result["skipped_reason"] = "no_safe_probe_contract"
+        return result
+
+    accepted_proof_kinds = {str(item) for item in contract.get("accepted_proof_kinds") or []}
+    if proof_kind not in accepted_proof_kinds:
+        result["skipped_reason"] = "unsupported_proof_kind"
+        return result
+
+    allowed_tools = [str(item) for item in contract.get("allowed_tool_name_patterns") or []]
+    if not tool_name or not any(pattern and pattern in tool_name for pattern in allowed_tools):
+        result["skipped_reason"] = "no_matching_safe_tool"
+        return result
+
+    policy_operations = {str(item) for item in safe_validation_policy(service_family).get("safe_operations") or []}
+    if selected_probe_id not in policy_operations:
+        result["skipped_reason"] = "unsupported_safe_probe_id"
+        return result
+
+    if not trace_refs:
+        result["skipped_reason"] = "missing_target_client_trace"
+        return result
+
+    if status not in {"passed", "verified"} or safe_probe_result != "passed":
+        result["skipped_reason"] = "safe_probe_not_passed"
+        return result
+
+    result["status"] = "passed"
+    result["target_client_visible"] = True
+    result.pop("skipped_reason", None)
+    return result
+
+
 def validate_project_root(root: str | Path, *, require_workspace: bool = False) -> Path:
     canonical_root = canonical_path(root)
     if is_denied_project_root(canonical_root):
