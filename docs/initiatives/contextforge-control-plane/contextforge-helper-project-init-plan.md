@@ -286,13 +286,20 @@ Validation tool contract:
     "context7:canonical": {
       "status": "passed",
       "target_client_visible": true,
+      "proof_kind": "target_client_safe_probe_result",
+      "safe_probe_result": "passed",
+      "safe_probe_id": "resolve-library-id",
       "verification_trace_refs": [
-        "contextforge://control-plane/traces/context7-target-client"
+        "contextforge://control-plane/traces/context7:canonical-target-client"
       ]
     }
   }
   ```
 
+- For services with a safe-probe contract, the expected shape should include
+  the contract's proof fields. For Context7 this means the helper guidance
+  prefers the result shape produced by `build_safe_probe_validation_result()`,
+  not a generic backend-health or boolean-only substitute.
 - Nested payloads such as `{"services": {"context7:canonical": ...}}` are not
   treated as useful validation. If a validate-now payload contains results but
   none match selected service keys, the helper must return a non-recording

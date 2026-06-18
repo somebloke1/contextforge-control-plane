@@ -1546,6 +1546,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(["services"], result["validation_diagnostic"]["unmatched_keys"])
         self.assertEqual([], result["validation_diagnostic"]["matched_keys"])
         self.assertIn("context7:canonical", result["expected_validation_results_shape"])
+        expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
+        self.assertEqual("target_client_safe_probe_result", expected_shape["proof_kind"])
+        self.assertEqual("passed", expected_shape["safe_probe_result"])
+        self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
+        self.assertEqual(
+            ["contextforge://control-plane/traces/context7:canonical-target-client"],
+            expected_shape["verification_trace_refs"],
+        )
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
         job = after["project_init"]["activation_jobs"][after["project_init"]["current_job_id"]]
@@ -1658,6 +1666,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("validation_recorded", result["status"])
         self.assertEqual("initialized", result["project_status"])
         self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["matched_keys"])
+        expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
+        self.assertEqual("target_client_safe_probe_result", expected_shape["proof_kind"])
+        self.assertEqual("passed", expected_shape["safe_probe_result"])
+        self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
         assert written is not None
         self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
@@ -1718,6 +1730,20 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("contextforge-helper", result["helper"]["name"])
         self.assertEqual("available", result["helper"]["status"])
         self.assertEqual("codex", result["root_attestation"]["client_type"])
+
+    def test_contextforge_helper_validation_guidance_exposes_safe_probe_shape(self) -> None:
+        helper_doc = contextforge_helper_mcp.record_project_init_validation.__doc__ or ""
+        plan_doc = (
+            REPO_ROOT / "docs/initiatives/contextforge-control-plane/contextforge-helper-project-init-plan.md"
+        ).read_text(encoding="utf-8")
+
+        for text in (helper_doc, plan_doc):
+            with self.subTest(surface=text[:40]):
+                self.assertIn("target_client_safe_probe_result", text)
+                self.assertIn("safe_probe_result", text)
+                self.assertIn("safe_probe_id", text)
+                self.assertIn("resolve-library-id", text)
+                self.assertIn("contextforge://control-plane/traces/context7:canonical-target-client", text)
 
     def test_contextforge_helper_mcp_binds_approval_event_without_agent_supplied_ref(self) -> None:
         approval_params = set(inspect.signature(contextforge_helper_mcp.approve_project_init_plan).parameters)
