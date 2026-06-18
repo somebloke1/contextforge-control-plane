@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import unittest
 from pathlib import Path
@@ -308,6 +309,29 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("Docker build/run/rebuild operations", contract)
         self.assertIn("ContextForge registry or token mutation", contract)
         self.assertIn("helper approve/apply/recovery state mutation", contract)
+
+    def test_pi_baseline_launcher_mounts_canonical_repo_as_workspace_root(self) -> None:
+        host_launcher = (ROOT / "docker/client-harness/scripts/start-pi-contextforge-baseline.sh").read_text(encoding="utf-8")
+
+        self.assertIn('-v "${REPO_ROOT}:/workspace:ro"', host_launcher)
+
+    def test_pi_baseline_state_file_is_present_but_not_pi_bound(self) -> None:
+        state = json.loads((ROOT / ".project/context_forge_state.json").read_text(encoding="utf-8"))
+        services = state.get("services", {})
+
+        self.assertIsInstance(services, dict)
+        for service in services.values():
+            target_clients = service.get("target_clients", {})
+            self.assertIsInstance(target_clients, dict)
+            self.assertNotIn("pi", target_clients)
+
+    def test_pi_baseline_contract_documents_residual_no_target_clients_pi(self) -> None:
+        contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "project state has no approved target_clients.pi service bindings",
+            contract,
+        )
 
 
 if __name__ == "__main__":

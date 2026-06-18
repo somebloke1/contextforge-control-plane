@@ -76,6 +76,13 @@ The existing smoke script may keep its explicit `--extension` proof. The
 baseline session launcher now carries that extension path by default so the
 developer does not have to remember the special flag.
 
+For project-state readback, the baseline launcher now mounts the canonical
+repository root at `/workspace`, so the session starts in the same project root
+where `context_forge_state.json` can be discovered. When that state file is
+present but has no `target_clients.pi` service bindings, the shim readback still
+reports `project state has no approved target_clients.pi service bindings` and
+`services: []` as the active residual gap.
+
 ### OpenCode
 
 OpenCode should use a project-local harness fixture rather than a user-global
