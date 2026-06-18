@@ -49,6 +49,9 @@ A full #58 evidence refresh has these phases.
    - keep local Qwen/llama.cpp as configuration, not an installation task;
    - prove OpenCode through its remote MCP client surface against
      `http://host.docker.internal:4445`;
+   - for the `mentality_dev_docker_server` route, distinguish
+     `opencode mcp list` connection evidence from target-client readiness by
+     also collecting a known-safe governance list/read call from the same OpenCode client Docker run;
    - prove Pi through the extension/shim validation path, not by inventing a
      native Pi MCP config surface;
    - record container-local evidence paths and token revocation.
