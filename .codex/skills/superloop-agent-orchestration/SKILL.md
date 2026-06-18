@@ -171,7 +171,14 @@ both worker and child output as evidence, not authority.
 
 ## Branch Discipline
 
-Keep implementation branches owned and non-overlapping:
+Keep implementation branches and worktrees owned and non-overlapping. The
+controller should normally maintain one clean controller baseline on current
+`dev-root` for integration, readback, and final acceptance. Use separate linked
+worktrees for worker branches, feature branches, or any slice that would
+otherwise mix with dirty or concurrent work.
+
+Do not casually move the controller through many dirty worktrees. Treat linked
+worktrees as leased execution surfaces:
 
 - controller integration branches start from current clean `dev-root`;
 - worker branches use `codex/issue-<number>-<short-slug>` unless the lease says
@@ -179,6 +186,9 @@ Keep implementation branches owned and non-overlapping:
 - workers do not reuse another agent's branch;
 - if a worktree contains unrelated dirty changes, create a separate linked
   worktree or stop with exact containment needs;
+- the controller records which worktree owns each active branch or lease;
+- the controller returns to the clean baseline before final integration when
+  feasible;
 - the controller verifies merge state, branch containment, and Project state
   before deleting branch refs.
 
