@@ -122,6 +122,27 @@ targeted Project readback after a short delay or at the next maintenance pass.
 Set `Agent owner` only after the auto-added item is visible; if it is still
 missing, record the pending reconciliation instead of fighting the workflow.
 
+## Creative Discussion Agents
+
+When the operator asks for creative agents to contribute to a GitHub
+discussion, keep the prompt light. Do not wrap idea generation in a full
+work-unit lease unless the discussion contribution is tied to an implementation
+or roadmap mutation. Send the agent to the discussion, ask it to contribute
+creatively, and preserve only the necessary boundaries:
+
+- repo/codebase files remain read-only unless a separate work unit says
+  otherwise;
+- the named GitHub discussion is writable for the requested contribution;
+- no issues, PRs, branches, commits, Project fields, labels, runtime services,
+  Docker/client/global config, secrets, hooks, helper apply state, or other
+  shared surfaces are mutated unless explicitly authorized;
+- the contribution is idea fuel, not accepted roadmap, final evidence, or a
+  project completion claim.
+
+Use normal controller integration afterward: read back the discussion URL,
+retire the agent, and decide separately whether any idea deserves a real issue,
+Project item, work-unit lease, or governance record.
+
 At maintenance:
 
 1. Record durable evidence, non-actions, residual risk, GitHub state, and branch
