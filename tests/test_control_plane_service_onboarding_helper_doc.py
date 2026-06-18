@@ -128,7 +128,27 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "`storage_mode: stdout_only`",
             "`write_persistence: false`",
             "introducing hidden local files",
-            "long-running helper behavior",
+            "Long-running helper behavior",
+        ]:
+            self.assertIn(phrase, self.doc)
+
+    def test_doc_records_local_ignored_session_store_boundaries(self) -> None:
+        for phrase in [
+            "Local Ignored Session Store",
+            "run/service-onboarding-sessions/",
+            "--resume-session",
+            "--save-session",
+            "`storage_mode: local_ignored_session_file`",
+            "`write_persistence: true`",
+            "`session_record_path`",
+            "project-local ignored `run/` tree",
+            "the helper remains stdout-only",
+            "not a daemon",
+            "service runtime",
+            "Docker state",
+            "client installation",
+            "secret store",
+            "approval bypass",
         ]:
             self.assertIn(phrase, self.doc)
 

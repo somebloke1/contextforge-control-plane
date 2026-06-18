@@ -18,6 +18,8 @@ import control_plane_redaction as redaction
 HELPER_VERSION = 1
 SCHEMA_URI = "contextforge://control-plane/schemas/service-onboarding-record/v1"
 SESSION_SCHEMA_URI = "contextforge://control-plane/schemas/service-onboarding-session/v1"
+DEFAULT_SESSION_DIR = Path("run/service-onboarding-sessions")
+LOCAL_SESSION_STORAGE_MODE = "local_ignored_session_file"
 
 DIALOGUE_STATES = (
     "intake",
@@ -126,6 +128,9 @@ def build_onboarding_record(
     issue: str | None = None,
     previous_record: Mapping[str, Any] | None = None,
     session_id: str | None = None,
+    storage_mode: str = "stdout_only",
+    write_persistence: bool = False,
+    session_record_path: str | None = None,
 ) -> dict[str, Any]:
     """Build a structured service-onboarding record without side effects."""
 
@@ -187,6 +192,9 @@ def build_onboarding_record(
             classification,
             strategy,
             approvals,
+            storage_mode,
+            write_persistence,
+            session_record_path,
         ),
         "blockers": blockers,
         "next_questions": questions,
@@ -219,6 +227,9 @@ def _dialogue_session(
     classification: Mapping[str, Mapping[str, str | None]],
     strategy: Mapping[str, Any],
     approvals: Mapping[str, Any],
+    storage_mode: str,
+    write_persistence: bool,
+    session_record_path: str | None,
 ) -> dict[str, Any]:
     previous_session = _mapping(previous_record.get("dialogue_session") if previous_record else None)
     previous_history = [
@@ -245,7 +256,7 @@ def _dialogue_session(
     if previous_status:
         transition["from_status"] = previous_status
 
-    return {
+    session = {
         "schema_uri": SESSION_SCHEMA_URI,
         "session_id": resolved_session_id,
         "turn_index": turn_index,
@@ -255,14 +266,53 @@ def _dialogue_session(
         "state_history": _unique(previous_state_history + [current_state]),
         "answered_questions": sorted(previous_questions - current_questions),
         "decision_log": _decision_log(turn_index, classification, strategy, approvals),
-        "storage_mode": "stdout_only",
-        "write_persistence": False,
+        "storage_mode": storage_mode,
+        "write_persistence": bool(write_persistence),
         "history": [_json_compatible_copy(item) for item in previous_history] + [transition],
         "next_resume_inputs": [
             "save this onboarding record if future resumption is needed",
             "rerun with --previous-record and an updated descriptor to add evidence",
         ],
     }
+    if session_record_path:
+        session["session_record_path"] = session_record_path
+    return session
+
+
+def session_record_path(session_dir: Path, session_id: str) -> Path:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", session_id):
+        raise ServiceOnboardingInputError("session_id must be 1-128 characters of letters, digits, dot, underscore, or dash")
+    return session_dir / f"{session_id}.json"
+
+
+def resolve_session_dir(session_dir: str | Path | None, *, project_root: str | None = None) -> Path:
+    root = Path(project_root).expanduser() if project_root else Path.cwd()
+    root = root.resolve()
+    requested = Path(session_dir) if session_dir else DEFAULT_SESSION_DIR
+    if not requested.is_absolute():
+        requested = root / requested
+    requested = requested.expanduser().resolve()
+    allowed_root = (root / "run").resolve()
+    if requested != allowed_root and allowed_root not in requested.parents:
+        raise ServiceOnboardingInputError("session_dir must be inside the project-local ignored run/ directory")
+    return requested
+
+
+def load_session_record(session_dir: Path, session_id: str) -> dict[str, Any]:
+    return _load_record(str(session_record_path(session_dir, session_id)))
+
+
+def save_session_record(record: Mapping[str, Any], session_dir: Path) -> Path:
+    session = _mapping(record.get("dialogue_session"))
+    session_id = _first_string(session.get("session_id"))
+    if not session_id or session_id == "unassigned":
+        raise ServiceOnboardingInputError("--save-session requires --session-id or a previous record with a session_id")
+    path = session_record_path(session_dir, session_id)
+    session_dir.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp_path.replace(path)
+    return path
 
 
 def _decision_log(
@@ -730,18 +780,46 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project-root", default=None)
     parser.add_argument("--issue", default=None)
     parser.add_argument("--previous-record", default=None, help="Optional prior onboarding record to resume from")
+    parser.add_argument("--resume-session", default=None, help="Load the previous record from the local ignored session store")
     parser.add_argument("--session-id", default=None, help="Stable session id to include in dialogue metadata")
+    parser.add_argument("--session-dir", default=str(DEFAULT_SESSION_DIR), help="Project-local ignored session directory under run/")
+    parser.add_argument("--save-session", action="store_true", help="Persist the emitted record to the local ignored session store")
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args(argv)
 
-    previous_record = _load_record(args.previous_record) if args.previous_record else None
+    if args.previous_record and args.resume_session:
+        raise ServiceOnboardingInputError("use either --previous-record or --resume-session, not both")
+
+    session_dir = resolve_session_dir(args.session_dir, project_root=args.project_root)
+    previous_record = None
+    if args.previous_record:
+        previous_record = _load_record(args.previous_record)
+    elif args.resume_session:
+        previous_record = load_session_record(session_dir, args.resume_session)
+
+    resolved_session_id = (
+        args.session_id
+        or _first_string(_mapping(previous_record.get("dialogue_session") if previous_record else None).get("session_id"))
+    )
+    if args.save_session and not resolved_session_id:
+        raise ServiceOnboardingInputError("--save-session requires --session-id or --resume-session with a saved session_id")
+    planned_record_path = (
+        str(session_record_path(session_dir, resolved_session_id))
+        if args.save_session and resolved_session_id
+        else None
+    )
     record = build_onboarding_record(
         _load_descriptor(args.descriptor, case_name=args.case),
         project_root=args.project_root,
         issue=args.issue,
         previous_record=previous_record,
         session_id=args.session_id,
+        storage_mode=LOCAL_SESSION_STORAGE_MODE if args.save_session else "stdout_only",
+        write_persistence=args.save_session,
+        session_record_path=planned_record_path,
     )
+    if args.save_session:
+        save_session_record(record, session_dir)
     print(json.dumps(record, indent=2 if args.pretty else None, sort_keys=True) + "\n", end="")
     return 0
 
