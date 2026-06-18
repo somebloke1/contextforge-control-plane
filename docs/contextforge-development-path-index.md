@@ -67,8 +67,8 @@ or project-init apply/recovery state.
 
 Open issues:
 
-- #111: post-merge refresh for this development path index after the
-  ssh-tmux safe-probe contract landed.
+- #115: post-merge refresh for this development path index after the
+  OpenZeppelin safe-probe contract landed.
 - #52: guided MCP service-onboarding helper.
 - #3: host Pi global ContextForge shim prompt/resource parity and live
   Pi-visible readback.
@@ -95,10 +95,13 @@ Recent PR topology:
   safe-probe result fields.
 - #106 merged the #105 Mentality safe-probe policy contract.
 - #110 merged the #109 ssh-tmux safe-probe policy contract.
+- #114 merged the #113 OpenZeppelin Solidity Contracts safe-probe policy
+  contract.
 
-Recently closed path-setting issues include #109, #107, #105, #103, #101, #99,
-#97, #95, #91, #89, #79, #83, #85, #62, #58, #50, #41, #37, #31, #25, and #66.
-They are evidence and history, not substitutes for current path ownership.
+Recently closed path-setting issues include #113, #111, #109, #107, #105, #103,
+#101, #99, #97, #95, #91, #89, #79, #83, #85, #62, #58, #50, #41, #37, #31,
+#25, and #66. They are evidence and history, not substitutes for current path
+ownership.
 
 ## Named Development Paths
 
@@ -254,19 +257,21 @@ Current state:
   list/read proof.
 - #109/#110 added the ssh-tmux safe-probe policy contract for target-client
   list-sessions and existing-session metadata proof.
+- #113/#114 added the OpenZeppelin Solidity Contracts safe-probe policy
+  contract for constrained deterministic ERC-20 preview proof.
 - These are source-level contracts and tests. They do not prove live
   runtime/client validation, Docker behavior, host Pi install/reload, or
-  ContextForge registry state.
+  ContextForge registry state. The OpenZeppelin contract also does not prove
+  generated Solidity is audited or deployable.
 
 Near-term gap:
 
 - Continue implementing harmless read-only probe contracts one service or
   service class at a time. The next source-only candidates are tighter
-  conditional-probe scoping for credential, browser, generated-code, and
-  project-scoped services such as GitHub, web-search, Exa Search,
-  Playwright, OpenZeppelin Solidity Contracts, and Serena/project-scoped
-  services. Each future runtime validation claim must still be tied to the
-  exact target client and exercised surface.
+  conditional-probe scoping for remaining credential, browser, and
+  project-scoped services such as GitHub, web-search, Exa Search, Playwright,
+  and Serena/project-scoped services. Each future runtime validation claim
+  must still be tied to the exact target client and exercised surface.
 
 ### Operator Productization
 
@@ -334,9 +339,9 @@ items until they are promoted into concrete issues or PRs:
   should be marked done or cross-referenced rather than kept as a second active
   owner for the same work.
 - `Roadmap: Safe client-visible validation probes` was promoted through
-  #97/#99/#101/#103/#105/#109 and should be marked done or cross-referenced rather
-  than kept as a second active owner for the same completed source-contract
-  series.
+  #97/#99/#101/#103/#105/#109/#113 and should be marked done or
+  cross-referenced rather than kept as a second active owner for the same
+  completed source-contract series.
 - `Roadmap: Operator productization` for helper, registration, readback,
   retry, and approval packet workflows.
 - `Roadmap: Dev Docker service expansion` driven by #52 onboarding records and
@@ -365,8 +370,7 @@ promote them:
 
 - next safe client-visible validation probe contract or policy slice for
   conditional-probe scoping across GitHub, web-search, Exa Search,
-  Playwright, OpenZeppelin Solidity Contracts, and Serena/project-scoped
-  services;
+  Playwright, and Serena/project-scoped services;
 - operator productization of helper/registration/readback workflows;
 - next dev Docker service expansion driven by #52 onboarding records;
 - project inspector and language-profile proof path;
