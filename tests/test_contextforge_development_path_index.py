@@ -34,7 +34,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
 
     def test_index_maps_current_open_issues_and_recent_prs(self) -> None:
         for reference in [
-            "#95: post-merge refresh for this development path index",
+            "#107: post-merge refresh for this development path index",
             "#52: guided MCP service-onboarding helper",
             "#3: host Pi global ContextForge shim prompt/resource parity",
             "#2: deferred Serena runtime blockers",
@@ -44,10 +44,16 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "#92 merged the #91 path-index topology refresh",
             "#93 merged the #52 source-only resume envelope",
             "#94 merged the #52 opt-in local ignored session store",
+            "#98 merged the #97 safe client-visible validation probe catalog",
+            "#100 merged the #99 Context7 safe-probe policy contract",
+            "#102 merged the #101 Context7 safe-probe validation result builder",
+            "#104 merged the #103 helper guidance",
+            "#106 merged the #105 Mentality safe-probe policy contract",
             "closed #89",
-            "Recently closed path-setting issues include #91",
+            "Recently closed path-setting issues include #105",
         ]:
             self.assertIn(reference, self.index)
+        self.assertNotIn("#95: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#91: post-merge refresh for this development path index", self.index)
 
     def test_index_preserves_surface_boundaries(self) -> None:
@@ -64,7 +70,14 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
 
     def test_index_records_gap_issue_candidates_without_implementation(self) -> None:
         for candidate in [
-            "#97 owns the first source/docs/tests safe-probe catalog",
+            "#97/#98 added the first source/docs/tests safe-probe catalog",
+            "#99/#100 added the Context7 safe-probe policy contract",
+            "#101/#102 added the Context7 safe-probe validation result builder",
+            "#103/#104 updated helper guidance",
+            "#105/#106 added the Mentality safe-probe policy contract",
+            "They do not prove live",
+            "ssh-tmux list/session metadata",
+            "conditional services such as GitHub",
             "operator productization",
             "next dev Docker service expansion",
             "late legacy-retirement phase",
@@ -72,7 +85,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             self.assertIn(candidate, self.index)
 
         self.assertIn("promoted to #89/#90", self.index)
-        self.assertIn("Safe client-visible validation probes` is promoted to #97", self.index)
+        self.assertIn("Safe client-visible validation probes` was promoted through", self.index)
         self.assertIn("Do not implement these gaps from this index alone.", self.index)
 
     def test_roadmap_links_current_path_index(self) -> None:

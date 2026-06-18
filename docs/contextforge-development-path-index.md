@@ -67,8 +67,8 @@ or project-init apply/recovery state.
 
 Open issues:
 
-- #95: post-merge refresh for this development path index after #93/#94
-  landed.
+- #107: post-merge refresh for this development path index after the
+  safe-probe contract series landed.
 - #52: guided MCP service-onboarding helper.
 - #3: host Pi global ContextForge shim prompt/resource parity and live
   Pi-visible readback.
@@ -88,10 +88,16 @@ Recent PR topology:
   `dialogue_session` metadata without file persistence.
 - #94 merged the #52 opt-in local ignored session store under
   `run/service-onboarding-sessions/`.
+- #98 merged the #97 safe client-visible validation probe catalog.
+- #100 merged the #99 Context7 safe-probe policy contract.
+- #102 merged the #101 Context7 safe-probe validation result builder.
+- #104 merged the #103 helper guidance and expected-shape diagnostics for
+  safe-probe result fields.
+- #106 merged the #105 Mentality safe-probe policy contract.
 
-Recently closed path-setting issues include #91, #89, #79, #83, #85, #62,
-#58, #50, #41, #37, #31, #25, and #66. They are evidence and history, not
-substitutes for current path ownership.
+Recently closed path-setting issues include #105, #103, #101, #99, #97, #95,
+#91, #89, #79, #83, #85, #62, #58, #50, #41, #37, #31, #25, and #66. They are
+evidence and history, not substitutes for current path ownership.
 
 ## Named Development Paths
 
@@ -237,13 +243,26 @@ Current state:
   lack safe default probe payloads.
 - Project-init validation rules require target-client-visible ContextForge
   routes, not backend-only checks or local shell substitutes.
-- #97 owns the first source/docs/tests safe-probe catalog, promoted from the
-  Project #6 roadmap draft item.
+- #97/#98 added the first source/docs/tests safe-probe catalog, promoted from
+  the Project #6 roadmap draft item.
+- #99/#100 added the Context7 safe-probe policy contract.
+- #101/#102 added the Context7 safe-probe validation result builder.
+- #103/#104 updated helper guidance and expected-shape diagnostics so
+  safe-probe result fields are visible to project-init callers.
+- #105/#106 added the Mentality safe-probe policy contract for governance
+  list/read proof.
+- These are source-level contracts and tests. They do not prove live
+  runtime/client validation, Docker behavior, host Pi install/reload, or
+  ContextForge registry state.
 
 Near-term gap:
 
-- After #97, implement harmless read-only probes one service at a time, with
-  each runtime validation claim tied to the exact target client and surface.
+- Continue implementing harmless read-only probe contracts one service at a
+  time. The next source-only candidates are ssh-tmux list/session metadata
+  proof or tighter scoping for conditional services such as GitHub,
+  web-search, Exa Search, Playwright, and Serena/project-scoped services.
+  Each future runtime validation claim must still be tied to the exact target
+  client and exercised surface.
 
 ### Operator Productization
 
@@ -310,9 +329,10 @@ items until they are promoted into concrete issues or PRs:
 - `Roadmap: Client-visible activation UX matrix` was promoted to #89/#90 and
   should be marked done or cross-referenced rather than kept as a second active
   owner for the same work.
-- `Roadmap: Safe client-visible validation probes` is promoted to #97 and
-  should be marked done or cross-referenced rather than kept as a second
-  active owner for the same work.
+- `Roadmap: Safe client-visible validation probes` was promoted through
+  #97/#99/#101/#103/#105 and should be marked done or cross-referenced rather
+  than kept as a second active owner for the same completed source-contract
+  series.
 - `Roadmap: Operator productization` for helper, registration, readback,
   retry, and approval packet workflows.
 - `Roadmap: Dev Docker service expansion` driven by #52 onboarding records and
@@ -339,8 +359,9 @@ active items for the same work.
 These are candidates for future GitHub issues when the operator chooses to
 promote them:
 
-- safe client-visible validation probes for services that still lack harmless
-  target-client-visible checks;
+- next safe client-visible validation probe contract, likely ssh-tmux
+  list/session metadata or conditional-probe scoping for GitHub, web-search,
+  Exa Search, Playwright, and Serena/project-scoped services;
 - operator productization of helper/registration/readback workflows;
 - next dev Docker service expansion driven by #52 onboarding records;
 - project inspector and language-profile proof path;
