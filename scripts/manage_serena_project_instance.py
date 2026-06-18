@@ -656,6 +656,85 @@ def socket_port_open(port: int) -> bool:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _read_process_detail(pid: str) -> dict[str, Any]:
+    proc_dir = Path("/proc") / pid
+    detail: dict[str, Any] = {"pid": pid}
+    try:
+        detail["cwd"] = str((proc_dir / "cwd").resolve(strict=True))
+    except OSError as exc:
+        detail["cwd_error"] = str(exc)
+    try:
+        raw_cmdline = (proc_dir / "cmdline").read_bytes()
+        detail["cmdline"] = [part.decode("utf-8", errors="replace") for part in raw_cmdline.split(b"\0") if part]
+    except OSError as exc:
+        detail["cmdline_error"] = str(exc)
+    try:
+        raw_environ = (proc_dir / "environ").read_bytes()
+        env: dict[str, str] = {}
+        for part in raw_environ.split(b"\0"):
+            if not part or b"=" not in part:
+                continue
+            key, value = part.split(b"=", 1)
+            key_text = key.decode("utf-8", errors="replace")
+            if key_text in {"PWD", "SERENA_HOME"}:
+                env[key_text] = value.decode("utf-8", errors="replace")
+        detail["env"] = env
+    except OSError as exc:
+        detail["env_error"] = str(exc)
+    return detail
+
+
+def port_listener_detail(port: int) -> dict[str, Any]:
+    detail: dict[str, Any] = {
+        "port": port,
+        "command": ["ss", "-ltnp", f"sport = :{port}"],
+        "listeners": [],
+    }
+    proc = run(detail["command"], check=False, capture=True)
+    detail["returncode"] = proc.returncode
+    detail["stdout"] = proc.stdout
+    detail["stderr"] = proc.stderr
+    pids = sorted(set(re.findall(r"pid=(\d+)", proc.stdout)))
+    detail["pids"] = pids
+    detail["listeners"] = [_read_process_detail(pid) for pid in pids]
+    return detail
+
+
+def _listener_matches_manifest(listener: dict[str, Any], project_root: Path, instance_dir: Path) -> bool:
+    cmdline = " ".join(str(part) for part in listener.get("cmdline", []))
+    env = listener.get("env") if isinstance(listener.get("env"), dict) else {}
+    cwd = str(listener.get("cwd") or "")
+    serena_home = str(env.get("SERENA_HOME") or "")
+    project_signal = str(project_root) in cmdline or cwd == str(project_root)
+    if not project_signal:
+        return False
+    if serena_home:
+        return serena_home.startswith(str(instance_dir))
+    return True
+
+
+def classify_port_listener(detail: dict[str, Any], project_root: Path, instance_dir: Path) -> dict[str, Any]:
+    listeners = detail.get("listeners") if isinstance(detail.get("listeners"), list) else []
+    matching_pids = [
+        listener.get("pid")
+        for listener in listeners
+        if isinstance(listener, dict) and _listener_matches_manifest(listener, project_root, instance_dir)
+    ]
+    if matching_pids:
+        classification = "canonical_manifest_owner"
+    elif listeners:
+        classification = "foreign_or_stale_owner"
+    elif detail.get("returncode") == 0:
+        classification = "no_listener"
+    else:
+        classification = "listener_inspection_failed"
+    return {
+        "classification": classification,
+        "matching_pids": matching_pids,
+        "listener_pids": [listener.get("pid") for listener in listeners if isinstance(listener, dict)],
+    }
+
+
 def used_manifest_ports() -> set[int]:
     ports: set[int] = set()
     for manifest in (REPO_ROOT / "server-instances").glob("serena-*/instance.json"):
@@ -1811,6 +1890,18 @@ def build_verify_result(args: argparse.Namespace) -> dict[str, Any]:
     }
     check("manifest_project_root_matches", manifest_project_root(manifest) == str(project_root), manifest_project_root(manifest))
     check("port_open", isinstance(port, int) and socket_port_open(port), port)
+    if isinstance(port, int):
+        listener_detail = port_listener_detail(port)
+        listener_classification = classify_port_listener(listener_detail, project_root, instance_dir)
+        result["runtime"]["port_listener"] = {
+            **listener_detail,
+            **listener_classification,
+        }
+        check(
+            "port_listener_matches_manifest",
+            listener_classification["classification"] == "canonical_manifest_owner",
+            result["runtime"]["port_listener"],
+        )
 
     unit_state = run(["systemctl", "--user", "is-active", unit], check=False, capture=True)
     unit_active = unit_state.stdout.strip() or unit_state.stderr.strip()
@@ -2016,6 +2107,12 @@ def status(args: argparse.Namespace) -> int:
         **base_lsp_advisory(lang.get("selected_language"), instance_dir),
         "unit_active": None,
     }
+    if isinstance(port, int):
+        listener_detail = port_listener_detail(port)
+        result["port_listener"] = {
+            **listener_detail,
+            **classify_port_listener(listener_detail, identity.root, instance_dir),
+        }
     proc = run(["systemctl", "--user", "is-active", unit], check=False, capture=True)
     result["unit_active"] = proc.stdout.strip() if proc.stdout.strip() else proc.stderr.strip()
     print(json.dumps(result, indent=2, sort_keys=True))

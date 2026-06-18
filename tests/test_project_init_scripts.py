@@ -1446,6 +1446,64 @@ class SerenaManagerTests(unittest.TestCase):
             finally:
                 serena_manager.REPO_ROOT = original_repo_root
 
+    def test_port_listener_classification_accepts_canonical_manifest_owner(self) -> None:
+        project_root = Path("/home/dgk/workspace/cf-controlplane")
+        instance_dir = project_root / "server-instances" / "serena-cf-controlplane-d46fe58a2a20"
+        detail = {
+            "returncode": 0,
+            "listeners": [
+                {
+                    "pid": "123",
+                    "cwd": str(project_root),
+                    "cmdline": [
+                        "serena",
+                        "start-mcp-server",
+                        "--project",
+                        str(project_root),
+                        "--port",
+                        "9108",
+                    ],
+                    "env": {"SERENA_HOME": str(instance_dir / "run" / "serena-home")},
+                }
+            ],
+        }
+
+        result = serena_manager.classify_port_listener(detail, project_root, instance_dir)
+
+        self.assertEqual("canonical_manifest_owner", result["classification"])
+        self.assertEqual(["123"], result["matching_pids"])
+
+    def test_port_listener_classification_flags_foreign_or_stale_owner(self) -> None:
+        project_root = Path("/home/dgk/workspace/cf-controlplane")
+        instance_dir = project_root / "server-instances" / "serena-cf-controlplane-d46fe58a2a20"
+        other_root = Path("/home/dgk/workspace/retired-project")
+        detail = {
+            "returncode": 0,
+            "listeners": [
+                {
+                    "pid": "456",
+                    "cwd": str(other_root),
+                    "cmdline": [
+                        "serena",
+                        "start-mcp-server",
+                        "--project",
+                        str(other_root),
+                        "--port",
+                        "9108",
+                    ],
+                    "env": {
+                        "SERENA_HOME": str(other_root / "server-instances" / "serena-retired" / "run" / "serena-home")
+                    },
+                }
+            ],
+        }
+
+        result = serena_manager.classify_port_listener(detail, project_root, instance_dir)
+
+        self.assertEqual("foreign_or_stale_owner", result["classification"])
+        self.assertEqual([], result["matching_pids"])
+        self.assertEqual(["456"], result["listener_pids"])
+
     def test_language_inference_prefers_code_over_markdown(self) -> None:
         with tempfile.TemporaryDirectory(dir=common.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
