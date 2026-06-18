@@ -134,6 +134,25 @@ Each completed helper session should emit a structured record with:
 - non-actions already preserved;
 - residual risks, retirement conditions, and next issue/PR steps.
 
+## Source Helper CLI
+
+The first executable helper surface is source-only:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboarding_helper.py \
+  --descriptor tests/fixtures/control_plane_service_onboarding_cases.json \
+  --case serena_project_scoped_stdio_dev_docker_gate \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --issue '#52' \
+  --pretty
+```
+
+The CLI reads a JSON descriptor and emits a deterministic onboarding record. It
+does not write session state, register services, call ContextForge, start
+containers, edit client config, or mutate runtime state. Resumption is explicit:
+the emitted `current_state`, `next_questions`, and `source_descriptor` tell the
+operator or model what evidence to add before rerunning the helper.
+
 ## Non-Mutation Default
 
 The helper must default to source-only planning. It must not register services,
