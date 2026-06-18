@@ -68,6 +68,7 @@ or project-init apply/recovery state.
 Open issues:
 
 - #52: guided MCP service-onboarding helper.
+- #89: client-visible activation UX matrix for Codex, Pi, and OpenCode.
 - #3: host Pi global ContextForge shim prompt/resource parity and live
   Pi-visible readback.
 - #2: deferred Serena runtime blockers for the later migration/cutoff phase.
@@ -79,6 +80,9 @@ Recent or active PR topology:
 - #88 is the current source/docs/tests path-index refresh vehicle. Do not
   treat this bullet as durable open-PR topology after #88 merges; refresh from
   GitHub Project #6 and live PR state instead.
+- #90 is the current source/docs/tests client-visible activation matrix
+  vehicle. It closes #89 and should follow #88 in the review queue so the
+  path-index and Project #6 coordination practice land first.
 
 Recently closed path-setting issues include #79, #83, #85, #62, #58, #50,
 #41, #37, #31, #25, and #66. They are evidence and history, not substitutes
@@ -139,6 +143,9 @@ Current state:
 - #3 remains open for host Pi global shim install/reload/readback.
 - #62 closed the container baseline helper/shim visibility path for Pi and
   OpenCode client Docker.
+- #89/#90 now package the client-visible activation matrix as a focused
+  source/docs/tests slice, including the distinction between #62 client Docker
+  proof and still-separate host Pi, host OpenCode, and Codex hook claims.
 - Pi-visible behavior is shim/tool/guidance availability, not a Codex-style
   project hook banner.
 - OpenCode-visible behavior is project-local plugin/helper behavior.
@@ -146,10 +153,9 @@ Current state:
 
 Near-term gap:
 
-- Create a follow-up issue if operator-visible confusion persists after #62:
-  define expected first-prompt or first-session observables per client
-  (`Codex`, `Pi`, `OpenCode`) and classify each as hook, shim, plugin, helper,
-  or guidance behavior.
+- After #90 merges, keep client-visible validation claims tied to the matrix:
+  do not generalize #62 Pi/OpenCode client Docker proof to host Pi global
+  install/reload, host OpenCode global config, or Codex hook activation.
 
 ### Dev Docker Integration Lab
 
@@ -286,8 +292,9 @@ Policy:
 The following roadmap paths should be represented in Project #6 as draft
 items until they are promoted into concrete issues or PRs:
 
-- `Roadmap: Client-visible activation UX matrix` for Codex, Pi, and OpenCode
-  observables.
+- `Roadmap: Client-visible activation UX matrix` was promoted to #89/#90 and
+  should be marked done or cross-referenced rather than kept as a second active
+  owner for the same work.
 - `Roadmap: Safe client-visible validation probes` for harmless
   target-client-visible checks.
 - `Roadmap: Operator productization` for helper, registration, readback,
@@ -316,7 +323,6 @@ active items for the same work.
 These are candidates for future GitHub issues when the operator chooses to
 promote them:
 
-- client-visible activation UX matrix for Codex, Pi, and OpenCode;
 - safe client-visible validation probes for services that still lack harmless
   target-client-visible checks;
 - operator productization of helper/registration/readback workflows;

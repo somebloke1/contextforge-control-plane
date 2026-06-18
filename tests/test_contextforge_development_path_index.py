@@ -35,6 +35,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
     def test_index_maps_current_open_issues_and_pr(self) -> None:
         for reference in [
             "#52: guided MCP service-onboarding helper",
+            "#89: client-visible activation UX matrix",
             "#3: host Pi global ContextForge shim prompt/resource parity",
             "#2: deferred Serena runtime blockers",
             "#87 merged the #52 source/docs/tests fixture increment",
@@ -42,6 +43,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             self.assertIn(reference, self.index)
 
         self.assertIn("#88 is the current source/docs/tests path-index refresh vehicle", self.index)
+        self.assertIn("#90 is the current source/docs/tests client-visible activation matrix", self.index)
 
     def test_index_preserves_surface_boundaries(self) -> None:
         for surface in [
@@ -57,7 +59,6 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
 
     def test_index_records_gap_issue_candidates_without_implementation(self) -> None:
         for candidate in [
-            "client-visible activation UX matrix",
             "safe client-visible validation probes",
             "operator productization",
             "next dev Docker service expansion",
@@ -65,6 +66,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
         ]:
             self.assertIn(candidate, self.index)
 
+        self.assertIn("promoted to #89/#90", self.index)
         self.assertIn("Do not implement these gaps from this index alone.", self.index)
 
     def test_roadmap_links_current_path_index(self) -> None:
