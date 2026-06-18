@@ -23,6 +23,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INSTANCE_ROOT = REPO_ROOT / "server-instances"
 PROJECT_STATE_PATH = REPO_ROOT / ".project" / "context_forge_state.json"
 SCHEMA_URI = "contextforge://diagnostics/registry-cleanup/v1"
+RETIRED_PORTAL_SLUG = "-".join(("context", "portal"))
+RETIRED_REGISTRY_URI_PREFIX = "contextforge://" + RETIRED_PORTAL_SLUG
 NON_ACTIONS = (
     "read-only inspection; no ContextForge registry mutation",
     "read-only inspection; no direct database writes",
@@ -254,6 +256,43 @@ def orphan_prompt_resource_rows(live: dict[str, Any]) -> tuple[list[dict[str, An
     return prompts, resources
 
 
+def _record_mentions_retired_registry_surface(row: dict[str, Any]) -> bool:
+    return any(
+        isinstance(value, str) and RETIRED_REGISTRY_URI_PREFIX in value
+        for value in row.values()
+    )
+
+
+def retired_registry_surface_records(
+    prompt_orphans: list[dict[str, Any]],
+    resource_orphans: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for prompt in prompt_orphans:
+        if _record_mentions_retired_registry_surface(prompt):
+            rows.append(
+                {
+                    "record_type": "prompt",
+                    "id": prompt["id"],
+                    "name": prompt["name"],
+                    "custom_name": prompt["custom_name"],
+                    "reason": "orphaned registry record still references the retired project surface",
+                }
+            )
+    for resource in resource_orphans:
+        if _record_mentions_retired_registry_surface(resource):
+            rows.append(
+                {
+                    "record_type": "resource",
+                    "id": resource["id"],
+                    "name": resource["name"],
+                    "uri": resource["uri"],
+                    "reason": "orphaned registry record still references the retired project surface",
+                }
+            )
+    return rows
+
+
 def guidance_gap_summary(live: dict[str, Any]) -> dict[str, dict[str, int]]:
     tools_by_name = _items(live["tools"], "name")
     resources_by_uri = _items(live["resources"], "uri")
@@ -294,8 +333,11 @@ def cleanup_candidates(
     tool_rows: list[dict[str, Any]],
     prompt_orphans: list[dict[str, Any]],
     resource_orphans: list[dict[str, Any]],
+    retired_records: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
+    retired_prompt_ids = {row["id"] for row in retired_records if row["record_type"] == "prompt"}
+    retired_resource_ids = {row["id"] for row in retired_records if row["record_type"] == "resource"}
     for row in tool_rows:
         if row["classification"] not in {"stale_project_scoped", "orphaned"}:
             continue
@@ -318,6 +360,8 @@ def cleanup_candidates(
             }
         )
     for prompt in prompt_orphans:
+        if prompt["id"] in retired_prompt_ids:
+            continue
         candidates.append(
             {
                 "operation": "DELETE /prompts/{prompt_id}",
@@ -330,6 +374,8 @@ def cleanup_candidates(
             }
         )
     for resource in resource_orphans:
+        if resource["id"] in retired_resource_ids:
+            continue
         candidates.append(
             {
                 "operation": "DELETE /resources/{resource_id}",
@@ -347,7 +393,8 @@ def cleanup_candidates(
 def build_manifest(live: dict[str, Any], instances: list[dict[str, Any]], instance_roots: list[Path]) -> dict[str, Any]:
     tool_rows, classification_counts = classify_tools(live, instances)
     prompt_orphans, resource_orphans = orphan_prompt_resource_rows(live)
-    candidates = cleanup_candidates(tool_rows, prompt_orphans, resource_orphans)
+    retired_records = retired_registry_surface_records(prompt_orphans, resource_orphans)
+    candidates = cleanup_candidates(tool_rows, prompt_orphans, resource_orphans, retired_records)
     operation_counts = Counter(candidate["operation"] for candidate in candidates)
     return {
         "schema_uri": SCHEMA_URI,
@@ -369,11 +416,13 @@ def build_manifest(live: dict[str, Any], instances: list[dict[str, Any]], instan
             "cleanup_candidates_by_operation": dict(sorted(operation_counts.items())),
             "orphan_prompts": len(prompt_orphans),
             "orphan_resources": len(resource_orphans),
+            "retired_registry_surface_records": len(retired_records),
             "guidance_gaps": guidance_gap_summary(live),
         },
         "tool_classification": tool_rows,
         "prompt_orphans": prompt_orphans,
         "resource_orphans": resource_orphans,
+        "retired_registry_surface_records": retired_records,
         "cleanup_candidates": candidates,
         "approval_boundary": APPROVAL_BOUNDARY,
         "non_actions": list(NON_ACTIONS),
