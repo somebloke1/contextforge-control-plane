@@ -34,16 +34,21 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
 
     def test_index_maps_current_open_issues_and_recent_prs(self) -> None:
         for reference in [
+            "#95: post-merge refresh for this development path index",
             "#52: guided MCP service-onboarding helper",
-            "#91: post-merge refresh for this development path index",
             "#3: host Pi global ContextForge shim prompt/resource parity",
             "#2: deferred Serena runtime blockers",
             "#87 merged the #52 source/docs/tests fixture increment",
             "#88 merged the source/docs/tests path-index refresh",
             "#90 merged the client-visible activation matrix",
+            "#92 merged the #91 path-index topology refresh",
+            "#93 merged the #52 source-only resume envelope",
+            "#94 merged the #52 opt-in local ignored session store",
             "closed #89",
+            "Recently closed path-setting issues include #91",
         ]:
             self.assertIn(reference, self.index)
+        self.assertNotIn("#91: post-merge refresh for this development path index", self.index)
 
     def test_index_preserves_surface_boundaries(self) -> None:
         for surface in [
