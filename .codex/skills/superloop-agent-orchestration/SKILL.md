@@ -81,10 +81,45 @@ At maintenance:
 4. Complete the current formal goal when the subgoal is fully verified.
 5. Immediately create the refined successor goal.
 
+## Goal Refinement Cadence
+
+Keep the formal goal current at controller boundaries, not on every tactical
+observation. During a live subgoal, maintain fast-changing observations in the
+tasklist, issue comments, Project #6 fields, PR notes, or governance ledgers as
+appropriate. Fold those observations into the next formal goal when the current
+subgoal is verified, handed off, or materially re-scoped.
+
+Use this cadence:
+
+- at every controller re-entry, read the formal goal and Project #6 before
+  acting;
+- after each completed work unit or small integrated batch, decide whether the
+  current subgoal is complete enough to close and refine;
+- after any lease assignment, worker report, PR merge, issue closure, or
+  Project topology change, update coordination state before choosing the next
+  move;
+- after surprising evidence, record the correction immediately, then refine the
+  successor goal at the next honest boundary;
+- early in a new orchestration pattern, prefer smaller subgoals so learning can
+  be incorporated into successor goals quickly;
+- do not mark a formal goal complete merely to rewrite it; complete it only when
+  the bounded subgoal has actual acceptance evidence.
+
 ## Queue And Lease Model
 
-Workers must not pull arbitrary GitHub issues directly. A worker may begin only
-after the controller grants a lease or explicitly authorizes a lease request.
+Workers must not pull arbitrary GitHub issues directly. The default pattern is
+controller-instantiated, controller-assigned work: create or activate a worker
+for one bounded work unit, grant a lease, and require the worker to loop only
+inside that lease until the stop condition is satisfied.
+
+A standing worker may ask for another work unit after reporting completion or a
+handoff, but it still must not self-select from the queue. The controller either
+retires the worker, grants a successor lease, or leaves it idle. Treat
+worker-requested work as a request for controller assignment, not as queue
+ownership by the worker.
+
+A worker may begin only after the controller grants a lease or explicitly
+authorizes a lease request.
 
 Use the Project #6 `Agent owner` text field for current ownership:
 

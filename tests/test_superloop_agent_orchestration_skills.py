@@ -53,6 +53,11 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
             "controller-held item",
             "worker-held item",
             "Do not use `Assignees` as the agent lease owner",
+            "The default pattern is\ncontroller-instantiated, controller-assigned work",
+            "one bounded work unit",
+            "A standing worker may ask for another work unit",
+            "must not self-select from the queue",
+            "worker-requested work as a request for controller assignment",
             "Work unit lease:",
             "controller_run_id",
             "worker_agent_id",
@@ -80,6 +85,18 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
             "worker formal goals remain\nsubordinate",
             "worker successor goal",
             "controller response authorizes",
+        ]:
+            self.assertIn(text, self.controller)
+
+    def test_controller_skill_defines_goal_refinement_cadence(self) -> None:
+        for text in [
+            "Goal Refinement Cadence",
+            "Keep the formal goal current at controller boundaries",
+            "tasklist, issue comments, Project #6 fields, PR notes, or governance ledgers",
+            "after each completed work unit or small integrated batch",
+            "after any lease assignment, worker report, PR merge, issue closure, or\n  Project topology change",
+            "prefer smaller subgoals",
+            "do not mark a formal goal complete merely to rewrite it",
         ]:
             self.assertIn(text, self.controller)
 
