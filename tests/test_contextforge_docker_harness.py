@@ -226,7 +226,9 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("config/pi/start-contextforge-baseline.sh", contract)
         self.assertIn("pi-extensions/contextforge-global-shim/index.ts", contract)
         self.assertIn("cf_project_init_*", contract)
-        self.assertIn("avoid writing `~/.pi`, requiring `/reload`, or mutating host/global Pi state", contract)
+        self.assertIn("container-local Pi extension directory", contract)
+        self.assertIn("avoid host Pi installs, host `/reload`, or host/global Pi state mutation", contract)
+        self.assertIn("Container-local writes under `/home/agent/.pi/agent/extensions` are harness", contract)
         self.assertIn("project-local harness fixture", contract)
         self.assertIn("contextforge-helper", contract)
         self.assertIn("container-local Python environment", contract)
@@ -246,6 +248,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python", compose)
         self.assertIn("CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py", compose)
         self.assertIn("CONTEXTFORGE_PI_SHIM_EXTENSION: /repo/pi-extensions/contextforge-global-shim/index.ts", compose)
+        self.assertIn("CONTEXTFORGE_PI_SHIM_INSTALL_DIR: /home/agent/.pi/agent/extensions/contextforge-global-shim", compose)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py", compose)
         self.assertIn("CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace", compose)
 
@@ -253,6 +256,15 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
             match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
             self.assertIsNotNone(match, service)
             self.assertIn("- ../..:/repo:ro", match.group(0))
+            self.assertIn("- ./workspace:/workspace", match.group(0))
+
+        for service in ("opencode-ephemeral", "pi-ephemeral"):
+            match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
+            self.assertIsNotNone(match, service)
+            self.assertIn("- ../..:/repo:ro", match.group(0))
+            self.assertIn("tmpfs:", match.group(0))
+            self.assertIn("- /workspace:uid=1000,gid=1000,mode=0755", match.group(0))
+            self.assertNotIn("- ./workspace:/workspace", match.group(0))
 
         for service in ("codex-cli", "claude-code", "gemini-cli"):
             match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
@@ -263,7 +275,12 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         container_launcher = (ROOT / "docker/client-harness/config/pi/start-contextforge-baseline.sh").read_text(encoding="utf-8")
         host_launcher = (ROOT / "docker/client-harness/scripts/start-pi-contextforge-baseline.sh").read_text(encoding="utf-8")
 
-        self.assertIn("--extension \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\"", container_launcher)
+        self.assertIn("CONTEXTFORGE_PI_SHIM_INSTALL_DIR:=${PI_CODING_AGENT_DIR}/extensions/contextforge-global-shim", container_launcher)
+        self.assertIn("Refusing unsafe CONTEXTFORGE_PI_SHIM_INSTALL_DIR", container_launcher)
+        self.assertIn("rm -rf \"${CONTEXTFORGE_PI_SHIM_INSTALL_DIR}\"", container_launcher)
+        self.assertIn("cp -R \"$(dirname \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\")\" \"${CONTEXTFORGE_PI_SHIM_INSTALL_DIR}\"", container_launcher)
+        self.assertIn("contextforge-root.json", container_launcher)
+        self.assertNotIn("--extension \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\"", container_launcher)
         self.assertIn("--provider local-llama-qwen", container_launcher)
         self.assertIn("--model qwen3.6-a3b", container_launcher)
         self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON:=/opt/contextforge-wrapper-venv/bin/python", container_launcher)
@@ -272,7 +289,6 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("docker compose -f compose.yml run --rm --no-deps", host_launcher)
         self.assertIn("-v \"${REPO_ROOT}:/repo:ro\"", host_launcher)
         self.assertNotIn("/home/dgk/.pi", container_launcher + host_launcher)
-        self.assertNotIn("/home/agent/.pi/agent/extensions", container_launcher + host_launcher)
 
     def test_opencode_baseline_launcher_installs_project_plugin_fixture(self) -> None:
         container_launcher = (ROOT / "docker/client-harness/config/opencode/start-contextforge-baseline.sh").read_text(encoding="utf-8")
@@ -290,6 +306,9 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("spawnSync", plugin)
         self.assertIn("CONTEXTFORGE_OPENCODE_HOOK", plugin)
         self.assertIn("opencode_project_init_hook.py", plugin)
+        self.assertIn("hookSpecificOutput", plugin)
+        self.assertIn("additionalContext", plugin)
+        self.assertIn("output.system.push(context)", plugin)
         self.assertIn("CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace", container_launcher)
         self.assertIn('"contextforge-helper"', opencode_config)
         self.assertIn('"{env:CONTEXTFORGE_HELPER_PYTHON}"', opencode_config)
@@ -297,9 +316,11 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("contextforge-client-harness-runtime", opencode_config)
         self.assertNotIn("/home/dgk/.config/opencode", container_launcher + host_launcher + plugin)
         self.assertNotIn("opencode mcp add", container_launcher + host_launcher + plugin)
+        self.assertNotIn("opencode mcp list", container_launcher + host_launcher + plugin)
 
     def test_client_helper_baseline_contract_requires_future_runtime_evidence(self) -> None:
         contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docker/client-harness/README.md").read_text(encoding="utf-8")
 
         self.assertIn("separately approved validation", contract)
         self.assertIn("Pi ad hoc session lists or can invoke", contract)
@@ -309,6 +330,21 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("Docker build/run/rebuild operations", contract)
         self.assertIn("ContextForge registry or token mutation", contract)
         self.assertIn("helper approve/apply/recovery state mutation", contract)
+        self.assertIn("dev-time testing affordances", readme)
+        self.assertIn("not production deployment modes", readme)
+        self.assertIn("representative", readme)
+        self.assertIn("code-assistant consumers", readme)
+        self.assertIn("helper service and the services that the", readme)
+        self.assertIn("facilitates; code-assistant runtimes", readme)
+        self.assertIn("not as", readme)
+        self.assertIn("surfaces owned by this control plane", readme)
+        self.assertIn("local-Qwen validation sample", readme)
+        self.assertIn("thin consumers", readme)
+        self.assertIn("less-mediated model behavior", readme)
+        self.assertIn("multi-session persistence in `/workspace`", readme)
+        self.assertIn("should not leave duplicate, stale, or orphaned", readme)
+        self.assertIn("pi-ephemeral", readme)
+        self.assertIn("opencode-ephemeral", readme)
 
     def test_pi_baseline_launcher_mounts_canonical_repo_as_workspace_root(self) -> None:
         host_launcher = (ROOT / "docker/client-harness/scripts/start-pi-contextforge-baseline.sh").read_text(encoding="utf-8")

@@ -19,6 +19,7 @@ import manage_serena_project_instance as serena_manager
 import codex_project_init_hook as init_hook
 import gemini_project_init_hook
 import opencode_project_init_hook
+import pi_project_init_helper_cli
 import control_plane_contextforge_binding as binding
 import control_plane_project_state as project_state
 import control_plane_registry_discipline as registry_discipline
@@ -1418,6 +1419,30 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertEqual({"experimental.chat.system.transform", "session.created"}, set(opencode_project_init_hook.OPENCODE_HOOK_EVENTS))
         self.assertEqual({"SessionStart", "UserPromptSubmit"}, set(init_hook.CODEX_HOOK_EVENTS))
 
+    def test_opencode_project_init_hook_routes_to_opencode_client_context(self) -> None:
+        calls: list[dict[str, object]] = []
+        original = opencode_project_init_hook.codex_project_init_hook.main_for_events
+        try:
+            def fake_main_for_events(events: object, *, suppress_output: bool = False, target_client: str = "codex") -> int:
+                calls.append(
+                    {
+                        "events": set(events),  # type: ignore[arg-type]
+                        "suppress_output": suppress_output,
+                        "target_client": target_client,
+                    }
+                )
+                return 0
+
+            opencode_project_init_hook.codex_project_init_hook.main_for_events = fake_main_for_events  # type: ignore[assignment]
+            self.assertEqual(0, opencode_project_init_hook.main())
+        finally:
+            opencode_project_init_hook.codex_project_init_hook.main_for_events = original  # type: ignore[assignment]
+
+        self.assertEqual(1, len(calls))
+        self.assertEqual({"experimental.chat.system.transform", "session.created"}, calls[0]["events"])
+        self.assertTrue(calls[0]["suppress_output"])
+        self.assertEqual("opencode", calls[0]["target_client"])
+
     def test_gemini_project_init_hook_import_suppresses_gateway_stderr(self) -> None:
         cases = [
             ("gemini_project_init_hook", "GEMINI_HOOK_EVENTS", "BeforeAgent,SessionStart"),
@@ -1857,12 +1882,14 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertIn("Do not echo this context to the user", text)
         self.assertIn("hidden or structured prompt/context injection", text)
         self.assertIn("User-visible UI should be limited to information that requires user understanding or response", text)
+        self.assertIn("On the first user prompt in a session with lifecycle missing / fresh_initialization", text)
+        self.assertIn("before answering unrelated work or ordinary tool-list questions", text)
         self.assertIn("Ask exactly one question, then stop and wait", text)
         self.assertIn("Which ContextForge services should I activate for this project?", text)
         self.assertIn("No user-global config/trust/extension changes", text)
         self.assertIn("for Pi this is .project/context_forge_state.json records", text)
         self.assertIn("for OpenCode this is project-local opencode.json plus .opencode/plugins/contextforge-project-init.js", text)
-        self.assertIn("before_agent_start system-prompt context", text)
+        self.assertIn("input-triggered hidden message", text)
         self.assertIn("experimental.chat.system.transform system context", text)
         self.assertIn("cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only", text)
         self.assertIn("do not reconstruct the full plan object from visible text", text)
@@ -2014,6 +2041,80 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertIn("Ask exactly one question, then stop and wait", rendered)
         self.assertIn("/home/dgk/workspace/test-new-proj-03", rendered)
         self.assertIn(f"ContextForge project initialization, version {common.PROMPT_VERSION}", rendered)
+
+    def test_fresh_project_startup_guidance_is_client_specific_and_non_mutating(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            before = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+            pi_result = pi_project_init_helper_cli.dispatch(
+                "render_project_init_prompt",
+                {"project_root": str(root), "client_type": "pi"},
+            )
+            opencode_rendered = init_hook.render_local_prompt(
+                init_hook.prompt_args(common.project_identity(root), {}, target_client="opencode")
+            )
+            after = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+
+        self.assertEqual(before, after)
+        self.assertTrue(pi_result["ok"])
+        self.assertEqual("pi", pi_result["client_type"])
+        pi_text = str(pi_result["prompt_text"])
+        for text, client in ((pi_text, "pi"), (opencode_rendered, "opencode")):
+            with self.subTest(client=client):
+                self.assertIn(f"Target client: {client}", text)
+                self.assertIn("State: uninitialized", text)
+                self.assertIn("Lifecycle: missing / fresh_initialization", text)
+                self.assertIn("On the first user prompt in a session with lifecycle missing / fresh_initialization", text)
+                self.assertIn("before answering unrelated work or ordinary tool-list questions", text)
+                self.assertIn('asking exactly: "Which ContextForge services should I activate for this project?"', text)
+                self.assertIn("explain in practical terms", text)
+                self.assertIn("planned project-local writes and non-actions", text)
+                self.assertIn("require scoped approval before apply", text)
+                self.assertIn("avoid writing project state, client config, trust state, registry entries, service state, secrets, or backend state", text)
+                self.assertIn("Which ContextForge services should I activate for this project?", text)
+
+    def test_fresh_project_hook_uses_local_prompt_without_gateway_catalog_mutation(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            run_root = Path(run_tmp)
+            payload = {
+                "hook_event_name": "experimental.chat.system.transform",
+                "session_id": "opencode-fresh-project",
+                "cwd": str(root),
+            }
+            stdin = io.StringIO(json.dumps(payload))
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.object(init_hook.gateway, "_read_env", side_effect=AssertionError("gateway env must not be read")),
+                mock.patch.object(init_hook, "upgrade_project_init_prompt", side_effect=AssertionError("fresh guidance must not upsert prompt catalog")),
+                mock.patch.object(sys, "stdin", stdin),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = init_hook.main_for_events(
+                    {"experimental.chat.system.transform"},
+                    suppress_output=True,
+                    target_client="opencode",
+                )
+
+            self.assertEqual(0, code)
+            emitted = json.loads(stdout.getvalue())
+            self.assertTrue(emitted["suppressOutput"])
+            context = emitted["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("On the first user prompt in a session with lifecycle missing / fresh_initialization", context)
+            self.assertIn("before answering unrelated work or ordinary tool-list questions", context)
+            self.assertIn('asking exactly: "Which ContextForge services should I activate for this project?"', context)
+            self.assertIn("Target client: opencode", context)
+            self.assertIn("State: uninitialized", context)
+            self.assertIn("Lifecycle: missing / fresh_initialization", context)
+            self.assertIn("require scoped approval before apply", context)
+            self.assertIn("avoid writing project state, client config, trust state, registry entries, service state, secrets, or backend state", context)
+            self.assertFalse(project_state.project_state_path(root).exists())
+            self.assertFalse((root / "opencode.json").exists())
+            self.assertFalse((root / ".opencode").exists())
 
     def test_hook_decision_uses_project_init_lifecycle_inspector(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

@@ -47,14 +47,14 @@ def _plan_object(value: Any) -> dict[str, Any]:
     return plan
 
 
-def _render_prompt(project_root: str) -> dict[str, Any]:
+def _render_prompt(project_root: str, *, client_type: str = "pi") -> dict[str, Any]:
     import codex_project_init_hook as prompt_hook
     import contextforge_mcp_wrapper as gateway
 
     root = Path(project_root).expanduser().resolve(strict=False)
     identity = project_identity(root)
     values = read_project_env(root)
-    args = prompt_hook.prompt_args(identity, values)
+    args = prompt_hook.prompt_args(identity, values, target_client=client_type)
     source = "local_template"
     text = ""
     try:
@@ -75,6 +75,7 @@ def _render_prompt(project_root: str) -> dict[str, Any]:
         "status": "rendered",
         "source": source,
         "project_root": str(root),
+        "client_type": client_type,
         "prompt_text": text,
         "non_actions": [
             "does not mutate ContextForge prompt/resource catalog",
@@ -88,7 +89,7 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
     project_root = _project_root(data)
     client_type = str(data.get("client_type") or data.get("clientType") or "pi")
     if operation == "render_project_init_prompt":
-        return _ok(_render_prompt(project_root))
+        return _ok(_render_prompt(project_root, client_type=client_type))
     if operation == "get_project_context":
         return _ok(helper.helper_readiness(project_root=project_root, client_type=client_type))
     if operation == "list_available_capabilities":

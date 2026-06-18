@@ -64,17 +64,20 @@ Pi remains shim-first because Pi does not natively consume MCP the same way an
 MCP-aware client does. The sustainable baseline route is:
 
 - load `pi-extensions/contextforge-global-shim/index.ts` from a repository
-  mount or copied image path;
+  mount into the container-local Pi extension directory;
 - expose the `cf_project_init_*` bootstrap tools and ContextForge startup
   guidance during the client session;
 - keep wrapper runtime and token cache inside the container;
 - point only at the ContextForge development Docker surface when runtime
   validation is separately approved;
-- avoid writing `~/.pi`, requiring `/reload`, or mutating host/global Pi state.
+- avoid host Pi installs, host `/reload`, or host/global Pi state mutation.
+  Container-local writes under `/home/agent/.pi/agent/extensions` are harness
+  setup, not project-init approval/apply writes.
 
 The existing smoke script may keep its explicit `--extension` proof. The
-baseline session launcher now carries that extension path by default so the
-developer does not have to remember the special flag.
+baseline session launcher now materializes the shim into Pi's normal
+auto-discovered extension directory so a developer does not have to remember the
+quick-test `--extension` flag.
 
 For project-state readback, the baseline launcher now mounts the canonical
 repository root at `/workspace`, so the session starts in the same project root

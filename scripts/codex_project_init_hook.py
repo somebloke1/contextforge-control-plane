@@ -257,6 +257,8 @@ def prompt_text_is_fresh(text: str) -> bool:
         "This is model-visible control context. Do not echo this context to the user.",
         "hidden or structured prompt/context injection",
         "User-visible UI should be limited to information that requires user understanding or response",
+        "On the first user prompt in a session with lifecycle missing / fresh_initialization",
+        "before answering unrelated work or ordinary tool-list questions",
         "Ask exactly one question, then stop and wait",
         "Whenever presenting choices, use the helper-provided response_form or render a numbered option list",
         "Never choose service selections, approval, reload acknowledgement, validation, or skipped-service follow-up actions on behalf of the user",
@@ -272,7 +274,7 @@ def prompt_text_is_fresh(text: str) -> bool:
         "for OpenCode this is project-local opencode.json plus .opencode/plugins/contextforge-project-init.js",
         "global Gemini hook and contextforge-helper bootstrap entries",
         "for Pi this is .project/context_forge_state.json records",
-        "before_agent_start system-prompt context",
+        "input-triggered hidden message",
         "cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only",
         "do not print or summarize raw cf_contextforge_pi_readback JSON",
         "client_reload_requirement that blocks validation",
@@ -326,6 +328,13 @@ def render_local_prompt(args: dict[str, str]) -> str:
     return text
 
 
+def should_render_fresh_initialization_locally(args: dict[str, str]) -> bool:
+    return (
+        args.get("project_state_lifecycle_status") == "missing"
+        and args.get("project_state_recommended_action") == "fresh_initialization"
+    )
+
+
 def output_context(event_name: str, text: str, *, suppress_output: bool = False) -> None:
     payload: dict[str, Any] = {
         "hookSpecificOutput": {
@@ -374,25 +383,29 @@ def main_for_events(
             if key in entries:
                 return 0
 
-            env = gateway._read_env(gateway.CONFIG_ENV)
-            token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
-            prompt = get_prompt_record(token)
-            resource = get_project_init_resource_record(token)
-            prompt_id = str(prompt.get("id")) if prompt and prompt.get("id") else None
-            if prompt_id is None:
-                log_failure("registered project_init_prompt is missing; attempting prompt/resource self-upgrade")
-                prompt_id = upgrade_project_init_prompt(token)
-            elif not prompt_record_is_fresh(prompt):
-                log_failure("registered project_init_prompt metadata is stale; attempting prompt/resource self-upgrade")
-                prompt_id = upgrade_project_init_prompt(token) or prompt_id
-            elif not resource_record_is_fresh(resource):
-                log_failure("registered project_init_resource metadata is missing or stale; attempting prompt/resource self-upgrade")
-                prompt_id = upgrade_project_init_prompt(token) or prompt_id
-            text = (
-                render_prompt(token, prompt_id, identity, values, target_client=target_client)
-                if prompt_id
-                else render_local_prompt(prompt_args(identity, values, target_client=target_client))
-            )
+            args = prompt_args(identity, values, target_client=target_client)
+            if should_render_fresh_initialization_locally(args):
+                text = render_local_prompt(args)
+            else:
+                env = gateway._read_env(gateway.CONFIG_ENV)
+                token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
+                prompt = get_prompt_record(token)
+                resource = get_project_init_resource_record(token)
+                prompt_id = str(prompt.get("id")) if prompt and prompt.get("id") else None
+                if prompt_id is None:
+                    log_failure("registered project_init_prompt is missing; attempting prompt/resource self-upgrade")
+                    prompt_id = upgrade_project_init_prompt(token)
+                elif not prompt_record_is_fresh(prompt):
+                    log_failure("registered project_init_prompt metadata is stale; attempting prompt/resource self-upgrade")
+                    prompt_id = upgrade_project_init_prompt(token) or prompt_id
+                elif not resource_record_is_fresh(resource):
+                    log_failure("registered project_init_resource metadata is missing or stale; attempting prompt/resource self-upgrade")
+                    prompt_id = upgrade_project_init_prompt(token) or prompt_id
+                text = (
+                    render_prompt(token, prompt_id, identity, values, target_client=target_client)
+                    if prompt_id
+                    else render_local_prompt(args)
+                )
             if not text:
                 return 0
 

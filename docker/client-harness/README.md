@@ -118,6 +118,36 @@ Qwen model path, and avoid host Pi/OpenCode global config mutation. Runtime
 proof still requires separate approval to rebuild or run Docker client
 containers.
 
+The persistent and ephemeral Compose services are dev-time testing affordances.
+They are not production deployment modes, but they make ordinary use cases
+repeatable during staging.
+
+Pi, OpenCode, Gemini, Codex, and similar tools are representative
+code-assistant consumers in this harness. ContextForge production
+responsibility reaches the helper service and the services that the helper
+facilitates; code-assistant runtimes are validated as consumers, not as runtime
+surfaces owned by this control plane. Pi and OpenCode are the currently
+configured local-Qwen validation sample because they are thin consumers,
+especially Pi, and expose less-mediated model behavior during development
+validation.
+
+Use the ordinary `pi` and `opencode` Compose services when a dev-time test
+needs multi-session persistence in `/workspace`, such as resuming a partially
+applied project-init flow at validation time. Persistent tests must also prove
+idempotency: rerunning the same activation/resume flow should converge on the
+same project-local state and should not leave duplicate, stale, or orphaned
+library/config artifacts behind.
+
+Use `pi-ephemeral` and `opencode-ephemeral` when a dev-time test needs a clean
+project workspace on each container run. These services mount `/workspace` as
+tmpfs, so project-local state is discarded when the container stops while the
+repo and client config surfaces remain unchanged:
+
+```sh
+docker compose -f docker/client-harness/compose.yml run --rm pi-ephemeral bash
+docker compose -f docker/client-harness/compose.yml run --rm opencode-ephemeral bash
+```
+
 ## OpenCode ContextForge Dev Gateway Smoke
 
 After the ContextForge development Docker gateway and `mentality-transceiver`
