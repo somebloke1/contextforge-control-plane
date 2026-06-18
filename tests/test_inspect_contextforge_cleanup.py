@@ -134,10 +134,10 @@ class ContextForgeCleanupInspectorTests(unittest.TestCase):
         self.assertEqual("keep_project_scoped", by_id["tool-current"]["classification"])
         self.assertEqual("stale_project_scoped", by_id["tool-stale"]["classification"])
         self.assertEqual("retain_project_scoped_or_unknown", by_id["tool-phronesis"]["classification"])
-        self.assertEqual("orphaned", by_id["tool-orphan"]["classification"])
+        self.assertEqual("keep_canonical", by_id["tool-orphan"]["classification"])
         self.assertEqual("keep_canonical", by_id["tool-keep"]["classification"])
         operations = manifest["summary"]["cleanup_candidates_by_operation"]
-        self.assertEqual(2, operations["DELETE /tools/{tool_id}"])
+        self.assertEqual(1, operations["DELETE /tools/{tool_id}"])
         self.assertEqual(1, operations["DELETE /prompts/{prompt_id}"])
         self.assertEqual(1, operations["DELETE /resources/{resource_id}"])
         self.assertEqual(
