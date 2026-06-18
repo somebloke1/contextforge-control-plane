@@ -340,6 +340,125 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertTrue(second_output["dialogue_session"]["write_persistence"])
         self.assertEqual(second_output, saved_output)
 
+    def test_build_session_status_summarizes_resume_state_without_record_payload(self) -> None:
+        previous = self.record("missing_evidence_prompts_questions")
+        resumed = helper.build_onboarding_record(
+            {
+                "classification": {
+                    "plan_type": "source_only_scaffolding",
+                    "localization_type": "shared_canonical",
+                    "functional_type": "search_retrieval",
+                    "transport_type": "streamable_http",
+                    "state_type": "stateless",
+                    "approval_type": "source_only",
+                },
+                "source_evidence": [{"type": "package", "ref": "unknown-service"}],
+            },
+            project_root=PROJECT_ROOT,
+            issue="#52",
+            previous_record=previous,
+            session_id="svc-onboarding-status",
+            storage_mode=helper.LOCAL_SESSION_STORAGE_MODE,
+            write_persistence=True,
+            session_record_path="/tmp/project/run/service-onboarding-sessions/svc-onboarding-status.json",
+        )
+
+        summary = helper.build_session_status(resumed)
+
+        self.assertEqual("service_onboarding_session_status", summary["summary_type"])
+        self.assertEqual("svc-onboarding-status", summary["session_id"])
+        self.assertEqual("unknown-service", summary["candidate_service"])
+        self.assertEqual("ready_for_handoff", summary["status"])
+        self.assertEqual("handoff", summary["current_state"])
+        self.assertEqual(2, summary["turn_index"])
+        self.assertEqual([], summary["classification_open"])
+        self.assertIn("approval_type", summary["classification_known"])
+        self.assertEqual("Direct native registration", summary["primary_paradigm"])
+        self.assertFalse(summary["approval_required"])
+        self.assertFalse(summary["mutation_allowed"])
+        self.assertIn(
+            "What upstream docs, package names, commands, local paths, or issue links prove the service shape?",
+            summary["answered_questions"],
+        )
+        self.assertNotIn("source_descriptor", summary)
+
+    def test_cli_session_status_reads_local_store_without_descriptor_or_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
+            session_id = "svc-onboarding-status-cli"
+            first = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--descriptor",
+                    str(FIXTURE),
+                    "--case",
+                    "missing_evidence_prompts_questions",
+                    "--project-root",
+                    str(project_root),
+                    "--issue",
+                    "#52",
+                    "--session-id",
+                    session_id,
+                    "--save-session",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            status = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--project-root",
+                    str(project_root),
+                    "--session-status",
+                    session_id,
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+        first_output = json.loads(first.stdout)
+        status_output = json.loads(status.stdout)
+        self.assertEqual("", first.stderr)
+        self.assertEqual("", status.stderr)
+        self.assertEqual("needs_user_input", first_output["status"])
+        self.assertEqual("service_onboarding_session_status", status_output["summary_type"])
+        self.assertEqual(session_id, status_output["session_id"])
+        self.assertEqual("source_discovery", status_output["current_state"])
+        self.assertEqual(1, status_output["turn_index"])
+        self.assertIn("plan_type", status_output["classification_open"])
+        self.assertFalse(status_output["mutation_allowed"])
+        self.assertTrue(status_output["session_record_path"].endswith(f"{session_id}.json"))
+
+    def test_cli_session_status_rejects_descriptor_or_write_combinations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            for extra_args in [
+                ["--descriptor", str(FIXTURE)],
+                ["--save-session"],
+                ["--resume-session", "same-session"],
+                ["--previous-record", str(FIXTURE)],
+            ]:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                        "--project-root",
+                        tmp,
+                        "--session-status",
+                        "same-session",
+                        *extra_args,
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                self.assertNotEqual(0, result.returncode)
+
     def test_descriptor_must_be_mapping(self) -> None:
         with self.assertRaises(helper.ServiceOnboardingInputError):
             helper.build_onboarding_record(["not", "a", "mapping"])  # type: ignore[arg-type]

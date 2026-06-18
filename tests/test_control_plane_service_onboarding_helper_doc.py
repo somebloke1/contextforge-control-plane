@@ -152,6 +152,25 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         ]:
             self.assertIn(phrase, self.doc)
 
+    def test_doc_records_session_status_readback_contract(self) -> None:
+        for phrase in [
+            "Session Status Readback",
+            "--session-status",
+            "without a descriptor",
+            "without rewriting the",
+            "`turn_index`",
+            "known and open classification dimensions",
+            "primary and secondary integration paradigms",
+            "approval requirement and required approval types",
+            "answered questions, next questions, next resume inputs",
+            "`mutation_allowed: false`",
+            "cannot be combined with descriptor input",
+            "previous-record input",
+            "session resume input",
+            "`--save-session`",
+        ]:
+            self.assertIn(phrase, self.doc)
+
 
 if __name__ == "__main__":
     unittest.main()
