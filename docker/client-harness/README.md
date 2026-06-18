@@ -101,6 +101,10 @@ See `CONTEXTFORGE_HELPER_BASELINE.md` for the Pi/OpenCode baseline contract
 that closes the gap between specialized ContextForge smoke scripts and ordinary
 ad hoc client sessions.
 
+See `../../docs/client-visible-activation-matrix.md` for the client-specific
+activation/readiness observables. Pi and OpenCode are not expected to show a
+Codex-style hook banner; they have their own shim/plugin/helper readback paths.
+
 The harness-owned baseline launchers are:
 
 ```sh
