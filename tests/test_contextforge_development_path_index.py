@@ -58,8 +58,10 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "#123 merged the #122 path-index refresh",
             "#125 merged the #124 service-onboarding session-list readback",
             "#129 merged the #128 service-onboarding session-template readback",
+            "#163 merged the #162 path-index refresh",
             "closed #89",
             "Recently closed path-setting issues include #128",
+            "#66, and #162",
         ]:
             self.assertIn(reference, self.index)
         self.assertNotIn("#162: post-merge refresh for this development path index", self.index)
@@ -71,6 +73,37 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
         self.assertNotIn("#107: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#95: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#91: post-merge refresh for this development path index", self.index)
+
+    def test_index_records_review_agent_issue_intake(self) -> None:
+        for text in [
+            "#130-#161: review-agent ideal-form intake issues",
+            "not an automatic\n  implementation queue",
+            "Project #6 `Agent state: Ready`: #140, #144, #152, #153, #158, #160,\n    #161",
+            "Project #6 `Agent state: Deferred`: #146, #147, #148",
+            "Project #6 `Agent state: Candidate`: #130-#139, #141-#143, #145,\n    #149-#157, #159",
+            "#160 comment `4740100419` records the read-only intake",
+            "#140 is now the ready validation issue",
+            "#131 and #135-#139 are candidate ideal-form issues",
+            "#144, #158, and #161 are ready source/docs/tests guardrail\n  candidates",
+            "#153 is ready as the inventory-as-discovery validation issue",
+            "#152 is now the ready ideal-form issue",
+            "not as a\n  replacement owner",
+            "#149 and #150 are candidate issues",
+            "#159 is now the candidate operator productization issue",
+            "#146, #147, and #148 are deferred trust",
+        ]:
+            self.assertIn(text, self.index)
+
+    def test_gap_candidates_reference_promoted_issue_owners(self) -> None:
+        for text in [
+            "now shaped by #144, #158,\n  and #161",
+            "represented by candidate issue #159",
+            "constrained by #152 and #153",
+            "represented by\n  candidate issues #150 and #151",
+            "now partially represented by\n  #145, #158, and #161",
+            "now represented by deferred issues #146,\n  #147, and #148",
+        ]:
+            self.assertIn(text, self.index)
 
     def test_index_preserves_surface_boundaries(self) -> None:
         for surface in [
