@@ -61,10 +61,32 @@ class ControlPlaneVerificationTests(unittest.TestCase):
 
         event = trace["probe_events"][0]
         self.assertEqual(trace["result"], "passed")
+        self.assertEqual(trace["exercised_surface"], "contextforge_dev_docker")
+        self.assertEqual(trace["x_exercised_surface"], "contextforge_dev_docker")
         self.assertEqual(trace["redaction_status"], "redacted")
         self.assertRegex(event["x_observation_digest"], r"^sha256:[0-9a-f]{64}$")
         self.assertEqual(event["evidence_hash"], event["x_observation_digest"])
         self.assertRegex(trace["result_hash"], r"^sha256:[0-9a-f]{64}$")
+
+    def test_trace_normalizes_exercised_surface_aliases(self) -> None:
+        trace = verification.build_verification_trace(
+            trace_id="trace-pi-client",
+            plan_id="plan-serena",
+            step_id="verify-serena",
+            service_binding="serena:project-root",
+            layer="target_client",
+            probe_id="probe-target-client",
+            probe_type="readback",
+            subject="serena:project-root:target_client",
+            status="passed",
+            observations={"summary": "Pi client listed helper tools"},
+            exercised_surface="Pi client Docker",
+            target_client="pi",
+            generated_at=STAMP,
+        )
+
+        contracts.validate_artifact("verification_trace", trace)
+        self.assertEqual("pi_client_docker", trace["exercised_surface"])
 
     def test_failed_and_stale_traces_validate_and_carry_failure_classification(self) -> None:
         failed = self.build_trace(status="failed", failure_classification="gateway_readback_failed")
@@ -172,6 +194,49 @@ class ControlPlaneVerificationTests(unittest.TestCase):
         self.assertEqual("block", decision["decision"])
         self.assertEqual("trace_ref_digest_mismatch", decision["reason"])
         self.assertEqual("mismatched", decision["matrix"]["layers"]["contextforge_gateway"]["status"])
+
+    def test_surface_mismatch_blocks_lifecycle_overclaim(self) -> None:
+        trace = verification.build_verification_trace(
+            trace_id="trace-wrong-surface",
+            plan_id="plan-serena",
+            step_id="verify-serena",
+            service_binding="serena:project-root",
+            layer="contextforge_gateway",
+            probe_id="probe-contextforge_gateway",
+            probe_type="readback",
+            subject="serena:project-root:contextforge_gateway",
+            status="passed",
+            observations={"summary": "Pi helper saw a banner, not ContextForge gateway routing"},
+            exercised_surface="pi_client_docker",
+            target_client="pi",
+            generated_at=STAMP,
+        )
+        ref = trace_ref(trace)
+
+        decision = verification.validate_lifecycle_transition(
+            plan_id="plan-serena",
+            step_id="verify-serena",
+            service_binding="serena:project-root",
+            target_state="verified",
+            required_layers=["contextforge_gateway"],
+            trace_refs=[ref],
+            trace_artifacts={ref["ref"]: trace},
+            target_client="pi",
+        )
+
+        self.assertFalse(decision["valid"])
+        self.assertEqual("surface_cannot_support_required_layer", decision["reason"])
+        self.assertEqual("block", decision["surface_claim"]["decision"])
+        self.assertEqual(
+            {
+                "trace_ref": ref["ref"],
+                "trace_id": "trace-wrong-surface",
+                "layer": "contextforge_gateway",
+                "exercised_surface": "pi_client_docker",
+                "reason": "pi_client_docker evidence cannot prove contextforge_gateway",
+            },
+            decision["surface_claim"]["unsupported_surfaces"][0],
+        )
 
     def test_multiple_required_layers_matrix_classifies_pass_fail_and_stale(self) -> None:
         backend = self.build_trace(trace_id="trace-backend", layer="backend")
