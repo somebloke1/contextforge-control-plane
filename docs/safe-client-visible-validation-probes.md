@@ -76,6 +76,19 @@ ContextForge-exposed Context7 tools.
 - Forbidden substitutions: backend health, direct bridge calls, local package
   lookup, built-in web search, or direct Upstash/Context7 backend calls.
 
+## Context7 Result Builder Boundary
+
+Issue #101 adds an executable source-level builder for Context7 validation
+result JSON. The builder is a shaping contract only: it accepts metadata from a
+target-client-visible tool listing and safe call that already happened, then
+returns the result shape project-init may record.
+
+The builder does not call Context7, start clients, mutate project state, rewrite
+client config, run Docker, register services, handle secrets, or prove live
+runtime validation. Wrong tools, unsupported proof kinds, missing target-client
+trace refs, backend-only proof, or failed probe output must produce a
+non-passing result instead of a validation claim.
+
 ## Claim Rules
 
 - Record `validated` only after the exact target client lists and, where safe,

@@ -60,7 +60,7 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             "shell process mutation",
         ]:
             with self.subTest(phrase=phrase):
-                self.assertIn(phrase, self.doc)
+                self.assertIn(phrase, self.normalized)
 
     def test_context7_probe_contract_is_documented_and_machine_readable(self) -> None:
         for phrase in [
@@ -76,7 +76,7 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             "direct Upstash/Context7 backend calls",
         ]:
             with self.subTest(phrase=phrase):
-                self.assertIn(phrase, self.doc)
+                self.assertIn(phrase, self.normalized)
 
         policy = common.safe_validation_policy("context7")
         contract = policy["probe_contract"]
@@ -127,6 +127,104 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             "target_client_safe_probe_result",
             safe_default["probe_contract"]["validation_result_shape"]["proof_kind"],
         )
+
+    def test_context7_result_builder_boundary_is_documented(self) -> None:
+        for phrase in [
+            "## Context7 Result Builder Boundary",
+            "Issue #101",
+            "shaping contract only",
+            "does not call Context7",
+            "Wrong tools, unsupported proof kinds, missing target-client trace refs",
+            "non-passing result instead of a validation claim",
+        ]:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.normalized)
+
+    def test_context7_result_builder_accepts_target_client_safe_proof(self) -> None:
+        result = common.build_safe_probe_validation_result(
+            "context7",
+            target_client="codex",
+            tool_name="context7-local-resolve-library-id",
+            verification_trace_refs=["contextforge://control-plane/traces/context7-target-client"],
+            result_summary="resolved /python/cpython",
+        )
+
+        self.assertEqual("passed", result["status"])
+        self.assertIs(result["target_client_visible"], True)
+        self.assertEqual("target_client_safe_probe_result", result["proof_kind"])
+        self.assertEqual("passed", result["safe_probe_result"])
+        self.assertEqual("resolve-library-id", result["safe_probe_id"])
+        self.assertEqual("codex", result["target_client"])
+        self.assertEqual("context7-local-resolve-library-id", result["tool_name"])
+        self.assertEqual(
+            ["contextforge://control-plane/traces/context7-target-client"],
+            result["verification_trace_refs"],
+        )
+
+    def test_context7_result_builder_accepts_pi_safe_proof_kind(self) -> None:
+        result = common.build_safe_probe_validation_result(
+            "context7",
+            target_client="pi",
+            tool_name="cf_context7_s123__context7-local-resolve-library-id",
+            verification_trace_refs=[
+                "pi://contextforge-global-shim/tools/cf_context7_s123__context7-local-resolve-library-id"
+            ],
+            proof_kind="pi_safe_probe_result",
+        )
+
+        self.assertEqual("passed", result["status"])
+        self.assertIs(result["target_client_visible"], True)
+        self.assertEqual("pi_safe_probe_result", result["proof_kind"])
+
+    def test_context7_result_builder_rejects_non_target_client_substitutes(self) -> None:
+        cases = [
+            (
+                "wrong_tool",
+                {
+                    "tool_name": "local-package-lookup",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
+                },
+                "no_matching_safe_tool",
+            ),
+            (
+                "unsupported_proof",
+                {
+                    "tool_name": "context7-local-resolve-library-id",
+                    "proof_kind": "backend_health",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
+                },
+                "unsupported_proof_kind",
+            ),
+            (
+                "missing_trace",
+                {
+                    "tool_name": "context7-local-resolve-library-id",
+                    "verification_trace_refs": [],
+                },
+                "missing_target_client_trace",
+            ),
+            (
+                "failed_probe",
+                {
+                    "tool_name": "context7-local-resolve-library-id",
+                    "safe_probe_result": "error",
+                    "status": "pending",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
+                },
+                "safe_probe_not_passed",
+            ),
+        ]
+
+        for name, kwargs, reason in cases:
+            with self.subTest(name=name):
+                result = common.build_safe_probe_validation_result(
+                    "context7",
+                    target_client="codex",
+                    **kwargs,
+                )
+                self.assertEqual("pending", result["status"])
+                self.assertIs(result["target_client_visible"], False)
+                self.assertEqual(reason, result["skipped_reason"])
 
     def test_pi_shim_context7_defaults_align_with_probe_contract(self) -> None:
         text = PI_SHIM.read_text(encoding="utf-8")
