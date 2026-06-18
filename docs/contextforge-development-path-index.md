@@ -67,9 +67,9 @@ or project-init apply/recovery state.
 
 Open issues:
 
-- #52: guided MCP service-onboarding helper.
-- #91: post-merge refresh for this development path index after #88/#90
+- #95: post-merge refresh for this development path index after #93/#94
   landed.
+- #52: guided MCP service-onboarding helper.
 - #3: host Pi global ContextForge shim prompt/resource parity and live
   Pi-visible readback.
 - #2: deferred Serena runtime blockers for the later migration/cutoff phase.
@@ -82,9 +82,15 @@ Recent PR topology:
   coordination practice and workflow knowledge persistence.
 - #90 merged the client-visible activation matrix source/docs/tests slice and
   closed #89.
+- #92 merged the #91 path-index topology refresh after #88/#90 landed and
+  closed #91.
+- #93 merged the #52 source-only resume envelope for deterministic
+  `dialogue_session` metadata without file persistence.
+- #94 merged the #52 opt-in local ignored session store under
+  `run/service-onboarding-sessions/`.
 
-Recently closed path-setting issues include #89, #79, #83, #85, #62, #58,
-#50, #41, #37, #31, #25, and #66. They are evidence and history, not
+Recently closed path-setting issues include #91, #89, #79, #83, #85, #62,
+#58, #50, #41, #37, #31, #25, and #66. They are evidence and history, not
 substitutes for current path ownership.
 
 ## Named Development Paths
@@ -171,8 +177,9 @@ Current state:
 Near-term gap:
 
 - The lab should add services through explicit onboarding records and bounded
-  runtime approvals, not by broad container expansion. #52/#87 is the current
-  source-side feeder for that work.
+  runtime approvals, not by broad container expansion. #52, including the
+  merged #87/#93/#94 helper increments, is the current source-side feeder for
+  that work.
 
 ### MCP Service Onboarding Lifecycle
 
@@ -186,12 +193,19 @@ Current state:
 - #69 merged the first deterministic no-mutation onboarding-record helper.
 - #87 merged a source/docs/tests increment adding bridged stdio,
   credential-scoped, and client/session-local examples.
+- #93 merged a source-only resume envelope with deterministic
+  `dialogue_session` metadata, previous-record resumption, and no file
+  persistence.
+- #94 merged opt-in project-local ignored session persistence under
+  `run/service-onboarding-sessions/`, including `--save-session`,
+  `--resume-session`, path-safety checks, and no runtime/service mutation.
 
 Near-term gap:
 
-- The current helper is deterministic and source-only. A later #52 slice should
-  decide whether to add durable session storage, a long-running helper process,
-  or a more explicit dialogue-state resume interface.
+- The current helper is still deterministic CLI tooling rather than a
+  long-running helper process. A later #52 slice should either add richer
+  dialogue/session management on top of the local ignored store or use the
+  helper to produce a first real onboarding record for a selected service.
 
 ### Serena/Project-Scoped Service Lifecycle
 
