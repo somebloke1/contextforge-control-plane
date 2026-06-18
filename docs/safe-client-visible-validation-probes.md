@@ -46,7 +46,7 @@ to implement later, one service at a time.
 | context7 | `known_safe_probe` | Target-client list-tools proof plus a small read-only documentation lookup for a harmless package or library. | Upstash/backend health, local package lookup, or direct bridge checks. |
 | mentality | `known_safe_probe` | Target-client list/read proof for governance records only. | Decision writes, ledger mutation, or local file reads used as validation proof. |
 | ssh-tmux | `known_safe_probe` | Target-client list-sessions or session metadata readback only. | Opening sessions, sending commands, cleanup, or shell process mutation. |
-| OpenZeppelin Solidity Contracts | `conditional_probe` | Deterministic read-only generation or metadata payload with no write target and no secret-bearing input. | Treating remote availability or package docs as target-client proof. |
+| OpenZeppelin Solidity Contracts | `known_safe_probe` | Target-client deterministic ERC-20 preview generation with constrained harmless arguments and no write/deploy target. | Treating remote availability, package docs, deployment, generated-code audit claims, or direct backend calls as target-client proof. |
 | web-search | `conditional_probe` | Harmless low-cost search query only after provider credentials, rate limits, and output redaction are bounded. | Built-in web search, direct provider calls, or credential exposure. |
 | Exa Search | `conditional_probe` | Harmless low-cost search query only after API-key, quota, and redaction boundaries are explicit. | Direct Exa calls outside the target client or broad internet queries without a bounded payload. |
 | GitHub | `conditional_probe` | Read-only viewer, rate-limit, repository metadata, or issue metadata readback with credential scope confirmed. | Creating issues/PRs/comments, mutating labels, or using `gh` local auth as target-client proof. |
@@ -136,6 +136,33 @@ when the exact target client can see the ContextForge-exposed ssh-tmux tools.
   cleanup/deletion, closing sessions, remote file reads or writes as
   validation proof, direct shell or tmux commands, backend health, or local
   process inspection.
+
+## OpenZeppelin Solidity Contracts Probe Contract
+
+OpenZeppelin Solidity Contracts has a known-safe source-level probe contract
+only for constrained deterministic ERC-20 preview generation. A future runtime
+validation may use this contract only when the exact target client can see the
+ContextForge-exposed OpenZeppelin tool.
+
+- Required proof layers: target-client `list-tools` evidence plus one
+  target-client safe `call-tool` result.
+- Allowed tool name: `openzeppelin-solidity-contracts-solidity-erc20`.
+- Default payload: call `openzeppelin-solidity-contracts-solidity-erc20` with
+  fixed harmless preview arguments: name `ContextForgePreviewToken`, symbol
+  `CFP`, premint `0`, disabled mint/burn/pause/permit/callback/votes,
+  disabled flash minting and cross-chain bridging, access `none`, and
+  upgradeability disabled.
+- Accepted proof kinds: `target_client_safe_probe_result` or
+  `pi_safe_probe_result`.
+- Required successful result shape: `status: passed`,
+  `target_client_visible: true`, `safe_probe_result: passed`,
+  `safe_probe_id: solidity-erc20-preview`, and at least one target-client
+  trace reference.
+- Forbidden substitutions: remote OpenZeppelin availability, package
+  documentation lookup, direct backend calls, generated code treated as
+  audited, deployment or security approval, file writes, project mutation,
+  wallet/private-key input, chain/RPC interaction, or any secret-bearing
+  input.
 
 ## Claim Rules
 
