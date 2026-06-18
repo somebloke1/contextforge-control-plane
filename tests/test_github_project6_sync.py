@@ -298,7 +298,8 @@ class GitHubProject6SyncTests(unittest.TestCase):
         self.assertEqual(["gh", "api", "graphql"], runner.calls[0][:3])
         self.assertIn("updateProjectV2ItemFieldValue", runner.calls[0][-1])
         self.assertIn("singleSelectOptionId", runner.calls[0][-1])
-        self.assertEqual("Add low-quota GitHub Project 6 sync helper", applied["targeted_readback"]["query"])
+        self.assertEqual("Add low-quota GitHub Project 6 sync helper", applied["targeted_readback"][0]["query"])
+        self.assertEqual(1, applied["targeted_readback"][0]["result"]["totalCount"])
         self.assertEqual(1, applied["rate_limit"]["graphql_query"]["cost"])
         self.assertIn(["gh", "api", "rate_limit", "--jq", "{core:.resources.core, graphql:.resources.graphql}"], runner.calls)
 
