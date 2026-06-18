@@ -285,6 +285,96 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             safe_default["probe_contract"]["validation_result_shape"]["proof_kind"],
         )
 
+    def test_openzeppelin_probe_contract_is_documented_and_machine_readable(self) -> None:
+        for phrase in [
+            "## OpenZeppelin Solidity Contracts Probe Contract",
+            "target-client `list-tools` evidence plus one",
+            "openzeppelin-solidity-contracts-solidity-erc20",
+            "ContextForgePreviewToken",
+            "symbol `CFP`",
+            "premint `0`",
+            "access `none`",
+            "target_client_safe_probe_result",
+            "pi_safe_probe_result",
+            "safe_probe_result: passed",
+            "safe_probe_id: solidity-erc20-preview",
+            "remote OpenZeppelin availability",
+            "generated code treated as audited",
+            "wallet/private-key input",
+            "chain/RPC interaction",
+            "secret-bearing input",
+        ]:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.normalized)
+
+        policy = common.safe_validation_policy("openzeppelin-solidity-contracts")
+        contract = policy["probe_contract"]
+
+        self.assertEqual("known_safe_probe", contract["status"])
+        self.assertEqual(["list_tools", "call_tool"], contract["target_client_proof_layers"])
+        self.assertEqual(
+            ["openzeppelin-solidity-contracts-solidity-erc20"],
+            contract["allowed_tool_name_patterns"],
+        )
+        self.assertEqual("solidity-erc20-preview", contract["default_probe"]["safe_probe_id"])
+        self.assertEqual(
+            {
+                "name": "ContextForgePreviewToken",
+                "symbol": "CFP",
+                "premint": "0",
+                "mintable": False,
+                "burnable": False,
+                "pausable": False,
+                "permit": False,
+                "callback": False,
+                "votes": False,
+                "flashmint": False,
+                "crossChainBridging": False,
+                "access": "none",
+                "upgradeable": False,
+            },
+            contract["default_probe"]["arguments"],
+        )
+        self.assertEqual(
+            {"target_client_safe_probe_result", "pi_safe_probe_result"},
+            set(contract["accepted_proof_kinds"]),
+        )
+        self.assertEqual("passed", contract["validation_result_shape"]["status"])
+        self.assertIs(contract["validation_result_shape"]["target_client_visible"], True)
+        self.assertIn("generated code audit claim", contract["forbidden_substitutions"])
+        self.assertIn("wallet or private key", contract["forbidden_substitutions"])
+        self.assertIn("chain or RPC interaction", contract["forbidden_substitutions"])
+
+    def test_openzeppelin_probe_contract_flows_into_validation_plan(self) -> None:
+        service = {
+            "service_family": "openzeppelin-solidity-contracts",
+            "service_binding": "openzeppelin-solidity-contracts:canonical",
+            "validation_policy": common.safe_validation_policy("openzeppelin-solidity-contracts"),
+        }
+        plan = binding.build_project_init_validation_plan(
+            [service],
+            validation_mode="validate_now",
+            target_client="codex",
+        )
+        service_plan = plan["service_plans"][0]
+        safe_default = service_plan["safe_default"]
+
+        self.assertEqual("target_client_visible_mcp", service_plan["required_proof"])
+        self.assertEqual("pending_target_client_probe", service_plan["status"])
+        self.assertEqual("safe_call", safe_default["mode"])
+        self.assertEqual(
+            ["solidity-erc20-preview"],
+            safe_default["safe_operations"],
+        )
+        self.assertEqual(
+            "openzeppelin-solidity-contracts-solidity-erc20",
+            safe_default["probe_contract"]["default_probe"]["tool_name_hint"],
+        )
+        self.assertEqual(
+            "target_client_safe_probe_result",
+            safe_default["probe_contract"]["validation_result_shape"]["proof_kind"],
+        )
+
     def test_context7_result_builder_boundary_is_documented(self) -> None:
         for phrase in [
             "## Context7 Result Builder Boundary",
@@ -542,6 +632,102 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             with self.subTest(name=name):
                 result = common.build_safe_probe_validation_result(
                     "ssh-tmux",
+                    target_client="codex",
+                    **kwargs,
+                )
+                self.assertEqual("pending", result["status"])
+                self.assertIs(result["target_client_visible"], False)
+                self.assertEqual(reason, result["skipped_reason"])
+
+    def test_openzeppelin_result_builder_accepts_target_client_safe_proof(self) -> None:
+        result = common.build_safe_probe_validation_result(
+            "openzeppelin-solidity-contracts",
+            target_client="codex",
+            tool_name="openzeppelin-solidity-contracts-solidity-erc20",
+            verification_trace_refs=["contextforge://control-plane/traces/openzeppelin-target-client"],
+            result_summary="generated deterministic ERC-20 preview text",
+        )
+
+        self.assertEqual("passed", result["status"])
+        self.assertIs(result["target_client_visible"], True)
+        self.assertEqual("target_client_safe_probe_result", result["proof_kind"])
+        self.assertEqual("passed", result["safe_probe_result"])
+        self.assertEqual("solidity-erc20-preview", result["safe_probe_id"])
+        self.assertEqual("codex", result["target_client"])
+        self.assertEqual("openzeppelin-solidity-contracts-solidity-erc20", result["tool_name"])
+        self.assertEqual(
+            ["contextforge://control-plane/traces/openzeppelin-target-client"],
+            result["verification_trace_refs"],
+        )
+
+    def test_openzeppelin_result_builder_rejects_backend_or_deployment_substitutes(self) -> None:
+        cases = [
+            (
+                "wrong_generator",
+                {
+                    "tool_name": "openzeppelin-solidity-contracts-solidity-custom",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/openzeppelin-target-client"],
+                },
+                "no_matching_safe_tool",
+            ),
+            (
+                "backend_health",
+                {
+                    "tool_name": "curl https://mcp.openzeppelin.com/contracts/solidity/mcp",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/openzeppelin-target-client"],
+                },
+                "no_matching_safe_tool",
+            ),
+            (
+                "deployment_substitute",
+                {
+                    "tool_name": "openzeppelin-deploy-contract",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/openzeppelin-target-client"],
+                },
+                "no_matching_safe_tool",
+            ),
+            (
+                "unsupported_safe_probe",
+                {
+                    "tool_name": "openzeppelin-solidity-contracts-solidity-erc20",
+                    "safe_probe_id": "deploy-contract",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/openzeppelin-target-client"],
+                },
+                "unsupported_safe_probe_id",
+            ),
+            (
+                "unsupported_proof",
+                {
+                    "tool_name": "openzeppelin-solidity-contracts-solidity-erc20",
+                    "proof_kind": "backend_health",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/openzeppelin-target-client"],
+                },
+                "unsupported_proof_kind",
+            ),
+            (
+                "missing_trace",
+                {
+                    "tool_name": "openzeppelin-solidity-contracts-solidity-erc20",
+                    "verification_trace_refs": [],
+                },
+                "missing_target_client_trace",
+            ),
+            (
+                "failed_probe",
+                {
+                    "tool_name": "openzeppelin-solidity-contracts-solidity-erc20",
+                    "safe_probe_result": "error",
+                    "status": "pending",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/openzeppelin-target-client"],
+                },
+                "safe_probe_not_passed",
+            ),
+        ]
+
+        for name, kwargs, reason in cases:
+            with self.subTest(name=name):
+                result = common.build_safe_probe_validation_result(
+                    "openzeppelin-solidity-contracts",
                     target_client="codex",
                     **kwargs,
                 )

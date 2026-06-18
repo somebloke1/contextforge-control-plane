@@ -563,7 +563,60 @@ def safe_validation_policy(service_family: str) -> dict[str, Any]:
         "openzeppelin_solidity_contracts": {
             "mode": "safe_call",
             "description": "use documentation/template lookup or generation preview only when non-mutating",
-            "safe_operations": ["list-tools", "solidity-erc20"],
+            "safe_operations": ["solidity-erc20-preview"],
+            "probe_contract": {
+                "status": "known_safe_probe",
+                "target_client_proof_layers": ["list_tools", "call_tool"],
+                "allowed_tool_name_patterns": [
+                    "openzeppelin-solidity-contracts-solidity-erc20",
+                ],
+                "default_probe": {
+                    "safe_probe_id": "solidity-erc20-preview",
+                    "tool_name_hint": "openzeppelin-solidity-contracts-solidity-erc20",
+                    "arguments": {
+                        "name": "ContextForgePreviewToken",
+                        "symbol": "CFP",
+                        "premint": "0",
+                        "mintable": False,
+                        "burnable": False,
+                        "pausable": False,
+                        "permit": False,
+                        "callback": False,
+                        "votes": False,
+                        "flashmint": False,
+                        "crossChainBridging": False,
+                        "access": "none",
+                        "upgradeable": False,
+                    },
+                    "expected_result": "deterministic Solidity preview text without deployment, file writes, secrets, wallet, chain, or RPC interaction",
+                },
+                "accepted_proof_kinds": [
+                    "target_client_safe_probe_result",
+                    "pi_safe_probe_result",
+                ],
+                "validation_result_shape": {
+                    "status": "passed",
+                    "target_client_visible": True,
+                    "proof_kind": "target_client_safe_probe_result",
+                    "safe_probe_result": "passed",
+                    "safe_probe_id": "solidity-erc20-preview",
+                    "verification_trace_refs": [
+                        "contextforge://control-plane/traces/openzeppelin-target-client"
+                    ],
+                },
+                "forbidden_substitutions": [
+                    "remote availability",
+                    "package documentation lookup",
+                    "direct backend call",
+                    "generated code audit claim",
+                    "deployment approval",
+                    "file write",
+                    "project mutation",
+                    "wallet or private key",
+                    "chain or RPC interaction",
+                    "secret-bearing input",
+                ],
+            },
             "requires_mutation_approval": False,
         },
     }
