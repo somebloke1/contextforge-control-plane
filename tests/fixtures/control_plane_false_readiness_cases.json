@@ -1,0 +1,546 @@
+{
+  "version": 1,
+  "generated_at": "2026-06-18T12:00:00Z",
+  "max_evidence_age_seconds": 86400,
+  "cases": [
+    {
+      "name": "supported_pi_target_client_ready",
+      "description": "A current Pi-visible list/call proof with a scoped token supports the target-client readiness claim.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "pi",
+        "service_binding": "contextforge-global-shim",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/supported/model.json"
+        },
+        "scoped_probe_token": {
+          "present": true,
+          "revoked": false,
+          "scope": "client-visible-validation",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/supported/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": true,
+          "client": "pi",
+          "fixture_ref": "docker/client-harness/config/pi/AGENTS.md#contextforge-global-shim",
+          "ref": "run/false-readiness/supported/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "target_client_tool_call",
+          "client": "pi",
+          "exercised_surface": "target_client",
+          "status": "passed",
+          "backend_only": false,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "tool_call": {
+            "status": "passed",
+            "result_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "ref": "run/false-readiness/supported/client-visible-proof.json"
+        },
+        "wrapper": {
+          "status": "passed",
+          "ref": "run/false-readiness/supported/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "allow_readiness_claim",
+        "failure_reason_ids": []
+      }
+    },
+    {
+      "name": "stale_model_id_for_pi_claim",
+      "description": "A run using an old or mismatched model id cannot be reported as current readiness proof.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "pi",
+        "service_binding": "contextforge-global-shim",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b-q4",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/stale-model/model.json"
+        },
+        "scoped_probe_token": {
+          "present": true,
+          "revoked": false,
+          "scope": "client-visible-validation",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/stale-model/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": true,
+          "client": "pi",
+          "fixture_ref": "docker/client-harness/config/pi/AGENTS.md#contextforge-global-shim",
+          "ref": "run/false-readiness/stale-model/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "target_client_tool_call",
+          "client": "pi",
+          "exercised_surface": "target_client",
+          "status": "passed",
+          "backend_only": false,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "tool_call": {
+            "status": "passed",
+            "result_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "ref": "run/false-readiness/stale-model/client-visible-proof.json"
+        },
+        "wrapper": {
+          "status": "passed",
+          "ref": "run/false-readiness/stale-model/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "block_readiness_claim",
+        "failure_reason_ids": [
+          "stale_or_mismatched_model_id"
+        ]
+      }
+    },
+    {
+      "name": "absent_scoped_probe_token_for_pi_claim",
+      "description": "A target-client proof without a scoped probe token is not acceptance evidence.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "pi",
+        "service_binding": "contextforge-global-shim",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/absent-token/model.json"
+        },
+        "scoped_probe_token": {
+          "present": false,
+          "revoked": false,
+          "scope": null,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/absent-token/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": true,
+          "client": "pi",
+          "fixture_ref": "docker/client-harness/config/pi/AGENTS.md#contextforge-global-shim",
+          "ref": "run/false-readiness/absent-token/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "target_client_tool_call",
+          "client": "pi",
+          "exercised_surface": "target_client",
+          "status": "passed",
+          "backend_only": false,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "tool_call": {
+            "status": "passed",
+            "result_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          "ref": "run/false-readiness/absent-token/client-visible-proof.json"
+        },
+        "wrapper": {
+          "status": "passed",
+          "ref": "run/false-readiness/absent-token/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "block_readiness_claim",
+        "failure_reason_ids": [
+          "absent_scoped_probe_token"
+        ]
+      }
+    },
+    {
+      "name": "revoked_scoped_probe_token_for_pi_claim",
+      "description": "A revoked scoped token invalidates an otherwise target-client-shaped proof.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "pi",
+        "service_binding": "contextforge-global-shim",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/revoked-token/model.json"
+        },
+        "scoped_probe_token": {
+          "present": true,
+          "revoked": true,
+          "scope": "client-visible-validation",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/revoked-token/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": true,
+          "client": "pi",
+          "fixture_ref": "docker/client-harness/config/pi/AGENTS.md#contextforge-global-shim",
+          "ref": "run/false-readiness/revoked-token/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "target_client_tool_call",
+          "client": "pi",
+          "exercised_surface": "target_client",
+          "status": "passed",
+          "backend_only": false,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "tool_call": {
+            "status": "passed",
+            "result_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "ref": "run/false-readiness/revoked-token/client-visible-proof.json"
+        },
+        "wrapper": {
+          "status": "passed",
+          "ref": "run/false-readiness/revoked-token/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "block_readiness_claim",
+        "failure_reason_ids": [
+          "revoked_scoped_probe_token"
+        ]
+      }
+    },
+    {
+      "name": "missing_pi_client_binding_fixture",
+      "description": "Host Pi readiness cannot be claimed without a Pi binding fixture for the exercised path.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "pi",
+        "service_binding": "contextforge-global-shim",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/missing-pi-binding/model.json"
+        },
+        "scoped_probe_token": {
+          "present": true,
+          "revoked": false,
+          "scope": "client-visible-validation",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/missing-pi-binding/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": false,
+          "client": "pi",
+          "fixture_ref": null,
+          "ref": "run/false-readiness/missing-pi-binding/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "target_client_tool_call",
+          "client": "pi",
+          "exercised_surface": "target_client",
+          "status": "passed",
+          "backend_only": false,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "tool_call": {
+            "status": "passed",
+            "result_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+          },
+          "ref": "run/false-readiness/missing-pi-binding/client-visible-proof.json"
+        },
+        "wrapper": {
+          "status": "passed",
+          "ref": "run/false-readiness/missing-pi-binding/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "block_readiness_claim",
+        "failure_reason_ids": [
+          "missing_client_binding_fixture"
+        ]
+      }
+    },
+    {
+      "name": "missing_opencode_client_binding_fixture",
+      "description": "OpenCode readiness cannot be claimed without an OpenCode binding fixture for the exercised path.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "opencode",
+        "service_binding": "contextforge-helper",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/missing-opencode-binding/model.json"
+        },
+        "scoped_probe_token": {
+          "present": true,
+          "revoked": false,
+          "scope": "client-visible-validation",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/missing-opencode-binding/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": false,
+          "client": "opencode",
+          "fixture_ref": null,
+          "ref": "run/false-readiness/missing-opencode-binding/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "target_client_tool_call",
+          "client": "opencode",
+          "exercised_surface": "target_client",
+          "status": "passed",
+          "backend_only": false,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "tool_call": {
+            "status": "passed",
+            "result_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+          },
+          "ref": "run/false-readiness/missing-opencode-binding/client-visible-proof.json"
+        },
+        "wrapper": {
+          "status": "passed",
+          "ref": "run/false-readiness/missing-opencode-binding/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "block_readiness_claim",
+        "failure_reason_ids": [
+          "missing_client_binding_fixture"
+        ]
+      }
+    },
+    {
+      "name": "backend_only_claimed_as_client_visible",
+      "description": "Backend health cannot be promoted to target-client readiness.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "pi",
+        "service_binding": "contextforge-global-shim",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/backend-only/model.json"
+        },
+        "scoped_probe_token": {
+          "present": true,
+          "revoked": false,
+          "scope": "client-visible-validation",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/backend-only/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": true,
+          "client": "pi",
+          "fixture_ref": "docker/client-harness/config/pi/AGENTS.md#contextforge-global-shim",
+          "ref": "run/false-readiness/backend-only/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "backend_health",
+          "client": "pi",
+          "exercised_surface": "backend",
+          "status": "passed",
+          "backend_only": true,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "tool_call": {
+            "status": "passed",
+            "result_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "ref": "run/false-readiness/backend-only/backend-health.json"
+        },
+        "wrapper": {
+          "status": "passed",
+          "ref": "run/false-readiness/backend-only/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "block_readiness_claim",
+        "failure_reason_ids": [
+          "backend_only_claimed_client_visible"
+        ]
+      }
+    },
+    {
+      "name": "wrapper_tool_call_failure_for_opencode_claim",
+      "description": "A wrapper/tool-call error blocks target-client readiness even when setup evidence is current.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "opencode",
+        "service_binding": "contextforge-helper",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/wrapper-failure/model.json"
+        },
+        "scoped_probe_token": {
+          "present": true,
+          "revoked": false,
+          "scope": "client-visible-validation",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/wrapper-failure/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": true,
+          "client": "opencode",
+          "fixture_ref": "docker/client-harness/config/opencode/plugins/contextforge-project-init.js#contextforge-project-init",
+          "ref": "run/false-readiness/wrapper-failure/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "target_client_tool_call",
+          "client": "opencode",
+          "exercised_surface": "target_client",
+          "status": "failed",
+          "backend_only": false,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "tool_call": {
+            "status": "failed",
+            "error_class": "tool_call_timeout"
+          },
+          "ref": "run/false-readiness/wrapper-failure/client-visible-proof.json"
+        },
+        "wrapper": {
+          "status": "failed",
+          "error_class": "contextforge_wrapper_timeout",
+          "ref": "run/false-readiness/wrapper-failure/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "block_readiness_claim",
+        "failure_reason_ids": [
+          "wrapper_tool_call_failure"
+        ]
+      }
+    },
+    {
+      "name": "stale_timestamp_for_pi_claim",
+      "description": "Old target-client evidence must not be reported as current readiness.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "pi",
+        "service_binding": "contextforge-global-shim",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/stale-timestamp/model.json"
+        },
+        "scoped_probe_token": {
+          "present": true,
+          "revoked": false,
+          "scope": "client-visible-validation",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/stale-timestamp/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": true,
+          "client": "pi",
+          "fixture_ref": "docker/client-harness/config/pi/AGENTS.md#contextforge-global-shim",
+          "ref": "run/false-readiness/stale-timestamp/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "target_client_tool_call",
+          "client": "pi",
+          "exercised_surface": "target_client",
+          "status": "passed",
+          "backend_only": false,
+          "observed_at": "2026-06-15T11:45:00Z",
+          "tool_call": {
+            "status": "passed",
+            "result_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+          },
+          "ref": "run/false-readiness/stale-timestamp/client-visible-proof.json"
+        },
+        "wrapper": {
+          "status": "passed",
+          "ref": "run/false-readiness/stale-timestamp/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "block_readiness_claim",
+        "failure_reason_ids": [
+          "stale_timestamp"
+        ]
+      }
+    },
+    {
+      "name": "wrong_exercised_surface_for_opencode_claim",
+      "description": "A target-client-shaped proof from the wrong exercised surface cannot prove the claimed surface.",
+      "claim": {
+        "status": "target_client_ready",
+        "target_client": "opencode",
+        "service_binding": "contextforge-helper",
+        "expected_model_id": "qwen3.6-a3b",
+        "expected_exercised_surface": "target_client"
+      },
+      "evidence": {
+        "model": {
+          "model_id": "qwen3.6-a3b",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/wrong-surface/model.json"
+        },
+        "scoped_probe_token": {
+          "present": true,
+          "revoked": false,
+          "scope": "client-visible-validation",
+          "observed_at": "2026-06-18T11:45:00Z",
+          "ref": "run/false-readiness/wrong-surface/probe-token.redacted.json"
+        },
+        "client_binding_fixture": {
+          "present": true,
+          "client": "opencode",
+          "fixture_ref": "docker/client-harness/config/opencode/plugins/contextforge-project-init.js#contextforge-project-init",
+          "ref": "run/false-readiness/wrong-surface/client-binding.json"
+        },
+        "proof": {
+          "proof_type": "target_client_tool_call",
+          "client": "pi",
+          "exercised_surface": "contextforge_dev_docker",
+          "status": "passed",
+          "backend_only": false,
+          "observed_at": "2026-06-18T11:45:00Z",
+          "tool_call": {
+            "status": "passed",
+            "result_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+          },
+          "ref": "run/false-readiness/wrong-surface/client-visible-proof.json"
+        },
+        "wrapper": {
+          "status": "passed",
+          "ref": "run/false-readiness/wrong-surface/wrapper.json"
+        }
+      },
+      "expected": {
+        "decision": "block_readiness_claim",
+        "failure_reason_ids": [
+          "wrong_exercised_surface"
+        ]
+      }
+    }
+  ]
+}

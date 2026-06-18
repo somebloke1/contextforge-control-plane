@@ -77,6 +77,22 @@ Do not claim:
 - validation success from a skipped probe unless the claim is explicitly
   `presumed_working`.
 
+## False-Readiness Fixture Reasons
+
+`tests/fixtures/control_plane_false_readiness_cases.json` provides
+deterministic negative fixtures for source-only reporting checks. The fixture
+does not validate live runtime behavior; it verifies that the reporting layer
+keeps common false-readiness reasons distinct:
+
+- `stale_or_mismatched_model_id`
+- `absent_scoped_probe_token`
+- `revoked_scoped_probe_token`
+- `missing_client_binding_fixture`
+- `backend_only_claimed_client_visible`
+- `wrapper_tool_call_failure`
+- `stale_timestamp`
+- `wrong_exercised_surface`
+
 ## Claim Template
 
 When reporting readiness, use this shape:
