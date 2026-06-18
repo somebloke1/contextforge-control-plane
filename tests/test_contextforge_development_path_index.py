@@ -275,9 +275,9 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "In Review",
             "Done",
             "Deferred",
-            "gh project item-list 6 --owner somebloke1",
+            'gh project item-list 6 --owner "$CONTEXTFORGE_GITHUB_PROJECT_OWNER"',
             "--query '-status:Done'",
-            "gh api repos/somebloke1/contextforge-control-plane/issues",
+            'gh api "repos/$CONTEXTFORGE_GITHUB_REPO/issues?state=open&per_page=60"',
             "gh api rate_limit",
             "direct GraphQL batch",
         ]:

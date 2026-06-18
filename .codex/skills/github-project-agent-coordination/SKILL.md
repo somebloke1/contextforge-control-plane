@@ -315,11 +315,11 @@ mutations small, explicit, and evidence-backed.
 ## Useful Commands
 
 ```sh
-gh project view 6 --owner somebloke1 --format json
-gh project field-list 6 --owner somebloke1 --format json
-gh project item-list 6 --owner somebloke1 --format json --limit 100
-gh project item-list 6 --owner somebloke1 --format json --query '-status:Done' --limit 80
-gh api repos/somebloke1/contextforge-control-plane/issues?state=open\&per_page=60
+gh project view 6 --owner "$CONTEXTFORGE_GITHUB_PROJECT_OWNER" --format json
+gh project field-list 6 --owner "$CONTEXTFORGE_GITHUB_PROJECT_OWNER" --format json
+gh project item-list 6 --owner "$CONTEXTFORGE_GITHUB_PROJECT_OWNER" --format json --limit 100
+gh project item-list 6 --owner "$CONTEXTFORGE_GITHUB_PROJECT_OWNER" --format json --query '-status:Done' --limit 80
+gh api "repos/$CONTEXTFORGE_GITHUB_REPO/issues?state=open&per_page=60"
 gh api rate_limit --jq '{core:.resources.core, graphql:.resources.graphql}'
 ```
 
