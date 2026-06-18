@@ -13,6 +13,13 @@ The canonical source-edit workspace is now
 `/home/dgk/workspace/cf-controlplane`. New source truth belongs there unless
 the user explicitly directs a legacy compatibility edit.
 
+Current development path index:
+
+- `docs/contextforge-development-path-index.md` names the active post-migration
+  development lanes, maps current issues and PRs, records gap issue
+  candidates, and preserves the legacy/live, ContextForge dev Docker, Pi
+  client Docker, and OpenCode client Docker surface boundaries.
+
 Current tracker topology:
 
 - issue #15 is closed; it is historical retirement context, not the active
