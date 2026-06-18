@@ -68,25 +68,24 @@ or project-init apply/recovery state.
 Open issues:
 
 - #52: guided MCP service-onboarding helper.
-- #89: client-visible activation UX matrix for Codex, Pi, and OpenCode.
+- #91: post-merge refresh for this development path index after #88/#90
+  landed.
 - #3: host Pi global ContextForge shim prompt/resource parity and live
   Pi-visible readback.
 - #2: deferred Serena runtime blockers for the later migration/cutoff phase.
 
-Recent or active PR topology:
+Recent PR topology:
 
 - #87 merged the #52 source/docs/tests fixture increment for bridged stdio,
   credential-scoped, and client/session-local onboarding examples.
-- #88 is the current source/docs/tests path-index refresh vehicle. Do not
-  treat this bullet as durable open-PR topology after #88 merges; refresh from
-  GitHub Project #6 and live PR state instead.
-- #90 is the current source/docs/tests client-visible activation matrix
-  vehicle. It closes #89 and should follow #88 in the review queue so the
-  path-index and Project #6 coordination practice land first.
+- #88 merged the source/docs/tests path-index refresh, including Project #6
+  coordination practice and workflow knowledge persistence.
+- #90 merged the client-visible activation matrix source/docs/tests slice and
+  closed #89.
 
-Recently closed path-setting issues include #79, #83, #85, #62, #58, #50,
-#41, #37, #31, #25, and #66. They are evidence and history, not substitutes
-for current path ownership.
+Recently closed path-setting issues include #89, #79, #83, #85, #62, #58,
+#50, #41, #37, #31, #25, and #66. They are evidence and history, not
+substitutes for current path ownership.
 
 ## Named Development Paths
 
@@ -153,7 +152,7 @@ Current state:
 
 Near-term gap:
 
-- After #90 merges, keep client-visible validation claims tied to the matrix:
+- After #90, keep client-visible validation claims tied to the matrix:
   do not generalize #62 Pi/OpenCode client Docker proof to host Pi global
   install/reload, host OpenCode global config, or Codex hook activation.
 
