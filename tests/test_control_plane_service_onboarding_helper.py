@@ -261,6 +261,85 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual(2, output["dialogue_session"]["turn_index"])
         self.assertEqual(["source_discovery", "handoff"], output["dialogue_session"]["state_history"])
 
+    def test_cli_saves_and_resumes_from_local_ignored_session_store(self) -> None:
+        descriptor = {
+            "classification": {
+                "plan_type": "source_only_scaffolding",
+                "localization_type": "shared_canonical",
+                "functional_type": "search_retrieval",
+                "transport_type": "streamable_http",
+                "state_type": "stateless",
+                "approval_type": "source_only",
+            },
+            "source_evidence": [{"type": "package", "ref": "unknown-service"}],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
+            session_dir = project_root / "run/service-onboarding-sessions"
+            session_path = session_dir / "svc-onboarding-local-store.json"
+            descriptor_path = project_root / "descriptor.json"
+            descriptor_path.write_text(json.dumps(descriptor), encoding="utf-8")
+
+            first = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--descriptor",
+                    str(FIXTURE),
+                    "--case",
+                    "missing_evidence_prompts_questions",
+                    "--project-root",
+                    str(project_root),
+                    "--issue",
+                    "#52",
+                    "--session-id",
+                    "svc-onboarding-local-store",
+                    "--save-session",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            first_output = json.loads(first.stdout)
+
+            second = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--descriptor",
+                    str(descriptor_path),
+                    "--project-root",
+                    str(project_root),
+                    "--issue",
+                    "#52",
+                    "--resume-session",
+                    "svc-onboarding-local-store",
+                    "--save-session",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            second_output = json.loads(second.stdout)
+            session_exists = session_path.exists()
+            saved_output = json.loads(session_path.read_text(encoding="utf-8"))
+
+        self.assertEqual("", first.stderr)
+        self.assertEqual("", second.stderr)
+        self.assertTrue(session_exists)
+        self.assertEqual("needs_user_input", first_output["status"])
+        self.assertEqual("local_ignored_session_file", first_output["dialogue_session"]["storage_mode"])
+        self.assertTrue(first_output["dialogue_session"]["write_persistence"])
+        self.assertEqual(str(session_path), first_output["dialogue_session"]["session_record_path"])
+        self.assertEqual("ready_for_handoff", second_output["status"])
+        self.assertEqual("previous_record", second_output["dialogue_session"]["resume_source"])
+        self.assertEqual(2, second_output["dialogue_session"]["turn_index"])
+        self.assertEqual("local_ignored_session_file", second_output["dialogue_session"]["storage_mode"])
+        self.assertTrue(second_output["dialogue_session"]["write_persistence"])
+        self.assertEqual(second_output, saved_output)
+
     def test_descriptor_must_be_mapping(self) -> None:
         with self.assertRaises(helper.ServiceOnboardingInputError):
             helper.build_onboarding_record(["not", "a", "mapping"])  # type: ignore[arg-type]
@@ -268,6 +347,15 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
     def test_previous_record_must_include_source_descriptor_for_resume(self) -> None:
         with self.assertRaises(helper.ServiceOnboardingInputError):
             helper.build_onboarding_record({}, previous_record={"status": "needs_user_input"})
+
+    def test_local_session_store_rejects_unignored_or_traversing_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(helper.ServiceOnboardingInputError):
+                helper.resolve_session_dir("service-onboarding-sessions", project_root=tmp)
+            session_dir = helper.resolve_session_dir("run/service-onboarding-sessions", project_root=tmp)
+            with self.assertRaises(helper.ServiceOnboardingInputError):
+                helper.session_record_path(session_dir, "../bad")
+            self.assertEqual(session_dir / "safe-session_1.json", helper.session_record_path(session_dir, "safe-session_1"))
 
 
 def _blockers(record: dict[str, object]) -> list[dict[str, str]]:

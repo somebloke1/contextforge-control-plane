@@ -3,9 +3,10 @@
 Issue #52 requests a stateful helper process for onboarding new MCP services
 into the cf-controlplane service offering. This document records the source-only
 contract and current deterministic record/resume CLI for that helper. It is not
-a runtime daemon, file-backed session store, or live service implementation, and
-it must not mutate ContextForge, Docker, client, global, service, registry,
-systemd, hook, trust, secret, Pi, or legacy archive state.
+a runtime daemon or live service implementation. Its durable session storage is
+opt-in and limited to project-local ignored files under `run/`; it must not
+mutate ContextForge, Docker, client, global, service, registry, systemd, hook,
+trust, secret, Pi, or legacy archive state.
 
 ## Outcome
 
@@ -181,9 +182,46 @@ new descriptor and emits `dialogue_session` metadata containing:
 
 This resume envelope makes stateful human-agent dialogue reviewable without
 introducing hidden local files, daemon state, ContextForge API calls, Docker
-mutation, client/global config writes, or secret handling. Durable storage,
-long-running helper behavior, and richer session management remain later slices
-that need their own evidence and approval boundaries.
+mutation, client/global config writes, or secret handling.
+
+## Local Ignored Session Store
+
+The helper can optionally persist the emitted record under the project-local
+ignored `run/service-onboarding-sessions/` directory:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboarding_helper.py \
+  --descriptor updated-service-evidence.json \
+  --session-id svc-onboarding-example \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --issue '#52' \
+  --save-session
+```
+
+A later turn may resume by stable session id instead of passing a previous
+record path:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboarding_helper.py \
+  --descriptor updated-service-evidence.json \
+  --resume-session svc-onboarding-example \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --issue '#52' \
+  --save-session
+```
+
+When `--save-session` is present, `dialogue_session` records
+`storage_mode: local_ignored_session_file`, `write_persistence: true`, and the
+exact `session_record_path`. Session identifiers are restricted to safe
+letters, digits, dots, underscores, and dashes, and the session directory must
+resolve inside the project-local ignored `run/` tree. Without `--save-session`,
+the helper remains stdout-only and does not create files.
+
+This local store is for resumable planning records only. It is not a daemon,
+registry, service runtime, Docker state, client installation, secret store,
+hook state, or approval bypass. Long-running helper behavior and richer
+session management remain later slices that need their own evidence and
+approval boundaries.
 
 ## Fixture Coverage
 
