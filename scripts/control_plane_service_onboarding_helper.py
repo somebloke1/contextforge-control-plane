@@ -388,6 +388,74 @@ def list_session_statuses(session_dir: Path) -> dict[str, Any]:
     return result
 
 
+def build_session_template(record: Mapping[str, Any], *, session_record_path: str | None = None) -> dict[str, Any]:
+    """Build a deterministic descriptor patch scaffold for resuming a saved session."""
+
+    if not isinstance(record, Mapping):
+        raise ServiceOnboardingInputError("session record must be a mapping")
+
+    status = build_session_status(record, session_record_path=session_record_path)
+    classification = _mapping(record.get("classification"))
+    footprint = _mapping(record.get("footprint_plan"))
+    feasibility = _mapping(record.get("feasibility"))
+
+    descriptor_patch: dict[str, Any] = {}
+    if not _first_string(record.get("candidate_service")):
+        descriptor_patch["candidate_service"] = "<candidate service name>"
+    if not _first_string(record.get("operator_goal")):
+        descriptor_patch["operator_goal"] = "<operator outcome this service should support>"
+    if not _as_list(record.get("source_evidence")):
+        descriptor_patch["source_evidence"] = [
+            {"type": "<docs|package|repository|local_path|issue>", "ref": "<source reference>"}
+        ]
+
+    classification_patch = {}
+    for dimension, allowed in CLASSIFICATION_VALUES.items():
+        entry = _mapping(classification.get(dimension))
+        if entry.get("status") != "known":
+            classification_patch[dimension] = f"<one of: {', '.join(sorted(allowed))}>"
+    if classification_patch:
+        descriptor_patch["classification"] = classification_patch
+
+    service_slug = _first_string(footprint.get("service_slug"))
+    if not service_slug:
+        descriptor_patch["footprint_plan"] = {"service_slug": "<stable-service-slug>"}
+
+    evidence_gaps = _string_list(feasibility.get("evidence_gaps"))
+    if evidence_gaps:
+        descriptor_patch["feasibility"] = {
+            "evidence_gaps": [],
+            "notes": [f"<evidence resolving {gap}>" for gap in evidence_gaps],
+        }
+
+    session_id = status["session_id"]
+    rerun_guidance = {
+        "descriptor_path": "<project-local descriptor patch JSON path>",
+        "command": (
+            "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python "
+            "scripts/control_plane_service_onboarding_helper.py "
+            "--descriptor <descriptor-patch.json> "
+            f"--resume-session {session_id} "
+            "--project-root <project-root> "
+            "--issue <issue> "
+            "--save-session"
+        ),
+        "write_persistence": False,
+    }
+
+    result = {
+        "schema_uri": SESSION_SCHEMA_URI,
+        "summary_type": "service_onboarding_resume_template",
+        "mutation_allowed": False,
+        "session": status,
+        "next_questions": _string_list(record.get("next_questions")),
+        "descriptor_patch_template": descriptor_patch,
+        "rerun_guidance": rerun_guidance,
+    }
+    _validate_no_secret_leaks(result)
+    return result
+
+
 def _decision_log(
     turn_index: int,
     classification: Mapping[str, Mapping[str, str | None]],
@@ -856,6 +924,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--resume-session", default=None, help="Load the previous record from the local ignored session store")
     parser.add_argument("--session-status", default=None, help="Emit a compact no-mutation status summary for a saved session")
     parser.add_argument("--list-sessions", action="store_true", help="List compact no-mutation summaries for saved sessions")
+    parser.add_argument("--session-template", default=None, help="Emit a no-mutation descriptor patch scaffold for a saved session")
     parser.add_argument("--session-id", default=None, help="Stable session id to include in dialogue metadata")
     parser.add_argument("--session-dir", default=str(DEFAULT_SESSION_DIR), help="Project-local ignored session directory under run/")
     parser.add_argument("--save-session", action="store_true", help="Persist the emitted record to the local ignored session store")
@@ -863,7 +932,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.list_sessions:
-        if args.descriptor or args.case or args.previous_record or args.resume_session or args.session_status or args.save_session:
+        if (
+            args.descriptor
+            or args.case
+            or args.previous_record
+            or args.resume_session
+            or args.session_status
+            or args.session_template
+            or args.save_session
+        ):
             raise ServiceOnboardingInputError("--list-sessions cannot be combined with descriptor, resume, status, or write options")
         session_dir = resolve_session_dir(args.session_dir, project_root=args.project_root)
         print(
@@ -877,8 +954,24 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    if args.session_template:
+        if args.descriptor or args.case or args.previous_record or args.resume_session or args.session_status or args.save_session:
+            raise ServiceOnboardingInputError("--session-template cannot be combined with descriptor, resume, status, list, or write options")
+        session_dir = resolve_session_dir(args.session_dir, project_root=args.project_root)
+        path = session_record_path(session_dir, args.session_template)
+        print(
+            json.dumps(
+                build_session_template(load_session_record(session_dir, args.session_template), session_record_path=str(path)),
+                indent=2 if args.pretty else None,
+                sort_keys=True,
+            )
+            + "\n",
+            end="",
+        )
+        return 0
+
     if args.session_status:
-        if args.descriptor or args.case or args.previous_record or args.resume_session or args.save_session:
+        if args.descriptor or args.case or args.previous_record or args.resume_session or args.session_template or args.save_session:
             raise ServiceOnboardingInputError("--session-status cannot be combined with descriptor, resume, or write options")
         session_dir = resolve_session_dir(args.session_dir, project_root=args.project_root)
         path = session_record_path(session_dir, args.session_status)
@@ -894,7 +987,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if not args.descriptor:
-        raise ServiceOnboardingInputError("--descriptor is required unless --session-status is used")
+        raise ServiceOnboardingInputError("--descriptor is required unless a saved-session readback mode is used")
     if args.previous_record and args.resume_session:
         raise ServiceOnboardingInputError("use either --previous-record or --resume-session, not both")
 

@@ -582,6 +582,138 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
                 )
                 self.assertNotEqual(0, result.returncode)
 
+    def test_build_session_template_scaffolds_missing_resume_inputs(self) -> None:
+        record = helper.build_onboarding_record(
+            self.cases["missing_evidence_prompts_questions"]["descriptor"],  # type: ignore[arg-type]
+            project_root=PROJECT_ROOT,
+            issue="#52",
+            session_id="missing-service-evidence",
+            storage_mode=helper.LOCAL_SESSION_STORAGE_MODE,
+            write_persistence=True,
+            session_record_path="/tmp/project/run/service-onboarding-sessions/missing.json",
+        )
+
+        template = helper.build_session_template(record, session_record_path="/tmp/project/run/service-onboarding-sessions/missing.json")
+
+        self.assertEqual("service_onboarding_resume_template", template["summary_type"])
+        self.assertFalse(template["mutation_allowed"])
+        self.assertEqual("missing-service-evidence", template["session"]["session_id"])
+        self.assertEqual("needs_user_input", template["session"]["status"])
+        self.assertNotIn("source_descriptor", template["session"])
+        self.assertIn(
+            "What upstream docs, package names, commands, local paths, or issue links prove the service shape?",
+            template["next_questions"],
+        )
+        patch = template["descriptor_patch_template"]
+        self.assertEqual(
+            [{"type": "<docs|package|repository|local_path|issue>", "ref": "<source reference>"}],
+            patch["source_evidence"],
+        )
+        self.assertIn("plan_type", patch["classification"])
+        self.assertIn("source_only_scaffolding", patch["classification"]["plan_type"])
+        self.assertEqual([], patch["feasibility"]["evidence_gaps"])
+        self.assertIn("--resume-session missing-service-evidence", template["rerun_guidance"]["command"])
+        self.assertFalse(template["rerun_guidance"]["write_persistence"])
+
+        slugless_record = helper.build_onboarding_record(
+            {
+                "operator_goal": "prove footprint scaffolding",
+                "source_evidence": [{"type": "docs", "ref": "https://example.invalid/service"}],
+                "classification": {
+                    "plan_type": "source_only_scaffolding",
+                    "localization_type": "shared_canonical",
+                    "functional_type": "search_retrieval",
+                    "transport_type": "streamable_http",
+                    "state_type": "stateless",
+                    "approval_type": "source_only",
+                },
+            },
+            project_root=PROJECT_ROOT,
+            issue="#52",
+            session_id="slugless-service",
+        )
+        slugless_template = helper.build_session_template(slugless_record)
+        self.assertEqual("<stable-service-slug>", slugless_template["descriptor_patch_template"]["footprint_plan"]["service_slug"])
+
+    def test_cli_session_template_reads_store_without_rewriting_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
+            session_id = "svc-onboarding-template-cli"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--descriptor",
+                    str(FIXTURE),
+                    "--case",
+                    "missing_evidence_prompts_questions",
+                    "--project-root",
+                    str(project_root),
+                    "--issue",
+                    "#52",
+                    "--session-id",
+                    session_id,
+                    "--save-session",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            session_path = project_root / "run/service-onboarding-sessions" / f"{session_id}.json"
+            before = session_path.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--project-root",
+                    str(project_root),
+                    "--session-template",
+                    session_id,
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            after = session_path.read_text(encoding="utf-8")
+            output = json.loads(result.stdout)
+
+        self.assertEqual("", result.stderr)
+        self.assertEqual(before, after)
+        self.assertEqual("service_onboarding_resume_template", output["summary_type"])
+        self.assertEqual(session_id, output["session"]["session_id"])
+        self.assertFalse(output["mutation_allowed"])
+        self.assertIn("classification", output["descriptor_patch_template"])
+        self.assertIn("source_evidence", output["descriptor_patch_template"])
+
+    def test_cli_session_template_rejects_descriptor_status_list_resume_or_write_combinations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            for extra_args in [
+                ["--descriptor", str(FIXTURE)],
+                ["--save-session"],
+                ["--resume-session", "same-session"],
+                ["--previous-record", str(FIXTURE)],
+                ["--session-status", "same-session"],
+                ["--list-sessions"],
+            ]:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                        "--project-root",
+                        tmp,
+                        "--session-template",
+                        "same-session",
+                        *extra_args,
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                self.assertNotEqual(0, result.returncode)
+
     def test_descriptor_must_be_mapping(self) -> None:
         with self.assertRaises(helper.ServiceOnboardingInputError):
             helper.build_onboarding_record(["not", "a", "mapping"])  # type: ignore[arg-type]
