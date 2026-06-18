@@ -315,6 +315,58 @@ def save_session_record(record: Mapping[str, Any], session_dir: Path) -> Path:
     return path
 
 
+def build_session_status(record: Mapping[str, Any], *, session_record_path: str | None = None) -> dict[str, Any]:
+    """Build a compact no-mutation readback summary for a saved onboarding session."""
+
+    if not isinstance(record, Mapping):
+        raise ServiceOnboardingInputError("session record must be a mapping")
+    session = _mapping(record.get("dialogue_session"))
+    classification = _mapping(record.get("classification"))
+    strategy = _mapping(record.get("integration_strategy"))
+    approvals = _mapping(record.get("approval_gate"))
+
+    known_dimensions = sorted(
+        dimension
+        for dimension, entry in classification.items()
+        if isinstance(entry, Mapping) and entry.get("status") == "known"
+    )
+    open_dimensions = sorted(
+        dimension
+        for dimension, entry in classification.items()
+        if not isinstance(entry, Mapping) or entry.get("status") != "known"
+    )
+    summary = {
+        "schema_uri": SESSION_SCHEMA_URI,
+        "summary_type": "service_onboarding_session_status",
+        "session_id": _first_string(session.get("session_id")) or "unassigned",
+        "candidate_service": _first_string(record.get("candidate_service")),
+        "status": _first_string(record.get("status")),
+        "current_state": _first_string(record.get("current_state")),
+        "turn_index": session.get("turn_index"),
+        "state_history": _string_list(session.get("state_history")),
+        "storage_mode": _first_string(session.get("storage_mode")) or "unknown",
+        "write_persistence": bool(session.get("write_persistence")),
+        "mutation_allowed": bool(record.get("mutation_allowed")),
+        "classification_known": known_dimensions,
+        "classification_open": open_dimensions,
+        "primary_paradigm": _first_string(strategy.get("primary_paradigm")),
+        "secondary_validation_paradigms": _string_list(strategy.get("secondary_validation_paradigms")),
+        "approval_required": bool(approvals.get("approval_required")),
+        "required_approval_types": _string_list(approvals.get("required_approval_types")),
+        "answered_questions": _string_list(session.get("answered_questions")),
+        "next_questions": _string_list(record.get("next_questions")),
+        "next_resume_inputs": _string_list(session.get("next_resume_inputs")),
+        "next_issue_pr_steps": _string_list(record.get("next_issue_pr_steps")),
+        "residual_risks": _string_list(record.get("residual_risks")),
+    }
+    if session_record_path:
+        summary["session_record_path"] = session_record_path
+    elif _first_string(session.get("session_record_path")):
+        summary["session_record_path"] = _first_string(session.get("session_record_path"))
+    _validate_no_secret_leaks(summary)
+    return summary
+
+
 def _decision_log(
     turn_index: int,
     classification: Mapping[str, Mapping[str, str | None]],
@@ -775,18 +827,37 @@ def _load_record(path: str) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build a no-mutation ContextForge service-onboarding record.")
-    parser.add_argument("--descriptor", required=True, help="JSON descriptor path, or '-' for stdin")
+    parser.add_argument("--descriptor", default=None, help="JSON descriptor path, or '-' for stdin")
     parser.add_argument("--case", default=None, help="Optional fixture case name containing a descriptor")
     parser.add_argument("--project-root", default=None)
     parser.add_argument("--issue", default=None)
     parser.add_argument("--previous-record", default=None, help="Optional prior onboarding record to resume from")
     parser.add_argument("--resume-session", default=None, help="Load the previous record from the local ignored session store")
+    parser.add_argument("--session-status", default=None, help="Emit a compact no-mutation status summary for a saved session")
     parser.add_argument("--session-id", default=None, help="Stable session id to include in dialogue metadata")
     parser.add_argument("--session-dir", default=str(DEFAULT_SESSION_DIR), help="Project-local ignored session directory under run/")
     parser.add_argument("--save-session", action="store_true", help="Persist the emitted record to the local ignored session store")
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args(argv)
 
+    if args.session_status:
+        if args.descriptor or args.case or args.previous_record or args.resume_session or args.save_session:
+            raise ServiceOnboardingInputError("--session-status cannot be combined with descriptor, resume, or write options")
+        session_dir = resolve_session_dir(args.session_dir, project_root=args.project_root)
+        path = session_record_path(session_dir, args.session_status)
+        print(
+            json.dumps(
+                build_session_status(load_session_record(session_dir, args.session_status), session_record_path=str(path)),
+                indent=2 if args.pretty else None,
+                sort_keys=True,
+            )
+            + "\n",
+            end="",
+        )
+        return 0
+
+    if not args.descriptor:
+        raise ServiceOnboardingInputError("--descriptor is required unless --session-status is used")
     if args.previous_record and args.resume_session:
         raise ServiceOnboardingInputError("use either --previous-record or --resume-session, not both")
 

@@ -217,6 +217,30 @@ letters, digits, dots, underscores, and dashes, and the session directory must
 resolve inside the project-local ignored `run/` tree. Without `--save-session`,
 the helper remains stdout-only and does not create files.
 
+## Session Status Readback
+
+Saved sessions can be inspected without a descriptor and without rewriting the
+session record:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboarding_helper.py \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --session-status svc-onboarding-example
+```
+
+This emits a compact status summary for agent-human resumption, including:
+
+- `session_id`, `status`, `current_state`, `turn_index`, and `state_history`;
+- known and open classification dimensions;
+- primary and secondary integration paradigms;
+- approval requirement and required approval types;
+- answered questions, next questions, next resume inputs, residual risks, and
+  next issue/PR steps;
+- `mutation_allowed: false`.
+
+`--session-status` is read-only. It cannot be combined with descriptor input,
+previous-record input, session resume input, or `--save-session`.
+
 This local store is for resumable planning records only. It is not a daemon,
 registry, service runtime, Docker state, client installation, secret store,
 hook state, or approval bypass. Long-running helper behavior and richer
