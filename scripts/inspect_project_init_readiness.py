@@ -42,6 +42,7 @@ PENDING_ACTIVATION_JOB_STATUSES = frozenset(
     }
 )
 NON_BLOCKING_CLIENT_STATUSES = frozenset({"verified", "presumed_working", "disabled"})
+RETIRED_COMPARISON_ROOT_STATUSES = frozenset({"disabled"})
 
 
 def _canonical(path: str | Path) -> Path:
@@ -622,7 +623,14 @@ def _readiness_findings(
         )
 
     compare_roots = roots[1:]
-    if any(str(root.get("readiness_status") or "") == "valid" for root in compare_roots):
+    active_valid_compare_roots = [
+        root
+        for root in compare_roots
+        if str(root.get("readiness_status") or "") == "valid"
+        and str(((root.get("state") if isinstance(root.get("state"), Mapping) else {}) or {}).get("raw_status") or "")
+        not in RETIRED_COMPARISON_ROOT_STATUSES
+    ]
+    if active_valid_compare_roots:
         warnings.append("comparison_root_has_valid_project_state")
         next_actions.append("Treat the comparison root as potentially live state until dirty-checkout retirement explicitly moves or retires it.")
 
