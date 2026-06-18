@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "docs/contextforge-development-path-index.md"
 ROADMAP = ROOT / "docs/project-status-roadmap-2026-06-16.md"
+PROJECT_SKILL = ROOT / ".codex/skills/github-project-agent-coordination/SKILL.md"
 
 
 class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
@@ -14,6 +15,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.index = INDEX.read_text(encoding="utf-8")
         cls.roadmap = ROADMAP.read_text(encoding="utf-8")
+        cls.project_skill = PROJECT_SKILL.read_text(encoding="utf-8")
 
     def test_index_names_required_development_paths(self) -> None:
         for heading in [
@@ -35,9 +37,11 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "#52: guided MCP service-onboarding helper",
             "#3: host Pi global ContextForge shim prompt/resource parity",
             "#2: deferred Serena runtime blockers",
-            "#87: draft #52 source/docs/tests fixture increment",
+            "#87 merged the #52 source/docs/tests fixture increment",
         ]:
             self.assertIn(reference, self.index)
+
+        self.assertIn("#88 is the current source/docs/tests path-index refresh vehicle", self.index)
 
     def test_index_preserves_surface_boundaries(self) -> None:
         for surface in [
@@ -66,6 +70,35 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
     def test_roadmap_links_current_path_index(self) -> None:
         self.assertIn("docs/contextforge-development-path-index.md", self.roadmap)
         self.assertIn("Current development path index", self.roadmap)
+
+    def test_agent_issue_view_protocol_is_recorded(self) -> None:
+        for text in [
+            "GitHub Project #6",
+            "`Agent Issue View`",
+            "`Agent state`",
+            "coordination index",
+            "successor",
+            "goals",
+        ]:
+            self.assertIn(text, self.index)
+            self.assertIn(text, self.roadmap)
+
+    def test_project_coordination_skill_defines_minimal_board_practice(self) -> None:
+        for text in [
+            "name: github-project-agent-coordination",
+            "Use GitHub Project #6",
+            "Read Project #6 `Agent Issue View` during SuperLoop re-entry",
+            "`Agent state`: agent-facing coordination state",
+            "Candidate",
+            "Ready",
+            "Active",
+            "Blocked",
+            "In Review",
+            "Done",
+            "Deferred",
+            "gh project item-list 6 --owner somebloke1",
+        ]:
+            self.assertIn(text, self.project_skill)
 
 
 if __name__ == "__main__":

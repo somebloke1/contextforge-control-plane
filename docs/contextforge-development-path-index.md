@@ -13,6 +13,24 @@ configs as discovery or consumption surfaces, keep project initialization state
 in `.project/context_forge_state.json`, and prove behavior through current
 evidence rather than inherited claims.
 
+## Agent Coordination Index
+
+GitHub Project #6, `cf-controlplane-project`, is the lightweight agent
+coordination index for current work selection. Its single required view is
+`Agent Issue View`; the board is not a duplicate roadmap, issue body, PR body,
+or evidence ledger.
+
+Agents should read `Agent Issue View` during SuperLoop re-entry before choosing
+or confirming the next subgoal, then reconcile its `Agent state` values against
+current GitHub issue/PR evidence. Agents should update `Agent state` only when
+a durable coordination transition occurs, such as a PR becoming ready for
+review, merging, blocking on approval, or an issue becoming deferred.
+
+The repo-local skill
+`.codex/skills/github-project-agent-coordination/SKILL.md` owns the detailed
+practice for this board. Preserve the board-use directive in successor formal
+goals so the practice survives goal refreshes and compaction.
+
 ## Surface Boundaries
 
 All path work must name the exercised surface:
@@ -43,10 +61,13 @@ Open issues:
   Pi-visible readback.
 - #2: deferred Serena runtime blockers for the later migration/cutoff phase.
 
-Open PRs:
+Recent or active PR topology:
 
-- #87: draft #52 source/docs/tests fixture increment for bridged stdio,
+- #87 merged the #52 source/docs/tests fixture increment for bridged stdio,
   credential-scoped, and client/session-local onboarding examples.
+- #88 is the current source/docs/tests path-index refresh vehicle. Do not
+  treat this bullet as durable open-PR topology after #88 merges; refresh from
+  GitHub Project #6 and live PR state instead.
 
 Recently closed path-setting issues include #79, #83, #85, #62, #58, #50,
 #41, #37, #31, #25, and #66. They are evidence and history, not substitutes
@@ -147,7 +168,7 @@ Current state:
 
 - #52 is open and owns the guided MCP service-onboarding helper.
 - #69 merged the first deterministic no-mutation onboarding-record helper.
-- #87 is an open draft source/docs/tests increment adding bridged stdio,
+- #87 merged a source/docs/tests increment adding bridged stdio,
   credential-scoped, and client/session-local examples.
 
 Near-term gap:
@@ -221,6 +242,9 @@ Current state:
 - The SuperLoop remains the operating protocol: refresh evidence, execute one
   bounded transition, document evidence and non-actions, complete the current
   formal goal, and activate the refined successor goal.
+- Project #6 `Agent Issue View` now supplies the lightweight cross-object
+  coordination index for agents. It should be read at goal re-entry and updated
+  during goal maintenance only when durable coordination state changes.
 
 Near-term gap:
 
