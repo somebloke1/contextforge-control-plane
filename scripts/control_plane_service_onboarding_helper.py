@@ -17,6 +17,7 @@ import control_plane_redaction as redaction
 
 HELPER_VERSION = 1
 SCHEMA_URI = "contextforge://control-plane/schemas/service-onboarding-record/v1"
+SESSION_SCHEMA_URI = "contextforge://control-plane/schemas/service-onboarding-session/v1"
 
 DIALOGUE_STATES = (
     "intake",
@@ -123,13 +124,17 @@ def build_onboarding_record(
     *,
     project_root: str | None = None,
     issue: str | None = None,
+    previous_record: Mapping[str, Any] | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Build a structured service-onboarding record without side effects."""
 
     if not isinstance(descriptor, Mapping):
         raise ServiceOnboardingInputError("descriptor must be a mapping")
+    if previous_record is not None and not isinstance(previous_record, Mapping):
+        raise ServiceOnboardingInputError("previous_record must be a mapping")
 
-    source = _json_compatible_copy(descriptor)
+    source = _merge_resume_descriptor(previous_record, descriptor)
     candidate_service = _first_string(
         source.get("candidate_service"),
         source.get("candidate_service_name"),
@@ -173,6 +178,16 @@ def build_onboarding_record(
         "integration_strategy": strategy,
         "footprint_plan": footprint,
         "approval_gate": approvals,
+        "dialogue_session": _dialogue_session(
+            previous_record,
+            session_id,
+            current_state,
+            status,
+            questions,
+            classification,
+            strategy,
+            approvals,
+        ),
         "blockers": blockers,
         "next_questions": questions,
         "non_actions": list(NON_MUTATION_DEFAULTS),
@@ -182,6 +197,97 @@ def build_onboarding_record(
     }
     _validate_no_secret_leaks(record)
     return record
+
+
+def _merge_resume_descriptor(previous_record: Mapping[str, Any] | None, descriptor: Mapping[str, Any]) -> dict[str, Any]:
+    source = _json_compatible_copy(descriptor)
+    if previous_record is None:
+        return source
+
+    previous_source = previous_record.get("source_descriptor")
+    if not isinstance(previous_source, Mapping):
+        raise ServiceOnboardingInputError("previous_record.source_descriptor must be a mapping when resuming")
+    return _deep_merge(_json_compatible_copy(previous_source), source)
+
+
+def _dialogue_session(
+    previous_record: Mapping[str, Any] | None,
+    session_id: str | None,
+    current_state: str,
+    status: str,
+    questions: list[str],
+    classification: Mapping[str, Mapping[str, str | None]],
+    strategy: Mapping[str, Any],
+    approvals: Mapping[str, Any],
+) -> dict[str, Any]:
+    previous_session = _mapping(previous_record.get("dialogue_session") if previous_record else None)
+    previous_history = [
+        item
+        for item in _as_list(previous_session.get("history"))
+        if isinstance(item, Mapping)
+    ]
+    previous_state_history = _string_list(previous_session.get("state_history"))
+    previous_questions = set(_string_list(previous_record.get("next_questions") if previous_record else None))
+    current_questions = set(questions)
+    previous_state = _first_string(previous_record.get("current_state") if previous_record else None)
+    previous_status = _first_string(previous_record.get("status") if previous_record else None)
+    resolved_session_id = (
+        session_id
+        or _first_string(previous_session.get("session_id"))
+        or "unassigned"
+    )
+    turn_index = len(previous_history) + 1
+    transition: dict[str, str] = {
+        "from_state": previous_state or "new_session",
+        "to_state": current_state,
+        "status": status,
+    }
+    if previous_status:
+        transition["from_status"] = previous_status
+
+    return {
+        "schema_uri": SESSION_SCHEMA_URI,
+        "session_id": resolved_session_id,
+        "turn_index": turn_index,
+        "resume_source": "previous_record" if previous_record is not None else "fresh_descriptor",
+        "previous_state": previous_state,
+        "current_state": current_state,
+        "state_history": _unique(previous_state_history + [current_state]),
+        "answered_questions": sorted(previous_questions - current_questions),
+        "decision_log": _decision_log(turn_index, classification, strategy, approvals),
+        "storage_mode": "stdout_only",
+        "write_persistence": False,
+        "history": [_json_compatible_copy(item) for item in previous_history] + [transition],
+        "next_resume_inputs": [
+            "save this onboarding record if future resumption is needed",
+            "rerun with --previous-record and an updated descriptor to add evidence",
+        ],
+    }
+
+
+def _decision_log(
+    turn_index: int,
+    classification: Mapping[str, Mapping[str, str | None]],
+    strategy: Mapping[str, Any],
+    approvals: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    known_dimensions = sorted(
+        dimension for dimension, entry in classification.items() if entry.get("status") == "known"
+    )
+    open_dimensions = sorted(
+        dimension for dimension, entry in classification.items() if entry.get("status") != "known"
+    )
+    return [
+        {
+            "turn_index": turn_index,
+            "classification_known": known_dimensions,
+            "classification_open": open_dimensions,
+            "primary_paradigm": strategy.get("primary_paradigm"),
+            "approval_required": approvals.get("approval_required"),
+            "required_approval_types": approvals.get("required_approval_types", []),
+            "mutation_allowed": False,
+        }
+    ]
 
 
 def _current_state(blockers: list[dict[str, str]], approvals: Mapping[str, Any]) -> str:
@@ -528,6 +634,22 @@ def _json_compatible_copy(value: Any) -> Any:
     return str(value)
 
 
+def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(base)
+    for key, value in overlay.items():
+        if (
+            key in result
+            and isinstance(result[key], Mapping)
+            and isinstance(value, Mapping)
+        ):
+            result[key] = _deep_merge(dict(result[key]), dict(value))
+        elif key == "source_evidence" and isinstance(result.get(key), list) and isinstance(value, list):
+            result[key] = result[key] + value
+        else:
+            result[key] = copy.deepcopy(value)
+    return result
+
+
 def _mapping(value: Any) -> dict[str, Any]:
     return copy.deepcopy(dict(value)) if isinstance(value, Mapping) else {}
 
@@ -593,19 +715,32 @@ def _load_descriptor(path: str, *, case_name: str | None = None) -> dict[str, An
     raise ServiceOnboardingInputError(f"case not found: {case_name}")
 
 
+def _load_record(path: str) -> dict[str, Any]:
+    with Path(path).open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, Mapping):
+        raise ServiceOnboardingInputError("previous record must be a JSON object")
+    return dict(data)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build a no-mutation ContextForge service-onboarding record.")
     parser.add_argument("--descriptor", required=True, help="JSON descriptor path, or '-' for stdin")
     parser.add_argument("--case", default=None, help="Optional fixture case name containing a descriptor")
     parser.add_argument("--project-root", default=None)
     parser.add_argument("--issue", default=None)
+    parser.add_argument("--previous-record", default=None, help="Optional prior onboarding record to resume from")
+    parser.add_argument("--session-id", default=None, help="Stable session id to include in dialogue metadata")
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args(argv)
 
+    previous_record = _load_record(args.previous_record) if args.previous_record else None
     record = build_onboarding_record(
         _load_descriptor(args.descriptor, case_name=args.case),
         project_root=args.project_root,
         issue=args.issue,
+        previous_record=previous_record,
+        session_id=args.session_id,
     )
     print(json.dumps(record, indent=2 if args.pretty else None, sort_keys=True) + "\n", end="")
     return 0
