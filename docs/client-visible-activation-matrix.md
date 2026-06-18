@@ -10,6 +10,10 @@ This is a source/docs/tests contract. It does not prove live runtime behavior
 and does not authorize runtime, Docker, client-global, hook-trust, registry,
 secret, project-init apply, Serena, or retired-checkout mutation.
 
+Use `docs/readiness-claim-guardrails.md` when reporting activation or
+validation state. Source readiness, backend readiness, ContextForge readiness,
+and target-client readiness are separate claims.
+
 ## Matrix
 
 | Client | Activation owner | Expected first-session or first-prompt observable | Explicit readback or invocation path | Missing banner classification | Validation surface |
@@ -37,6 +41,9 @@ secret, project-init apply, Serena, or retired-checkout mutation.
 
 ## Claim Rules
 
+- Report readiness with the vocabulary from
+  `docs/readiness-claim-guardrails.md`. Do not collapse `source_ready`,
+  `backend_ready`, `contextforge_ready`, and `target_client_ready`.
 - Claim `Codex active` only from Codex-visible project-local hook/helper/MCP
   readback after the approved Codex project boundary has been crossed.
 - Claim `Pi active` only from Pi-visible shim/helper/guidance or validation
