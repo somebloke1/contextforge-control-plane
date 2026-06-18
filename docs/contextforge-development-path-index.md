@@ -237,11 +237,13 @@ Current state:
   lack safe default probe payloads.
 - Project-init validation rules require target-client-visible ContextForge
   routes, not backend-only checks or local shell substitutes.
+- #97 owns the first source/docs/tests safe-probe catalog, promoted from the
+  Project #6 roadmap draft item.
 
 Near-term gap:
 
-- Create a focused issue to inventory services without safe probes and add
-  harmless read-only probes one service at a time.
+- After #97, implement harmless read-only probes one service at a time, with
+  each runtime validation claim tied to the exact target client and surface.
 
 ### Operator Productization
 
@@ -308,8 +310,9 @@ items until they are promoted into concrete issues or PRs:
 - `Roadmap: Client-visible activation UX matrix` was promoted to #89/#90 and
   should be marked done or cross-referenced rather than kept as a second active
   owner for the same work.
-- `Roadmap: Safe client-visible validation probes` for harmless
-  target-client-visible checks.
+- `Roadmap: Safe client-visible validation probes` is promoted to #97 and
+  should be marked done or cross-referenced rather than kept as a second
+  active owner for the same work.
 - `Roadmap: Operator productization` for helper, registration, readback,
   retry, and approval packet workflows.
 - `Roadmap: Dev Docker service expansion` driven by #52 onboarding records and

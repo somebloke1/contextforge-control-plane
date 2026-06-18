@@ -48,6 +48,10 @@ secret, project-init apply, Serena, or retired-checkout mutation.
 - For #62-style Pi/OpenCode container claims, cite the client Docker runtime
   evidence and label the exercised surface. Do not generalize that evidence to
   host Pi global install/reload or Codex hook behavior.
+- For service-specific validation, use
+  `docs/safe-client-visible-validation-probes.md` to decide whether the service
+  has a known safe target-client-visible probe, a conditional probe, or must
+  remain skipped or presumed-working.
 
 ## Non-Actions
 

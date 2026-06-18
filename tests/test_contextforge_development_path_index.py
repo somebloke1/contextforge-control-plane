@@ -64,7 +64,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
 
     def test_index_records_gap_issue_candidates_without_implementation(self) -> None:
         for candidate in [
-            "safe client-visible validation probes",
+            "#97 owns the first source/docs/tests safe-probe catalog",
             "operator productization",
             "next dev Docker service expansion",
             "late legacy-retirement phase",
@@ -72,6 +72,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             self.assertIn(candidate, self.index)
 
         self.assertIn("promoted to #89/#90", self.index)
+        self.assertIn("Safe client-visible validation probes` is promoted to #97", self.index)
         self.assertIn("Do not implement these gaps from this index alone.", self.index)
 
     def test_roadmap_links_current_path_index(self) -> None:
