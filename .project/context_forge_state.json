@@ -37,18 +37,26 @@
       "state": "unknown",
       "trust_surface": "user-global Codex project trust",
       "verified_at": null
+    },
+    "pi": {
+      "approval_record": null,
+      "last_probe": null,
+      "root": "/home/dgk/workspace/cf-controlplane",
+      "state": "not_required",
+      "trust_surface": "global Pi extension installation status",
+      "verified_at": null
     }
   },
   "decisions": {
     "context7:canonical": {
       "contract_card_ref": "contextforge://control-plane/service-bindings/context7:canonical",
-      "decided_at": "2026-06-17T09:16:17Z",
+      "decided_at": "2026-06-18T12:56:15Z",
       "decided_by": "control_plane_contextforge_binding",
       "decision_kind": "service",
       "notes": "project-local ContextForge service activation approved",
       "reopened_at": null,
       "service_binding": "context7:canonical",
-      "source_plan_id": "project-init-activation-9cf2603a77b620fb",
+      "source_plan_id": "project-init-activation-650239a65e16d37a",
       "state": "accepted",
       "x_non_actions": [
         "do not mutate user-global Codex config or trust",
@@ -62,13 +70,13 @@
     },
     "github:canonical": {
       "contract_card_ref": "contextforge://control-plane/service-bindings/github:canonical",
-      "decided_at": "2026-06-17T09:16:17Z",
+      "decided_at": "2026-06-18T12:56:15Z",
       "decided_by": "control_plane_contextforge_binding",
       "decision_kind": "service",
       "notes": "project-local ContextForge service activation approved",
       "reopened_at": null,
       "service_binding": "github:canonical",
-      "source_plan_id": "project-init-activation-9cf2603a77b620fb",
+      "source_plan_id": "project-init-activation-650239a65e16d37a",
       "state": "accepted",
       "x_non_actions": [
         "do not mutate user-global Codex config or trust",
@@ -82,13 +90,13 @@
     },
     "mentality:static_repo_local": {
       "contract_card_ref": "contextforge://control-plane/service-bindings/mentality:static_repo_local",
-      "decided_at": "2026-06-17T09:16:17Z",
+      "decided_at": "2026-06-18T12:56:15Z",
       "decided_by": "control_plane_contextforge_binding",
       "decision_kind": "service",
       "notes": "project-local ContextForge service activation approved",
       "reopened_at": null,
       "service_binding": "mentality:static_repo_local",
-      "source_plan_id": "project-init-activation-9cf2603a77b620fb",
+      "source_plan_id": "project-init-activation-650239a65e16d37a",
       "state": "accepted",
       "x_non_actions": [
         "do not mutate user-global Codex config or trust",
@@ -101,13 +109,13 @@
     },
     "web-search:credential_scoped": {
       "contract_card_ref": "contextforge://control-plane/service-bindings/web-search:credential_scoped",
-      "decided_at": "2026-06-17T09:16:17Z",
+      "decided_at": "2026-06-18T12:56:15Z",
       "decided_by": "control_plane_contextforge_binding",
       "decision_kind": "service",
       "notes": "project-local ContextForge service activation approved",
       "reopened_at": null,
       "service_binding": "web-search:credential_scoped",
-      "source_plan_id": "project-init-activation-9cf2603a77b620fb",
+      "source_plan_id": "project-init-activation-650239a65e16d37a",
       "state": "accepted",
       "x_non_actions": [
         "do not mutate user-global Codex config or trust",
@@ -137,12 +145,12 @@
   "meta": {
     "created_at": "2026-05-31T00:52:51Z",
     "last_audit_record": null,
-    "last_plan_id": "project-init-activation-9cf2603a77b620fb",
-    "revision": 13,
+    "last_plan_id": "project-init-activation-650239a65e16d37a",
+    "revision": 15,
     "schema_uri": "contextforge://control-plane/project-state/v1",
     "schema_version": 1,
-    "updated_at": "2026-06-17T10:00:48Z",
-    "updated_by": "operating_agent_project_name_repair"
+    "updated_at": "2026-06-18T12:59:09Z",
+    "updated_by": "control_plane_project_init_helper"
   },
   "migration": {
     "client_config_migrations": {
@@ -170,7 +178,22 @@
     "legacy_env_disposition": "not_present",
     "legacy_env_seen": false
   },
-  "open_items": [],
+  "open_items": [
+    {
+      "blocks_initialized": false,
+      "created_at": "2026-06-18T12:56:15Z",
+      "detail": {
+        "accepted_state": "bindings recorded but not verified as working",
+        "reason": "target-client validation was not completed during activation",
+        "validation_mode": "pending_choice"
+      },
+      "id": "project-init-validation",
+      "resolution_state": "open",
+      "resource": "target-client-visible MCP proof",
+      "severity": "warning",
+      "type": "verification"
+    }
+  ],
   "project": {
     "display_root": null,
     "name": "cf-controlplane",
@@ -179,6 +202,129 @@
   },
   "project_init": {
     "activation_jobs": {
+      "job-project-init-54e9281c97ecd05a": {
+        "client_type": "pi",
+        "consent_receipt_refs": [
+          "run/consent-receipts/receipt-project-state-write-8b7e4daebe754064.json"
+        ],
+        "job_id": "job-project-init-54e9281c97ecd05a",
+        "local_client_config_digest": "sha256:c5ff7d7fa263caecec03e21f390620ae370654f6fabe82491f501ebdab454f1f",
+        "non_actions": [
+          "no user-global config or trust mutation",
+          "no ContextForge registry or catalog mutation",
+          "no backend install or restart for shared canonical services",
+          "no secret or token material write"
+        ],
+        "plan_digest": "sha256:7e8b327c8e22ba3ff88ce8ee3480f31b91a9061a9642560694dad38b50fe9512",
+        "plan_id": "project-init-54e9281c97ecd05a",
+        "recovery_state": "local_written_validation_pending",
+        "selected_service_bindings": [
+          "context7:canonical",
+          "github:canonical",
+          "mentality:static_repo_local",
+          "web-search:credential_scoped"
+        ],
+        "selected_service_ids": [
+          "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "contextforge-service-08345c02a797f51961dbf262",
+          "contextforge-service-838204a3bd026f164451dd85",
+          "contextforge-service-cb9b90887f519a07988356c9"
+        ],
+        "stale_plan_inputs": {
+          "base_project_state": {
+            "artifact_digest": "sha256:b8408dde7e6d849c14ded37ee378fba07d65c70cb6b4e1f0684fae94d26a90ab",
+            "artifact_status": "valid",
+            "digest": "sha256:b8408dde7e6d849c14ded37ee378fba07d65c70cb6b4e1f0684fae94d26a90ab",
+            "recovery": null,
+            "revision": 13,
+            "status": "initialized"
+          },
+          "catalog": {
+            "descriptor_digests": {
+              "context7:canonical": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+              "github:canonical": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+              "mentality:static_repo_local": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+              "web-search:credential_scoped": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb"
+            },
+            "revision_or_etag": "fixture-catalog"
+          },
+          "project_root": "/home/dgk/workspace/cf-controlplane",
+          "project_root_hash": "d46fe58a2a2061e88f722eb5d4e2f546fd09e6d46d4f9f4410c0ad40e65572cf",
+          "target_client_digests": {
+            "pi": "sha256:69af6814713d68f29a78b654392563f4881fc852cc036ee3541cd21253cbc15e"
+          },
+          "trust_state_digest": null
+        },
+        "status": "applied_validation_choice_pending",
+        "step_statuses": [
+          {
+            "idempotency_key": "pi-activation-project-init-54e9281c97ecd05a",
+            "operation_id": "record-pi-shim-activation-metadata",
+            "operation_type": "record_pi_shim_activation_metadata",
+            "post_digest": "sha256:c5ff7d7fa263caecec03e21f390620ae370654f6fabe82491f501ebdab454f1f",
+            "pre_digest": "sha256:69af6814713d68f29a78b654392563f4881fc852cc036ee3541cd21253cbc15e",
+            "recovery_state": null,
+            "status": "completed"
+          },
+          {
+            "idempotency_key": "project-state-project-init-54e9281c97ecd05a",
+            "operation_id": "write-project-state",
+            "operation_type": "write_project_state",
+            "post_digest": null,
+            "pre_digest": null,
+            "recovery_state": null,
+            "status": "completed"
+          }
+        ],
+        "validation_records": {
+          "contextforge-service-08345c02a797f51961dbf262": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "github:canonical",
+            "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
+          },
+          "contextforge-service-1c0fb210b9aa8a8797287e69": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "context7:canonical",
+            "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
+          },
+          "contextforge-service-838204a3bd026f164451dd85": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "mentality:static_repo_local",
+            "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
+          },
+          "contextforge-service-cb9b90887f519a07988356c9": {
+            "mode": "pending_choice",
+            "proof_ref": null,
+            "safe_probe_id": null,
+            "skipped_reason": null,
+            "status": "pending_user_choice",
+            "target_client_visible": false,
+            "x_service_binding": "web-search:credential_scoped",
+            "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
+          }
+        },
+        "x_client_reload_ack": {
+          "acknowledged_at": "2026-06-18T12:59:09Z",
+          "acknowledged_by": "control_plane_project_init_helper",
+          "client_type": "pi",
+          "command": "/reload"
+        }
+      },
       "job-project-init-91f379cf05179506": {
         "client_type": "codex",
         "consent_receipt_refs": [
@@ -715,7 +861,7 @@
           "contextforge-service-1c0fb210b9aa8a8797287e69"
         ],
         "status": "validation_pending",
-        "updated_at": "2026-06-17T10:00:48Z",
+        "updated_at": "2026-06-18T12:59:09Z",
         "validation_status": "pending"
       },
       "codex": {
@@ -738,13 +884,36 @@
           "contextforge-service-cb9b90887f519a07988356c9"
         ],
         "status": "verified",
-        "updated_at": "2026-06-17T10:00:48Z",
+        "updated_at": "2026-06-18T12:59:09Z",
         "validation_status": "passed",
         "x_operator_direction": "user explicitly instructed the operating agent on 2026-06-17 to mark project-local activation validated and handle deeper validation separately"
+      },
+      "pi": {
+        "activation_surface": "contextforge-global-shim",
+        "client_type": "pi",
+        "current_job_id": "job-project-init-54e9281c97ecd05a",
+        "last_plan_id": "project-init-54e9281c97ecd05a",
+        "local_client_config_digest": "sha256:c5ff7d7fa263caecec03e21f390620ae370654f6fabe82491f501ebdab454f1f",
+        "reload_status": "acknowledged",
+        "selected_service_bindings": [
+          "context7:canonical",
+          "github:canonical",
+          "mentality:static_repo_local",
+          "web-search:credential_scoped"
+        ],
+        "selected_service_ids": [
+          "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "contextforge-service-08345c02a797f51961dbf262",
+          "contextforge-service-838204a3bd026f164451dd85",
+          "contextforge-service-cb9b90887f519a07988356c9"
+        ],
+        "status": "validation_pending",
+        "updated_at": "2026-06-18T12:59:09Z",
+        "validation_status": "pending"
       }
     },
-    "current_job_id": "job-project-init-repair-547d1a4fb3bd448f",
-    "x_hook_prompt_state": "completed_verified"
+    "current_job_id": "job-project-init-54e9281c97ecd05a",
+    "x_hook_prompt_state": "active"
   },
   "services": {
     "context7:canonical": {
@@ -757,7 +926,8 @@
         "run/consent-receipts/receipt-project-local-config-write-58f613a831194ceb.json",
         "run/consent-receipts/receipt-project-state-write-baceaae459ed0502.json",
         "run/consent-receipts/receipt-project-local-config-write-1adfdc8eadd42fd5.json",
-        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json"
+        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json",
+        "run/consent-receipts/receipt-project-state-write-8b7e4daebe754064.json"
       ],
       "contract_card_ref": "contextforge://control-plane/service-bindings/context7:canonical",
       "evidence": [
@@ -874,6 +1044,17 @@
           "target_client": "codex",
           "validation_mode": "pending_choice",
           "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:c5ff7d7fa263caecec03e21f390620ae370654f6fabe82491f501ebdab454f1f",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:248ff0d2939215ff5c28ff710a111552b69f4f2bdc2826beb2cdfff9621b804d",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "target_client": "pi",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
         }
       ],
       "instantiation_class": "shared_canonical",
@@ -929,6 +1110,16 @@
             "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
           },
           "validation_status": "passed"
+        },
+        "pi": {
+          "alias": "context7",
+          "pi_tool_prefix": "context7",
+          "service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69",
+          "shim": "contextforge-global-shim",
+          "status": "shim_activation_planned",
+          "surface": "global Pi extension + .project/context_forge_state.json",
+          "validation_status": "pending",
+          "virtual_server": "context7_local_server"
         }
       },
       "verification_layers": {
@@ -939,13 +1130,9 @@
           "status": "passed"
         },
         "target_client": {
-          "proof_ref": "contextforge://control-plane/verification-traces/codex-context7-target-client-live-proof-20260617",
-          "safe_probe_id": "context7-resolve-library-id",
-          "status": "passed",
-          "target_client": "codex",
-          "validated_at": "2026-06-17T09:34:19Z",
-          "x_operator_direction": "marked validated by explicit user direction; deeper validation is tracked separately",
-          "x_service_identity_id": "contextforge-service-1c0fb210b9aa8a8797287e69"
+          "mode": "per_client",
+          "proof": "see target_clients for client-specific validation evidence",
+          "status": "mixed"
         },
         "tool_policy": {
           "policy": {
@@ -987,7 +1174,8 @@
         "run/consent-receipts/receipt-project-local-config-write-58f613a831194ceb.json",
         "run/consent-receipts/receipt-project-state-write-baceaae459ed0502.json",
         "run/consent-receipts/receipt-project-local-config-write-1adfdc8eadd42fd5.json",
-        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json"
+        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json",
+        "run/consent-receipts/receipt-project-state-write-8b7e4daebe754064.json"
       ],
       "contract_card_ref": "contextforge://control-plane/service-bindings/github:canonical",
       "evidence": [
@@ -1034,6 +1222,17 @@
           "kind": "project_init_activation",
           "service_identity_id": "contextforge-service-08345c02a797f51961dbf262",
           "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:c5ff7d7fa263caecec03e21f390620ae370654f6fabe82491f501ebdab454f1f",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:94cbb82475dd91135ad765f36e6f2904dad0282adbc5d45ae341f558996483ac",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-08345c02a797f51961dbf262",
+          "target_client": "pi",
           "validation_mode": "pending_choice",
           "validation_status": "pending"
         }
@@ -1086,6 +1285,16 @@
             "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
           },
           "validation_status": "passed"
+        },
+        "pi": {
+          "alias": "github",
+          "pi_tool_prefix": "github",
+          "service_identity_id": "contextforge-service-08345c02a797f51961dbf262",
+          "shim": "contextforge-global-shim",
+          "status": "shim_activation_planned",
+          "surface": "global Pi extension + .project/context_forge_state.json",
+          "validation_status": "pending",
+          "virtual_server": "github_server"
         }
       },
       "verification_layers": {
@@ -1096,13 +1305,9 @@
           "status": "passed"
         },
         "target_client": {
-          "proof_ref": "contextforge://control-plane/verification-traces/codex-github-target-client-live-proof-20260617",
-          "safe_probe_id": "github-read-only-probe",
-          "status": "passed",
-          "target_client": "codex",
-          "validated_at": "2026-06-17T09:34:19Z",
-          "x_operator_direction": "marked validated by explicit user direction; deeper validation is tracked separately",
-          "x_service_identity_id": "contextforge-service-08345c02a797f51961dbf262"
+          "mode": "per_client",
+          "proof": "see target_clients for client-specific validation evidence",
+          "status": "mixed"
         },
         "tool_policy": {
           "policy": {
@@ -1145,7 +1350,8 @@
         "run/consent-receipts/receipt-project-local-config-write-58f613a831194ceb.json",
         "run/consent-receipts/receipt-project-state-write-baceaae459ed0502.json",
         "run/consent-receipts/receipt-project-local-config-write-1adfdc8eadd42fd5.json",
-        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json"
+        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json",
+        "run/consent-receipts/receipt-project-state-write-8b7e4daebe754064.json"
       ],
       "contract_card_ref": "contextforge://control-plane/service-bindings/mentality:static_repo_local",
       "evidence": [
@@ -1192,6 +1398,17 @@
           "kind": "project_init_activation",
           "service_identity_id": "contextforge-service-838204a3bd026f164451dd85",
           "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:c5ff7d7fa263caecec03e21f390620ae370654f6fabe82491f501ebdab454f1f",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:bb9e2fca6e073ea062f76a475cdbe90ea49dc3b1629f19b18da6de3485c12383",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-838204a3bd026f164451dd85",
+          "target_client": "pi",
           "validation_mode": "pending_choice",
           "validation_status": "pending"
         }
@@ -1243,6 +1460,16 @@
             "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
           },
           "validation_status": "passed"
+        },
+        "pi": {
+          "alias": "mentality",
+          "pi_tool_prefix": "mentality",
+          "service_identity_id": "contextforge-service-838204a3bd026f164451dd85",
+          "shim": "contextforge-global-shim",
+          "status": "shim_activation_planned",
+          "surface": "global Pi extension + .project/context_forge_state.json",
+          "validation_status": "pending",
+          "virtual_server": "mentality_server"
         }
       },
       "verification_layers": {
@@ -1253,13 +1480,9 @@
           "status": "passed"
         },
         "target_client": {
-          "proof_ref": "contextforge://control-plane/verification-traces/codex-mentality-target-client-live-proof-20260617",
-          "safe_probe_id": "mentality-governance-read-only-probe",
-          "status": "passed",
-          "target_client": "codex",
-          "validated_at": "2026-06-17T09:34:19Z",
-          "x_operator_direction": "marked validated by explicit user direction; deeper validation is tracked separately",
-          "x_service_identity_id": "contextforge-service-838204a3bd026f164451dd85"
+          "mode": "per_client",
+          "proof": "see target_clients for client-specific validation evidence",
+          "status": "mixed"
         },
         "tool_policy": {
           "policy": {
@@ -1300,7 +1523,8 @@
         "run/consent-receipts/receipt-project-local-config-write-58f613a831194ceb.json",
         "run/consent-receipts/receipt-project-state-write-baceaae459ed0502.json",
         "run/consent-receipts/receipt-project-local-config-write-1adfdc8eadd42fd5.json",
-        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json"
+        "run/consent-receipts/receipt-project-state-write-3ffff98e4eb94708.json",
+        "run/consent-receipts/receipt-project-state-write-8b7e4daebe754064.json"
       ],
       "contract_card_ref": "contextforge://control-plane/service-bindings/web-search:credential_scoped",
       "evidence": [
@@ -1347,6 +1571,17 @@
           "kind": "project_init_activation",
           "service_identity_id": "contextforge-service-cb9b90887f519a07988356c9",
           "target_client": "codex",
+          "validation_mode": "pending_choice",
+          "validation_status": "pending"
+        },
+        {
+          "client_config_after_digest": "sha256:c5ff7d7fa263caecec03e21f390620ae370654f6fabe82491f501ebdab454f1f",
+          "client_configs_are_service_identities": false,
+          "contextforge_server_id": null,
+          "descriptor_digest": "sha256:69eed0f79236bdad3612254ebc71713203a1ccb467b4ed47524ec8b6eb509ceb",
+          "kind": "project_init_activation",
+          "service_identity_id": "contextforge-service-cb9b90887f519a07988356c9",
+          "target_client": "pi",
           "validation_mode": "pending_choice",
           "validation_status": "pending"
         }
@@ -1398,6 +1633,16 @@
             "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
           },
           "validation_status": "passed"
+        },
+        "pi": {
+          "alias": "web-search",
+          "pi_tool_prefix": "web-search",
+          "service_identity_id": "contextforge-service-cb9b90887f519a07988356c9",
+          "shim": "contextforge-global-shim",
+          "status": "shim_activation_planned",
+          "surface": "global Pi extension + .project/context_forge_state.json",
+          "validation_status": "pending",
+          "virtual_server": "web_search_server"
         }
       },
       "verification_layers": {
@@ -1408,13 +1653,9 @@
           "status": "passed"
         },
         "target_client": {
-          "proof_ref": "contextforge://control-plane/verification-traces/codex-web-search-target-client-live-proof-20260617",
-          "safe_probe_id": "web-search-read-only-probe",
-          "status": "passed",
-          "target_client": "codex",
-          "validated_at": "2026-06-17T09:34:19Z",
-          "x_operator_direction": "marked validated by explicit user direction; deeper validation is tracked separately",
-          "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
+          "mode": "per_client",
+          "proof": "see target_clients for client-specific validation evidence",
+          "status": "mixed"
         },
         "tool_policy": {
           "policy": {
@@ -1447,7 +1688,7 @@
       "x_service_identity_id": "contextforge-service-cb9b90887f519a07988356c9"
     }
   },
-  "status": "initialized",
+  "status": "in_progress",
   "x_non_actions": [
     "no client config promoted as service identity",
     "no per-project backend for shared canonical service",

@@ -78,10 +78,13 @@ developer does not have to remember the special flag.
 
 For project-state readback, the baseline launcher now mounts the canonical
 repository root at `/workspace`, so the session starts in the same project root
-where `context_forge_state.json` can be discovered. When that state file is
-present but has no `target_clients.pi` service bindings, the shim readback still
-reports `project state has no approved target_clients.pi service bindings` and
-`services: []` as the active residual gap.
+where `context_forge_state.json` can be discovered. Project state now records
+pending `target_clients.pi` shim bindings for the four existing project-local
+services. The active residual gap is no longer missing Pi bindings; it is
+wrapper reachability. A baseline Pi session can import the service metadata, but
+canonical service tools are not registered until the launcher points wrappers at
+a reachable ContextForge surface with matching virtual-server names and
+container-local auth material.
 
 ### OpenCode
 
@@ -120,8 +123,9 @@ Runtime evidence should identify the exercised surface explicitly:
 
 Minimum future runtime checks:
 
-- Pi ad hoc session lists or can invoke the expected ContextForge helper/shim
-  tools without host-global Pi mutation.
+- Pi ad hoc session imports the expected ContextForge helper/shim bindings and
+  then lists or can invoke service tools through a reachable ContextForge
+  development surface without host-global Pi mutation.
 - OpenCode ad hoc session receives project-init helper/hook context from the
   harness-owned fixture without user-global OpenCode mutation.
 - Both clients continue using the local llama.cpp Qwen model path.
@@ -136,6 +140,6 @@ This contract does not approve or perform:
 - ContextForge registry or token mutation.
 - host Pi install/reload.
 - user-global OpenCode/Pi config mutation.
-- helper approve/apply/recovery state mutation.
-- `.project/context_forge_state.json` mutation.
+- unapproved helper approve/apply/recovery state mutation.
+- direct `.project/context_forge_state.json` mutation outside the helper path.
 - legacy `/home/dgk/workspace/legacy-controlplane-archive` mutation.

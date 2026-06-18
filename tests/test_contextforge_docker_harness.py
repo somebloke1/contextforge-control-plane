@@ -302,7 +302,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
 
         self.assertIn("separately approved validation", contract)
-        self.assertIn("Pi ad hoc session lists or can invoke", contract)
+        self.assertIn("Pi ad hoc session imports the expected ContextForge helper/shim bindings", contract)
+        self.assertIn("then lists or can invoke service tools", contract)
         self.assertIn("OpenCode ad hoc session receives project-init helper/hook context", contract)
         self.assertIn("Both clients continue using the local llama.cpp Qwen model path", contract)
         self.assertIn("revoked before exit", contract)
@@ -315,23 +316,32 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
 
         self.assertIn('-v "${REPO_ROOT}:/workspace:ro"', host_launcher)
 
-    def test_pi_baseline_state_file_is_present_but_not_pi_bound(self) -> None:
+    def test_pi_baseline_state_file_has_pending_pi_bindings(self) -> None:
         state = json.loads((ROOT / ".project/context_forge_state.json").read_text(encoding="utf-8"))
         services = state.get("services", {})
+        expected = {
+            "context7:canonical",
+            "github:canonical",
+            "mentality:static_repo_local",
+            "web-search:credential_scoped",
+        }
 
         self.assertIsInstance(services, dict)
-        for service in services.values():
-            target_clients = service.get("target_clients", {})
-            self.assertIsInstance(target_clients, dict)
-            self.assertNotIn("pi", target_clients)
+        self.assertTrue(expected.issubset(set(services)))
+        for service_binding in expected:
+            target_clients = services[service_binding].get("target_clients", {})
+            pi = target_clients.get("pi")
+            self.assertIsInstance(pi, dict)
+            self.assertEqual("shim_activation_planned", pi["status"])
+            self.assertEqual("pending", pi["validation_status"])
+            self.assertEqual("contextforge-global-shim", pi["shim"])
 
-    def test_pi_baseline_contract_documents_residual_no_target_clients_pi(self) -> None:
+    def test_pi_baseline_contract_documents_wrapper_reachability_residual(self) -> None:
         contract = (ROOT / "docker/client-harness/CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
 
-        self.assertIn(
-            "project state has no approved target_clients.pi service bindings",
-            contract,
-        )
+        self.assertIn("The active residual gap is no longer missing Pi bindings", contract)
+        self.assertIn("wrapper reachability", contract)
+        self.assertIn("matching virtual-server names", contract)
 
 
 if __name__ == "__main__":
