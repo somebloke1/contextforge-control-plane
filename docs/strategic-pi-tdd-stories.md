@@ -13,10 +13,11 @@ The machine-readable catalog is
 
 ## Scope
 
-The catalog contains 26 mandatory feature requests:
+The catalog contains 36 mandatory feature requests:
 
 - #201-#216 are intended-behavior stories.
 - #219-#228 are structurally different failure/recovery stories.
+- #231-#240 are additional structurally different failure/recovery stories.
 
 Accidental extras #217 and #218 were closed as not planned and are explicitly
 not part of this repertoire.
@@ -55,6 +56,16 @@ The recovery set deliberately covers different structures:
 - #226: concurrent stale-plan conflict;
 - #227: interrupted apply and recovery journal;
 - #228: absent tool admitted as a gap.
+- #231: duplicate service identity blocks ambiguous routing;
+- #232: tool schema drift quarantines imported capability;
+- #233: malformed tool result becomes bounded diagnostic;
+- #234: secret-like tool output is redacted before display;
+- #235: long-running tool timeout offers resumable check;
+- #236: mid-call transport drop avoids duplicate mutation;
+- #237: OAuth-required service stops at the login boundary;
+- #238: missing Pi container project mount reports the exact fix;
+- #239: policy revocation invalidates cached tools safely;
+- #240: stale registry readback prevents false readiness.
 
 ## Non-Actions
 

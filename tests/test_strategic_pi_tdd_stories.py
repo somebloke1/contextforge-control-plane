@@ -21,15 +21,18 @@ class StrategicPiTddStoryCatalogTests(unittest.TestCase):
         cls.normalized_doc = " ".join(cls.doc.split())
 
     def test_catalog_records_exact_story_set(self) -> None:
-        self.assertEqual(26, len(self.stories))
-        self.assertEqual(set(range(201, 217)) | set(range(219, 229)), set(self.by_issue))
+        self.assertEqual(36, len(self.stories))
+        self.assertEqual(
+            set(range(201, 217)) | set(range(219, 229)) | set(range(231, 241)),
+            set(self.by_issue),
+        )
         self.assertNotIn(217, self.by_issue)
         self.assertNotIn(218, self.by_issue)
 
     def test_catalog_keeps_intended_and_recovery_counts_distinct(self) -> None:
         counts = Counter(story["story_type"] for story in self.stories)
         self.assertEqual(16, counts["intended_behavior"])
-        self.assertEqual(10, counts["failure_recovery"])
+        self.assertEqual(20, counts["failure_recovery"])
         self.assertEqual({"intended_behavior", "failure_recovery"}, set(counts))
 
     def test_catalog_declares_shared_acceptance_contract(self) -> None:
@@ -66,6 +69,16 @@ class StrategicPiTddStoryCatalogTests(unittest.TestCase):
             226: "Concurrent session stale plan conflict",
             227: "Interrupted apply resumes through recovery journal",
             228: "User asks for absent tool and Pi admits gap",
+            231: "Duplicate service identity blocks ambiguous routing",
+            232: "Tool schema drift quarantines imported capability",
+            233: "Malformed tool result becomes bounded diagnostic",
+            234: "Secret-like tool output is redacted before display",
+            235: "Long-running tool timeout offers resumable check",
+            236: "Mid-call transport drop avoids duplicate mutation",
+            237: "OAuth-required service stops at login boundary",
+            238: "Pi container missing project mount reports exact fix",
+            239: "Policy revocation invalidates cached tool safely",
+            240: "Stale registry readback prevents false readiness",
         }
 
         for issue, title in expected_titles.items():
@@ -81,6 +94,7 @@ class StrategicPiTddStoryCatalogTests(unittest.TestCase):
             "Issue: #199",
             "#201-#216 are intended-behavior stories",
             "#219-#228 are structurally different failure/recovery stories",
+            "#231-#240 are additional structurally different failure/recovery stories",
             "Accidental extras #217 and #218 were closed as not planned",
             "must not be closed from source tests",
             "ordinary interactive Pi session",
@@ -94,6 +108,9 @@ class StrategicPiTddStoryCatalogTests(unittest.TestCase):
 
     def test_document_names_each_recovery_story(self) -> None:
         for issue in range(219, 229):
+            with self.subTest(issue=issue):
+                self.assertIn(f"#{issue}", self.doc)
+        for issue in range(231, 241):
             with self.subTest(issue=issue):
                 self.assertIn(f"#{issue}", self.doc)
 

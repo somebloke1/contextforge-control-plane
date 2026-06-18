@@ -272,6 +272,106 @@
       "complexity": "Medium",
       "observable_contract": "When the user asks for a missing tool, Pi admits the gap and offers the next useful path.",
       "technical_contract": "Tool guidance maps absent capability to discovery, onboarding, or explicit unsupported status without hallucinating availability."
+    },
+    {
+      "issue": 231,
+      "title": "Duplicate service identity blocks ambiguous routing",
+      "story_type": "failure_recovery",
+      "lane": "Registry validation",
+      "effort": "Medium",
+      "complexity": "High",
+      "observable_contract": "Pi refuses to route a requested capability when two ContextForge bindings are plausible.",
+      "technical_contract": "Route resolution classifies ambiguous bindings and withholds dispatch until a single canonical service identity is selected."
+    },
+    {
+      "issue": 232,
+      "title": "Tool schema drift quarantines imported capability",
+      "story_type": "failure_recovery",
+      "lane": "Contract artifacts",
+      "effort": "Medium",
+      "complexity": "High",
+      "observable_contract": "Pi detects that an imported tool contract changed and asks for fresh readback before retry.",
+      "technical_contract": "Tool schema hashes or versions invalidate stale argument rendering and quarantine the route until refreshed."
+    },
+    {
+      "issue": 233,
+      "title": "Malformed tool result becomes bounded diagnostic",
+      "story_type": "failure_recovery",
+      "lane": "Wrapper validation",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi reports malformed backend output as a concise diagnostic rather than raw protocol noise.",
+      "technical_contract": "Result parsing captures bounded, redacted failure details and distinguishes safe retry from unknown effect."
+    },
+    {
+      "issue": 234,
+      "title": "Secret-like tool output is redacted before display",
+      "story_type": "failure_recovery",
+      "lane": "Trust",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi redacts token-like output while telling the user that sensitive content was protected.",
+      "technical_contract": "The renderer applies secret-pattern redaction before model-visible or terminal-visible output is emitted."
+    },
+    {
+      "issue": 235,
+      "title": "Long-running tool timeout offers resumable check",
+      "story_type": "failure_recovery",
+      "lane": "Transport",
+      "effort": "Medium",
+      "complexity": "High",
+      "observable_contract": "Pi times out a long-running tool without hanging and offers a status or resume check.",
+      "technical_contract": "Transport tracking records request identity, timeout class, and retry safety before suggesting the next action."
+    },
+    {
+      "issue": 236,
+      "title": "Mid-call transport drop avoids duplicate mutation",
+      "story_type": "failure_recovery",
+      "lane": "Apply recovery",
+      "effort": "High",
+      "complexity": "High",
+      "observable_contract": "Pi refuses automatic replay when a possibly mutating call loses transport before a final result.",
+      "technical_contract": "Consent receipt and request identity are preserved while read-only reconciliation checks determine whether retry is safe."
+    },
+    {
+      "issue": 237,
+      "title": "OAuth-required service stops at login boundary",
+      "story_type": "failure_recovery",
+      "lane": "Auth",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi names the service authentication boundary and offers safe alternatives instead of faking access.",
+      "technical_contract": "Auth readback classifies missing or expired credentials without copying host-global secrets or inventing tokens."
+    },
+    {
+      "issue": 238,
+      "title": "Pi container missing project mount reports exact fix",
+      "story_type": "failure_recovery",
+      "lane": "Client adapters",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi identifies a missing project mount in the client container and gives the exact launch correction.",
+      "technical_contract": "Container-side project-root detection distinguishes mount errors from corrupt or absent project state."
+    },
+    {
+      "issue": 239,
+      "title": "Policy revocation invalidates cached tool safely",
+      "story_type": "failure_recovery",
+      "lane": "Tool policy",
+      "effort": "Medium",
+      "complexity": "High",
+      "observable_contract": "Pi blocks a previously imported tool after policy or project state revokes it.",
+      "technical_contract": "Cached Pi tool closures check current route generation and policy state before upstream dispatch."
+    },
+    {
+      "issue": 240,
+      "title": "Stale registry readback prevents false readiness",
+      "story_type": "failure_recovery",
+      "lane": "Readiness",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi refuses to claim readiness from old registry evidence and asks for fresh proof.",
+      "technical_contract": "Readiness checks compare cache age, registry generation, server identity, and route health before target-client claims."
     }
   ]
 }
