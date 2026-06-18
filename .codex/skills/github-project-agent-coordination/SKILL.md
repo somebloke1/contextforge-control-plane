@@ -68,6 +68,48 @@ Project workflow to create the native issue/PR project item. Then retire,
 defer, or cross-reference the draft item so the board does not contain two
 active items for the same work.
 
+## Configured Project Workflows
+
+The following GitHub Project #6 workflows were verified read-only in the GitHub
+UI on 2026-06-17. Treat this as the current automation contract until a fresh
+browser or API readback proves it changed.
+
+- `Auto-add to project`: for repository `contextforge-control-plane`, filter
+  `is:issue,pr is:open`; matching open issues and PRs are added to the
+  project.
+- `Item added to project`: when an issue or pull request is added, set
+  `Status: Todo`.
+- `Pull request linked to issue`: when a pull request is linked to an issue,
+  set `Status: In progress`.
+- `Code changes requested`: when a pull request has a review requesting
+  changes, set `Status: In progress`.
+- `Code review approved`: when a pull request is approved, set
+  `Status: In progress`.
+- `Pull request merged`: when a pull request is merged, set `Status: Done`.
+- `Item closed`: when an issue or pull request is closed, set `Status: Done`.
+- `Item reopened`: when an issue or pull request is reopened, set
+  `Status: In progress`.
+- `Auto-close issue`: when `Status` is updated to `Done`, close the issue.
+- `Auto-add sub-issues to project`: when an item in the project has
+  sub-issues, add the sub-issues to the project.
+- `Auto-archive items`: filter `is:issue is:closed updated:<@today-2w`; archive
+  matching items on GitHub's periodic workflow cadence, shown in the UI as
+  every 12 hours.
+
+Operational consequences:
+
+- Do not manually create native issue or PR project items for open
+  `contextforge-control-plane` issues/PRs; the auto-add workflow should do it.
+- Do not manually manage native issue/PR `Status` unless repairing a proven
+  workflow miss; `Status` is workflow-owned for normal issue/PR lifecycle
+  transitions.
+- Do manually manage `Agent state` as the agent coordination field.
+- Do manually manage roadmap draft items because they are not native
+  repository issues or PRs.
+- When a roadmap draft item is promoted to a real issue, let the workflow add
+  the issue item, then mark the draft item `Done`, `Deferred`, or
+  cross-referenced so the board has one active owner for the work.
+
 ## Agent State Values
 
 - `Candidate`: plausible future work, not selected now.
