@@ -34,7 +34,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
 
     def test_index_maps_current_open_issues_and_recent_prs(self) -> None:
         for reference in [
-            "#115: post-merge refresh for this development path index",
+            "#118: post-merge refresh for this development path index",
             "#52: guided MCP service-onboarding helper",
             "#3: host Pi global ContextForge shim prompt/resource parity",
             "#2: deferred Serena runtime blockers",
@@ -51,10 +51,13 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "#106 merged the #105 Mentality safe-probe policy contract",
             "#110 merged the #109 ssh-tmux safe-probe policy contract",
             "#114 merged the #113 OpenZeppelin Solidity Contracts safe-probe policy",
+            "#116 merged the #115 path-index refresh",
+            "#117 merged the #52 service-onboarding session-status readback",
             "closed #89",
-            "Recently closed path-setting issues include #113",
+            "Recently closed path-setting issues include #115",
         ]:
             self.assertIn(reference, self.index)
+        self.assertNotIn("#115: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#111: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#107: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#95: post-merge refresh for this development path index", self.index)
@@ -95,6 +98,21 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
         self.assertIn("Safe client-visible validation probes` was promoted through", self.index)
         self.assertIn("#97/#99/#101/#103/#105/#109/#113", self.index)
         self.assertIn("Do not implement these gaps from this index alone.", self.index)
+
+    def test_index_records_service_onboarding_status_readback(self) -> None:
+        for text in [
+            "#69 merged the first deterministic no-mutation onboarding-record helper",
+            "#87 merged a source/docs/tests increment",
+            "#93 merged a source-only resume envelope",
+            "#94 merged opt-in project-local ignored session persistence",
+            "#117 merged compact read-only status summaries",
+            "`--session-status <session-id>`",
+            "known/open classifications",
+            "answered/next questions",
+            "first real onboarding record",
+            "richer local dialogue/session management",
+        ]:
+            self.assertIn(text, self.index)
 
     def test_roadmap_links_current_path_index(self) -> None:
         self.assertIn("docs/contextforge-development-path-index.md", self.roadmap)
