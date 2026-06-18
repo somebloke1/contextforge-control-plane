@@ -70,6 +70,9 @@ class ClientVisibleActivationMatrixTests(unittest.TestCase):
             "Claim `OpenCode active` only from OpenCode-visible plugin/helper/MCP readback",
             "state that the source path is prepared and runtime validation remains unproven",
             "Do not generalize that evidence to host Pi global install/reload or Codex hook behavior",
+            "docs/safe-client-visible-validation-probes.md",
+            "known safe target-client-visible probe",
+            "skipped or presumed-working",
         ]
 
         for phrase in required_phrases:
