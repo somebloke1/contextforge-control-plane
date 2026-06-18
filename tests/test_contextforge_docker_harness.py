@@ -303,7 +303,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
 
         self.assertIn("separately approved validation", contract)
         self.assertIn("Pi ad hoc session imports the expected ContextForge helper/shim bindings", contract)
-        self.assertIn("then lists or can invoke service tools", contract)
+        self.assertIn("and then lists or can", contract)
+        self.assertIn("invoke service tools through a reachable matching ContextForge surface", contract)
         self.assertIn("OpenCode ad hoc session receives project-init helper/hook context", contract)
         self.assertIn("Both clients continue using the local llama.cpp Qwen model path", contract)
         self.assertIn("revoked before exit", contract)
@@ -342,6 +343,41 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("The active residual gap is no longer missing Pi bindings", contract)
         self.assertIn("wrapper reachability", contract)
         self.assertIn("matching virtual-server names", contract)
+
+    def test_pi_dev_baseline_launcher_prepares_matching_dev_fixture(self) -> None:
+        launcher = (ROOT / "docker/client-harness/scripts/start-pi-contextforge-dev-baseline.sh").read_text(
+            encoding="utf-8"
+        )
+        readme = (ROOT / "docker/client-harness/README.md").read_text(encoding="utf-8")
+        fixture = json.loads(
+            (ROOT / "docker/client-harness/config/pi/contextforge-dev-project-state.template.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertIn("CONTEXTFORGE_HOST_BASE_URL:-http://127.0.0.1:4445", launcher)
+        self.assertIn("CONTEXTFORGE_CONTAINER_BASE_URL:-http://host.docker.internal:4445", launcher)
+        self.assertIn("CONTEXTFORGE_DEV_SERVER_NAME:-mentality_dev_docker_server", launcher)
+        self.assertIn("CONTEXTFORGE_BEARER_TOKEN", launcher)
+        self.assertIn("CONTEXTFORGE_CONFIG_ENV=/tmp/missing-contextforge.env", launcher)
+        self.assertIn("CONTEXTFORGE_TOKEN_CACHE=/tmp/contextforge-wrapper-token.local.json", launcher)
+        self.assertIn("CONTEXTFORGE_TOKEN_LOCK=/tmp/contextforge-wrapper-token.local.json.lock", launcher)
+        self.assertIn("revoke_probe_token", launcher)
+        self.assertIn("probe_token_revoked", launcher)
+        self.assertIn("contextforge-dev-project-state.template.json", launcher)
+        self.assertIn("scripts/start-pi-contextforge-dev-baseline.sh", readme)
+        self.assertIn("starts the baseline Pi entrypoint", readme)
+        self.assertNotIn('-v "${REPO_ROOT}:/workspace:ro"', launcher)
+        self.assertNotIn("127.0.0.1:4444", launcher)
+
+        service = fixture["services"]["mentality:dev_docker"]
+        self.assertEqual("initialized", fixture["status"])
+        self.assertEqual("/workspace", fixture["project"]["root"])
+        self.assertEqual("mentality_dev_docker_server", service["virtual_server"])
+        self.assertEqual("__CONTEXTFORGE_DEV_SERVER_ID__", service["x_contextforge_server_id"])
+        self.assertEqual("mentality_dev_docker_server", service["target_clients"]["pi"]["virtual_server"])
+        self.assertEqual("enabled", service["target_clients"]["pi"]["status"])
+        self.assertEqual("contextforge-global-shim", service["target_clients"]["pi"]["shim"])
 
 
 if __name__ == "__main__":

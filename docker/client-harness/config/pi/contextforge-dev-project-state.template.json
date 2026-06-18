@@ -1,0 +1,34 @@
+{
+  "project": {
+    "name": "pi-contextforge-dev-baseline",
+    "root": "/workspace"
+  },
+  "services": {
+    "mentality:dev_docker": {
+      "service_binding": "mentality:dev_docker",
+      "service_family": "mentality",
+      "target_clients": {
+        "pi": {
+          "pi_tool_prefix": "mentality-dev-docker",
+          "shim": "contextforge-global-shim",
+          "status": "enabled",
+          "validation_status": "pending",
+          "virtual_server": "mentality_dev_docker_server"
+        }
+      },
+      "verification_layers": {
+        "tool_policy": {
+          "policy": {
+            "safe_operations": [
+              "governance-list",
+              "governance-read"
+            ]
+          }
+        }
+      },
+      "virtual_server": "mentality_dev_docker_server",
+      "x_contextforge_server_id": "__CONTEXTFORGE_DEV_SERVER_ID__"
+    }
+  },
+  "status": "initialized"
+}

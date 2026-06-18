@@ -86,6 +86,21 @@ canonical service tools are not registered until the launcher points wrappers at
 a reachable ContextForge surface with matching virtual-server names and
 container-local auth material.
 
+The harness now keeps two Pi launch paths distinct:
+
+- `scripts/start-pi-contextforge-baseline.sh` mounts the canonical repository as
+  `/workspace` and exercises the real project state. It is the right path for
+  checking project-local activation metadata, but it must not claim imported
+  service tools are usable until the target ContextForge surface has matching
+  virtual servers for that state.
+- `scripts/start-pi-contextforge-dev-baseline.sh` writes an isolated
+  `mentality:dev_docker` project-state fixture into the resettable harness
+  workspace and passes the wrapper environment used by the ContextForge
+  development Docker surface. This is the ordinary-session path for proving Pi
+  client Docker can see a real shim-imported service without relying on the
+  legacy/live ContextForge instance or pretending the canonical four-service
+  state has been registered in the dev gateway.
+
 ### OpenCode
 
 OpenCode should use a project-local harness fixture rather than a user-global
@@ -123,9 +138,10 @@ Runtime evidence should identify the exercised surface explicitly:
 
 Minimum future runtime checks:
 
-- Pi ad hoc session imports the expected ContextForge helper/shim bindings and
-  then lists or can invoke service tools through a reachable ContextForge
-  development surface without host-global Pi mutation.
+- Pi ad hoc session imports the expected ContextForge helper/shim bindings from
+  either the canonical project state or the dev fixture, and then lists or can
+  invoke service tools through a reachable matching ContextForge surface without
+  host-global Pi mutation.
 - OpenCode ad hoc session receives project-init helper/hook context from the
   harness-owned fixture without user-global OpenCode mutation.
 - Both clients continue using the local llama.cpp Qwen model path.

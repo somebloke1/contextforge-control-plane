@@ -26,9 +26,10 @@ and target-client readiness are separate claims.
 
 - Backend-only ContextForge health or registry readback is insufficient for a
   client-visible activation claim.
-- #62 is closed for the Pi/OpenCode client Docker baseline after runtime
-  evidence proved the harness can expose callable helper/shim behavior through
-  ordinary baseline sessions against the ContextForge dev Docker surface.
+- #62 has reopened for Pi ordinary first-prompt evidence. Historical runtime
+  evidence proved selected helper/shim paths, but current acceptance requires
+  fresh target-client-visible evidence from the ordinary Pi/OpenCode baseline
+  paths against a matching ContextForge surface.
 - #62 does not prove host Pi global extension install/reload behavior, host
   OpenCode global config behavior, or Codex project hook activation.
 - #3 remains the host Pi global shim install, reload, and live Pi readback

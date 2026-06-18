@@ -62,8 +62,8 @@ class ClientVisibleActivationMatrixTests(unittest.TestCase):
     def test_matrix_preserves_evidence_boundaries(self) -> None:
         required_phrases = [
             "Backend-only ContextForge health or registry readback is insufficient",
-            "#62 is closed for the Pi/OpenCode client Docker baseline",
-            "callable helper/shim behavior through ordinary baseline sessions",
+            "#62 has reopened for Pi ordinary first-prompt evidence",
+            "current acceptance requires fresh target-client-visible evidence",
             "#62 does not prove host Pi global extension install/reload behavior",
             "#3 remains the host Pi global shim install",
             "Claim `Pi active` only from Pi-visible shim/helper/guidance",

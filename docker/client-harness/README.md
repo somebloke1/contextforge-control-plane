@@ -189,6 +189,17 @@ inside the client-harness workspace, loads the shim through Pi's explicit
 revokes the scoped token before exit. It prints only the token id, never the raw
 token value.
 
+For an ordinary Pi baseline session against the same development ContextForge
+surface, use:
+
+```sh
+scripts/start-pi-contextforge-dev-baseline.sh --no-session --no-context-files -p "..."
+```
+
+That launcher uses the same scoped-token and wrapper environment contract, but
+starts the baseline Pi entrypoint with a matching `mentality:dev_docker`
+project-state fixture instead of forcing the validation tool call itself.
+
 Do not install or reload the host user-global Pi extension for this harness
 without separate approval.
 
