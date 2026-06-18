@@ -27,6 +27,9 @@ body, PR body, evidence ledger, or goal store.
   draft items for every thought, command, or transient follow-up.
 - Promote a draft roadmap item to an issue or PR only when it becomes selected
   bounded work with acceptance criteria and an evidence plan.
+- Respect configured GitHub Project workflows: if GitHub auto-adds issue or PR
+  items, or auto-marks merged PR items done, do not create duplicate native
+  project items or fight the workflow-managed status.
 - Preserve the board-use directive in successor formal goals.
 - Keep mutations idempotent: read the item and field IDs first, then update
   only the intended project item field.
@@ -36,7 +39,8 @@ body, PR body, evidence ledger, or goal store.
 - `Title`: native issue/PR title, or a concise `Roadmap: ...` title for draft
   roadmap items.
 - `Status`: GitHub Projects default workflow state. Leave it coarse unless the
-  operator asks to make it authoritative.
+  operator asks to make it authoritative. Prefer configured GitHub workflow
+  automation for native issue/PR status transitions.
 - `Labels`: native issue labels. Maintain on issues, not by project-field hacks.
 - `Linked pull requests`: native GitHub relationship. Prefer PR body/reference
   hygiene over manual board bookkeeping.
@@ -59,6 +63,10 @@ GitHub issue. Keep them at lane or bounded-initiative resolution:
 
 Use draft items to prevent future paths from being lost during compaction or
 goal refresh. Do not let draft items replace issues once implementation begins.
+When a draft roadmap item is promoted to an issue or PR, allow the configured
+Project workflow to create the native issue/PR project item. Then retire,
+defer, or cross-reference the draft item so the board does not contain two
+active items for the same work.
 
 ## Agent State Values
 
@@ -91,7 +99,10 @@ At goal maintenance:
 2. Update `Agent state` only if the coordination state changed.
 3. Add, update, retire, or promote roadmap draft items when roadmap artifacts
    expose durable future paths not represented by issues or PRs.
-4. Include the board-use directive in the successor formal goal.
+4. Let configured Project workflows auto-add linked issues/PRs and auto-close
+   or mark merged PR items done; manually reconcile only gaps that workflows do
+   not cover.
+5. Include the board-use directive in the successor formal goal.
 
 ## Suggested State Patterns
 

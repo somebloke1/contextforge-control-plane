@@ -78,6 +78,7 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "`Agent state`",
             "coordination index",
             "roadmap draft items",
+            "GitHub Project workflows",
             "successor",
             "goals",
         ]:
@@ -107,6 +108,8 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "Roadmap Draft Items",
             "Promote a draft roadmap item to an issue or PR",
             "Add, update, retire, or promote roadmap draft items",
+            "Respect configured GitHub Project workflows",
+            "workflow-managed status",
             "`Agent state`: agent-facing coordination state",
             "Candidate",
             "Ready",

@@ -177,7 +177,10 @@ formal issue. Update the board's `Agent state` field only during goal
 maintenance or other durable coordination transitions, not for transient
 activity. During goal maintenance, add, update, retire, or promote roadmap
 draft items when durable roadmap artifacts expose future paths not represented
-by issues or PRs. See the repo-local
+by issues or PRs. Configured GitHub Project workflows should remain responsible
+for auto-adding native issue/PR project items and marking merged PR items done
+where those automations apply; agents should not create duplicate native items
+or fight workflow-managed status. See the repo-local
 `github-project-agent-coordination` skill for operating details, and preserve
 this board-use directive in successor formal goals.
 
@@ -207,7 +210,8 @@ Each loop must preserve this state explicitly inside the operating agent:
    governance into one current truth.
 4. Refine: update the goal chain by completing, splitting, blocking, deferring,
    or promoting subgoals; update `Agent state` and roadmap draft items only
-   when durable coordination state changes.
+   when durable coordination state changes, while respecting configured
+   Project workflows for native issue/PR item creation and merged-PR status.
 5. Rebind: choose the next current subgoal and record why it is next by
    dependency, risk, user value, and verification readiness.
 

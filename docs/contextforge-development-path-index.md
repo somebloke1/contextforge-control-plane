@@ -33,7 +33,9 @@ yet ready to become an implementation issue. Keep them at lane or
 bounded-initiative resolution, with `Roadmap: ...` titles and bodies that name
 the outcome, current evidence source, promotion trigger, and non-goals. Promote
 them to issues or PRs when the work becomes selected, scoped, and evidence
-planned.
+planned. When configured GitHub Project workflows auto-add issue or PR items,
+agents should let that automation create native project items and mark merged
+PRs done rather than duplicating those transitions manually.
 
 The repo-local skill
 `.codex/skills/github-project-agent-coordination/SKILL.md` owns the detailed
@@ -303,6 +305,11 @@ items until they are promoted into concrete issues or PRs:
 
 Keep #2 as the explicit deferred late-phase legacy/Serena blocker instead of
 creating a duplicate roadmap draft item for legacy cutoff.
+
+When one of these draft items is promoted to a concrete issue or PR, let the
+configured Project workflows create the native issue/PR item. Then retire,
+defer, or cross-reference the roadmap draft item so the board does not show two
+active items for the same work.
 
 ## Gap Issue Candidates
 
