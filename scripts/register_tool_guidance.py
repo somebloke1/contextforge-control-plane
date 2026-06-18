@@ -104,6 +104,7 @@ PROMPTS = {
     "mentality-governance-list": ("mentality_governance_list_entries", "List governance entries for repo {repo} and ledger {ledger}, optionally filtered by ledger-valid status {status}. Summarize ids, statuses, updated dates, and titles; mention the ledger path."),
     "mentality-governance-read": ("mentality_governance_read_entry", "Read one governance entry using repo {repo}, ledger {ledger}, and exact id {id}. Return the path, metadata, body, and any raw markdown details needed for follow-up update decisions."),
     "mentality-governance-update": ("mentality_governance_update_entry", "Update one governance entry using repo {repo}, ledger {ledger}, exact id {id}, and only the fields that should change: title {title}, body {body}, status {status}, and tags {tags}. Omit unchanged fields. Return the updated id, path, status, and summary."),
+    "ssh-tmux-cleanup-dead-sessions": ("ssh_tmux_cleanup_dead_sessions", "Clean up only SSH tmux sessions already reported as dead. First list sessions, then call cleanup with dry_run {dry_run} unless the user explicitly approved deletion. Return removed session IDs and any sessions left untouched."),
     "ssh-tmux-close-session": ("ssh_tmux_close_session", "Close SSH tmux session {session_id} only after confirming no important foreground work should continue; report the final snapshot and cleanup result."),
     "ssh-tmux-get-snapshot": ("ssh_tmux_get_snapshot", "Inspect session {session_id} with {lines} lines and decide whether it is idle, busy, waiting for input, or dead."),
     "ssh-tmux-list-sessions": ("ssh_tmux_list_sessions", "List current ssh-tmux sessions and identify which session IDs are reusable, dead, or safe to clean up."),
@@ -180,6 +181,8 @@ PROMPTS = {
     "web-search-pdf-extract": ("web_search_pdf_extract_prompt", "Extract markdown text from PDF URL {url}. Bound extraction with maxPages {maxPages} and maxCharacters {maxCharacters}; report page coverage and any parse failures."),
     "web-search-web-search": ("web_search_web_search_prompt", "Search the web for {query} with provider {provider}, result count {numResults}, optional domains {domains}, and optional date bounds {startPublishedDate} to {endPublishedDate}. Return answer, sources, and metadata."),
 }
+
+PROJECT_INIT_MANAGED_TOOL_PREFIXES = ("serena-",)
 
 PLACEHOLDER_RE = re.compile(r"(?<!{){([A-Za-z_][A-Za-z0-9_]*)}(?!})")
 SQL_TRIGGER_RE = re.compile(r"(?i)(union|select|insert|update|delete|drop)(?=\s)")
@@ -283,6 +286,18 @@ def service_for_tool(name: str) -> str:
         if name.startswith(prefix):
             return service
     raise ValueError(f"unknown service for {name}")
+
+
+def tool_guidance_managed_elsewhere(name: str) -> bool:
+    return name.startswith(PROJECT_INIT_MANAGED_TOOL_PREFIXES)
+
+
+def unmapped_extra_tools(tools_by_name: dict[str, dict[str, Any]]) -> list[str]:
+    return sorted(
+        name
+        for name in set(tools_by_name) - set(PROMPTS)
+        if not tool_guidance_managed_elsewhere(name)
+    )
 
 
 def resource_uri(tool: dict[str, Any], service: str) -> str:
@@ -504,7 +519,7 @@ def main() -> int:
     tools = api_items("/tools?include_inactive=true&limit=1000", token)
     tools_by_name = index_by(tools, "name")
     missing = sorted(set(prompt_defs) - set(tools_by_name))
-    extra = sorted(set(tools_by_name) - set(PROMPTS)) if args.service is None else []
+    extra = unmapped_extra_tools(tools_by_name) if args.service is None else []
     if missing or extra:
         print(f"tool/prompt mismatch: missing={missing} extra={extra}", file=sys.stderr)
         return 1
