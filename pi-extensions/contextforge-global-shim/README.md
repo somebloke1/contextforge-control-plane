@@ -38,6 +38,15 @@ Runtime model:
   ContextForge resources and renders matching ContextForge prompts for an
   approved service. This gives Pi the same guidance surface Codex receives from
   MCP prompts/resources without flooding Pi's tool list.
+- The Pi-visible `cf_contextforge_tool_gap_report` tool classifies a
+  user-requested Pi or MCP tool name against the current imported-tool readback
+  before the agent promises tool use. It reports imported, policy-blocked,
+  route-missing, approved-service-without-tools, guidance-available-but-tool
+  absent, absent-binding, and unknown-capability states, then points to
+  readback, guidance lookup, or project-init capability discovery. This is a
+  source contract; it does not prove the narrated #228 behavior in an ordinary
+  interactive Pi session until the installed shim is exercised after approval
+  and `/reload`.
 - The Pi-visible `cf_contextforge_pi_readback` tool reports imported services,
   tool names, prompt names, resource URIs, skips, and errors for project-init
   validation and adapter diagnostics.

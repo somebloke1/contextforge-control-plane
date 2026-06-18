@@ -363,6 +363,25 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
   });
 
   registerToolOnce(pi, {
+    name: "cf_contextforge_tool_gap_report",
+    label: "ContextForge / Tool Gap Report",
+    description: "Classify a requested ContextForge/Pi tool name against current imported tools and return honest recovery guidance without fabricating a tool call.",
+    parameters: helperSchema({
+      requestedTool: { type: "string", description: "Requested Pi tool name or underlying MCP tool name." },
+      requested_tool: { type: "string", description: "Alias for requestedTool." },
+    }),
+    renderShell: "self",
+    renderCall: renderNothing,
+    renderResult: renderNothing,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const projectRoot = projectRootFromParams(params, ctx);
+      await activateProject(pi, projectRoot, clients);
+      const result = toolGapReport(String(params.requestedTool || params.requested_tool || ""));
+      return textResult(JSON.stringify(result, null, 2), result.ok === false);
+    },
+  });
+
+  registerToolOnce(pi, {
     name: "cf_contextforge_pi_validate",
     label: "ContextForge / Pi Validate",
     description: "Run compact, non-mutating Pi-visible ContextForge validation probes and return recordable validation results.",
@@ -654,6 +673,89 @@ async function lookupGuidance(params: JsonObject): Promise<JsonObject> {
     response.available_prompts = readback.prompts.filter((item) => item.serviceBinding === service.serviceBinding).map((item) => item.name);
   }
   return response;
+}
+
+function toolGapReport(requestedTool: string): JsonObject {
+  const requested = String(requestedTool || "").trim();
+  const requestedKey = slug(requested);
+  const matchedTool = readback.tools.find((tool) => {
+    if (!requestedKey) return false;
+    return [tool.piName, tool.mcpName].map((value) => slug(value)).includes(requestedKey);
+  });
+  const base: JsonObject = {
+    ok: false,
+    requested_tool: requested,
+    should_call_requested_tool: false,
+    available_pi_tools: readback.tools.map((tool) => tool.piName),
+    available_mcp_tools: readback.tools.map((tool) => tool.mcpName),
+    available_services: readback.services.map((service) => service.serviceBinding),
+    recovery_actions: [
+      "call cf_contextforge_pi_readback to inspect imported services and tools",
+      "call cf_contextforge_guidance_lookup for approved service prompt/resource guidance",
+      "call cf_project_init_list_capabilities or cf_project_init_propose before activation",
+    ],
+    readiness_status: "target_client_ready_missing",
+  };
+  if (!requested) {
+    return {
+      ...base,
+      status: "missing_requested_tool_name",
+      message: "No requested tool name was supplied.",
+    };
+  }
+  if (matchedTool) {
+    const route = toolRoutes.get(matchedTool.piName);
+    const routeMissing = !route;
+    const blocked = Boolean(matchedTool.blockedByDefault);
+    return {
+      ...base,
+      ok: !blocked && !routeMissing,
+      status: routeMissing ? "route_missing_or_import_failed" : blocked ? "blocked_by_default" : "available",
+      should_call_requested_tool: !blocked && !routeMissing,
+      matched_pi_name: matchedTool.piName,
+      matched_mcp_name: matchedTool.mcpName,
+      service_binding: matchedTool.serviceBinding,
+      readiness_status: routeMissing ? "target_client_ready_missing" : blocked ? "target_client_ready_blocked_by_policy" : "target_client_ready",
+      message: routeMissing
+        ? "The requested tool was listed in readback, but its active route is missing in this Pi session."
+        : blocked
+          ? "The requested tool is imported but blocked by the default safe Pi policy."
+          : "The requested tool is imported in the current Pi project.",
+    };
+  }
+  if (readback.services.length === 0) {
+    return {
+      ...base,
+      status: "absent_binding",
+      message: "No approved target_clients.pi service bindings are present for this project.",
+    };
+  }
+  const emptyServices = readback.validation
+    .filter((signal) => signal.status === "skipped" && signal.skipped_reason === "no_pi_tools_registered")
+    .map((signal) => String(signal.service_binding || ""))
+    .filter(Boolean);
+  if (emptyServices.length > 0) {
+    return {
+      ...base,
+      status: "approved_service_no_imported_tools",
+      affected_services: emptyServices,
+      message: "Approved Pi services exist, but no MCP tools are currently imported for them.",
+    };
+  }
+  const serviceWithGuidance = selectGuidanceService("", requested, "", "");
+  if (serviceWithGuidance) {
+    return {
+      ...base,
+      status: "guidance_available_but_tool_absent",
+      service_binding: serviceWithGuidance.serviceBinding,
+      message: "Guidance exists for the requested capability, but no matching Pi tool is currently imported.",
+    };
+  }
+  return {
+    ...base,
+    status: "unknown_capability",
+    message: "The requested tool is not currently imported into the Pi shim for this project.",
+  };
 }
 
 function selectGuidanceService(serviceBinding: string, mcpToolName: string, resourceUri: string, promptName: string): ProjectService | undefined {

@@ -1074,6 +1074,104 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("skipped", result["validation_signals"][0]["status"])
         self.assertEqual("no_matching_safe_pi_tool", result["validation_signals"][0]["skipped_reason"])
 
+    def test_pi_shim_dry_run_classifies_absent_tool_without_fabricated_route(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            project_state.write_state_atomic(root, state)
+            result = pi_contextforge_shim_dry_run.dry_run(
+                root,
+                {"context7_server": [{"name": "context7-local-resolve-library-id"}]},
+                requested_tool="cf_context7_s123__missing-tool",
+            )
+
+        guidance = result["requested_tool_guidance"]
+        self.assertEqual("unknown_capability", guidance["status"])
+        self.assertFalse(guidance["should_call_requested_tool"])
+        self.assertEqual("target_client_ready_missing", guidance["readiness_status"])
+        self.assertIn("cf_context7_s", guidance["available_pi_tools"][0])
+        self.assertIn("cf_contextforge_pi_readback", guidance["recovery_actions"][0])
+        self.assertIn("cf_project_init_list_capabilities", " ".join(guidance["recovery_actions"]))
+        self.assertIn("not currently imported", guidance["message"])
+
+    def test_pi_shim_dry_run_classifies_blocked_tool_without_calling_it(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("github")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            project_state.write_state_atomic(root, state)
+            result = pi_contextforge_shim_dry_run.dry_run(
+                root,
+                {"github_server": [{"name": "github-create-issue"}]},
+                requested_tool="github-create-issue",
+            )
+
+        guidance = result["requested_tool_guidance"]
+        self.assertEqual("blocked_by_default", guidance["status"])
+        self.assertFalse(guidance["should_call_requested_tool"])
+        self.assertEqual("target_client_ready_blocked_by_policy", guidance["readiness_status"])
+        self.assertEqual("github-create-issue", guidance["matched_mcp_name"])
+        self.assertIn("blocked by the default safe Pi policy", guidance["message"])
+
+    def test_pi_shim_dry_run_cli_reports_requested_tool_guidance(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            project_state.write_state_atomic(root, state)
+            fixture = root / "tools.json"
+            fixture.write_text(json.dumps({"context7_server": [{"name": "context7-local-resolve-library-id"}]}), encoding="utf-8")
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/pi_contextforge_shim_dry_run.py"),
+                    "--project-root",
+                    str(root),
+                    "--tool-fixture",
+                    str(fixture),
+                    "--requested-tool",
+                    "missing-tool",
+                ],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+
+        payload = json.loads(completed.stdout)
+        self.assertEqual("unknown_capability", payload["requested_tool_guidance"]["status"])
+        self.assertFalse(payload["requested_tool_guidance"]["should_call_requested_tool"])
+
     def test_pi_helper_resumes_pending_validation_when_shim_metadata_is_current(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -1361,6 +1459,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Diagnostic only", text)
         self.assertIn("cf_contextforge_pi_readback", text)
         self.assertIn("cf_contextforge_guidance_lookup", text)
+        self.assertIn("cf_contextforge_tool_gap_report", text)
+        self.assertIn("toolGapReport", text)
+        self.assertIn("should_call_requested_tool", text)
+        self.assertIn("guidance_available_but_tool_absent", text)
+        self.assertIn("unknown_capability", text)
         self.assertIn("listPrompts", text)
         self.assertIn("getPrompt", text)
         self.assertIn("listResources", text)

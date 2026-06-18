@@ -128,6 +128,89 @@ def validation_signals(services: list[dict[str, Any]], tools: list[dict[str, Any
     return signals
 
 
+def absent_tool_guidance(dry_run_result: Mapping[str, Any], requested_tool: str) -> dict[str, Any]:
+    """Classify a requested Pi/ContextForge tool name without inventing a route."""
+
+    requested = str(requested_tool or "").strip()
+    requested_key = slug(requested)
+    tools = [tool for tool in dry_run_result.get("registered_tools") or [] if isinstance(tool, Mapping)]
+    services = [service for service in dry_run_result.get("services") or [] if isinstance(service, Mapping)]
+    validation = [signal for signal in dry_run_result.get("validation_signals") or [] if isinstance(signal, Mapping)]
+
+    matched_tool = next(
+        (
+            tool
+            for tool in tools
+            if requested_key
+            and requested_key
+            in {
+                slug(str(tool.get("pi_name") or "")),
+                slug(str(tool.get("mcp_name") or "")),
+            }
+        ),
+        None,
+    )
+    recovery_actions = [
+        "run cf_contextforge_pi_readback to inspect imported services and tools",
+        "run cf_contextforge_guidance_lookup for approved service prompt/resource guidance",
+        "run cf_project_init_list_capabilities or cf_project_init_propose before activation",
+    ]
+    base = {
+        "requested_tool": requested,
+        "should_call_requested_tool": False,
+        "available_pi_tools": [str(tool.get("pi_name") or "") for tool in tools],
+        "available_mcp_tools": [str(tool.get("mcp_name") or "") for tool in tools],
+        "available_services": [str(service.get("service_binding") or "") for service in services],
+        "recovery_actions": recovery_actions,
+        "readiness_status": "target_client_ready_missing",
+    }
+    if not requested:
+        return {
+            **base,
+            "status": "missing_requested_tool_name",
+            "message": "No requested tool name was supplied.",
+        }
+    if matched_tool:
+        blocked = bool(matched_tool.get("blocked_by_default"))
+        return {
+            **base,
+            "status": "blocked_by_default" if blocked else "available",
+            "should_call_requested_tool": not blocked,
+            "matched_pi_name": str(matched_tool.get("pi_name") or ""),
+            "matched_mcp_name": str(matched_tool.get("mcp_name") or ""),
+            "service_binding": str(matched_tool.get("service_binding") or ""),
+            "readiness_status": "target_client_ready" if not blocked else "target_client_ready_blocked_by_policy",
+            "message": (
+                "The requested tool is imported but blocked by the default safe Pi policy."
+                if blocked
+                else "The requested tool is imported in the current Pi project."
+            ),
+        }
+    if not services:
+        return {
+            **base,
+            "status": "absent_binding",
+            "message": "No approved target_clients.pi service bindings are present for this project.",
+        }
+    empty_services = [
+        str(signal.get("service_binding") or "")
+        for signal in validation
+        if signal.get("status") == "skipped" and signal.get("skipped_reason") == "no_pi_tools_registered"
+    ]
+    if empty_services:
+        return {
+            **base,
+            "status": "approved_service_no_imported_tools",
+            "affected_services": empty_services,
+            "message": "Approved Pi services exist, but no MCP tools are currently imported for them.",
+        }
+    return {
+        **base,
+        "status": "unknown_capability",
+        "message": "The requested tool is not currently imported into the Pi shim for this project.",
+    }
+
+
 def load_tool_fixture(path: Path) -> dict[str, list[dict[str, Any]]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, Mapping):
@@ -140,7 +223,7 @@ def load_tool_fixture(path: Path) -> dict[str, list[dict[str, Any]]]:
     return output
 
 
-def dry_run(project_root: str | Path, tool_fixture: Mapping[str, list[dict[str, Any]]]) -> dict[str, Any]:
+def dry_run(project_root: str | Path, tool_fixture: Mapping[str, list[dict[str, Any]]], requested_tool: str | None = None) -> dict[str, Any]:
     root = project_state.validate_project_root(project_root, require_workspace=False)
     state = project_state.load_state(root) or project_state.default_state(root)
     services = approved_pi_services(state)
@@ -166,7 +249,7 @@ def dry_run(project_root: str | Path, tool_fixture: Mapping[str, list[dict[str, 
                     "blocked_by_default": blocked_by_default(service, mcp_name),
                 }
             )
-    return {
+    result = {
         "project_root": str(root),
         "state_path": str(project_state.project_state_path(root)),
         "services": services,
@@ -175,14 +258,18 @@ def dry_run(project_root: str | Path, tool_fixture: Mapping[str, list[dict[str, 
         "skipped": skipped,
         "target_client_visible": bool(tools),
     }
+    if requested_tool is not None:
+        result["requested_tool_guidance"] = absent_tool_guidance(result, requested_tool)
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Dry-run Pi ContextForge shim registration from project state and a tools/list fixture.")
     parser.add_argument("--project-root", required=True)
     parser.add_argument("--tool-fixture", required=True, type=Path)
+    parser.add_argument("--requested-tool", help="Classify a user-requested Pi or MCP tool name without fabricating a route")
     args = parser.parse_args(argv)
-    print(json.dumps(dry_run(args.project_root, load_tool_fixture(args.tool_fixture)), indent=2, sort_keys=True))
+    print(json.dumps(dry_run(args.project_root, load_tool_fixture(args.tool_fixture), requested_tool=args.requested_tool), indent=2, sort_keys=True))
     return 0
 
 

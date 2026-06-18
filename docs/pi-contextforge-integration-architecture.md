@@ -47,6 +47,14 @@ mechanism.
   `scripts/contextforge_mcp_wrapper.py` for each approved virtual server, then
   maps MCP `tools/list`, `prompts/list`, and `resources/list` into Pi-visible
   readback, guidance lookup, validation, and imported tools.
+- `scripts/pi_contextforge_shim_dry_run.py` models the same source-level
+  imported-tool readback and can classify a user-requested tool name without
+  fabricating a Pi route. Its `--requested-tool` path reports whether a tool is
+  imported, blocked by the default safe Pi policy, absent because no Pi tools
+  were imported, or unknown/unimported, then points to readback, guidance
+  lookup, or project-init capability discovery as the recovery path. This is
+  the source/test contract for #228; it is not ordinary interactive Pi-session
+  proof.
 - `scripts/manage_pi_global_shim.py` owns status, plan, and explicitly
   confirmed install/upgrade for the user-global Pi extension. Its status and
   plan paths are non-mutating. The install path requires
