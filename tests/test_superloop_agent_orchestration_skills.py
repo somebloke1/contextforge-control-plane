@@ -63,6 +63,17 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
         ]:
             self.assertIn(text, self.controller)
 
+    def test_controller_skill_defines_worktree_policy(self) -> None:
+        for text in [
+            "one clean controller baseline on current\n`dev-root`",
+            "separate linked\nworktrees for worker branches",
+            "Do not casually move the controller through many dirty worktrees",
+            "linked\nworktrees as leased execution surfaces",
+            "records which worktree owns each active branch or lease",
+            "returns to the clean baseline before final integration",
+        ]:
+            self.assertIn(text, self.controller)
+
     def test_controller_skill_requires_worker_goal_text(self) -> None:
         for text in [
             "initial worker formal goal text",
