@@ -98,6 +98,7 @@ services:
       CONTEXTFORGE_OPENCODE_HOOK_PYTHON: python3
       CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python
       CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py
+      CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
     volumes:
       - opencode-home:/home/agent
       - ../..:/repo:ro
@@ -149,6 +150,7 @@ services:
       CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT: /workspace
       CONTEXTFORGE_PI_SHIM_PYTHON: /opt/contextforge-wrapper-venv/bin/python
       CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py
+      CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
     volumes:
       - pi-home:/home/agent
       - ../..:/repo:ro

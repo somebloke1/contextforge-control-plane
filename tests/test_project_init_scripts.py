@@ -70,6 +70,19 @@ class ProjectInitCommonTests(unittest.TestCase):
         self.assertEqual(root, common.validate_project_root(root, require_workspace=True))
         self.assertEqual(root / "dev", common.validate_project_root(root / "dev", require_workspace=True))
 
+    def test_additional_safe_project_roots_are_explicit_env_only(self) -> None:
+        root = Path("/workspace")
+        with self.assertRaises(ValueError):
+            common.validate_project_root(root, require_workspace=True)
+        with mock.patch.dict(common.os.environ, {common.ADDITIONAL_SAFE_ROOTS_ENV: str(root)}):
+            self.assertTrue(common.safe_workspace_project_root(root))
+            self.assertEqual(root, common.validate_project_root(root, require_workspace=True))
+
+    def test_additional_safe_project_roots_do_not_override_denied_roots(self) -> None:
+        with mock.patch.dict(common.os.environ, {common.ADDITIONAL_SAFE_ROOTS_ENV: str(Path.home())}):
+            with self.assertRaises(ValueError):
+                common.validate_project_root(Path.home(), require_workspace=True)
+
     def test_symlink_escape_is_not_a_safe_workspace_project(self) -> None:
         link = common.WORKSPACE_ROOT / "cf-controlplane-test-symlink-escape"
         if link.exists() or link.is_symlink():

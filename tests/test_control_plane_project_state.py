@@ -52,6 +52,19 @@ class ControlPlaneProjectStateTests(unittest.TestCase):
         self.assertEqual(root, state_lib.validate_project_root(root, require_workspace=True))
         self.assertEqual(root / "dev", state_lib.validate_project_root(root / "dev", require_workspace=True))
 
+    def test_additional_safe_project_roots_are_explicit_env_only(self) -> None:
+        root = Path("/workspace")
+        with self.assertRaises(state_lib.RootValidationError):
+            state_lib.validate_project_root(root, require_workspace=True)
+        with unittest.mock.patch.dict(os.environ, {state_lib.ADDITIONAL_SAFE_ROOTS_ENV: str(root)}):
+            self.assertTrue(state_lib.is_safe_project_root(root))
+            self.assertEqual(root, state_lib.validate_project_root(root, require_workspace=True))
+
+    def test_additional_safe_project_roots_do_not_override_denied_roots(self) -> None:
+        with unittest.mock.patch.dict(os.environ, {state_lib.ADDITIONAL_SAFE_ROOTS_ENV: str(Path.home())}):
+            with self.assertRaises(state_lib.RootValidationError):
+                state_lib.validate_project_root(Path.home(), require_workspace=True)
+
     def test_explicit_denied_root_is_rejected(self) -> None:
         with self.workspace_project() as tmp:
             root = Path(tmp).resolve()

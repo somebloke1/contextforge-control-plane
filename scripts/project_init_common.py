@@ -17,6 +17,7 @@ HOME = Path.home().resolve()
 WORKSPACE_ROOT = Path("/home/dgk/workspace").resolve()
 CMU_MATH_FOUNDATIONS_ROOT = Path("/home/dgk/gdrive/__CMU/classes/00_MathFoundationsML").resolve()
 SAFE_PROJECT_ROOTS = frozenset({WORKSPACE_ROOT, CMU_MATH_FOUNDATIONS_ROOT})
+ADDITIONAL_SAFE_ROOTS_ENV = "CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUN_ROOT = REPO_ROOT / "run"
 SERVER_INSTANCES_ROOT = REPO_ROOT / "server-instances"
@@ -84,6 +85,20 @@ def canonical_path(value: str | Path) -> Path:
     return Path(value).expanduser().resolve(strict=False)
 
 
+def additional_safe_project_roots() -> frozenset[Path]:
+    raw = os.environ.get(ADDITIONAL_SAFE_ROOTS_ENV, "")
+    roots = {
+        canonical_path(item)
+        for item in raw.split(os.pathsep)
+        if item.strip()
+    }
+    return frozenset(root for root in roots if not is_denied_project_root(root))
+
+
+def safe_project_roots() -> frozenset[Path]:
+    return SAFE_PROJECT_ROOTS | additional_safe_project_roots()
+
+
 def is_relative_to(path: Path, parent: Path) -> bool:
     try:
         path.relative_to(parent)
@@ -97,7 +112,7 @@ def is_denied_project_root(path: Path) -> bool:
 
 
 def safe_workspace_project_root(path: Path) -> bool:
-    return any(is_relative_to(path, root) for root in SAFE_PROJECT_ROOTS) and not is_denied_project_root(path)
+    return any(is_relative_to(path, root) for root in safe_project_roots()) and not is_denied_project_root(path)
 
 
 def normalize_slug(name: str) -> str:
