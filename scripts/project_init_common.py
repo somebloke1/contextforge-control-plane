@@ -491,6 +491,48 @@ def safe_validation_policy(service_family: str) -> dict[str, Any]:
             "mode": "read_only",
             "description": "list sessions or read existing session visibility only",
             "safe_operations": ["list-sessions", "get-snapshot"],
+            "probe_contract": {
+                "status": "known_safe_probe",
+                "target_client_proof_layers": ["list_tools", "call_tool"],
+                "allowed_tool_name_patterns": [
+                    "ssh-tmux-list-sessions",
+                    "ssh-tmux-get-snapshot",
+                    "list_sessions",
+                    "get_snapshot",
+                ],
+                "default_probe": {
+                    "safe_probe_id": "list-sessions",
+                    "tool_name_hint": "ssh-tmux-list-sessions",
+                    "arguments": {},
+                    "expected_result": "non-error listing or empty listing of existing sessions without opening or mutating sessions",
+                },
+                "accepted_proof_kinds": [
+                    "target_client_safe_probe_result",
+                    "pi_safe_probe_result",
+                ],
+                "validation_result_shape": {
+                    "status": "passed",
+                    "target_client_visible": True,
+                    "proof_kind": "target_client_safe_probe_result",
+                    "safe_probe_result": "passed",
+                    "safe_probe_id": "list-sessions",
+                    "verification_trace_refs": [
+                        "contextforge://control-plane/traces/ssh-tmux-target-client"
+                    ],
+                },
+                "forbidden_substitutions": [
+                    "open session",
+                    "send command",
+                    "send keys",
+                    "cleanup dead sessions",
+                    "close session",
+                    "remote file read",
+                    "remote file write",
+                    "direct shell or tmux command",
+                    "backend health",
+                    "local process inspection",
+                ],
+            },
             "requires_mutation_approval": True,
             "mutation_boundary": "opening sessions or sending commands requires explicit approval",
         },

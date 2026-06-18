@@ -207,6 +207,84 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             safe_default["probe_contract"]["validation_result_shape"]["proof_kind"],
         )
 
+    def test_ssh_tmux_probe_contract_is_documented_and_machine_readable(self) -> None:
+        for phrase in [
+            "## ssh-tmux Probe Contract",
+            "target-client `list-tools` evidence plus one",
+            "ssh-tmux-list-sessions",
+            "ssh-tmux-get-snapshot",
+            "list_sessions",
+            "get_snapshot",
+            "call `ssh-tmux-list-sessions` with `{}`",
+            "target_client_safe_probe_result",
+            "pi_safe_probe_result",
+            "safe_probe_result: passed",
+            "safe_probe_id: list-sessions",
+            "opening sessions",
+            "sending commands or keys",
+            "cleanup/deletion",
+            "direct shell or tmux commands",
+            "local process inspection",
+        ]:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.normalized)
+
+        policy = common.safe_validation_policy("ssh-tmux")
+        contract = policy["probe_contract"]
+
+        self.assertEqual("known_safe_probe", contract["status"])
+        self.assertEqual(["list_tools", "call_tool"], contract["target_client_proof_layers"])
+        self.assertEqual(
+            [
+                "ssh-tmux-list-sessions",
+                "ssh-tmux-get-snapshot",
+                "list_sessions",
+                "get_snapshot",
+            ],
+            contract["allowed_tool_name_patterns"],
+        )
+        self.assertEqual("list-sessions", contract["default_probe"]["safe_probe_id"])
+        self.assertEqual({}, contract["default_probe"]["arguments"])
+        self.assertEqual(
+            {"target_client_safe_probe_result", "pi_safe_probe_result"},
+            set(contract["accepted_proof_kinds"]),
+        )
+        self.assertEqual("passed", contract["validation_result_shape"]["status"])
+        self.assertIs(contract["validation_result_shape"]["target_client_visible"], True)
+        self.assertIn("send command", contract["forbidden_substitutions"])
+        self.assertIn("direct shell or tmux command", contract["forbidden_substitutions"])
+        self.assertIn("local process inspection", contract["forbidden_substitutions"])
+
+    def test_ssh_tmux_probe_contract_flows_into_validation_plan(self) -> None:
+        service = {
+            "service_family": "ssh-tmux",
+            "service_binding": "ssh-tmux:canonical",
+            "validation_policy": common.safe_validation_policy("ssh-tmux"),
+        }
+        plan = binding.build_project_init_validation_plan(
+            [service],
+            validation_mode="validate_now",
+            target_client="codex",
+        )
+        service_plan = plan["service_plans"][0]
+        safe_default = service_plan["safe_default"]
+
+        self.assertEqual("target_client_visible_mcp", service_plan["required_proof"])
+        self.assertEqual("pending_target_client_probe", service_plan["status"])
+        self.assertEqual("read_only", safe_default["mode"])
+        self.assertEqual(
+            ["list-sessions", "get-snapshot"],
+            safe_default["safe_operations"],
+        )
+        self.assertEqual(
+            "ssh-tmux-list-sessions",
+            safe_default["probe_contract"]["default_probe"]["tool_name_hint"],
+        )
+        self.assertEqual(
+            "target_client_safe_probe_result",
+            safe_default["probe_contract"]["validation_result_shape"]["proof_kind"],
+        )
+
     def test_context7_result_builder_boundary_is_documented(self) -> None:
         for phrase in [
             "## Context7 Result Builder Boundary",
@@ -377,6 +455,93 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             with self.subTest(name=name):
                 result = common.build_safe_probe_validation_result(
                     "mentality",
+                    target_client="codex",
+                    **kwargs,
+                )
+                self.assertEqual("pending", result["status"])
+                self.assertIs(result["target_client_visible"], False)
+                self.assertEqual(reason, result["skipped_reason"])
+
+    def test_ssh_tmux_result_builder_accepts_target_client_safe_proof(self) -> None:
+        result = common.build_safe_probe_validation_result(
+            "ssh-tmux",
+            target_client="codex",
+            tool_name="ssh-tmux-list-sessions",
+            verification_trace_refs=["contextforge://control-plane/traces/ssh-tmux-target-client"],
+            result_summary="listed existing sessions",
+        )
+
+        self.assertEqual("passed", result["status"])
+        self.assertIs(result["target_client_visible"], True)
+        self.assertEqual("target_client_safe_probe_result", result["proof_kind"])
+        self.assertEqual("passed", result["safe_probe_result"])
+        self.assertEqual("list-sessions", result["safe_probe_id"])
+        self.assertEqual("codex", result["target_client"])
+        self.assertEqual("ssh-tmux-list-sessions", result["tool_name"])
+        self.assertEqual(
+            ["contextforge://control-plane/traces/ssh-tmux-target-client"],
+            result["verification_trace_refs"],
+        )
+
+    def test_ssh_tmux_result_builder_rejects_mutating_or_local_substitutes(self) -> None:
+        cases = [
+            (
+                "open_session",
+                {
+                    "tool_name": "ssh-tmux-open-session",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/ssh-tmux-target-client"],
+                },
+                "no_matching_safe_tool",
+            ),
+            (
+                "send_command",
+                {
+                    "tool_name": "ssh-tmux-send-command",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/ssh-tmux-target-client"],
+                },
+                "no_matching_safe_tool",
+            ),
+            (
+                "direct_shell",
+                {
+                    "tool_name": "tmux list-sessions",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/ssh-tmux-target-client"],
+                },
+                "no_matching_safe_tool",
+            ),
+            (
+                "unsupported_safe_probe",
+                {
+                    "tool_name": "ssh-tmux-list-sessions",
+                    "safe_probe_id": "send-command",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/ssh-tmux-target-client"],
+                },
+                "unsupported_safe_probe_id",
+            ),
+            (
+                "missing_trace",
+                {
+                    "tool_name": "ssh-tmux-list-sessions",
+                    "verification_trace_refs": [],
+                },
+                "missing_target_client_trace",
+            ),
+            (
+                "failed_probe",
+                {
+                    "tool_name": "ssh-tmux-list-sessions",
+                    "safe_probe_result": "error",
+                    "status": "pending",
+                    "verification_trace_refs": ["contextforge://control-plane/traces/ssh-tmux-target-client"],
+                },
+                "safe_probe_not_passed",
+            ),
+        ]
+
+        for name, kwargs, reason in cases:
+            with self.subTest(name=name):
+                result = common.build_safe_probe_validation_result(
+                    "ssh-tmux",
                     target_client="codex",
                     **kwargs,
                 )
