@@ -85,12 +85,15 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "#140 is now the ready validation issue",
             "#131 and #135-#139 are candidate ideal-form issues",
             "#144, #158, and #161 are ready source/docs/tests guardrail\n  candidates",
+            "`docs/readiness-claim-guardrails.md` defines the readiness vocabulary",
             "#153 is ready as the inventory-as-discovery validation issue",
             "#152 is now the ready ideal-form issue",
             "not as a\n  replacement owner",
             "#149 and #150 are candidate issues",
             "#159 is now the candidate operator productization issue",
             "#146, #147, and #148 are deferred trust",
+            "#161 owns the readiness claim guardrails",
+            "The durable source contract is\n  `docs/readiness-claim-guardrails.md`",
         ]:
             self.assertIn(text, self.index)
 

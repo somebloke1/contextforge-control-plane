@@ -206,6 +206,9 @@ Near-term gap:
   verification traces, surface-labeled evidence, and readiness claim
   guardrails. #144, #158, and #161 are ready source/docs/tests guardrail
   candidates; #3 remains the separate host Pi operational front.
+- `docs/readiness-claim-guardrails.md` defines the readiness vocabulary that
+  prevents source, backend, ContextForge, and target-client claims from being
+  collapsed into one generic validation state.
 
 ### Dev Docker Integration Lab
 
@@ -387,6 +390,8 @@ Near-term gap:
   Its 2026-06-18 intake comment `4740100419` records the #130-#161
   classification and Project #6 Agent state readback. #155 and #156 remain
   candidate issues for governance ledger authority and service memory boundary.
+- #161 owns the readiness claim guardrails. The durable source contract is
+  `docs/readiness-claim-guardrails.md`.
 
 ### Legacy Retirement
 

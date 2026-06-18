@@ -18,6 +18,10 @@ being claimed.
 The catalog is the contract for deciding which probe semantics are safe enough
 to implement later, one service at a time.
 
+Use `docs/readiness-claim-guardrails.md` to report probe and readiness state.
+Probe contracts can make a slice `source_ready`; only target-client-visible
+list/call proof can support `target_client_ready`.
+
 ## Client Surfaces
 
 | Client surface | Target-client proof must come from | Not sufficient |
@@ -166,6 +170,9 @@ ContextForge-exposed OpenZeppelin tool.
 
 ## Claim Rules
 
+- Report source, backend, ContextForge, and target-client readiness with
+  `docs/readiness-claim-guardrails.md`; do not collapse those layers into one
+  generic validation state.
 - Record `validated` only after the exact target client lists and, where safe,
   calls the intended ContextForge-visible probe.
 - Record `skipped` when no safe payload exists or the target-client probe tool
