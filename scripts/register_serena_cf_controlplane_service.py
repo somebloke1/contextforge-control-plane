@@ -7,12 +7,15 @@ import argparse
 import sys
 import time
 import urllib.error
+from urllib.parse import urlparse
 from typing import Any
 
 import contextforge_mcp_wrapper as gateway
 
 
 OWNER = "admin@contextforge.dev"
+GATEWAY_ID = "6737c3908d3a4bb098d829a5a4e5327f"
+SERVER_ID = "c14f033a68f34b9ba26870bfede42cbf"
 GATEWAY_NAME = "serena-cf-controlplane-d46fe58a2a20"
 SERVER_NAME = "serena_cf_controlplane_d46fe58a2a20_server"
 GATEWAY_URL = "http://localhost:9108/mcp"
@@ -39,6 +42,58 @@ def by_name(rows: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
     return None
 
 
+def tag_values(values: Any) -> set[str]:
+    tags: set[str] = set()
+    if not isinstance(values, list):
+        return tags
+    for value in values:
+        if isinstance(value, str):
+            tags.add(value)
+        elif isinstance(value, dict):
+            for key in ("id", "name", "label"):
+                if value.get(key):
+                    tags.add(str(value[key]))
+    return tags
+
+
+def normalized_endpoint(url: str) -> tuple[str, int | None, str]:
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    if host in {"localhost", "127.0.0.1"}:
+        host = "127.0.0.1"
+    return host, parsed.port, parsed.path.rstrip("/")
+
+
+def gateway_matches(row: dict[str, Any]) -> bool:
+    name = str(row.get("name") or "")
+    slug = str(row.get("slug") or "")
+    if row.get("id") == GATEWAY_ID:
+        return True
+    if name == GATEWAY_NAME or slug == GATEWAY_NAME:
+        return True
+    url = str(row.get("url") or "")
+    return normalized_endpoint(url) == normalized_endpoint(GATEWAY_URL)
+
+
+def server_matches(row: dict[str, Any]) -> bool:
+    name = str(row.get("name") or "")
+    if row.get("id") == SERVER_ID:
+        return True
+    if name == SERVER_NAME:
+        return True
+    tags = tag_values(row.get("tags"))
+    description = str(row.get("description") or "").lower()
+    return "serena" in tags and "contextforge operator repository" in description
+
+
+def unique_match(rows: list[dict[str, Any]], predicate: Any, label: str) -> dict[str, Any] | None:
+    matches = [row for row in rows if predicate(row)]
+    if len(matches) > 1:
+        names = ", ".join(str(row.get("name") or row.get("id")) for row in matches)
+        raise RuntimeError(f"ambiguous {label} matches: {names}")
+    return matches[0] if matches else None
+
+
 def gateway_body() -> dict[str, Any]:
     return {
         "name": GATEWAY_NAME,
@@ -53,7 +108,7 @@ def gateway_body() -> dict[str, Any]:
 
 
 def ensure_gateway(token: str) -> dict[str, Any]:
-    existing = by_name(api_items("/gateways?include_inactive=true&limit=1000", token), GATEWAY_NAME)
+    existing = unique_match(api_items("/gateways?include_inactive=true&limit=1000", token), gateway_matches, "Serena gateway")
     body = gateway_body()
     if not existing:
         return api_request("POST", "/gateways", token=token, body=body)
@@ -70,7 +125,7 @@ def tools_for_gateway(token: str, gateway_id: str) -> list[dict[str, Any]]:
             tool
             for tool in tools
             if (tool.get("gatewayId") == gateway_id or tool.get("gateway_id") == gateway_id)
-            and tool.get("originalName") not in EXCLUDED_ORIGINAL_TOOL_NAMES
+            and original_tool_name(tool) not in EXCLUDED_ORIGINAL_TOOL_NAMES
         ],
         key=lambda tool: tool["name"],
     )
@@ -105,7 +160,7 @@ def resource_ids(token: str) -> list[str]:
         if isinstance(resource.get("id"), str)
         and (
             str(resource.get("uri") or "").startswith("serena-cf-controlplane-d46fe58a2a20://tools/")
-            or "serena" in (resource.get("tags") or [])
+            or str(resource.get("uri") or "") == "contextforge://cf-controlplane/serena-project-instance-guidance/v15"
         )
     )
 
@@ -116,22 +171,33 @@ def prompt_ids(token: str) -> list[str]:
         prompt["id"]
         for prompt in prompts
         if isinstance(prompt.get("id"), str)
-        and (
-            str(prompt.get("customName") or prompt.get("custom_name") or prompt.get("name") or "").startswith("serena_")
-            or "serena" in (prompt.get("tags") or [])
-        )
+        and str(prompt.get("customName") or prompt.get("custom_name") or prompt.get("name") or "")
+        == "serena_project_instance_guidance"
     )
 
 
+def original_tool_name(tool: dict[str, Any]) -> str:
+    original = tool.get("originalName") or tool.get("original_name")
+    if original:
+        return str(original)
+    name = str(tool.get("name") or "")
+    if name.startswith(f"{GATEWAY_NAME}-"):
+        return name[len(GATEWAY_NAME) + 1 :].replace("-", "_")
+    return name.replace("-", "_")
+
+
 def ensure_server(token: str, tool_ids: list[str]) -> dict[str, Any]:
-    existing = by_name(api_items("/servers?include_inactive=true&limit=1000", token), SERVER_NAME)
+    existing = unique_match(api_items("/servers?include_inactive=true&limit=1000", token), server_matches, "Serena virtual server")
     body = server_body(tool_ids)
     if existing:
         update_body = {
+            "name": body["name"],
+            "description": body["description"],
             "associatedTools": tool_ids,
-            "associatedResources": existing.get("associatedResources") or existing.get("associatedResourceIds") or resource_ids(token),
-            "associatedPrompts": existing.get("associatedPrompts") or existing.get("associatedPromptIds") or prompt_ids(token),
+            "associatedResources": resource_ids(token),
+            "associatedPrompts": prompt_ids(token),
             "associatedA2aAgents": existing.get("associatedA2aAgents") or [],
+            "tags": body["tags"],
             "ownerEmail": OWNER,
             "visibility": "public",
         }

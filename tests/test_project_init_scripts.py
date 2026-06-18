@@ -364,6 +364,97 @@ args = ["{legacy}/scripts/contextforge_helper_mcp.py"]
         token.assert_not_called()
         ensure_gateway.assert_not_called()
 
+    def test_serena_registration_reconciles_legacy_gateway_by_url(self) -> None:
+        requests: list[tuple[str, str, dict[str, object] | None]] = []
+
+        def fake_items(path: str, token: str) -> list[dict[str, object]]:
+            self.assertEqual("token", token)
+            self.assertEqual("/gateways?include_inactive=true&limit=1000", path)
+            return [
+                {
+                    "id": "gateway-old",
+                    "name": "stale-serena-gateway",
+                    "slug": "stale-serena-gateway",
+                    "url": serena_registration.GATEWAY_URL,
+                }
+            ]
+
+        def fake_request(method: str, path: str, *, token: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            self.assertEqual("token", token)
+            requests.append((method, path, body))
+            return {"id": "gateway-old", **(body or {})}
+
+        with (
+            mock.patch.object(serena_registration, "api_items", side_effect=fake_items),
+            mock.patch.object(serena_registration, "api_request", side_effect=fake_request),
+        ):
+            row = serena_registration.ensure_gateway("token")
+
+        self.assertEqual("gateway-old", row["id"])
+        self.assertEqual([("PUT", "/gateways/gateway-old")], [(method, path) for method, path, _body in requests])
+        body = requests[0][2] or {}
+        self.assertEqual(serena_registration.GATEWAY_NAME, body["name"])
+        self.assertEqual(serena_registration.GATEWAY_URL, body["url"])
+        self.assertTrue(body["enabled"])
+        self.assertNotIn("stale-serena-gateway", body["tags"])
+
+    def test_serena_registration_replaces_legacy_server_metadata_and_resources(self) -> None:
+        requests: list[tuple[str, str, dict[str, object] | None]] = []
+
+        def fake_items(path: str, token: str) -> list[dict[str, object]]:
+            self.assertEqual("token", token)
+            if path == "/servers?include_inactive=true&limit=1000":
+                return [
+                    {
+                        "id": "server-old",
+                        "name": "stale_serena_server",
+                        "description": "Virtual server exposing Serena for the ContextForge operator repository.",
+                        "associatedResources": ["old-resource"],
+                        "associatedPrompts": ["old-prompt"],
+                        "associatedA2aAgents": ["a2a-old"],
+                        "tags": [{"id": "serena", "label": "serena"}],
+                    }
+                ]
+            if path == "/resources?include_inactive=true&limit=1000":
+                return [
+                    {
+                        "id": "old-resource",
+                        "uri": "contextforge://retired/serena-project-instance-guidance/v14",
+                        "tags": ["serena"],
+                    },
+                    {
+                        "id": "new-resource",
+                        "uri": "contextforge://cf-controlplane/serena-project-instance-guidance/v15",
+                        "tags": ["contextforge", "serena"],
+                    },
+                ]
+            if path == "/prompts?include_inactive=true&limit=1000":
+                return [
+                    {"id": "new-prompt", "customName": "serena_project_instance_guidance"},
+                    {"id": "other-prompt", "customName": "serena_other_guidance"},
+                ]
+            raise AssertionError(f"unexpected path: {path}")
+
+        def fake_request(method: str, path: str, *, token: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            self.assertEqual("token", token)
+            requests.append((method, path, body))
+            return {"id": "server-old", **(body or {})}
+
+        with (
+            mock.patch.object(serena_registration, "api_items", side_effect=fake_items),
+            mock.patch.object(serena_registration, "api_request", side_effect=fake_request),
+        ):
+            row = serena_registration.ensure_server("token", ["tool-a", "tool-b"])
+
+        self.assertEqual("server-old", row["id"])
+        self.assertEqual([("PUT", "/servers/server-old")], [(method, path) for method, path, _body in requests])
+        body = requests[0][2] or {}
+        self.assertEqual(serena_registration.SERVER_NAME, body["name"])
+        self.assertEqual(["tool-a", "tool-b"], body["associatedTools"])
+        self.assertEqual(["new-resource"], body["associatedResources"])
+        self.assertEqual(["new-prompt"], body["associatedPrompts"])
+        self.assertEqual(["contextforge", "serena", "cf-controlplane"], body["tags"])
+
 
 class DirtyCheckoutRebindPlannerTests(unittest.TestCase):
     def _write_minimal_surfaces(self, target: Path, legacy: Path) -> None:
@@ -1753,6 +1844,31 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertIn("would_register project_init_prompt", stdout.getvalue())
         finally:
             prompt_registration.gateway._read_env = original_read_env  # type: ignore[assignment]
+
+    def test_prompt_render_verification_supplies_target_client(self) -> None:
+        calls: list[dict[str, object] | None] = []
+
+        def fake_api_request(
+            method: str,
+            path: str,
+            token: str,
+            payload: dict[str, object] | None = None,
+        ) -> dict[str, object]:
+            self.assertEqual("POST", method)
+            self.assertEqual("/prompts/prompt-id", path)
+            self.assertEqual("token", token)
+            calls.append(payload)
+            text = prompt_registration.PROJECT_INIT_TEXT
+            for key, value in (payload or {}).items():
+                text = text.replace("{{ " + key + " }}", str(value))
+            return {"messages": [{"content": {"text": text}}]}
+
+        with mock.patch.object(prompt_registration, "api_request", side_effect=fake_api_request):
+            prompt_registration.verify_prompt_render("token", {"id": "prompt-id"})
+
+        self.assertEqual(1, len(calls))
+        self.assertEqual("codex", (calls[0] or {})["target_client"])
+        self.assertEqual("/home/dgk/workspace/cf-controlplane", (calls[0] or {})["project_root"])
 
     def test_project_init_artifact_uris_track_semantic_prompt_version(self) -> None:
         self.assertTrue(common.PROJECT_INIT_RESOURCE_URI.endswith(f"/{common.PROMPT_VERSION}"))

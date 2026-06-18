@@ -67,3 +67,11 @@ cwd = "/home/dgk/workspace/cf-controlplane"
 env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
 startup_timeout_ms = 60000
 tool_timeout_ms = 120000
+
+# contextforge-project-init-owner = "serena_cf_controlplane_d46fe58a2a20_server"
+[mcp_servers.serena]
+command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
+args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_mcp_wrapper.py", "serena_cf_controlplane_d46fe58a2a20_server"]
+cwd = "/home/dgk/workspace/cf-controlplane"
+startup_timeout_ms = 60000
+tool_timeout_ms = 120000
