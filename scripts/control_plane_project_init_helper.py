@@ -21,6 +21,7 @@ from project_init_common import (
     client_reload_requirement,
     discover_contextforge_hosted_services,
     normalize_codex_alias,
+    safe_probe_contract,
     safe_validation_policy,
     stable_digest,
 )
@@ -1189,12 +1190,21 @@ def _validation_results_diagnostic(services: Sequence[Mapping[str, Any]], valida
 def _expected_validation_results_shape(services: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     service = services[0] if services else {}
     binding_id = str(service.get("service_binding") or "context7:canonical")
-    return {
-        binding_id: {
+    service_family = str(service.get("service_family") or binding_id.split(":", 1)[0] or "context7")
+    trace_ref = f"contextforge://control-plane/traces/{project_state._state_map_key(binding_id)}-target-client"
+    contract = safe_probe_contract(service_family)
+    contract_shape = contract.get("validation_result_shape") if isinstance(contract.get("validation_result_shape"), Mapping) else {}
+    if contract_shape:
+        shape = dict(contract_shape)
+        shape["verification_trace_refs"] = [trace_ref]
+    else:
+        shape = {
             "status": "passed",
             "target_client_visible": True,
-            "verification_trace_refs": [f"contextforge://control-plane/traces/{project_state._state_map_key(binding_id)}-target-client"],
+            "verification_trace_refs": [trace_ref],
         }
+    return {
+        binding_id: shape,
     }
 
 

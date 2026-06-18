@@ -673,7 +673,10 @@ def record_project_init_validation(
     For validation_mode="validate_now", validation_results must be a top-level
     object keyed by selected service binding, normalized binding key, or service
     identity id, for example:
-    {"context7:canonical": {"status": "passed", "target_client_visible": true}}.
+    {"context7:canonical": {"status": "passed", "target_client_visible": true,
+    "proof_kind": "target_client_safe_probe_result",
+    "safe_probe_result": "passed", "safe_probe_id": "resolve-library-id",
+    "verification_trace_refs": ["contextforge://control-plane/traces/context7:canonical-target-client"]}}.
     Do not nest results under {"services": ...}.
     """
     try:
@@ -704,7 +707,10 @@ def cf_project_init_record_validation(
     For validation_mode="validate_now", validation_results must be a top-level
     object keyed by selected service binding, normalized binding key, or service
     identity id, for example:
-    {"context7:canonical": {"status": "passed", "target_client_visible": true}}.
+    {"context7:canonical": {"status": "passed", "target_client_visible": true,
+    "proof_kind": "target_client_safe_probe_result",
+    "safe_probe_result": "passed", "safe_probe_id": "resolve-library-id",
+    "verification_trace_refs": ["contextforge://control-plane/traces/context7:canonical-target-client"]}}.
     Do not nest results under {"services": ...}.
     """
     return record_project_init_validation(
