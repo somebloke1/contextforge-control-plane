@@ -118,6 +118,81 @@ Qwen model path, and avoid host Pi/OpenCode global config mutation. Runtime
 proof still requires separate approval to rebuild or run Docker client
 containers.
 
+## Interactive Pi TUI Session
+
+Issue #198 requires a multi-turn Pi session that a user can inspect directly.
+One-shot prompts such as `pi -p "..."` are useful diagnostics, but they do not
+prove the interactive session behavior of the Pi extension, project-init
+guidance, helper readback, or growing conversation context.
+
+Start a manual Pi TUI session with:
+
+```sh
+scripts/start-pi-contextforge-interactive.sh
+```
+
+This starts the Pi client Docker surface with the ContextForge Pi extension
+shim loaded from `/repo`, the local llama.cpp Qwen model path configured by
+`env/local-llama.env`, and an ignored harness workspace mounted at
+`/workspace`. The launcher prepares `/workspace/.project/context_forge_state.json`
+with a `mentality:dev_docker` `target_clients.pi` binding, creates a scoped dev
+ContextForge token, passes the wrapper environment that the shim uses to import
+service tools, and revokes the token when the session exits.
+
+The ContextForge development Docker gateway and the `mentality_dev_docker_server`
+registration must already be running and reachable at the configured dev
+gateway URL. The default host URL is:
+
+```text
+http://127.0.0.1:4445
+```
+
+The default container URL is:
+
+```text
+http://host.docker.internal:4445
+```
+
+Do not pass `-p`, `--no-session`, `--no-tools`, or `--no-context-files` when
+using this path for #198 validation. Interact with Pi directly for multiple
+turns. Suggested manual checks:
+
+- ask whether ContextForge project-init guidance is visible;
+- ask Pi to use `cf_contextforge_pi_readback` for `/workspace`;
+- confirm readback imports `mentality:dev_docker` and
+  `cf_mentality-dev-docker__*` tools;
+- ask Pi to use a safe imported governance read/list tool;
+- ask a follow-up question that relies on the prior answer;
+- confirm the session remains in the same Pi TUI context.
+
+The plain baseline launcher mounts the canonical repository at `/workspace` and
+is useful for project-init guidance checks. It is not sufficient as proof that
+ContextForge service tools import through Pi, because the canonical project
+state may not contain a dev `target_clients.pi` service binding or scoped
+ContextForge token.
+
+The launcher uses a stable container name by default:
+
+```text
+contextforge-pi-interactive
+```
+
+While the session is running, another terminal can attach with:
+
+```sh
+scripts/start-pi-contextforge-interactive.sh --attach
+```
+
+or:
+
+```sh
+docker attach contextforge-pi-interactive
+```
+
+Set `CONTEXTFORGE_PI_INTERACTIVE_CONTAINER` to override the container name.
+This path does not install or reload the host user-global Pi extension and does
+not mutate host Pi config.
+
 ## OpenCode ContextForge Dev Gateway Smoke
 
 After the ContextForge development Docker gateway and `mentality-transceiver`
