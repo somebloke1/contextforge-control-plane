@@ -15,6 +15,11 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SECRET_RE = re.compile(r"(token|secret|password|key|credential|auth)", re.IGNORECASE)
+SECRET_VALUE_RE = re.compile(
+    r"\bBearer\s+[A-Za-z0-9._~+/=-]{12,}|"
+    r"\b(?:sk|pk|ghp|gho|github_pat|xox[baprs]|ya29)[_-][A-Za-z0-9._-]{12,}|"
+    r"(?i:\b(?:api[_-]?key|token|password|secret)=\S+)"
+)
 
 CONFIG_CANDIDATES = [
     ("codex-terminal", "~/.codex/config.toml"),
@@ -49,6 +54,24 @@ SOURCE_HINT_RE = re.compile(
     r"pi-web-access|pi-claude-bridge",
     re.IGNORECASE,
 )
+FORBIDDEN_INVENTORY_EFFECTS = [
+    "canonical_service_creation",
+    "catalog_promotion",
+    "registry_mutation",
+    "client_config_mutation",
+    "backend_provisioning",
+]
+INVENTORY_CONTRACT = {
+    "role": "read_only_discovery_evidence",
+    "identity_authority": "contextforge_catalog_or_instance_manifest",
+    "allowed_outputs": [
+        "redacted_inventory_report",
+        "dedupe_classification_input",
+        "candidate_or_handoff_advisory",
+    ],
+    "forbidden_effects": FORBIDDEN_INVENTORY_EFFECTS,
+    "client_config_names_are": "aliases_or_consumption_surfaces_not_service_identities",
+}
 
 
 def redact(value: Any, key: str = "") -> Any:
@@ -60,6 +83,8 @@ def redact(value: Any, key: str = "") -> Any:
         return {str(k): redact(v, str(k)) for k, v in value.items()}
     if isinstance(value, list):
         return [redact(item, key) for item in value]
+    if isinstance(value, str) and SECRET_VALUE_RE.search(value):
+        return "<redacted>"
     return value
 
 
@@ -114,6 +139,18 @@ def classify_transport(config: dict[str, Any]) -> str:
     if config.get("command") or config.get("args"):
         return "stdio"
     return "unknown"
+
+
+def source_record(client: str, path: Path, *, exists: bool | None = None) -> dict[str, Any]:
+    return {
+        "client": client,
+        "path": str(path),
+        "exists": path.exists() if exists is None else exists,
+        "error": None,
+        "discovery_role": "client_config_source",
+        "identity_authority": INVENTORY_CONTRACT["identity_authority"],
+        "forbidden_effects": list(FORBIDDEN_INVENTORY_EFFECTS),
+    }
 
 
 def classify_client_from_workspace_path(path: Path) -> str:
@@ -215,15 +252,18 @@ def workspace_source_hints() -> list[dict[str, Any]]:
 
 def inventory_entry(client: str, source: Path, name: str, config: dict[str, Any], trail: tuple[str, ...]) -> dict[str, Any]:
     sanitized = redact(config)
+    transport = classify_transport(config)
     return {
         "name": name,
         "client": client,
         "source": str(source),
         "config_path": ".".join(trail),
         "enabled": not bool(config.get("disabled") or config.get("enabled") is False),
-        "transport": classify_transport(config),
+        "transport": transport,
         "has_command": bool(config.get("command")),
         "has_url": bool(config.get("url") or config.get("uri") or config.get("endpoint")),
+        "discovery": discovery_metadata("client_config_entry", "client_config_alias"),
+        "dedupe_hints": dedupe_hints(config, transport),
         "config": sanitized,
     }
 
@@ -238,10 +278,79 @@ def pi_package_entry(client: str, source: Path, package: str, trail: tuple[str, 
         "transport": "assistant_package",
         "has_command": False,
         "has_url": False,
+        "discovery": discovery_metadata("assistant_package_entry", "package_alias"),
+        "dedupe_hints": {
+            "backend_kind": "assistant_package",
+            "backend_hint": package.removeprefix("npm:"),
+            "dedupe_status": "requires_service_management_classification",
+            "dedupe_basis": [
+                "backend_hint",
+                "transport",
+                "runtime_scope",
+                "credential_scope",
+                "resource_scope",
+            ],
+            "runtime_scope": "assistant_package_declared",
+            "credential_scope": "unresolved_from_inventory",
+            "resource_scope": "unresolved_from_inventory",
+            "transport": "assistant_package",
+        },
         "config": {
             "package": package,
         },
     }
+
+
+def discovery_metadata(role: str, name_role: str) -> dict[str, Any]:
+    return {
+        "role": role,
+        "name_role": name_role,
+        "identity_authority": INVENTORY_CONTRACT["identity_authority"],
+        "candidate_status": "discovered_only",
+        "required_next_workflow": "service_management_handoff_before_promotion",
+        "forbidden_effects": list(FORBIDDEN_INVENTORY_EFFECTS),
+    }
+
+
+def dedupe_hints(config: dict[str, Any], transport: str) -> dict[str, Any]:
+    package = _first_string(config.get("package"), config.get("serverPackage"), config.get("npmPackage"))
+    command = _first_string(config.get("command"))
+    url = _first_string(config.get("url"), config.get("uri"), config.get("endpoint"))
+    if package:
+        backend_kind = "package"
+        backend_hint = package
+    elif command:
+        backend_kind = "command"
+        backend_hint = command
+    elif url:
+        backend_kind = "url"
+        backend_hint = url
+    else:
+        backend_kind = "unknown"
+        backend_hint = None
+    return {
+        "backend_kind": backend_kind,
+        "backend_hint": redact(backend_hint),
+        "dedupe_status": "requires_service_management_classification",
+        "dedupe_basis": [
+            "backend_hint",
+            "transport",
+            "runtime_scope",
+            "credential_scope",
+            "resource_scope",
+        ],
+        "runtime_scope": "client_config_declared",
+        "credential_scope": "unresolved_from_inventory",
+        "resource_scope": "unresolved_from_inventory",
+        "transport": transport,
+    }
+
+
+def _first_string(*values: Any) -> str | None:
+    for value in values:
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 def add_entries_from_config(entries: list[dict[str, Any]], source: dict[str, Any], client: str, path: Path) -> None:
@@ -272,6 +381,23 @@ def discover() -> dict[str, Any]:
             "transport": "stdio",
             "has_command": True,
             "has_url": False,
+            "discovery": discovery_metadata("static_repo_local_source", "repo_local_source_name"),
+            "dedupe_hints": {
+                "backend_kind": "repo_local_script",
+                "backend_hint": "scripts/governance_mcp.py",
+                "dedupe_status": "static_repo_local_manifest_required",
+                "dedupe_basis": [
+                    "backend_hint",
+                    "transport",
+                    "runtime_scope",
+                    "credential_scope",
+                    "resource_scope",
+                ],
+                "runtime_scope": "repo_local",
+                "credential_scope": "none_required",
+                "resource_scope": "repo_governance_ledgers",
+                "transport": "stdio",
+            },
             "config": {
                 "command": str(REPO_ROOT / ".venv/bin/python"),
                 "args": [str(REPO_ROOT / "scripts/governance_mcp.py")],
@@ -281,13 +407,13 @@ def discover() -> dict[str, Any]:
     sources: list[dict[str, Any]] = []
     for client, raw_path in CONFIG_CANDIDATES:
         path = Path(os.path.expanduser(raw_path))
-        source = {"client": client, "path": str(path), "exists": path.exists(), "error": None}
+        source = source_record(client, path)
         sources.append(source)
         add_entries_from_config(entries, source, client, path)
 
     for path in workspace_config_paths():
         client = classify_client_from_workspace_path(path)
-        source = {"client": client, "path": str(path), "exists": True, "error": None}
+        source = source_record(client, path, exists=True)
         sources.append(source)
         add_entries_from_config(entries, source, client, path)
     transport_counts: dict[str, int] = {}
@@ -297,6 +423,7 @@ def discover() -> dict[str, Any]:
         client_counts[entry["client"]] = client_counts.get(entry["client"], 0) + 1
     return {
         "repository": str(REPO_ROOT),
+        "inventory_contract": INVENTORY_CONTRACT,
         "sources": sources,
         "summary": {
             "entries": len(entries),
