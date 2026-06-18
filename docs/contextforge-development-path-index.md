@@ -107,11 +107,13 @@ Recent PR topology:
   service-onboarding fixture landed.
 - #125 merged the #124 service-onboarding session-list readback surface for
   compact no-mutation local session inventory.
+- #129 merged the #128 service-onboarding session-template readback surface for
+  deterministic no-mutation resume patch scaffolding.
 
-Recently closed path-setting issues include #124, #122, #120, #118, #115,
-#113, #111, #109, #107, #105, #103, #101, #99, #97, #95, #91, #89, #79,
-#83, #85, #62, #58, #50, #41, #37, #31, #25, and #66. They are evidence and
-history, not substitutes for current path ownership.
+Recently closed path-setting issues include #128, #124, #122, #120, #118,
+#115, #113, #111, #109, #107, #105, #103, #101, #99, #97, #95, #91, #89,
+#79, #83, #85, #62, #58, #50, #41, #37, #31, #25, and #66. They are evidence
+and history, not substitutes for current path ownership.
 
 ## Named Development Paths
 
@@ -198,8 +200,8 @@ Near-term gap:
 
 - The lab should add services through explicit onboarding records and bounded
   runtime approvals, not by broad container expansion. #52, including the
-  merged #87/#93/#94/#117/#125 helper increments, is the current source-side
-  feeder for that work.
+  merged #87/#93/#94/#117/#125/#129 helper increments, is the current
+  source-side feeder for that work.
 
 ### MCP Service Onboarding Lifecycle
 
@@ -233,13 +235,19 @@ Current state:
   `service_onboarding_session_list` output, absent-store empty-list behavior,
   saved-record-name ordering, and rejection of descriptor, resume, status, or
   write options.
+- #129 merged read-only resume templates for saved local ignored sessions
+  through `--session-template <session-id>`, including deterministic
+  `service_onboarding_resume_template` output with compact session context,
+  next questions, descriptor patch scaffolding for missing evidence and
+  classification fields, footprint scaffolding, and rerun guidance for
+  `--resume-session`.
 
 Near-term gap:
 
 - The current helper is still deterministic CLI tooling rather than a
   long-running helper process. A later #52 slice should either add richer local
-  dialogue/session management on top of the ignored store, status readback, and
-  list readback, or add another selected service record with similarly explicit
+  dialogue/session management on top of the ignored store and readback
+  surfaces, or add another selected service record with similarly explicit
   no-overclaim boundaries.
 
 ### Serena/Project-Scoped Service Lifecycle

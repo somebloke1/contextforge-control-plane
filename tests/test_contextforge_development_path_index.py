@@ -57,10 +57,12 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "#121 merged the #120 first real OpenZeppelin service-onboarding fixture",
             "#123 merged the #122 path-index refresh",
             "#125 merged the #124 service-onboarding session-list readback",
+            "#129 merged the #128 service-onboarding session-template readback",
             "closed #89",
-            "Recently closed path-setting issues include #124",
+            "Recently closed path-setting issues include #128",
         ]:
             self.assertIn(reference, self.index)
+        self.assertNotIn("#162: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#126: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#122: post-merge refresh for this development path index", self.index)
         self.assertNotIn("#118: post-merge refresh for this development path index", self.index)
@@ -125,8 +127,15 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "absent-store empty-list behavior",
             "saved-record-name ordering",
             "rejection of descriptor, resume, status, or\n  write options",
+            "#129 merged read-only resume templates",
+            "`--session-template <session-id>`",
+            "`service_onboarding_resume_template`",
+            "compact session context",
+            "descriptor patch scaffolding",
+            "footprint scaffolding",
+            "rerun guidance for\n  `--resume-session`",
             "richer local\n  dialogue/session management",
-            "status readback, and\n  list readback",
+            "ignored store and readback\n  surfaces",
             "another selected service record",
         ]:
             self.assertIn(text, self.index)
