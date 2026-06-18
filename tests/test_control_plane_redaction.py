@@ -160,11 +160,32 @@ class ControlPlaneRedactionTests(unittest.TestCase):
         self.assertEqual("tools/call", bundle["failing_call_shape"]["method"])
         self.assertEqual("requests", bundle["failing_call_shape"]["arguments"]["libraryName"])
         self.assertEqual("bearer_token", bundle["failing_call_shape"]["headers"]["Authorization"]["classification"])
-        self.assertEqual("explicit_raw_value", bundle["failing_call_shape"]["url"]["classification"])
+        self.assertEqual("credential_assignment", bundle["failing_call_shape"]["url"]["classification"])
         self.assertEqual("password", bundle["failing_call_shape"]["arguments"]["password"]["classification"])
         self.assertEqual("secret", bundle["failure_summary"]["client_secret"]["classification"])
         self.assertGreaterEqual(bundle["redaction"]["redacted_value_count"], expected["redacted_value_count"])
         redaction.assert_no_sensitive_raw_values(bundle, raw_values=expected["raw_values_absent"])
+
+    def test_failure_diagnostics_redacts_url_token_material_without_raw_values(self) -> None:
+        bundle = redaction.build_failure_diagnostics_bundle(
+            workflow="verify",
+            service_slug="context7",
+            canonical_service_identity="context7",
+            transport_path="streamable-http",
+            bridge_or_transceiver_reason="native_http",
+            client_visibility_target="opencode",
+            last_probe={"result": "failed"},
+            failing_call_shape={
+                "method": "tools/list",
+                "url": "https://contextforge-dev.example.test/mcp?access_token=SECRET123",
+            },
+            next_safe_diagnostic_action="repeat the probe with a scoped dev token and sanitized logging",
+        )
+
+        url = bundle["failing_call_shape"]["url"]
+        self.assertTrue(url["redacted"])
+        self.assertEqual("credential_assignment", url["classification"])
+        redaction.assert_no_sensitive_raw_values(bundle)
 
     def test_failure_diagnostics_validates_workflow_and_required_context(self) -> None:
         fixture = self.fixture["failure_diagnostics"]

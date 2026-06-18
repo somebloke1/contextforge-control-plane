@@ -43,7 +43,10 @@ SENSITIVE_VALUE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")),
     (
         "credential_assignment",
-        re.compile(r"(?i)\b(?:api[_-]?key|auth[_-]?token|token|password|secret)\s*=\s*[^\s'\"<>]+"),
+        re.compile(
+            r"(?i)\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|id[_-]?token|refresh[_-]?token|"
+            r"token|password|client[_-]?secret|secret)\s*=\s*[^\s'\"<>]+"
+        ),
     ),
 )
 
