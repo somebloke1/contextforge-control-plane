@@ -22,7 +22,7 @@ Out of scope for this baseline:
 
 - Codex CLI, Claude Code, and Gemini CLI client expansion.
 - Host Pi install, host Pi reload, or user-global Pi extension mutation.
-- User-global OpenCode config or plugin mutation.
+- Host user-global OpenCode config or plugin mutation.
 - Legacy/live ContextForge registry, token, service, or process mutation.
 - Runtime Docker rebuild/run proof. That remains a separately approved
   validation slice.
@@ -39,7 +39,9 @@ paths:
   `opencode mcp add` against the development gateway for one validation run.
 - `docker/client-harness/config/pi/AGENTS.md` only gives Qwen smoke guidance.
 - `docker/client-harness/config/opencode/opencode.json` defines the Qwen
-  provider/model and the harness-owned `contextforge-helper` local MCP entry.
+  provider/model and the harness-owned `contextforge-helper` local MCP entry,
+  but ordinary shell runs need that fixture materialized into the container
+  user's normal OpenCode config directory.
 
 Therefore a Pi or OpenCode container shell can truthfully lack ContextForge
 helper tools even when the specialized smoke scripts pass.
@@ -88,25 +90,36 @@ reports `project state has no approved target_clients.pi service bindings` and
 
 ### OpenCode
 
-OpenCode should use a project-local harness fixture rather than a user-global
-OpenCode mutation. The sustainable baseline route is:
+OpenCode should use the normal container-user global OpenCode plugin surface
+for the first-prompt trigger, while keeping selected MCP service bindings
+project-local after helper approval/apply. The sustainable baseline route is:
 
-- provide a harness-owned OpenCode project-init plugin/config fixture under
+- provide harness-owned OpenCode bootstrap fixtures under
   `docker/client-harness/config/opencode`;
+- seed the helper bootstrap config into
+  `/home/agent/.config/opencode/opencode.json`;
+- seed the first-prompt trigger into
+  `/home/agent/.config/opencode/plugins/contextforge-project-init.js`;
 - expose `contextforge-helper` through a container-local Python environment
   instead of the host `.venv`;
 - reuse the project-local hook behavior implemented by
   `scripts/opencode_project_init_hook.py`;
+- use the `chat.message` OpenCode plugin hook as the first-prompt trigger,
+  not `experimental.chat.system.transform` as the primary init path;
+- keep hook runtime state under writable container-local runtime paths, not
+  under the read-only `/repo` mount;
 - keep any generated client state inside the OpenCode client container volume;
 - point only at the ContextForge development Docker surface when runtime
   validation is separately approved;
-- avoid user-global OpenCode config or plugin writes.
+- avoid host user-global OpenCode config or plugin writes.
 
 The existing smoke script may keep its temporary `opencode mcp add` proof.
 Baseline helper availability now uses both a harness-owned `contextforge-helper`
-MCP entry in `opencode.json` and a project plugin fixture copied into
-`/workspace/.opencode/plugins/contextforge-project-init.js` inside the client
-container, so it does not depend on that one-shot command.
+MCP entry in the container user's OpenCode config and a global plugin copied
+into `/home/agent/.config/opencode/plugins/contextforge-project-init.js`, so it
+does not depend on that one-shot command and does not create project-local
+`.opencode/plugins` in a fresh workspace. Approved selected MCP services remain
+project-local in `opencode.json` plus `.project/context_forge_state.json`.
 
 ## Runtime Validation Boundary
 
@@ -126,7 +139,7 @@ Minimum future runtime checks:
 - Pi ad hoc session lists or can invoke the expected ContextForge helper/shim
   tools without host-global Pi mutation.
 - OpenCode ad hoc session receives project-init helper/hook context from the
-  harness-owned fixture without user-global OpenCode mutation.
+  container user-home fixture without host user-global OpenCode mutation.
 - Both clients continue using the local llama.cpp Qwen model path.
 - Any scoped development token is created, used, redacted in evidence, and
   revoked before exit.
@@ -138,7 +151,7 @@ This contract does not approve or perform:
 - Docker build/run/rebuild operations.
 - ContextForge registry or token mutation.
 - host Pi install/reload.
-- user-global OpenCode/Pi config mutation.
+- host user-global OpenCode/Pi config mutation.
 - helper approve/apply/recovery state mutation.
 - `.project/context_forge_state.json` mutation.
 - legacy `/home/dgk/workspace/legacy-controlplane-archive` mutation.

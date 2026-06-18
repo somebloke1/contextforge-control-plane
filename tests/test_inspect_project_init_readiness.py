@@ -96,7 +96,7 @@ class ReadinessCompatibilityTests(unittest.TestCase):
             scripts.mkdir()
             target = scripts / "project_init_common.py"
             target.write_text(
-                'URI = "contextforge://cf-controlplane/project-init/v15"\n'
+                f'URI = "contextforge://cf-controlplane/project-init/{common.PROMPT_VERSION}"\n'
                 'SLUG = "serena-cf-controlplane-d46fe58a2a20"\n',
                 encoding="utf-8",
             )

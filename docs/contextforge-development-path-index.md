@@ -193,7 +193,8 @@ Current state:
   proof and still-separate host Pi, host OpenCode, and Codex hook claims.
 - Pi-visible behavior is shim/tool/guidance availability, not a Codex-style
   project hook banner.
-- OpenCode-visible behavior is project-local plugin/helper behavior.
+- OpenCode-visible behavior is user-home plugin/helper bootstrap plus
+  project-local selected service bindings.
 - Codex-visible behavior is project-local hook/helper/readback behavior.
 
 Near-term gap:

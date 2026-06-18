@@ -140,14 +140,14 @@ def client_reload_before_validation_turn(reload_requirement: Mapping[str, Any]) 
             question_id="opencode-client-reload-before-validation",
             prompt=(
                 "Start a new OpenCode session from this project root before validating ContextForge service functionality. "
-                "OpenCode discovers configured MCP servers and loads project-local plugins when a session starts. "
+                "OpenCode discovers configured MCP servers and loads user-home plugins when a session starts. "
                 'In the new session, resume project init and choose 1 or reply "validate" to run validation; choose 2 or reply "skip validation" to record presumed working without verification.'
             ),
             choices=[
                 {
                     "id": "start_new_opencode_session",
                     "label": "Start new session",
-                    "effect": "Open a new OpenCode session from the project root so newly configured MCP tools and plugin context are loaded before validation.",
+                    "effect": "Open a new OpenCode session from the project root so newly configured MCP tools and user-home plugin context are loaded before validation.",
                 }
             ],
             allowed_response_shape='start a new OpenCode session from this project root, then resume project init and choose 1 or reply "validate"; choose 2 or reply "skip validation" in the new session',
@@ -791,7 +791,7 @@ def record_project_init_client_reload(
         elif client_type == "gemini":
             client_state["activation_surface"] = ".gemini/settings.json"
         elif client_type == "opencode":
-            client_state["activation_surface"] = "opencode.json + .opencode/plugins/contextforge-project-init.js"
+            client_state["activation_surface"] = "opencode.json"
         elif client_type == "pi":
             client_state["activation_surface"] = "contextforge-global-shim"
     next_state["project_init"].setdefault("client_states", {})[client_type] = client_state
@@ -2040,9 +2040,6 @@ def _build_project_init_recovery_plan(
     if config_recovery.get("next_text") is not None:
         plan_seed["config_recovery_plan"] = dict(plan_seed["config_recovery_plan"])
         plan_seed["config_recovery_plan"]["next_text"] = config_recovery.get("next_text")
-    if config_recovery.get("plugin_next_text") is not None:
-        plan_seed["config_recovery_plan"] = dict(plan_seed["config_recovery_plan"])
-        plan_seed["config_recovery_plan"]["plugin_next_text"] = config_recovery.get("plugin_next_text")
     plan_id = "project-init-recovery-" + stable_digest(plan_seed).removeprefix("sha256:")[:16]
     plan = {"plan_id": plan_id, **plan_seed}
     plan["status"] = "recovery_plan_ready" if required_consent_classes else "recovery_not_required"
@@ -2360,10 +2357,7 @@ def _write_client_activation(root: Path, config_plan: Mapping[str, Any], *, clie
         return
     if client_type == "opencode":
         config_path = root / "opencode.json"
-        plugin_path = root / ".opencode" / "plugins" / "contextforge-project-init.js"
         config_path.write_text(str(config_plan["next_text"]), encoding="utf-8")
-        plugin_path.parent.mkdir(parents=True, exist_ok=True)
-        plugin_path.write_text(str(config_plan["plugin_next_text"]), encoding="utf-8")
         return
     if client_type == "pi":
         return
@@ -2378,7 +2372,6 @@ def _planned_project_local_writes(root: Path, client_type: str) -> list[str]:
         writes.append(str(root / ".gemini" / "settings.json"))
     if client_type == "opencode":
         writes.append(str(root / "opencode.json"))
-        writes.append(str(root / ".opencode" / "plugins" / "contextforge-project-init.js"))
     writes.append(str(project_state.project_state_path(root)))
     return writes
 
@@ -2407,7 +2400,7 @@ def _repair_resume_reason(client_type: str) -> str:
     if client_type == "gemini":
         return "project init selected services and recorded state, but project-local Gemini settings are missing approved bindings"
     if client_type == "opencode":
-        return "project init selected services and recorded state, but project-local OpenCode config or plugin is missing approved bindings"
+        return "project init selected services and recorded state, but project-local OpenCode config is missing approved bindings"
     return "project init selected services and recorded state, but project-local Codex config is missing approved bindings"
 
 
@@ -2417,7 +2410,7 @@ def _repair_validation_block_label(client_type: str) -> str:
     if client_type == "gemini":
         return "do not validate services until project-local Gemini settings match the approved job"
     if client_type == "opencode":
-        return "do not validate services until project-local OpenCode config and plugin match the approved job"
+        return "do not validate services until project-local OpenCode config matches the approved job"
     return "do not validate services until project-local config matches the approved job"
 
 
@@ -2879,7 +2872,7 @@ def _client_activation_operation_id(client_type: str) -> str:
     if client_type == "pi":
         return "record-pi-shim-activation-metadata"
     if client_type == "opencode":
-        return "write-opencode-project-config-and-plugin"
+        return "write-opencode-project-config"
     return "write-managed-client-config"
 
 
@@ -2887,7 +2880,7 @@ def _client_activation_operation_type(client_type: str) -> str:
     if client_type == "pi":
         return "record_pi_shim_activation_metadata"
     if client_type == "opencode":
-        return "write_opencode_project_config_and_plugin"
+        return "write_opencode_project_config"
     return "write_managed_client_config"
 
 
@@ -2895,7 +2888,7 @@ def _repair_activation_operation_id(client_type: str) -> str:
     if client_type == "pi":
         return "repair-pi-shim-activation-metadata"
     if client_type == "opencode":
-        return "repair-opencode-project-config-and-plugin"
+        return "repair-opencode-project-config"
     return "repair-managed-client-config"
 
 
@@ -2903,7 +2896,7 @@ def _repair_activation_operation_type(client_type: str) -> str:
     if client_type == "pi":
         return "repair_pi_shim_activation_metadata"
     if client_type == "opencode":
-        return "repair_opencode_project_config_and_plugin"
+        return "repair_opencode_project_config"
     return "repair_managed_client_config"
 
 

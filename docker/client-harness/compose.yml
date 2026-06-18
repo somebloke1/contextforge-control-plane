@@ -27,11 +27,14 @@ x-opencode-contextforge-baseline: &opencode-contextforge-baseline
     LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
     OPENCODE_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
     LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
-    OPENCODE_CONFIG: /config/opencode/opencode.json
+    OPENCODE_CONFIG: /home/agent/.config/opencode/opencode.json
+    CONTEXTFORGE_OPENCODE_CONFIG_SOURCE: /config/opencode/opencode.json
+    CONTEXTFORGE_OPENCODE_CONFIG_TARGET: /home/agent/.config/opencode/opencode.json
     CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE: /config/opencode/plugins/contextforge-project-init.js
-    CONTEXTFORGE_OPENCODE_PLUGIN_TARGET: /workspace/.opencode/plugins/contextforge-project-init.js
+    CONTEXTFORGE_OPENCODE_PLUGIN_TARGET: /home/agent/.config/opencode/plugins/contextforge-project-init.js
     CONTEXTFORGE_OPENCODE_HOOK: /repo/scripts/opencode_project_init_hook.py
-    CONTEXTFORGE_OPENCODE_HOOK_PYTHON: python3
+    CONTEXTFORGE_OPENCODE_HOOK_PYTHON: /opt/contextforge-helper-venv/bin/python
+    CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /tmp/contextforge-client-harness-runtime/project-init
     CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python
     CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py
     CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace

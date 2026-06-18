@@ -114,7 +114,8 @@ scripts/start-opencode-contextforge-baseline.sh
 
 They mount this repository read-only at `/repo`, keep generated client state in
 the client container/workspace volumes, keep Pi/OpenCode on the configured local
-Qwen model path, and avoid host Pi/OpenCode global config mutation. Runtime
+Qwen model path, seed only container-user helper/plugin bootstrap where needed,
+and avoid host Pi/OpenCode global config mutation. Runtime
 proof still requires separate approval to rebuild or run Docker client
 containers.
 
@@ -141,7 +142,7 @@ library/config artifacts behind.
 Use `pi-ephemeral` and `opencode-ephemeral` when a dev-time test needs a clean
 project workspace on each container run. These services mount `/workspace` as
 tmpfs, so project-local state is discarded when the container stops while the
-repo and client config surfaces remain unchanged:
+repo and container user-home bootstrap surfaces remain unchanged:
 
 ```sh
 docker compose -f docker/client-harness/compose.yml run --rm pi-ephemeral bash

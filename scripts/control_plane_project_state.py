@@ -665,7 +665,7 @@ def _surface_from_job_or_client(client_type: str, job: dict[str, Any]) -> str | 
     if client_type == "gemini":
         return ".gemini/settings.json"
     if client_type == "opencode":
-        return "opencode.json + .opencode/plugins/contextforge-project-init.js"
+        return "opencode.json"
     if client_type == "pi":
         return "contextforge-global-shim"
     return None
@@ -1234,7 +1234,7 @@ def _activation_surface_for(target_client: str) -> str:
     if target_client == "gemini":
         return "gemini_project_local_mcp_settings"
     if target_client == "opencode":
-        return "opencode_project_local_mcp_config_and_plugin"
+        return "opencode_project_local_mcp_config"
     return "project_local_client_binding"
 
 
@@ -1345,7 +1345,7 @@ def _trust_surface_for(target_client: str) -> str:
     if target_client == "gemini":
         return "user-global Gemini helper MCP config and project-local settings"
     if target_client == "opencode":
-        return "OpenCode user/project config and local plugin loading"
+        return "OpenCode user-home plugin plus project-local config loading"
     if target_client == "codex":
         return "user-global Codex project trust"
     return f"{target_client} client trust"
@@ -1390,7 +1390,7 @@ def _target_client_activation_record(
             "alias": service.get("codex_alias"),
             "virtual_server": service.get("virtual_server"),
             "validation_status": validation_status,
-            "opencode_plugin": client_config_plan.get("plugin_path"),
+            "global_trigger_surface": client_config_plan.get("global_trigger_surface"),
         }
     return {
         "status": "project_local_config_planned" if client_config_plan.get("write_allowed") else "blocked",
@@ -1521,7 +1521,7 @@ def _client_activation_operation_id(target_client: str) -> str:
     if target_client == "gemini":
         return "write-gemini-project-settings"
     if target_client == "opencode":
-        return "write-opencode-project-config-and-plugin"
+        return "write-opencode-project-config"
     return "write-managed-client-config"
 
 
@@ -1531,7 +1531,7 @@ def _client_activation_operation_type(target_client: str) -> str:
     if target_client == "gemini":
         return "write_gemini_project_settings"
     if target_client == "opencode":
-        return "write_opencode_project_config_and_plugin"
+        return "write_opencode_project_config"
     return "write_managed_client_config"
 
 

@@ -19,12 +19,12 @@ CMU_MATH_FOUNDATIONS_ROOT = Path("/home/dgk/gdrive/__CMU/classes/00_MathFoundati
 SAFE_PROJECT_ROOTS = frozenset({WORKSPACE_ROOT, CMU_MATH_FOUNDATIONS_ROOT})
 ADDITIONAL_SAFE_ROOTS_ENV = "CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS"
 REPO_ROOT = Path(__file__).resolve().parents[1]
-RUN_ROOT = REPO_ROOT / "run"
+RUN_ROOT = Path(os.environ.get("CONTEXTFORGE_PROJECT_INIT_RUN_ROOT", REPO_ROOT / "run")).expanduser().resolve(strict=False)
 SERVER_INSTANCES_ROOT = REPO_ROOT / "server-instances"
 WRAPPER_PATH = REPO_ROOT / "scripts" / "contextforge_mcp_wrapper.py"
 PYTHON_PATH = REPO_ROOT / ".venv" / "bin" / "python"
 
-PROMPT_VERSION = "v15"
+PROMPT_VERSION = "v16"
 PROJECT_INIT_PROMPT_NAME = "project_init_prompt"
 PROJECT_INIT_RESOURCE_NAME = f"project_init_resource_{PROMPT_VERSION}"
 PROJECT_INIT_RESOURCE_URI = f"contextforge://cf-controlplane/project-init/{PROMPT_VERSION}"
@@ -190,8 +190,8 @@ CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "command": "start_new_session",
         "actor": "user",
         "instruction": (
-            "Before validating after approved OpenCode project-local MCP config and plugin changes, start a new OpenCode session from the project root. "
-            "OpenCode discovers configured MCP servers and loads local plugins when a session starts."
+            "Before validating after approved OpenCode project-local MCP config changes, start a new OpenCode session from the project root. "
+            "OpenCode discovers project-local MCP servers and loads the user-home ContextForge plugin when a session starts."
         ),
         "blocks_validation_until_done": True,
     }

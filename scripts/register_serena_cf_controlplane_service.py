@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from typing import Any
 
 import contextforge_mcp_wrapper as gateway
+from project_init_common import SERENA_GUIDANCE_RESOURCE_URI
 import control_plane_registry_discipline as registry_discipline
 
 
@@ -162,7 +163,7 @@ def resource_ids(token: str) -> list[str]:
         if isinstance(resource.get("id"), str)
         and (
             str(resource.get("uri") or "").startswith("serena-cf-controlplane-d46fe58a2a20://tools/")
-            or str(resource.get("uri") or "") == "contextforge://cf-controlplane/serena-project-instance-guidance/v15"
+            or str(resource.get("uri") or "") == SERENA_GUIDANCE_RESOURCE_URI
         )
     )
 

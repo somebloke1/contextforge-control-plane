@@ -271,8 +271,9 @@ def prompt_text_is_fresh(text: str) -> bool:
         "Project init may write only target-client project-local activation state",
         "for Codex this is project-local .codex/config.toml",
         "for Gemini this is project-local .gemini/settings.json",
-        "for OpenCode this is project-local opencode.json plus .opencode/plugins/contextforge-project-init.js",
+        "for OpenCode this is project-local opencode.json plus .project/context_forge_state.json",
         "global Gemini hook and contextforge-helper bootstrap entries",
+        "user-home OpenCode ContextForge plugin and contextforge-helper bootstrap entries",
         "for Pi this is .project/context_forge_state.json records",
         "input-triggered hidden message",
         "cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only",
@@ -282,8 +283,9 @@ def prompt_text_is_fresh(text: str) -> bool:
         "Codex launches configured MCP servers and exposes their tools when a session starts",
         "Gemini CLI launches configured MCP servers and exposes their tools when a session starts",
         "Gemini's user-global ContextForge hook injects this project-init guidance through SessionStart/BeforeAgent additionalContext",
-        "OpenCode discovers configured MCP servers and loads local plugins when a session starts",
-        "OpenCode's ContextForge plugin hook injects this project-init guidance into the hidden experimental.chat.system.transform system context",
+        "OpenCode discovers configured MCP servers and loads user-home plugins when a session starts",
+        "OpenCode's user-home ContextForge plugin uses the chat.message hook as the first-prompt trigger",
+        "does not rely on experimental.chat.system.transform as the primary init mechanism",
         "/mcp is a status view, not an in-place MCP tool reload",
         "start a new Codex session from the project root before target-client-visible validation",
         "start a new Gemini CLI session from the project root before target-client-visible validation",
@@ -326,6 +328,46 @@ def render_local_prompt(args: dict[str, str]) -> str:
         text = text.replace("{{" + key + "}}", value)
         text = text.replace("{" + key + "}", value)
     return text
+
+
+def render_helper_service_menu(project_root: Path, *, target_client: str) -> str:
+    try:
+        import control_plane_project_init_helper as helper
+
+        capabilities = helper.list_available_capabilities(project_root=project_root, client_type=target_client)
+    except Exception as exc:
+        log_failure(f"helper capability menu render failed: {type(exc).__name__}: {exc}")
+        return ""
+
+    next_turn = capabilities.get("next_turn") if isinstance(capabilities, dict) else None
+    choices = next_turn.get("choices") if isinstance(next_turn, dict) else None
+    if not isinstance(choices, list) or not choices:
+        return ""
+
+    lines = [
+        "OpenCode first-prompt service menu:",
+        'Ask exactly: "Which ContextForge services should I activate for this project?"',
+        "Then show this numbered list of helper-discovered choices and stop for the user's reply:",
+    ]
+    for index, choice in enumerate(choices, start=1):
+        if not isinstance(choice, dict):
+            continue
+        label = str(choice.get("label") or choice.get("id") or f"Choice {index}")
+        identifier = str(choice.get("id") or "").strip()
+        effect = str(choice.get("effect") or choice.get("description") or "").strip()
+        suffix = f" - {effect}" if effect else ""
+        if identifier and identifier.lower() != label.lower():
+            lines.append(f"{index}. {identifier} - {label}{suffix}")
+        else:
+            lines.append(f"{index}. {label}{suffix}")
+    lines.extend(
+        [
+            "",
+            "Do not write project state or target-client config during this first-prompt offer.",
+            "Do not choose services for the user.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def should_render_fresh_initialization_locally(args: dict[str, str]) -> bool:
@@ -386,6 +428,9 @@ def main_for_events(
             args = prompt_args(identity, values, target_client=target_client)
             if should_render_fresh_initialization_locally(args):
                 text = render_local_prompt(args)
+                service_menu = render_helper_service_menu(identity.root, target_client=target_client)
+                if target_client == "opencode" and service_menu:
+                    text = f"{service_menu}\n\n{text}"
             else:
                 env = gateway._read_env(gateway.CONFIG_ENV)
                 token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
