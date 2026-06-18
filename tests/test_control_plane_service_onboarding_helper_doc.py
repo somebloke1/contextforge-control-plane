@@ -176,6 +176,20 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         ]:
             self.assertIn(phrase, self.doc)
 
+    def test_doc_records_session_list_readback_contract(self) -> None:
+        for phrase in [
+            "--list-sessions",
+            "without descriptor input",
+            "without rewriting any session record",
+            "`service_onboarding_session_list`",
+            "compact status summaries",
+            "sorted by saved session record name",
+            "absent session directory returns an empty list",
+            "single-session status input",
+            "`--save-session`",
+        ]:
+            self.assertIn(phrase, self.doc)
+
 
 if __name__ == "__main__":
     unittest.main()

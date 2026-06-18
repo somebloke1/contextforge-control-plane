@@ -241,6 +241,20 @@ This emits a compact status summary for agent-human resumption, including:
 `--session-status` is read-only. It cannot be combined with descriptor input,
 previous-record input, session resume input, or `--save-session`.
 
+Saved sessions can also be listed without descriptor input and without rewriting any session record:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboarding_helper.py \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --list-sessions
+```
+
+`--list-sessions` returns a deterministic `service_onboarding_session_list`
+containing compact status summaries sorted by saved session record name. An
+absent session directory returns an empty list. It is read-only and cannot be
+combined with descriptor input, previous-record input, session resume input,
+single-session status input, or `--save-session`.
+
 This local store is for resumable planning records only. It is not a daemon,
 registry, service runtime, Docker state, client installation, secret store,
 hook state, or approval bypass. Long-running helper behavior and richer

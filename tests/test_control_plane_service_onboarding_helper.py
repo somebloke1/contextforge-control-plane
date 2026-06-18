@@ -491,6 +491,97 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
                 )
                 self.assertNotEqual(0, result.returncode)
 
+    def test_list_session_statuses_returns_empty_list_for_missing_store(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            session_dir = Path(tmp) / "run/service-onboarding-sessions"
+
+            listing = helper.list_session_statuses(session_dir)
+
+        self.assertEqual("service_onboarding_session_list", listing["summary_type"])
+        self.assertEqual(0, listing["session_count"])
+        self.assertEqual([], listing["sessions"])
+        self.assertFalse(listing["mutation_allowed"])
+
+    def test_cli_list_sessions_emits_sorted_compact_statuses_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
+            session_dir = project_root / "run/service-onboarding-sessions"
+            for session_id, case_name in [
+                ("zeta-session", "missing_evidence_prompts_questions"),
+                ("alpha-session", "native_http_shared_docs_source_only"),
+            ]:
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                        "--descriptor",
+                        str(FIXTURE),
+                        "--case",
+                        case_name,
+                        "--project-root",
+                        str(project_root),
+                        "--issue",
+                        "#52",
+                        "--session-id",
+                        session_id,
+                        "--save-session",
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--project-root",
+                    str(project_root),
+                    "--list-sessions",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            output = json.loads(result.stdout)
+            saved_paths = sorted(path.name for path in session_dir.glob("*.json"))
+
+        self.assertEqual("", result.stderr)
+        self.assertEqual(["alpha-session.json", "zeta-session.json"], saved_paths)
+        self.assertEqual("service_onboarding_session_list", output["summary_type"])
+        self.assertEqual(2, output["session_count"])
+        self.assertFalse(output["mutation_allowed"])
+        self.assertEqual(["alpha-session", "zeta-session"], [item["session_id"] for item in output["sessions"]])
+        self.assertEqual(["ready_for_handoff", "needs_user_input"], [item["status"] for item in output["sessions"]])
+        self.assertNotIn("source_descriptor", output["sessions"][0])
+        self.assertTrue(output["sessions"][0]["session_record_path"].endswith("alpha-session.json"))
+
+    def test_cli_list_sessions_rejects_descriptor_status_resume_or_write_combinations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            for extra_args in [
+                ["--descriptor", str(FIXTURE)],
+                ["--save-session"],
+                ["--resume-session", "same-session"],
+                ["--previous-record", str(FIXTURE)],
+                ["--session-status", "same-session"],
+            ]:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                        "--project-root",
+                        tmp,
+                        "--list-sessions",
+                        *extra_args,
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                self.assertNotEqual(0, result.returncode)
+
     def test_descriptor_must_be_mapping(self) -> None:
         with self.assertRaises(helper.ServiceOnboardingInputError):
             helper.build_onboarding_record(["not", "a", "mapping"])  # type: ignore[arg-type]
