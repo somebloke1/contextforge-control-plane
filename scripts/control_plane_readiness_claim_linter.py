@@ -329,8 +329,6 @@ def _promotes_backend_to_target_client(text: str) -> bool:
         return False
     if re.search(r"\bdoes not prove\b|\bcannot prove\b|\binsufficient\b|\bmissing\b", text, re.IGNORECASE):
         return False
-    if re.search(r"\b(pi_client_docker|opencode_client_docker|target_client)\b", text):
-        return False
     return bool(CURRENT_PROMOTION_RE.search(text) or _has_readiness_claim(text))
 
 
