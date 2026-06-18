@@ -154,7 +154,19 @@ def build_onboarding_record(
     strategy = _strategy(source, classification, feasibility)
     footprint = _footprint(source, candidate_service, strategy, project_root)
     approvals = _approval_gate(classification, strategy)
-    blockers = _blockers(candidate_service, operator_goal, source_evidence, classification, feasibility, footprint)
+    record_blockers = _blockers(candidate_service, operator_goal, source_evidence, classification, feasibility, footprint)
+    pre_runtime_gate = _pre_runtime_workflow_gate(
+        source,
+        candidate_service,
+        source_evidence,
+        classification,
+        feasibility,
+        strategy,
+        footprint,
+        approvals,
+        record_blockers,
+    )
+    blockers = _unique_blockers(record_blockers + list(pre_runtime_gate["blockers"]))
     current_state = _current_state(blockers, approvals)
     questions = _questions(blockers, classification, strategy)
 
@@ -183,6 +195,7 @@ def build_onboarding_record(
         "integration_strategy": strategy,
         "footprint_plan": footprint,
         "approval_gate": approvals,
+        "pre_runtime_workflow_gate": pre_runtime_gate,
         "dialogue_session": _dialogue_session(
             previous_record,
             session_id,
@@ -353,6 +366,7 @@ def build_session_status(record: Mapping[str, Any], *, session_record_path: str 
         "secondary_validation_paradigms": _string_list(strategy.get("secondary_validation_paradigms")),
         "approval_required": bool(approvals.get("approval_required")),
         "required_approval_types": _string_list(approvals.get("required_approval_types")),
+        "pre_runtime_workflow_gate": _compact_pre_runtime_workflow_gate(record.get("pre_runtime_workflow_gate")),
         "answered_questions": _string_list(session.get("answered_questions")),
         "next_questions": _string_list(record.get("next_questions")),
         "next_resume_inputs": _string_list(session.get("next_resume_inputs")),
@@ -398,6 +412,7 @@ def build_session_template(record: Mapping[str, Any], *, session_record_path: st
     classification = _mapping(record.get("classification"))
     footprint = _mapping(record.get("footprint_plan"))
     feasibility = _mapping(record.get("feasibility"))
+    pre_runtime_gate = _mapping(record.get("pre_runtime_workflow_gate"))
 
     descriptor_patch: dict[str, Any] = {}
     if not _first_string(record.get("candidate_service")):
@@ -420,6 +435,18 @@ def build_session_template(record: Mapping[str, Any], *, session_record_path: st
     service_slug = _first_string(footprint.get("service_slug"))
     if not service_slug:
         descriptor_patch["footprint_plan"] = {"service_slug": "<stable-service-slug>"}
+
+    missing_gate_dimensions = set(_string_list(pre_runtime_gate.get("missing_dimensions")))
+    if "credential_boundary" in missing_gate_dimensions:
+        descriptor_patch["credential_boundary"] = "<credential, account, tenant, token, or installation boundary>"
+    if "scope_locality" in missing_gate_dimensions:
+        descriptor_patch["scope_boundary"] = "<shared, project, user, credential, remote, dev, or client-local boundary evidence>"
+    if "state_footprint" in missing_gate_dimensions:
+        descriptor_patch.setdefault("footprint_plan", {})["state_footprint"] = "<stateless or concrete local/cache/registry/runtime state footprint>"
+    if "validation_probe_plan" in missing_gate_dimensions:
+        descriptor_patch["validation_probe_plan"] = [
+            {"layer": "<source-only planned probe layer>", "description": "<what a later approved turn should validate>"}
+        ]
 
     evidence_gaps = _string_list(feasibility.get("evidence_gaps"))
     if evidence_gaps:
@@ -448,6 +475,7 @@ def build_session_template(record: Mapping[str, Any], *, session_record_path: st
         "summary_type": "service_onboarding_resume_template",
         "mutation_allowed": False,
         "session": status,
+        "pre_runtime_workflow_gate": _compact_pre_runtime_workflow_gate(pre_runtime_gate),
         "next_questions": _string_list(record.get("next_questions")),
         "descriptor_patch_template": descriptor_patch,
         "rerun_guidance": rerun_guidance,
@@ -655,6 +683,217 @@ def _approval_gate(classification: Mapping[str, Mapping[str, str | None]], strat
         "required_approval_types": required,
         "exact_approval_text": exact_text,
         "stop_condition": "stop before runtime/global/client mutation" if required else "source-only path may proceed",
+    }
+
+
+def _pre_runtime_workflow_gate(
+    source: Mapping[str, Any],
+    candidate_service: str | None,
+    source_evidence: list[dict[str, Any]],
+    classification: Mapping[str, Mapping[str, str | None]],
+    feasibility: Mapping[str, Any],
+    strategy: Mapping[str, Any],
+    footprint: Mapping[str, Any],
+    approvals: Mapping[str, Any],
+    record_blockers: list[dict[str, str]],
+) -> dict[str, Any]:
+    planned_probe_layers = _planned_validation_probe_layers(source, classification, strategy, footprint, approvals)
+    known = _known_classifications(classification)
+    credential_required = (
+        known.get("localization_type") == "credential_scoped"
+        or known.get("state_type") == "credential_state"
+    )
+    credential_boundary = _first_string(
+        source.get("credential_boundary"),
+        source.get("credential_scope"),
+        source.get("account_boundary"),
+        source.get("tenant_boundary"),
+        source.get("token_boundary"),
+        source.get("installation_boundary"),
+    )
+    state_known = (
+        classification["state_type"]["status"] == "known"
+        and (
+            known.get("state_type") == "stateless"
+            or bool(
+                footprint.get("files")
+                or footprint.get("scripts")
+                or footprint.get("generated_artifacts")
+                or footprint.get("contextforge_surfaces")
+                or footprint.get("client_surfaces")
+                or footprint.get("docker_surfaces")
+            )
+        )
+    )
+    checks = [
+        (
+            "source_evidence",
+            bool(source_evidence),
+            "upstream docs, package names, commands, local paths, issue links, or source contracts",
+        ),
+        (
+            "canonical_service_identity",
+            bool(candidate_service and footprint.get("service_slug")),
+            "candidate service name plus stable canonical service slug or documented equivalent",
+        ),
+        (
+            "scope_locality",
+            classification["localization_type"]["status"] == "known",
+            "source-backed shared, project, user, credential, remote, dev, client-local, or gateway-exception locality",
+        ),
+        (
+            "transport",
+            classification["transport_type"]["status"] == "known",
+            "native transport or bridge-required transport evidence from sources",
+        ),
+        (
+            "credential_boundary",
+            bool(credential_boundary) if credential_required else True,
+            "credential, account, tenant, token, or installation boundary when credentials scope the service",
+        ),
+        (
+            "state_footprint",
+            state_known,
+            "stateless declaration or concrete local/cache/registry/runtime state footprint",
+        ),
+        (
+            "approval_boundary",
+            classification["approval_type"]["status"] == "known" and bool(approvals.get("stop_condition")),
+            "source-only, local ignored state, Docker, registry, live runtime, client/global, Pi, or cleanup approval boundary",
+        ),
+        (
+            "validation_probe_plan",
+            bool(planned_probe_layers),
+            "planned validation probe layers only; no probes are run by this helper",
+        ),
+    ]
+
+    known_dimensions = [name for name, is_known, _required in checks if is_known]
+    missing_dimensions = [name for name, is_known, _required in checks if not is_known]
+    required_pre_runtime_evidence = [
+        {
+            "dimension": name,
+            "status": "known" if is_known else "missing",
+            "required": required,
+        }
+        for name, is_known, required in checks
+    ]
+    blockers = [_pre_runtime_blocker(name) for name in missing_dimensions]
+    gate_status = "blocked" if blockers or record_blockers else "ready_for_pre_runtime_handoff"
+    if gate_status != "blocked" and approvals.get("approval_required"):
+        gate_status = "approval_required_before_runtime"
+
+    return {
+        "runtime_work_allowed": False,
+        "gate_status": gate_status,
+        "known_dimensions": known_dimensions,
+        "missing_dimensions": missing_dimensions,
+        "required_pre_runtime_evidence": required_pre_runtime_evidence,
+        "planned_validation_probe_layers": planned_probe_layers,
+        "blockers": blockers,
+        "non_actions": [
+            "plan validation probes only",
+            "do not run probes or start services from the pre-runtime gate",
+        ],
+    }
+
+
+def _planned_validation_probe_layers(
+    source: Mapping[str, Any],
+    classification: Mapping[str, Mapping[str, str | None]],
+    strategy: Mapping[str, Any],
+    footprint: Mapping[str, Any],
+    approvals: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    explicit = []
+    for item in _as_list(source.get("validation_probe_plan")):
+        if isinstance(item, Mapping):
+            layer = _first_string(item.get("layer"), item.get("name"), item.get("type"))
+            description = _first_string(item.get("description"), item.get("plan"), item.get("ref"))
+            if layer:
+                explicit.append(_probe_layer(layer, description or "operator-supplied source-only probe plan"))
+        elif isinstance(item, str):
+            explicit.append(_probe_layer(_normalize_token(item) or "operator_supplied_probe", item))
+    if explicit:
+        return explicit
+
+    known = _known_classifications(classification)
+    transport = known.get("transport_type")
+    layers = []
+    if transport in {"streamable_http", "sse", "rest_openapi", "native_hosted"}:
+        layers.append(_probe_layer("native_transport_contract_readback", "later read endpoint metadata and list/call behavior for the native transport"))
+    if transport in {"stdio", "bridge_required", "mixed"} or "Package-provided bridge/transceiver" in {
+        strategy.get("primary_paradigm"),
+        *strategy.get("secondary_validation_paradigms", []),
+    }:
+        layers.append(_probe_layer("bridge_transport_smoke_plan", "later verify the package bridge/transceiver exposes the missing HTTP or SSE side"))
+    if known.get("localization_type") == "credential_scoped" or known.get("state_type") == "credential_state":
+        layers.append(_probe_layer("credential_scope_negative_readback", "later prove the binding cannot cross credential or tenant boundaries"))
+    if known.get("localization_type") == "client_local_session_scoped":
+        layers.append(_probe_layer("client_session_scope_probe", "later validate behavior against the exact client-local session boundary"))
+    if known.get("state_type") and known.get("state_type") != "stateless":
+        layers.append(_probe_layer("state_footprint_readback", "later read back declared local/cache/registry/runtime evidence state without broadening scope"))
+    if approvals.get("approval_required"):
+        layers.append(_probe_layer("approval_scoped_runtime_readback", "later run only after exact approval for the listed runtime or client surface"))
+    if footprint.get("generated_artifacts"):
+        layers.append(_probe_layer("generated_artifact_review", "later inspect generated local evidence artifacts before promoting claims"))
+    return _unique_probe_layers(layers)
+
+
+def _probe_layer(layer: str, description: str) -> dict[str, Any]:
+    return {
+        "layer": layer,
+        "status": "planned",
+        "runtime_execution": False,
+        "description": description,
+    }
+
+
+def _pre_runtime_blocker(dimension: str) -> dict[str, str]:
+    questions = {
+        "source_evidence": "What source evidence proves the service shape before runtime work?",
+        "canonical_service_identity": "What canonical service identity and stable service slug should ContextForge use?",
+        "scope_locality": "Which scope/locality evidence defines whether this is shared, project, credential, user, client-local, remote, dev, or gateway-exception?",
+        "transport": "Which native transport or bridge-required transport evidence can be checked from sources?",
+        "credential_boundary": "Which credential, account, tenant, token, or installation boundary defines this service binding?",
+        "state_footprint": "Which state footprint evidence defines files, cache, registry, runtime evidence, or stateless behavior?",
+        "approval_boundary": "Which approval boundary applies before runtime, client, global, registry, or cleanup work?",
+        "validation_probe_plan": "Which validation probe layers should be planned from source evidence without running them?",
+    }
+    states = {
+        "source_evidence": "source_discovery",
+        "canonical_service_identity": "intake",
+        "scope_locality": "classification",
+        "transport": "feasibility_review",
+        "credential_boundary": "classification",
+        "state_footprint": "footprint_plan",
+        "approval_boundary": "approval_gate",
+        "validation_probe_plan": "feasibility_review",
+    }
+    return _blocker(states[dimension], f"pre_runtime_workflow_gate.{dimension}", questions[dimension])
+
+
+def _compact_pre_runtime_workflow_gate(value: Any) -> dict[str, Any]:
+    gate = _mapping(value)
+    return {
+        "runtime_work_allowed": False,
+        "gate_status": _first_string(gate.get("gate_status")) or "unknown",
+        "known_dimensions": _string_list(gate.get("known_dimensions")),
+        "missing_dimensions": _string_list(gate.get("missing_dimensions")),
+        "planned_validation_probe_layers": [
+            {
+                "layer": _first_string(layer.get("layer")),
+                "status": _first_string(layer.get("status")) or "planned",
+                "runtime_execution": bool(layer.get("runtime_execution")),
+            }
+            for layer in _as_list(gate.get("planned_validation_probe_layers"))
+            if isinstance(layer, Mapping) and _first_string(layer.get("layer"))
+        ],
+        "blocker_fields": [
+            _first_string(blocker.get("field"))
+            for blocker in _as_list(gate.get("blockers"))
+            if isinstance(blocker, Mapping) and _first_string(blocker.get("field"))
+        ],
     }
 
 
@@ -885,6 +1124,28 @@ def _unique(values: list[str] | tuple[str, ...]) -> list[str]:
     for value in values:
         if value and value not in seen:
             seen.add(value)
+            result.append(value)
+    return result
+
+
+def _unique_blockers(values: list[dict[str, str]]) -> list[dict[str, str]]:
+    seen = set()
+    result = []
+    for value in values:
+        key = (value.get("state"), value.get("field"), value.get("question"))
+        if key not in seen:
+            seen.add(key)
+            result.append(value)
+    return result
+
+
+def _unique_probe_layers(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen = set()
+    result = []
+    for value in values:
+        layer = _first_string(value.get("layer"))
+        if layer and layer not in seen:
+            seen.add(layer)
             result.append(value)
     return result
 

@@ -58,6 +58,13 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("Direct native registration", record["integration_strategy"]["primary_paradigm"])  # type: ignore[index]
         self.assertEqual("docs-search", record["footprint_plan"]["service_slug"])  # type: ignore[index]
         self.assertIn("open or update a focused issue/PR", " ".join(record["next_issue_pr_steps"]))  # type: ignore[index]
+        gate = record["pre_runtime_workflow_gate"]
+        self.assertFalse(gate["runtime_work_allowed"])  # type: ignore[index]
+        self.assertEqual("ready_for_pre_runtime_handoff", gate["gate_status"])  # type: ignore[index]
+        self.assertEqual([], gate["missing_dimensions"])  # type: ignore[index]
+        self.assertIn("source_evidence", gate["known_dimensions"])  # type: ignore[index]
+        self.assertIn("transport", gate["known_dimensions"])  # type: ignore[index]
+        self.assertEqual(["native_transport_contract_readback"], _probe_layers(gate))  # type: ignore[arg-type]
 
     def test_shared_stdio_bridge_service_stops_at_dev_docker_approval_gate(self) -> None:
         record = self.record("shared_stdio_bridge_dev_docker_gate")
@@ -75,6 +82,12 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
             "Direct native registration rejected until packetized HTTP/SSE endpoint evidence exists",
             record["integration_strategy"]["rejected_alternatives"],  # type: ignore[index]
         )
+        gate = record["pre_runtime_workflow_gate"]
+        self.assertFalse(gate["runtime_work_allowed"])  # type: ignore[index]
+        self.assertEqual("approval_required_before_runtime", gate["gate_status"])  # type: ignore[index]
+        self.assertEqual([], gate["missing_dimensions"])  # type: ignore[index]
+        self.assertIn("bridge_transport_smoke_plan", _probe_layers(gate))  # type: ignore[arg-type]
+        self.assertIn("approval_scoped_runtime_readback", _probe_layers(gate))  # type: ignore[arg-type]
 
     def test_credential_scoped_service_records_scope_question_and_registry_gate(self) -> None:
         record = self.record("github_credential_scoped_registry_gate")
@@ -94,6 +107,12 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
             "credential scope must be proven by metadata and negative readback before broader client exposure",
             record["residual_risks"],
         )
+        gate = record["pre_runtime_workflow_gate"]
+        self.assertFalse(gate["runtime_work_allowed"])  # type: ignore[index]
+        self.assertEqual("approval_required_before_runtime", gate["gate_status"])  # type: ignore[index]
+        self.assertEqual([], gate["missing_dimensions"])  # type: ignore[index]
+        self.assertIn("credential_boundary", gate["known_dimensions"])  # type: ignore[index]
+        self.assertIn("credential_scope_negative_readback", _probe_layers(gate))  # type: ignore[arg-type]
 
     def test_client_session_local_stdio_service_keeps_source_only_handoff(self) -> None:
         record = self.record("ssh_tmux_client_session_local_bridge")
@@ -113,6 +132,11 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         )
         self.assertIn("Pi client Docker", record["footprint_plan"]["client_surfaces"])  # type: ignore[index]
         self.assertIn("do not write global or client config", record["non_actions"])
+        gate = record["pre_runtime_workflow_gate"]
+        self.assertEqual("ready_for_pre_runtime_handoff", gate["gate_status"])  # type: ignore[index]
+        self.assertEqual([], gate["missing_dimensions"])  # type: ignore[index]
+        self.assertIn("bridge_transport_smoke_plan", _probe_layers(gate))  # type: ignore[arg-type]
+        self.assertIn("client_session_scope_probe", _probe_layers(gate))  # type: ignore[arg-type]
 
     def test_openzeppelin_real_service_fixture_is_source_only_handoff(self) -> None:
         record = self.record("openzeppelin_remote_native_hosted_source_only")
@@ -145,6 +169,12 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
             "registry state is unproven until a separately approved ContextForge dev registry readback exists",
             record["residual_risks"],
         )
+        gate = record["pre_runtime_workflow_gate"]
+        self.assertFalse(gate["runtime_work_allowed"])  # type: ignore[index]
+        self.assertEqual("ready_for_pre_runtime_handoff", gate["gate_status"])  # type: ignore[index]
+        self.assertEqual([], gate["missing_dimensions"])  # type: ignore[index]
+        self.assertIn("canonical_service_identity", gate["known_dimensions"])  # type: ignore[index]
+        self.assertEqual(["native_transport_contract_readback"], _probe_layers(gate))  # type: ignore[arg-type]
 
     def test_missing_source_and_classification_evidence_emits_stable_questions_and_redacts(self) -> None:
         first = self.record("missing_evidence_prompts_questions")
@@ -160,6 +190,53 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("<redacted>", first["source_descriptor"]["api_key"])  # type: ignore[index]
         self.assertIn("source_evidence", {blocker["field"] for blocker in first["blockers"]})  # type: ignore[index]
         self.assertIn("plan_type", {blocker["field"] for blocker in _blockers(first)})
+        gate = first["pre_runtime_workflow_gate"]
+        self.assertFalse(gate["runtime_work_allowed"])  # type: ignore[index]
+        self.assertEqual("blocked", gate["gate_status"])  # type: ignore[index]
+        for dimension in [
+            "source_evidence",
+            "scope_locality",
+            "transport",
+            "state_footprint",
+            "approval_boundary",
+            "validation_probe_plan",
+        ]:
+            self.assertIn(dimension, gate["missing_dimensions"])  # type: ignore[index]
+            self.assertIn(f"pre_runtime_workflow_gate.{dimension}", {blocker["field"] for blocker in gate["blockers"]})  # type: ignore[index]
+        self.assertIn(
+            "Which validation probe layers should be planned from source evidence without running them?",
+            first["next_questions"],
+        )
+
+    def test_missing_credential_boundary_blocks_before_runtime_handoff(self) -> None:
+        record = helper.build_onboarding_record(
+            {
+                "candidate_service": "github",
+                "operator_goal": "Represent a token-scoped GitHub service binding.",
+                "source_evidence": [{"type": "local_path", "ref": "server-instances/github/instance.json"}],
+                "classification": {
+                    "plan_type": "runtime_registration",
+                    "localization_type": "credential_scoped",
+                    "functional_type": "remote_api_tool",
+                    "transport_type": "streamable_http",
+                    "state_type": "credential_state",
+                    "approval_type": "contextforge_dev_registry",
+                },
+            },
+            project_root=PROJECT_ROOT,
+            issue="#52",
+        )
+
+        self.assertEqual("needs_user_input", record["status"])
+        self.assertEqual("classification", record["current_state"])
+        gate = record["pre_runtime_workflow_gate"]
+        self.assertEqual("blocked", gate["gate_status"])  # type: ignore[index]
+        self.assertIn("credential_boundary", gate["missing_dimensions"])  # type: ignore[index]
+        self.assertIn("credential_scope_negative_readback", _probe_layers(gate))  # type: ignore[arg-type]
+        self.assertIn(
+            "Which credential, account, tenant, token, or installation boundary defines this service binding?",
+            record["next_questions"],
+        )
 
     def test_previous_record_resume_merges_new_evidence_without_writing_state(self) -> None:
         previous = self.record("missing_evidence_prompts_questions")
@@ -408,6 +485,9 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("Direct native registration", summary["primary_paradigm"])
         self.assertFalse(summary["approval_required"])
         self.assertFalse(summary["mutation_allowed"])
+        self.assertEqual("ready_for_pre_runtime_handoff", summary["pre_runtime_workflow_gate"]["gate_status"])
+        self.assertEqual([], summary["pre_runtime_workflow_gate"]["missing_dimensions"])
+        self.assertEqual(["native_transport_contract_readback"], _probe_layers(summary["pre_runtime_workflow_gate"]))
         self.assertIn(
             "What upstream docs, package names, commands, local paths, or issue links prove the service shape?",
             summary["answered_questions"],
@@ -464,6 +544,8 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("source_discovery", status_output["current_state"])
         self.assertEqual(1, status_output["turn_index"])
         self.assertIn("plan_type", status_output["classification_open"])
+        self.assertEqual("blocked", status_output["pre_runtime_workflow_gate"]["gate_status"])
+        self.assertIn("validation_probe_plan", status_output["pre_runtime_workflow_gate"]["missing_dimensions"])
         self.assertFalse(status_output["mutation_allowed"])
         self.assertTrue(status_output["session_record_path"].endswith(f"{session_id}.json"))
 
@@ -599,6 +681,8 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertFalse(template["mutation_allowed"])
         self.assertEqual("missing-service-evidence", template["session"]["session_id"])
         self.assertEqual("needs_user_input", template["session"]["status"])
+        self.assertEqual("blocked", template["pre_runtime_workflow_gate"]["gate_status"])
+        self.assertIn("validation_probe_plan", template["pre_runtime_workflow_gate"]["missing_dimensions"])
         self.assertNotIn("source_descriptor", template["session"])
         self.assertIn(
             "What upstream docs, package names, commands, local paths, or issue links prove the service shape?",
@@ -611,6 +695,7 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         )
         self.assertIn("plan_type", patch["classification"])
         self.assertIn("source_only_scaffolding", patch["classification"]["plan_type"])
+        self.assertIn("validation_probe_plan", patch)
         self.assertEqual([], patch["feasibility"]["evidence_gaps"])
         self.assertIn("--resume-session missing-service-evidence", template["rerun_guidance"]["command"])
         self.assertFalse(template["rerun_guidance"]["write_persistence"])
@@ -738,6 +823,13 @@ def _blockers(record: dict[str, object]) -> list[dict[str, str]]:
         {"field": field, "question": entry["next_evidence_step"] or ""}
         for field, entry in record["classification"].items()  # type: ignore[union-attr]
         if entry["status"] != "known" and entry["next_evidence_step"] in questions
+    ]
+
+
+def _probe_layers(gate: object) -> list[str]:
+    return [
+        layer["layer"]
+        for layer in gate["planned_validation_probe_layers"]  # type: ignore[index]
     ]
 
 

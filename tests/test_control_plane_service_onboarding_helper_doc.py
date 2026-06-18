@@ -86,6 +86,27 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         ]:
             self.assertIn(phrase, self.doc)
 
+    def test_doc_records_pre_runtime_workflow_gate_contract(self) -> None:
+        for phrase in [
+            "Pre-Runtime Workflow Gate",
+            "`pre_runtime_workflow_gate`",
+            "`runtime_work_allowed: false`",
+            "source evidence, canonical service identity",
+            "scope/locality, transport, credential boundary",
+            "state footprint, approval",
+            "required pre-runtime evidence",
+            "planned validation probe layers",
+            "native transport contract readback",
+            "bridge transport smoke plan",
+            "credential scope negative readback",
+            "client session scope probe",
+            "only plans probes",
+            "does not call ContextForge",
+            "run Docker",
+            "execute validation",
+        ]:
+            self.assertIn(phrase, self.doc)
+
     def test_doc_preserves_non_mutation_default(self) -> None:
         for forbidden_surface in [
             "register services",
@@ -167,6 +188,8 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "known and open classification dimensions",
             "primary and secondary integration paradigms",
             "approval requirement and required approval types",
+            "compact `pre_runtime_workflow_gate` state",
+            "planned validation probe layers",
             "answered questions, next questions, next resume inputs",
             "`mutation_allowed: false`",
             "cannot be combined with descriptor input",
@@ -201,6 +224,9 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "classification values",
             "feasibility notes",
             "footprint fields",
+            "missing pre-runtime gate inputs",
+            "credential boundary",
+            "validation probe plan",
             "rerun guidance for `--resume-session`",
             "does not rewrite the session",
             "list input",
