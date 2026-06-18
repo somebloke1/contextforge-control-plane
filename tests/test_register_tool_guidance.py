@@ -39,6 +39,10 @@ class RegisterToolGuidanceTests(unittest.TestCase):
         self.assertEqual("ssh_tmux_cleanup_dead_sessions", prompt_name)
         self.assertIn("dry_run", template)
 
+    def test_api_request_rejects_non_public_registry_paths_before_gateway_call(self) -> None:
+        with self.assertRaises(guidance.registry_discipline.RegistryMutationDisciplineError):
+            guidance.api_request("POST", "/database/registry", token="unused", body={"unsafe": True})
+
 
 if __name__ == "__main__":
     unittest.main()

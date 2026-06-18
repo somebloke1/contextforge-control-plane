@@ -12,6 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 
+import control_plane_registry_discipline as registry_discipline
 import contextforge_mcp_wrapper as gateway
 
 
@@ -218,6 +219,7 @@ def api_request(
     body: dict[str, Any] | None = None,
     attempts: int = 8,
 ) -> Any:
+    registry_discipline.assert_public_contextforge_api_path(method, path)
     for attempt in range(attempts):
         try:
             result = gateway._request(method, path, token=token, body=body)

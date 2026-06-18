@@ -21,6 +21,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import contextforge_mcp_wrapper as gateway
+import control_plane_registry_discipline as registry_discipline
 
 from project_init_common import (
     ENV_PROJECT_INIT_STATUS,
@@ -898,8 +899,13 @@ exec serena start-mcp-server \\
 """
 
 
+def api_request(method: str, path: str, token: str, payload: dict[str, Any] | None = None) -> Any:
+    registry_discipline.assert_public_contextforge_api_path(method, path)
+    return gateway._request(method, path, token=token, body=payload)
+
+
 def api_items(method: str, path: str, token: str, payload: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    return gateway._items(gateway._request(method, path, token=token, body=payload))
+    return gateway._items(api_request(method, path, token, payload=payload))
 
 
 def gateway_by_name(gateways: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
@@ -963,13 +969,13 @@ def register_gateway_and_server(token: str, identity: Any, port: int) -> dict[st
     if existing_gateway:
         update_payload = dict(gateway_payload)
         update_payload["enabled"] = True
-        gateway_row = gateway._request("PUT", f"/gateways/{existing_gateway['id']}", token=token, body=update_payload)
+        gateway_row = api_request("PUT", f"/gateways/{existing_gateway['id']}", token, payload=update_payload)
     else:
-        gateway_row = gateway._request("POST", "/gateways", token=token, body=gateway_payload)
+        gateway_row = api_request("POST", "/gateways", token, payload=gateway_payload)
 
     gateway_id = str(gateway_row.get("id") or (existing_gateway or {}).get("id"))
     try:
-        gateway._request("POST", f"/gateways/{gateway_id}/tools/refresh", token=token)
+        api_request("POST", f"/gateways/{gateway_id}/tools/refresh", token)
     except Exception as exc:
         raise RuntimeError(f"gateway tool refresh failed for {gateway_name}: {exc}") from exc
 
@@ -1022,9 +1028,9 @@ def register_gateway_and_server(token: str, identity: Any, port: int) -> dict[st
             "ownerEmail": OWNER,
             "visibility": VISIBILITY,
         }
-        server_row = gateway._request("PUT", f"/servers/{existing_server['id']}", token=token, body=update_payload)
+        server_row = api_request("PUT", f"/servers/{existing_server['id']}", token, payload=update_payload)
     else:
-        server_row = gateway._request("POST", "/servers", token=token, body={"server": server_payload, "visibility": VISIBILITY})
+        server_row = api_request("POST", "/servers", token, payload={"server": server_payload, "visibility": VISIBILITY})
 
     server_id = str(server_row.get("id") or (existing_server or {}).get("id"))
     virtual_tools = api_items("GET", f"/servers/{server_id}/tools", token)
@@ -2169,12 +2175,12 @@ def remove(args: argparse.Namespace) -> int:
         servers = api_items("GET", "/servers?include_inactive=true&limit=1000", token)
         server = server_by_name(servers, identity.server_name)
         if server:
-            gateway._request("DELETE", f"/servers/{server['id']}", token=token)
+            api_request("DELETE", f"/servers/{server['id']}", token)
             deleted_contextforge["server_id"] = str(server["id"])
         gateways = api_items("GET", "/gateways?include_inactive=true&limit=1000", token)
         gateway_row = gateway_by_name(gateways, identity.instance_slug)
         if gateway_row:
-            gateway._request("DELETE", f"/gateways/{gateway_row['id']}", token=token)
+            api_request("DELETE", f"/gateways/{gateway_row['id']}", token)
             deleted_contextforge["gateway_id"] = str(gateway_row["id"])
     name = unit_name(identity.instance_slug)
     run(["systemctl", "--user", "disable", "--now", name], check=False)

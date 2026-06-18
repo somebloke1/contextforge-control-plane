@@ -91,6 +91,12 @@ class ApplyRegistryRecreationTests(unittest.TestCase):
             result = apply_helper.run(apply=False, manifests_root=root)
 
         self.assertFalse(result["mutation_performed"])
+        self.assertFalse(result["registry_mutation_discipline"]["direct_database_writes_allowed"])
+        self.assertFalse(result["registry_mutation_discipline"]["stored_ids_are_authority"])
+        self.assertEqual(
+            "public_contextforge_api_or_admin_ui_after_explicit_approval",
+            result["registry_mutation_discipline"]["mutation_path"],
+        )
         self.assertEqual(1, result["service_count"])
         self.assertEqual("mentality", result["services"][0]["slug"])
         self.assertEqual("dry-run; no ContextForge API calls", result["non_actions"][0])
@@ -162,6 +168,7 @@ class ApplyRegistryRecreationTests(unittest.TestCase):
         self.assertEqual("", result.stderr)
         data = json.loads(result.stdout)
         self.assertFalse(data["mutation_performed"])
+        self.assertEqual("#140", data["registry_mutation_discipline"]["issue"])
 
 
 if __name__ == "__main__":

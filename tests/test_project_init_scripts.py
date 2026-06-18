@@ -21,6 +21,7 @@ import gemini_project_init_hook
 import opencode_project_init_hook
 import control_plane_contextforge_binding as binding
 import control_plane_project_state as project_state
+import control_plane_registry_discipline as registry_discipline
 import inspect_codex_runtime_readback as codex_runtime_readback
 import inspect_project_init_readiness as readiness
 import plan_codex_global_config_migration as codex_global_plan
@@ -28,6 +29,8 @@ import plan_dirty_checkout_rebind as dirty_rebind
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
 import register_serena_cf_controlplane_service as serena_registration
+import register_github_service as github_registration
+import register_web_search_service as web_search_registration
 
 
 CONSENT_REFS = ["run/consent-receipts/receipt-project-local-config.json"]
@@ -55,6 +58,51 @@ def service_descriptor(name: str = "context7") -> dict[str, object]:
         "validation_policy": common.safe_validation_policy(name),
         "non_actions": ["do not create a per-project backend"],
     }
+
+
+class RegistryMutationGuardCoverageTests(unittest.TestCase):
+    def test_registration_api_wrappers_reject_unsupported_paths_before_gateway(self) -> None:
+        cases = [
+            (
+                prompt_registration,
+                lambda: prompt_registration.api_request("PATCH", "/gateways/gateway-1", "token"),
+            ),
+            (
+                serena_registration,
+                lambda: serena_registration.api_request("PATCH", "/gateways/gateway-1", token="token"),
+            ),
+            (
+                github_registration,
+                lambda: github_registration.api_request("PATCH", "/gateways/gateway-1", token="token"),
+            ),
+            (
+                web_search_registration,
+                lambda: web_search_registration.api_request("PATCH", "/gateways/gateway-1", token="token"),
+            ),
+            (
+                serena_manager,
+                lambda: serena_manager.api_request("PATCH", "/gateways/gateway-1", "token"),
+            ),
+        ]
+
+        for module, call in cases:
+            with self.subTest(module=module.__name__):
+                with mock.patch.object(module.gateway, "_request", side_effect=AssertionError("unguarded gateway call")):
+                    with self.assertRaises(registry_discipline.RegistryMutationDisciplineError):
+                        call()
+
+    def test_newly_guarded_registry_scripts_call_gateway_only_through_api_wrapper(self) -> None:
+        for path in [
+            REPO_ROOT / "scripts" / "register_project_init_prompt.py",
+            REPO_ROOT / "scripts" / "register_serena_cf_controlplane_service.py",
+            REPO_ROOT / "scripts" / "register_github_service.py",
+            REPO_ROOT / "scripts" / "register_web_search_service.py",
+            REPO_ROOT / "scripts" / "manage_serena_project_instance.py",
+        ]:
+            with self.subTest(path=path.name):
+                source = path.read_text(encoding="utf-8")
+                self.assertIn("registry_discipline.assert_public_contextforge_api_path", source)
+                self.assertEqual(1, source.count("gateway._request("))
 
 
 class ProjectInitCommonTests(unittest.TestCase):

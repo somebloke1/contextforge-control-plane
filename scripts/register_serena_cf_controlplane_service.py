@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from typing import Any
 
 import contextforge_mcp_wrapper as gateway
+import control_plane_registry_discipline as registry_discipline
 
 
 OWNER = "admin@contextforge.dev"
@@ -24,6 +25,7 @@ LIVE_REGISTRATION_APPROVAL = "--allow-live-serena-registration"
 
 
 def api_request(method: str, path: str, *, token: str, body: dict[str, Any] | None = None) -> Any:
+    registry_discipline.assert_public_contextforge_api_path(method, path)
     try:
         return gateway._request(method, path, token=token, body=body)
     except urllib.error.HTTPError as exc:
