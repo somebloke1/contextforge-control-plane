@@ -1,6 +1,20 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "llama.cpp/{env:LOCAL_LLAMA_MODEL}",
+  "mcp": {
+    "contextforge-helper": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "{env:CONTEXTFORGE_HELPER_PYTHON}",
+        "{env:CONTEXTFORGE_HELPER_SCRIPT}"
+      ],
+      "environment": {
+        "MCP_WRAPPER_LOG_LEVEL": "INFO",
+        "XDG_RUNTIME_DIR": "/tmp/contextforge-client-harness-runtime"
+      }
+    }
+  },
   "provider": {
     "llama.cpp": {
       "npm": "@ai-sdk/openai-compatible",

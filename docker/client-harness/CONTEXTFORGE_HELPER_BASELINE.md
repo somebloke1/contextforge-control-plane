@@ -4,9 +4,9 @@ Issue #62 identified a real gap: Pi and OpenCode client containers can run
 specialized ContextForge smoke flows, but ordinary ad hoc client sessions do
 not yet expose the project-init helper/hook surface by default.
 
-This document defines the source contract for adding that baseline without
-mutating host-global clients, the legacy/live ContextForge surface, or runtime
-registry state.
+This document defines the source contract and harness-owned baseline fixtures
+for that baseline without mutating host-global clients, the legacy/live
+ContextForge surface, or runtime registry state.
 
 ## Scope
 
@@ -38,8 +38,8 @@ paths:
 - `docker/client-harness/scripts/smoke-opencode-contextforge-dev.sh` runs
   `opencode mcp add` against the development gateway for one validation run.
 - `docker/client-harness/config/pi/AGENTS.md` only gives Qwen smoke guidance.
-- `docker/client-harness/config/opencode/opencode.json` only defines the Qwen
-  provider/model.
+- `docker/client-harness/config/opencode/opencode.json` defines the Qwen
+  provider/model and the harness-owned `contextforge-helper` local MCP entry.
 
 Therefore a Pi or OpenCode container shell can truthfully lack ContextForge
 helper tools even when the specialized smoke scripts pass.
@@ -47,8 +47,16 @@ helper tools even when the specialized smoke scripts pass.
 ## Desired Baseline
 
 The baseline should make the expected helper surface available whenever a
-developer starts a Pi or OpenCode client session from this harness, while
-keeping the harness isolated and resettable.
+developer starts a Pi or OpenCode client session from this harness through the
+baseline launchers, while keeping the harness isolated and resettable.
+
+Harness-owned baseline entrypoints:
+
+- `docker/client-harness/scripts/start-pi-contextforge-baseline.sh`
+- `docker/client-harness/config/pi/start-contextforge-baseline.sh`
+- `docker/client-harness/scripts/start-opencode-contextforge-baseline.sh`
+- `docker/client-harness/config/opencode/start-contextforge-baseline.sh`
+- `docker/client-harness/config/opencode/plugins/contextforge-project-init.js`
 
 ### Pi
 
@@ -64,9 +72,9 @@ MCP-aware client does. The sustainable baseline route is:
   validation is separately approved;
 - avoid writing `~/.pi`, requiring `/reload`, or mutating host/global Pi state.
 
-The existing smoke script may keep its explicit `--extension` proof, but the
-baseline session launcher should not rely on a human remembering that special
-flag.
+The existing smoke script may keep its explicit `--extension` proof. The
+baseline session launcher now carries that extension path by default so the
+developer does not have to remember the special flag.
 
 ### OpenCode
 
@@ -75,6 +83,8 @@ OpenCode mutation. The sustainable baseline route is:
 
 - provide a harness-owned OpenCode project-init plugin/config fixture under
   `docker/client-harness/config/opencode`;
+- expose `contextforge-helper` through a container-local Python environment
+  instead of the host `.venv`;
 - reuse the project-local hook behavior implemented by
   `scripts/opencode_project_init_hook.py`;
 - keep any generated client state inside the OpenCode client container volume;
@@ -82,8 +92,11 @@ OpenCode mutation. The sustainable baseline route is:
   validation is separately approved;
 - avoid user-global OpenCode config or plugin writes.
 
-The existing smoke script may keep its temporary `opencode mcp add` proof, but
-baseline helper availability should not depend on that one-shot command.
+The existing smoke script may keep its temporary `opencode mcp add` proof.
+Baseline helper availability now uses both a harness-owned `contextforge-helper`
+MCP entry in `opencode.json` and a project plugin fixture copied into
+`/workspace/.opencode/plugins/contextforge-project-init.js` inside the client
+container, so it does not depend on that one-shot command.
 
 ## Runtime Validation Boundary
 
