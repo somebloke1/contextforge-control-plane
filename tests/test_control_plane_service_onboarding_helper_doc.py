@@ -190,6 +190,24 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         ]:
             self.assertIn(phrase, self.doc)
 
+    def test_doc_records_session_template_readback_contract(self) -> None:
+        for phrase in [
+            "--session-template",
+            "`service_onboarding_resume_template`",
+            "compact session context",
+            "next questions",
+            "descriptor patch scaffold",
+            "missing source evidence",
+            "classification values",
+            "feasibility notes",
+            "footprint fields",
+            "rerun guidance for `--resume-session`",
+            "does not rewrite the session",
+            "list input",
+            "`--save-session`",
+        ]:
+            self.assertIn(phrase, self.doc)
+
 
 if __name__ == "__main__":
     unittest.main()

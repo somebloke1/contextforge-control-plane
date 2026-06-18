@@ -255,6 +255,23 @@ absent session directory returns an empty list. It is read-only and cannot be
 combined with descriptor input, previous-record input, session resume input,
 single-session status input, or `--save-session`.
 
+Saved sessions can also emit a read-only resume template for the next
+agent-human turn:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboarding_helper.py \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --session-template svc-onboarding-example
+```
+
+`--session-template` returns a deterministic
+`service_onboarding_resume_template` containing compact session context, next
+questions, a descriptor patch scaffold for missing source evidence,
+classification values, feasibility notes, and footprint fields, plus rerun guidance for `--resume-session`.
+It is read-only, does not rewrite the session record, and cannot be combined
+with descriptor input, previous-record input, session resume input,
+single-session status input, list input, or `--save-session`.
+
 This local store is for resumable planning records only. It is not a daemon,
 registry, service runtime, Docker state, client installation, secret store,
 hook state, or approval bypass. Long-running helper behavior and richer
