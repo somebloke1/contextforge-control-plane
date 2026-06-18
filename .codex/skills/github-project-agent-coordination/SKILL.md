@@ -6,26 +6,35 @@ description: Use when working on ContextForge roadmap, SuperLoop, issue, PR, or 
 # GitHub Project Agent Coordination
 
 Use GitHub Project #6, `cf-controlplane-project`, as a lightweight coordination
-index for agent work selection. The board helps agents answer what is active,
-blocked, ready, deferred, or done across issues and PRs. It is not a second
-roadmap, issue body, PR body, evidence ledger, or goal store.
+index for agent work selection and near-roadmap anticipation. The board helps
+agents answer what is active, blocked, ready, deferred, or done across issues,
+PRs, and deliberately scoped roadmap draft items. It is not a second issue
+body, PR body, evidence ledger, or goal store.
 
 ## Core Rules
 
 - Read Project #6 `Agent Issue View` during SuperLoop re-entry before choosing
   or confirming the current subgoal.
+- Include both live issue/PR items and roadmap draft items in that readback.
 - Treat issues, PRs, repo files, tests, runtime probes, and governance ledgers
   as authoritative for substance.
-- Use the project board only for cross-object coordination state.
+- Use the project board only for cross-object coordination and roadmap-lane
+  visibility.
 - Update `Agent state` only after durable state changes, not for transient
   progress within a turn.
+- Create or update draft roadmap items only for durable future paths named by
+  roadmap artifacts, user intent, or repeated project evidence. Do not create
+  draft items for every thought, command, or transient follow-up.
+- Promote a draft roadmap item to an issue or PR only when it becomes selected
+  bounded work with acceptance criteria and an evidence plan.
 - Preserve the board-use directive in successor formal goals.
 - Keep mutations idempotent: read the item and field IDs first, then update
   only the intended project item field.
 
 ## Field Semantics
 
-- `Title`: native issue/PR title. Do not manually maintain.
+- `Title`: native issue/PR title, or a concise `Roadmap: ...` title for draft
+  roadmap items.
 - `Status`: GitHub Projects default workflow state. Leave it coarse unless the
   operator asks to make it authoritative.
 - `Labels`: native issue labels. Maintain on issues, not by project-field hacks.
@@ -35,6 +44,21 @@ roadmap, issue body, PR body, evidence ledger, or goal store.
 - `Created` and `Updated`: native timestamps. Do not manually maintain.
 - `Agent state`: agent-facing coordination state. This is the main field agents
   may update.
+
+## Roadmap Draft Items
+
+Roadmap draft items are allowed when the project needs an intelligible,
+intentful future visible to agents before every lane is ready to become a
+GitHub issue. Keep them at lane or bounded-initiative resolution:
+
+- title format: `Roadmap: <lane or initiative>`;
+- body: outcome, current evidence source, promotion trigger, and non-goals;
+- `Agent state`: usually `Candidate`, `Ready`, or `Deferred`;
+- no detailed evidence duplication; link or name the authoritative doc, issue,
+  PR, or decision instead.
+
+Use draft items to prevent future paths from being lost during compaction or
+goal refresh. Do not let draft items replace issues once implementation begins.
 
 ## Agent State Values
 
@@ -54,15 +78,20 @@ At goal re-entry:
 
 1. Inspect the formal goal.
 2. Inspect repo branch/status and relevant issue/PR state.
-3. Inspect Project #6 `Agent Issue View`.
+3. Inspect Project #6 `Agent Issue View`, including roadmap draft items.
 4. Reconcile `Agent state` against live issue/PR evidence before selecting or
    confirming the next subgoal.
+5. Notice missing or stale roadmap draft items only as coordination findings;
+   create or update them during goal maintenance unless the current bounded
+   subgoal is board hygiene.
 
 At goal maintenance:
 
 1. Record durable evidence in the issue, PR, doc, or governance ledger.
 2. Update `Agent state` only if the coordination state changed.
-3. Include the board-use directive in the successor formal goal.
+3. Add, update, retire, or promote roadmap draft items when roadmap artifacts
+   expose durable future paths not represented by issues or PRs.
+4. Include the board-use directive in the successor formal goal.
 
 ## Suggested State Patterns
 
@@ -73,6 +102,12 @@ At goal maintenance:
 - A late-phase runtime blocker that should not be selected now: `Deferred`.
 - A newly surfaced follow-up without a selected slice: `Candidate`.
 - A current implementation or readiness slice: `Active`.
+- A durable roadmap lane that is visible but not yet sliced: draft item
+  `Candidate`.
+- A roadmap lane with a clear next slice but no current approval: draft item
+  `Ready`.
+- A roadmap lane intentionally reserved for a later stability phase: draft item
+  `Deferred`.
 
 ## Useful Commands
 

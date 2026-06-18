@@ -167,12 +167,17 @@ issue/PR where future operators will look. This keeps the roadmap as a dynamic
 goal system rather than a static task list.
 
 GitHub Project #6 `cf-controlplane-project` is the agent coordination index for
-current work selection. Its `Agent Issue View` should be read during SuperLoop
-re-entry before choosing or confirming a subgoal. The board is a coordination
-index only: issues, PRs, repo files, tests, runtime probes, and governance
-ledgers remain authoritative for substance. Update the board's `Agent state`
-field only during goal maintenance or other durable coordination transitions,
-not for transient activity. See the repo-local
+current work selection and near-roadmap anticipation. Its `Agent Issue View`
+should be read during SuperLoop re-entry before choosing or confirming a
+subgoal. The board is a coordination index only: issues, PRs, repo files,
+tests, runtime probes, and governance ledgers remain authoritative for
+substance. It may include roadmap draft items at lane or bounded-initiative
+resolution so agents can see the intended future before every path has become a
+formal issue. Update the board's `Agent state` field only during goal
+maintenance or other durable coordination transitions, not for transient
+activity. During goal maintenance, add, update, retire, or promote roadmap
+draft items when durable roadmap artifacts expose future paths not represented
+by issues or PRs. See the repo-local
 `github-project-agent-coordination` skill for operating details, and preserve
 this board-use directive in successor formal goals.
 
@@ -194,14 +199,15 @@ Each loop must preserve this state explicitly inside the operating agent:
 
 1. Re-enter: after compaction, interruption, or resume, restate the meta-goal,
    current formal goal, current subgoal, evidence authority, and current
-   branch/PR topology; inspect GitHub Project #6 `Agent Issue View` and
-   reconcile relevant `Agent state` values against live issue/PR evidence.
+   branch/PR topology; inspect GitHub Project #6 `Agent Issue View`, including
+   roadmap draft items, and reconcile relevant `Agent state` values against
+   live issue/PR evidence.
 2. Execute: make only the state transition owned by the current subgoal.
 3. Integrate: fold subagent outputs, tests, runtime probes, docs, GitHub, and
    governance into one current truth.
 4. Refine: update the goal chain by completing, splitting, blocking, deferring,
-   or promoting subgoals; update `Agent state` only when durable coordination
-   state changes.
+   or promoting subgoals; update `Agent state` and roadmap draft items only
+   when durable coordination state changes.
 5. Rebind: choose the next current subgoal and record why it is next by
    dependency, risk, user value, and verification readiness.
 

@@ -77,17 +77,36 @@ class ContextForgeDevelopmentPathIndexTests(unittest.TestCase):
             "`Agent Issue View`",
             "`Agent state`",
             "coordination index",
+            "roadmap draft items",
             "successor",
             "goals",
         ]:
             self.assertIn(text, self.index)
             self.assertIn(text, self.roadmap)
 
+    def test_project_six_records_roadmap_lane_items(self) -> None:
+        for text in [
+            "Project #6 Roadmap Draft Items",
+            "`Roadmap: Client-visible activation UX matrix`",
+            "`Roadmap: Safe client-visible validation probes`",
+            "`Roadmap: Operator productization`",
+            "`Roadmap: Dev Docker service expansion`",
+            "`Roadmap: Project inspector and language-profile proof path`",
+            "`Roadmap: Requirement/scenario QA and evidence ledger`",
+            "`Roadmap: Upstream ContextForge dependency and packaging watch`",
+            "`Roadmap: Security/auth/remote exposure gate`",
+            "Keep #2 as the explicit deferred late-phase legacy/Serena blocker",
+        ]:
+            self.assertIn(text, self.index)
+
     def test_project_coordination_skill_defines_minimal_board_practice(self) -> None:
         for text in [
             "name: github-project-agent-coordination",
             "Use GitHub Project #6",
             "Read Project #6 `Agent Issue View` during SuperLoop re-entry",
+            "Roadmap Draft Items",
+            "Promote a draft roadmap item to an issue or PR",
+            "Add, update, retire, or promote roadmap draft items",
             "`Agent state`: agent-facing coordination state",
             "Candidate",
             "Ready",

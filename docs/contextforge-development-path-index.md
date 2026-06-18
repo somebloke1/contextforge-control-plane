@@ -16,15 +16,24 @@ evidence rather than inherited claims.
 ## Agent Coordination Index
 
 GitHub Project #6, `cf-controlplane-project`, is the lightweight agent
-coordination index for current work selection. Its single required view is
-`Agent Issue View`; the board is not a duplicate roadmap, issue body, PR body,
-or evidence ledger.
+coordination index for current work selection and near-roadmap anticipation.
+Its single required view is `Agent Issue View`; the board is not a duplicate
+issue body, PR body, formal goal, or evidence ledger.
 
 Agents should read `Agent Issue View` during SuperLoop re-entry before choosing
-or confirming the next subgoal, then reconcile its `Agent state` values against
-current GitHub issue/PR evidence. Agents should update `Agent state` only when
-a durable coordination transition occurs, such as a PR becoming ready for
-review, merging, blocking on approval, or an issue becoming deferred.
+or confirming the next subgoal, including roadmap draft items alongside live
+issue/PR items. They should reconcile `Agent state` values against current
+GitHub issue/PR evidence where applicable. Agents should update `Agent state`
+only when a durable coordination transition occurs, such as a PR becoming ready
+for review, merging, blocking on approval, an issue becoming deferred, or a
+roadmap lane becoming ready to promote into a bounded issue.
+
+Roadmap draft items are allowed when a durable future path is visible but not
+yet ready to become an implementation issue. Keep them at lane or
+bounded-initiative resolution, with `Roadmap: ...` titles and bodies that name
+the outcome, current evidence source, promotion trigger, and non-goals. Promote
+them to issues or PRs when the work becomes selected, scoped, and evidence
+planned.
 
 The repo-local skill
 `.codex/skills/github-project-agent-coordination/SKILL.md` owns the detailed
@@ -270,6 +279,31 @@ Policy:
   retired surface still exists. Cutoff belongs only after the new stack is
   rigorously proven and changes can be made one bounded refinement at a time.
 
+## Project #6 Roadmap Draft Items
+
+The following roadmap paths should be represented in Project #6 as draft
+items until they are promoted into concrete issues or PRs:
+
+- `Roadmap: Client-visible activation UX matrix` for Codex, Pi, and OpenCode
+  observables.
+- `Roadmap: Safe client-visible validation probes` for harmless
+  target-client-visible checks.
+- `Roadmap: Operator productization` for helper, registration, readback,
+  retry, and approval packet workflows.
+- `Roadmap: Dev Docker service expansion` driven by #52 onboarding records and
+  bounded runtime approvals.
+- `Roadmap: Project inspector and language-profile proof path` for expanding
+  project-specific service evidence beyond Serena.
+- `Roadmap: Requirement/scenario QA and evidence ledger` for durable
+  acceptance evidence across services and clients.
+- `Roadmap: Upstream ContextForge dependency and packaging watch` for tracking
+  ContextForge capabilities, bridge behavior, and packaging assumptions.
+- `Roadmap: Security/auth/remote exposure gate` for later remote or
+  credential-sensitive exposure decisions.
+
+Keep #2 as the explicit deferred late-phase legacy/Serena blocker instead of
+creating a duplicate roadmap draft item for legacy cutoff.
+
 ## Gap Issue Candidates
 
 These are candidates for future GitHub issues when the operator chooses to
@@ -280,6 +314,10 @@ promote them:
   target-client-visible checks;
 - operator productization of helper/registration/readback workflows;
 - next dev Docker service expansion driven by #52 onboarding records;
+- project inspector and language-profile proof path;
+- requirement/scenario QA and evidence ledger;
+- upstream ContextForge dependency and packaging watch;
+- security/auth/remote exposure gate;
 - late legacy-retirement phase for the remaining #2 Serena blockers.
 
 Do not implement these gaps from this index alone. Each needs its own bounded
