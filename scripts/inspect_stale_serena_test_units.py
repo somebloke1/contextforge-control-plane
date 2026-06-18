@@ -22,6 +22,8 @@ COMPATIBILITY_OPERATOR_UNIT = "contextforge-serena-cf-controlplane-d46fe58a2a20.
 TEST_UNIT_PREFIX = "contextforge-serena-test-new-proj-"
 SERENA_UNIT_PREFIX = "contextforge-serena-"
 SYSTEMCTL_LIST_PATTERNS = ("contextforge-serena-test*", "contextforge*serena*")
+RETIRED_PORTAL_SLUG = "-".join(("context", "portal"))
+RETIRED_SERENA_SLUG = "-".join(("serena", RETIRED_PORTAL_SLUG))
 NON_ACTIONS = (
     "read-only inspection; no systemd stop/disable/restart",
     "read-only inspection; no unit file deletion",
@@ -168,6 +170,14 @@ def _path_state(path: str | None) -> dict[str, Any]:
     return {"exists": candidate.exists(), "type": path_type}
 
 
+def _mentions_retired_surface(*values: str | None) -> bool:
+    return any(
+        isinstance(value, str)
+        and (RETIRED_PORTAL_SLUG in value or RETIRED_SERENA_SLUG in value)
+        for value in values
+    )
+
+
 def _load_manifest(instance_dir: str | None) -> dict[str, Any] | None:
     if not instance_dir:
         return None
@@ -207,7 +217,18 @@ def classify_unit(
     reasons: list[str] = []
 
     classification = "review_required"
-    if unit == COMPATIBILITY_OPERATOR_UNIT:
+    retired_surface_present = _mentions_retired_surface(
+        unit,
+        instance_dir,
+        manifest_project_root,
+        unit_project_root,
+        *(paths or []),
+    )
+
+    if retired_surface_present:
+        classification = "retired_runtime_surface_requires_migration"
+        reasons.append("unit or path still points at the retired portal-named runtime surface")
+    elif unit == COMPATIBILITY_OPERATOR_UNIT:
         classification = "retain_compatibility_operator"
         reasons.append("compatibility Serena unit must not be stopped by stale test-unit cleanup")
     elif unit.startswith(TEST_UNIT_PREFIX):
@@ -246,6 +267,7 @@ def classify_unit(
         "classification": classification,
         "cleanup_allowed": False,
         "approval_required_for_cleanup": classification == "disposable_candidate_requires_approval",
+        "blocks_cleanup_until_migrated": classification == "retired_runtime_surface_requires_migration",
         "unit_file_state": unit_file_states.get(unit),
         "systemd": _unit_load_state(unit, list_units_text),
         "instance_dir": instance_dir,
@@ -281,7 +303,11 @@ def build_report(
         counts[unit["classification"]] = counts.get(unit["classification"], 0) + 1
     return {
         "schema_uri": SCHEMA_URI,
-        "status": "review_required" if units else "no_serena_units_found",
+        "status": "attention_required"
+        if any(unit["classification"] == "retired_runtime_surface_requires_migration" for unit in units)
+        else "review_required"
+        if units
+        else "no_serena_units_found",
         "summary": {
             "unit_count": len(units),
             "classification_counts": counts,
@@ -289,6 +315,11 @@ def build_report(
                 unit["unit"]
                 for unit in units
                 if unit["classification"] == "disposable_candidate_requires_approval"
+            ],
+            "retired_runtime_blocker_units": [
+                unit["unit"]
+                for unit in units
+                if unit["classification"] == "retired_runtime_surface_requires_migration"
             ],
         },
         "units": units,

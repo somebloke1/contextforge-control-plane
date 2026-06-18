@@ -38,6 +38,8 @@ EXACT_TEST_UNITS = (
     ("contextforge-serena-test-new-proj-02-091f62efae24.service", "test-new-proj-02", 9116),
     ("contextforge-serena-test-new-proj-03-5de812b55b21.service", "test-new-proj-03", 9117),
 )
+RETIRED_PORTAL_SLUG = "-".join(("context", "portal"))
+RETIRED_SERENA_UNIT = "contextforge-" + "-".join(("serena", RETIRED_PORTAL_SLUG)) + ".service"
 
 
 class SerenaStaleUnitInspectorTests(unittest.TestCase):
@@ -122,6 +124,41 @@ ExecStart={instance_dir}/run-server.sh --project {project_root}
         self.assertEqual("review_required", unit["classification"])
         self.assertEqual([], report["summary"]["cleanup_candidate_units"])
         self.assertIn("manifest_present", unit["reasons"][0])
+
+    def test_retired_runtime_surface_blocks_cleanup_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            retired_root = root / RETIRED_PORTAL_SLUG
+            instance_dir = retired_root / "server-instances" / "-".join(("serena", RETIRED_PORTAL_SLUG))
+            cat_dir = root / "cat"
+            cat_dir.mkdir()
+            instance_dir.mkdir(parents=True)
+            retired_root.mkdir(exist_ok=True)
+            (instance_dir / "instance.json").write_text(
+                json.dumps({"canonical_project_root": str(retired_root), "port": 9108}),
+                encoding="utf-8",
+            )
+            list_units = f"UNIT LOAD ACTIVE SUB DESCRIPTION\n{RETIRED_SERENA_UNIT} loaded active running ContextForge Serena backend\n"
+            list_unit_files = f"UNIT FILE STATE PRESET\n{RETIRED_SERENA_UNIT} enabled enabled\n"
+            (cat_dir / RETIRED_SERENA_UNIT).write_text(
+                f"[Service]\nExecStart={instance_dir}/run-server.sh --project {retired_root}\n",
+                encoding="utf-8",
+            )
+
+            report = inspector.build_report(
+                list_units_text=list_units,
+                list_unit_files_text=list_unit_files,
+                unit_cat_dir=cat_dir,
+            )
+
+        self.assertEqual("attention_required", report["status"])
+        by_unit = {unit["unit"]: unit for unit in report["units"]}
+        unit = by_unit[RETIRED_SERENA_UNIT]
+        self.assertEqual("retired_runtime_surface_requires_migration", unit["classification"])
+        self.assertTrue(unit["blocks_cleanup_until_migrated"])
+        self.assertFalse(unit["cleanup_allowed"])
+        self.assertEqual([RETIRED_SERENA_UNIT], report["summary"]["retired_runtime_blocker_units"])
+        self.assertEqual([], report["summary"]["cleanup_candidate_units"])
 
     def test_eight_exact_test_units_require_approval(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
