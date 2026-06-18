@@ -113,6 +113,30 @@ tools.
   delete, local ledger file reads used as validation proof, backend health,
   direct registry checks, or direct bridge checks.
 
+## ssh-tmux Probe Contract
+
+ssh-tmux has a known-safe source-level probe contract only for existing
+session visibility. A future runtime validation may use this contract only
+when the exact target client can see the ContextForge-exposed ssh-tmux tools.
+
+- Required proof layers: target-client `list-tools` evidence plus one
+  target-client safe `call-tool` result.
+- Allowed tool names: `ssh-tmux-list-sessions`,
+  `ssh-tmux-get-snapshot`, `list_sessions`, and `get_snapshot`.
+- Default payload: call `ssh-tmux-list-sessions` with `{}` to list existing
+  sessions or return an explicit empty listing without opening or mutating
+  sessions.
+- Accepted proof kinds: `target_client_safe_probe_result` or
+  `pi_safe_probe_result`.
+- Required successful result shape: `status: passed`,
+  `target_client_visible: true`, `safe_probe_result: passed`,
+  `safe_probe_id: list-sessions`, and at least one target-client trace
+  reference.
+- Forbidden substitutions: opening sessions, sending commands or keys,
+  cleanup/deletion, closing sessions, remote file reads or writes as
+  validation proof, direct shell or tmux commands, backend health, or local
+  process inspection.
+
 ## Claim Rules
 
 - Record `validated` only after the exact target client lists and, where safe,
