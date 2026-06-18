@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -56,12 +57,12 @@ class ControlPlaneProjectStateTests(unittest.TestCase):
         root = Path("/workspace")
         with self.assertRaises(state_lib.RootValidationError):
             state_lib.validate_project_root(root, require_workspace=True)
-        with unittest.mock.patch.dict(os.environ, {state_lib.ADDITIONAL_SAFE_ROOTS_ENV: str(root)}):
+        with mock.patch.dict(os.environ, {state_lib.ADDITIONAL_SAFE_ROOTS_ENV: str(root)}):
             self.assertTrue(state_lib.is_safe_project_root(root))
             self.assertEqual(root, state_lib.validate_project_root(root, require_workspace=True))
 
     def test_additional_safe_project_roots_do_not_override_denied_roots(self) -> None:
-        with unittest.mock.patch.dict(os.environ, {state_lib.ADDITIONAL_SAFE_ROOTS_ENV: str(Path.home())}):
+        with mock.patch.dict(os.environ, {state_lib.ADDITIONAL_SAFE_ROOTS_ENV: str(Path.home())}):
             with self.assertRaises(state_lib.RootValidationError):
                 state_lib.validate_project_root(Path.home(), require_workspace=True)
 
@@ -341,6 +342,58 @@ class ControlPlaneProjectStateTests(unittest.TestCase):
             self.assertEqual("invalid_blocked", inspection["lifecycle_status"])
             self.assertEqual("blocked_repair", inspection["recommended_action"])
             self.assertFalse(inspection["root_matches"])
+
+    def test_corrupt_project_state_blocks_activation_with_plan_first_repair_proposal(self) -> None:
+        with self.workspace_project() as tmp:
+            root = Path(tmp).resolve()
+            path = state_lib.project_state_path(root)
+            path.parent.mkdir(parents=True)
+            corrupt_text = '{"meta": {"schema_version": 1},'
+            path.write_text(corrupt_text, encoding="utf-8")
+            before = path.read_text(encoding="utf-8")
+            digest = state_lib.state_file_artifact_digest(root)
+
+            inspection = state_lib.inspect_project_init_state(root, require_workspace=True, target_client="pi")
+
+            self.assertEqual(before, path.read_text(encoding="utf-8"))
+            self.assertEqual("invalid_blocked", inspection["lifecycle_status"])
+            self.assertEqual("plan_project_state_repair", inspection["recommended_action"])
+            self.assertFalse(inspection["should_suppress_hook"])
+            self.assertEqual("pi", inspection["target_client"])
+            self.assertIsNone(inspection["target_client_state"])
+            self.assertIn("invalid JSON", inspection["schema_error"])
+            proposal = inspection["state_repair_proposal"]
+            self.assertEqual("corrupt_project_state_repair", proposal["proposal_type"])
+            self.assertEqual("approval_required", proposal["status"])
+            self.assertEqual(str(path), proposal["state_path"])
+            self.assertEqual(digest, proposal["current_artifact_digest"])
+            self.assertEqual("scoped_project_state_repair", proposal["required_approval_class"])
+            self.assertEqual(
+                {"activation": True, "tool_import": True, "readiness_claim": True},
+                proposal["blocks"],
+            )
+            self.assertTrue(proposal["backup_expectation"]["preserve_exact_corrupt_bytes"])
+            self.assertEqual(digest, proposal["backup_expectation"]["digest_must_match"])
+            self.assertTrue(proposal["repair_expectation"]["plan_first"])
+            self.assertTrue(proposal["repair_expectation"]["write_allowed_only_after_explicit_approval"])
+            self.assertTrue(proposal["repair_expectation"]["replacement_must_validate_schema"])
+            self.assertTrue(proposal["repair_expectation"]["rerun_readback_before_readiness_claim"])
+            self.assertIn("silently create a clean default state", proposal["forbidden_without_approval"])
+            self.assertEqual("not_verified", proposal["readiness_effect"])
+
+    def test_corrupt_project_state_load_and_default_paths_do_not_silently_replace_file(self) -> None:
+        with self.workspace_project() as tmp:
+            root = Path(tmp).resolve()
+            path = state_lib.project_state_path(root)
+            path.parent.mkdir(parents=True)
+            path.write_text('{"meta":', encoding="utf-8")
+
+            with self.assertRaises(state_lib.StateValidationError):
+                state_lib.load_state(root, require_workspace=True)
+            default = state_lib.read_or_default(root, require_workspace=True, allow_invalid_existing=True)
+
+            self.assertEqual("uninitialized", default["status"])
+            self.assertEqual('{"meta":', path.read_text(encoding="utf-8"))
 
     def test_project_init_client_states_track_independent_client_lifecycles(self) -> None:
         with self.workspace_project() as tmp:

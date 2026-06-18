@@ -1142,9 +1142,10 @@ def inspect_project_init_state(
             "hook_prompt_state": HOOK_PROMPT_ACTIVE,
             "target_client": target_client,
             "target_client_state": None,
-            "recommended_action": "blocked_repair",
+            "recommended_action": "plan_project_state_repair",
             "should_suppress_hook": False,
             "state_path": str(path),
+            "state_repair_proposal": corrupt_project_state_repair_proposal(root, str(exc)),
         }
 
     raw_status = str(raw_state.get("status") or "")
@@ -1205,6 +1206,49 @@ def inspect_project_init_state(
         "recommended_action": action,
         "should_suppress_hook": should_suppress,
         "state_path": str(path),
+    }
+
+
+def corrupt_project_state_repair_proposal(project_root: str | Path, parse_error: str) -> dict[str, Any]:
+    """Return a non-mutating repair proposal for an unreadable state file."""
+
+    root = validate_project_root(project_root)
+    path = project_state_path(root)
+    return {
+        "proposal_type": "corrupt_project_state_repair",
+        "status": "approval_required",
+        "state_path": str(path),
+        "current_artifact_digest": state_file_artifact_digest(root),
+        "parse_error": parse_error,
+        "required_approval_class": "scoped_project_state_repair",
+        "blocks": {
+            "activation": True,
+            "tool_import": True,
+            "readiness_claim": True,
+        },
+        "backup_expectation": {
+            "required": True,
+            "source_path": str(path),
+            "preserve_exact_corrupt_bytes": True,
+            "digest_must_match": state_file_artifact_digest(root),
+        },
+        "repair_expectation": {
+            "plan_first": True,
+            "write_allowed_only_after_explicit_approval": True,
+            "replacement_must_validate_schema": True,
+            "rerun_readback_before_readiness_claim": True,
+        },
+        "allowed_after_approval": [
+            "write approved project-state replacement",
+            "record recovery trail with previous artifact digest",
+            "rerun project-state readback and schema validation",
+        ],
+        "forbidden_without_approval": [
+            "overwrite corrupt project state",
+            "silently create a clean default state",
+            "import tools or claim activation readiness",
+        ],
+        "readiness_effect": "not_verified",
     }
 
 
