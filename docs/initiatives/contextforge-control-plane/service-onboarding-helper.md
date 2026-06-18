@@ -311,6 +311,9 @@ Current required examples include:
 - `serena_project_scoped_stdio_dev_docker_gate`: project-scoped code
   intelligence with stdio transport, Docker development-surface approval, and
   secondary stock bridge/transceiver validation.
+- `serena_source_only_project_scoped_abeyant_provisioning`: source-only Serena
+  record that keeps project-scoped provisioning abeyant but hard-required for
+  a later approved runtime turn.
 - `native_http_shared_docs_source_only`: shared canonical HTTP service that can
   produce a source-only handoff without runtime approval.
 - `shared_stdio_bridge_dev_docker_gate`: shared stdio backend that must be
@@ -337,6 +340,12 @@ credential-scoped services, it should ask which credential, account, tenant, tok
 defines the binding. For client/session-local services, it should ask which
 client-local state, live session, caller identity, or process authority defines
 the binding.
+
+Serena is modeled as a source-only project-scoped onboarding record when the
+backend exists in the repository but provisioning is still abeyant. The helper
+must keep that record no-mutation, name the project-scoped backend, and make it
+clear that a later approved runtime turn will hard-require the same Serena
+backend before live integration.
 
 ## Non-Mutation Default
 

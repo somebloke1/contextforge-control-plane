@@ -48,6 +48,68 @@
       }
     },
     {
+      "name": "serena_source_only_project_scoped_abeyant_provisioning",
+      "descriptor": {
+        "candidate_service": "serena",
+        "operator_goal": "Document the project-scoped Serena backend as a source-only onboarding record while keeping provisioning abeyant until a later approved runtime turn.",
+        "source_evidence": [
+          {
+            "type": "local_path",
+            "ref": "server-instances/serena-cf-controlplane-d46fe58a2a20/instance.json"
+          },
+          {
+            "type": "issue",
+            "ref": "#152"
+          }
+        ],
+        "classification": {
+          "plan_type": "source_only_scaffolding",
+          "localization_type": "project_scoped",
+          "functional_type": "code_intelligence",
+          "transport_type": "stdio",
+          "state_type": "project_metadata",
+          "approval_type": "source_only"
+        },
+        "feasibility": {
+          "verdict": "deferred",
+          "confidence": "medium",
+          "notes": [
+            "Serena provisioning is intentionally abeyant in this source-only record.",
+            "A later approved runtime turn must hard-require the project-scoped Serena backend before any live integration."
+          ]
+        },
+        "validation_probe_plan": [
+          {
+            "layer": "serena_project_backend_provisioning_readback",
+            "description": "later approved turn should prove the project-scoped Serena backend is provisioned before any runtime or client mutation"
+          }
+        ],
+        "footprint_plan": {
+          "service_slug": "serena-cf-controlplane-d46fe58a2a20",
+          "files": [
+            "server-instances/serena-cf-controlplane-d46fe58a2a20/",
+            "server-instances/serena-cf-controlplane-d46fe58a2a20/instance.json"
+          ],
+          "docs": [
+            "docs/initiatives/contextforge-control-plane/service-onboarding-helper.md",
+            "docs/cf-controlplane-serena-compatibility-readiness.md"
+          ],
+          "tests": [
+            "tests/test_control_plane_service_onboarding_helper.py",
+            "tests/test_control_plane_service_onboarding_helper_doc.py"
+          ],
+          "cleanup_or_rollback": [
+            "do not provision Serena from this source-only record",
+            "defer runtime registration until a later approved runtime turn hard-requires the project-scoped backend"
+          ]
+        },
+        "residual_risks": [
+          "Serena provisioning remains abeyant until a later approved runtime turn hard-requires the project-scoped backend.",
+          "No live integration, registry mutation, or client-side validation is claimed by this source-only record."
+        ]
+      }
+    },
+    {
       "name": "native_http_shared_docs_source_only",
       "descriptor": {
         "candidate_service": "docs-search",

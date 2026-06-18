@@ -126,6 +126,7 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "`github_credential_scoped_registry_gate`",
             "`ssh_tmux_client_session_local_bridge`",
             "`openzeppelin_remote_native_hosted_source_only`",
+            "`serena_source_only_project_scoped_abeyant_provisioning`",
         ]:
             self.assertIn(case_name, self.doc)
 
@@ -138,6 +139,14 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "generated-code audit",
             "deployment readiness",
             "registry",
+        ]:
+            self.assertIn(phrase, self.doc)
+
+    def test_doc_records_serena_source_only_abeyant_provisioning_fixture(self) -> None:
+        for phrase in [
+            "backend exists in the repository but provisioning is still abeyant.",
+            "hard-require the same Serena",
+            "later approved runtime turn",
         ]:
             self.assertIn(phrase, self.doc)
 
