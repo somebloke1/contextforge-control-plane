@@ -367,6 +367,27 @@ def build_session_status(record: Mapping[str, Any], *, session_record_path: str 
     return summary
 
 
+def list_session_statuses(session_dir: Path) -> dict[str, Any]:
+    """List compact readback summaries for saved onboarding sessions without writing state."""
+
+    statuses: list[dict[str, Any]] = []
+    if session_dir.exists():
+        if not session_dir.is_dir():
+            raise ServiceOnboardingInputError("session_dir must be a directory when listing sessions")
+        for path in sorted(session_dir.glob("*.json"), key=lambda item: item.name):
+            statuses.append(build_session_status(_load_record(str(path)), session_record_path=str(path)))
+    result = {
+        "schema_uri": SESSION_SCHEMA_URI,
+        "summary_type": "service_onboarding_session_list",
+        "session_dir": str(session_dir),
+        "session_count": len(statuses),
+        "mutation_allowed": False,
+        "sessions": statuses,
+    }
+    _validate_no_secret_leaks(result)
+    return result
+
+
 def _decision_log(
     turn_index: int,
     classification: Mapping[str, Mapping[str, str | None]],
@@ -834,11 +855,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--previous-record", default=None, help="Optional prior onboarding record to resume from")
     parser.add_argument("--resume-session", default=None, help="Load the previous record from the local ignored session store")
     parser.add_argument("--session-status", default=None, help="Emit a compact no-mutation status summary for a saved session")
+    parser.add_argument("--list-sessions", action="store_true", help="List compact no-mutation summaries for saved sessions")
     parser.add_argument("--session-id", default=None, help="Stable session id to include in dialogue metadata")
     parser.add_argument("--session-dir", default=str(DEFAULT_SESSION_DIR), help="Project-local ignored session directory under run/")
     parser.add_argument("--save-session", action="store_true", help="Persist the emitted record to the local ignored session store")
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.list_sessions:
+        if args.descriptor or args.case or args.previous_record or args.resume_session or args.session_status or args.save_session:
+            raise ServiceOnboardingInputError("--list-sessions cannot be combined with descriptor, resume, status, or write options")
+        session_dir = resolve_session_dir(args.session_dir, project_root=args.project_root)
+        print(
+            json.dumps(
+                list_session_statuses(session_dir),
+                indent=2 if args.pretty else None,
+                sort_keys=True,
+            )
+            + "\n",
+            end="",
+        )
+        return 0
 
     if args.session_status:
         if args.descriptor or args.case or args.previous_record or args.resume_session or args.save_session:
