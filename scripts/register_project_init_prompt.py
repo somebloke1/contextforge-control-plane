@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import contextforge_mcp_wrapper as gateway
+import control_plane_registry_discipline as registry_discipline
 from mcpgateway.services.content_security import get_content_security_service
 
 from project_init_common import (
@@ -111,6 +112,7 @@ def rendered_messages_text(rendered: Any) -> str:
 
 
 def api_request(method: str, path: str, token: str, payload: dict[str, Any] | None = None) -> Any:
+    registry_discipline.assert_public_contextforge_api_path(method, path)
     return gateway._request(method, path, token=token, body=payload)
 
 

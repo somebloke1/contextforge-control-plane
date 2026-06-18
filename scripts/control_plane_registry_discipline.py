@@ -29,17 +29,21 @@ ALLOWED_CONTEXTFORGE_API_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("GET", re.compile(r"^/gateways(?:\?.*)?$")),
     ("POST", re.compile(r"^/gateways$")),
     ("PUT", re.compile(r"^/gateways/[^/?]+$")),
+    ("DELETE", re.compile(r"^/gateways/[^/?]+$")),
     ("POST", re.compile(r"^/gateways/[^/?]+/tools/refresh$")),
     ("GET", re.compile(r"^/tools(?:\?.*)?$")),
     ("GET", re.compile(r"^/servers(?:\?.*)?$")),
     ("POST", re.compile(r"^/servers$")),
     ("PUT", re.compile(r"^/servers/[^/?]+$")),
+    ("DELETE", re.compile(r"^/servers/[^/?]+$")),
+    ("GET", re.compile(r"^/servers/[^/?]+/tools$")),
     ("GET", re.compile(r"^/resources(?:\?.*)?$")),
     ("POST", re.compile(r"^/resources$")),
     ("PUT", re.compile(r"^/resources/[^/?]+$")),
     ("GET", re.compile(r"^/prompts(?:\?.*)?$")),
     ("POST", re.compile(r"^/prompts$")),
     ("PUT", re.compile(r"^/prompts/[^/?]+$")),
+    ("POST", re.compile(r"^/prompts/[^/?]+$")),
 )
 
 

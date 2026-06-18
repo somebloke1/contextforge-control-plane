@@ -18,17 +18,21 @@ class RegistryMutationDisciplineTests(unittest.TestCase):
             ("GET", "/gateways?include_inactive=true&limit=1000"),
             ("POST", "/gateways"),
             ("PUT", "/gateways/gateway-1"),
+            ("DELETE", "/gateways/gateway-1"),
             ("POST", "/gateways/gateway-1/tools/refresh"),
             ("GET", "/tools?include_inactive=true&limit=1000"),
             ("GET", "/servers?include_inactive=true&limit=1000"),
             ("POST", "/servers"),
             ("PUT", "/servers/server-1"),
+            ("DELETE", "/servers/server-1"),
+            ("GET", "/servers/server-1/tools"),
             ("GET", "/resources?include_inactive=true&limit=1000"),
             ("POST", "/resources"),
             ("PUT", "/resources/resource-1"),
             ("GET", "/prompts?include_inactive=true&limit=1000"),
             ("POST", "/prompts"),
             ("PUT", "/prompts/prompt-1"),
+            ("POST", "/prompts/prompt-1"),
         ]:
             with self.subTest(method=method, path=path):
                 discipline.assert_public_contextforge_api_path(method, path)
@@ -39,7 +43,8 @@ class RegistryMutationDisciplineTests(unittest.TestCase):
             ("POST", "/database/registry"),
             ("PATCH", "/gateways/gateway-1"),
             ("PUT", "/admin/internal/gateways/gateway-1"),
-            ("DELETE", "/servers/server-1"),
+            ("DELETE", "/tools/tool-1"),
+            ("POST", "/servers/server-1/tools"),
         ]:
             with self.subTest(method=method, path=path):
                 with self.assertRaises(discipline.RegistryMutationDisciplineError):
@@ -65,6 +70,12 @@ class RegistryMutationDisciplineTests(unittest.TestCase):
             "Issue: #140",
             "scripts/apply_contextforge_registry_recreation.py",
             "scripts/register_tool_guidance.py",
+            "scripts/register_project_init_prompt.py",
+            "scripts/register_serena_cf_controlplane_service.py",
+            "scripts/register_github_service.py",
+            "scripts/register_web_search_service.py",
+            "scripts/manage_serena_project_instance.py",
+            "remove --yes --delete-contextforge-records",
             "must not write the ContextForge database directly",
             "stored IDs as readback evidence and request targets",
             "does not approve live registry mutation",
