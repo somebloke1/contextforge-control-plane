@@ -229,8 +229,30 @@ def looks_like_serena_server(server: dict[str, Any]) -> bool:
     return name.startswith("serena_") or name.startswith("serena-") or "serena" in tags or "serena" in description
 
 
+def retired_registry_uri_prefix() -> str:
+    return "contextforge://" + "-".join(("context", "portal"))
+
+
+def retired_serena_guidance_resource_ids(resources: list[dict[str, Any]], keep_id: str) -> set[str]:
+    retired_prefix = retired_registry_uri_prefix()
+    ids: set[str] = set()
+    for resource in resources:
+        resource_id = str(resource.get("id") or "")
+        if not resource_id or resource_id == keep_id:
+            continue
+        uri = str(resource.get("uri") or "")
+        name = str(resource.get("name") or "")
+        if uri.startswith(f"{retired_prefix}/serena-project-instance-guidance/") or (
+            name.startswith("serena_project_instance_guidance_resource") and uri != SERENA_GUIDANCE_RESOURCE_URI
+        ):
+            ids.add(resource_id)
+    return ids
+
+
 def associate_serena_guidance(token: str, prompt: dict[str, Any], resource: dict[str, Any]) -> list[str]:
     servers = api_items("GET", "/servers?include_inactive=true&limit=1000", token)
+    resources = api_items("GET", "/resources?include_inactive=true&limit=1000", token)
+    retired_resource_ids = retired_serena_guidance_resource_ids(resources, resource_id(resource))
     associated: list[str] = []
     for server in servers:
         if not looks_like_serena_server(server):
@@ -238,6 +260,7 @@ def associate_serena_guidance(token: str, prompt: dict[str, Any], resource: dict
         tools = set_of_ids(server, "associatedToolIds") or set_of_ids(server, "associatedTools")
         resources = set_of_ids(server, "associatedResourceIds") or set_of_ids(server, "associatedResources")
         prompts = set_of_ids(server, "associatedPromptIds") or set_of_ids(server, "associatedPrompts")
+        resources.difference_update(retired_resource_ids)
         resources.add(resource_id(resource))
         prompts.add(prompt_id(prompt))
         payload = {

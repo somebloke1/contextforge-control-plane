@@ -1870,6 +1870,57 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertEqual("codex", (calls[0] or {})["target_client"])
         self.assertEqual("/home/dgk/workspace/cf-controlplane", (calls[0] or {})["project_root"])
 
+    def test_serena_guidance_association_replaces_retired_resources(self) -> None:
+        requests: list[tuple[str, str, dict[str, object] | None]] = []
+
+        def fake_items(method: str, path: str, token: str, payload: dict[str, object] | None = None) -> list[dict[str, object]]:
+            self.assertEqual("GET", method)
+            self.assertEqual("token", token)
+            if path == "/servers?include_inactive=true&limit=1000":
+                return [
+                    {
+                        "id": "server-id",
+                        "name": "serena_cf_controlplane_d46fe58a2a20_server",
+                        "associatedToolIds": ["tool-id"],
+                        "associatedResourceIds": ["resource-current", "resource-retired"],
+                        "associatedPromptIds": ["prompt-current"],
+                        "tags": [{"id": "serena", "label": "serena"}],
+                    }
+                ]
+            if path == "/resources?include_inactive=true&limit=1000":
+                retired_uri = prompt_registration.retired_registry_uri_prefix() + "/serena-project-instance-guidance/v14"
+                return [
+                    {"id": "resource-current", "name": "serena_project_instance_guidance_resource_v15", "uri": common.SERENA_GUIDANCE_RESOURCE_URI},
+                    {"id": "resource-retired", "name": "serena_project_instance_guidance_resource_v14", "uri": retired_uri},
+                ]
+            raise AssertionError(f"unexpected path: {path}")
+
+        def fake_request(
+            method: str,
+            path: str,
+            token: str,
+            payload: dict[str, object] | None = None,
+        ) -> dict[str, object]:
+            self.assertEqual("PUT", method)
+            self.assertEqual("token", token)
+            requests.append((method, path, payload))
+            return {"id": "server-id"}
+
+        with (
+            mock.patch.object(prompt_registration, "api_items", side_effect=fake_items),
+            mock.patch.object(prompt_registration, "api_request", side_effect=fake_request),
+        ):
+            associated = prompt_registration.associate_serena_guidance(
+                "token",
+                {"id": "prompt-current"},
+                {"id": "resource-current"},
+            )
+
+        self.assertEqual(["serena_cf_controlplane_d46fe58a2a20_server"], associated)
+        body = requests[0][2] or {}
+        self.assertEqual(["resource-current"], body["associatedResources"])
+        self.assertEqual(["prompt-current"], body["associatedPrompts"])
+
     def test_project_init_artifact_uris_track_semantic_prompt_version(self) -> None:
         self.assertTrue(common.PROJECT_INIT_RESOURCE_URI.endswith(f"/{common.PROMPT_VERSION}"))
         self.assertTrue(common.SERENA_GUIDANCE_RESOURCE_URI.endswith(f"/{common.PROMPT_VERSION}"))
