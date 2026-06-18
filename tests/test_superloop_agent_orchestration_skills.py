@@ -185,6 +185,19 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
         ]:
             self.assertIn(text, self.project)
 
+    def test_project_skill_documents_custom_agent_field_automation_boundary(self) -> None:
+        for text in [
+            "built-in GitHub Project workflows do not\n  clear custom text fields",
+            "Custom Agent Field Automation",
+            "Treat `Status` as workflow-owned",
+            "`Agent state` / `Agent owner` as\nagent-owned",
+            "GitHub Actions workflow or a local\ncontroller/helper reconciliation job",
+            "clear `Agent owner` when a lease is completed",
+            "do not create duplicate Project items while waiting for auto-add latency",
+            "Do not infer that `Agent owner` was cleared merely because `Status` is `Done`",
+        ]:
+            self.assertIn(text, self.project)
+
 
 if __name__ == "__main__":
     unittest.main()
