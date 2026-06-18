@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "source_issue": 199,
+  "acceptance_gate": "user_observed_interactive_pi_session",
+  "readiness_floor": "planned",
+  "required_labels": [
+    "feature-request",
+    "ideal-form",
+    "validation-request"
+  ],
+  "required_narration_layers": [
+    "user_perception",
+    "technology_narration"
+  ],
+  "stories": [
+    {
+      "issue": 201,
+      "title": "First-run project-init guidance without mutation",
+      "story_type": "intended_behavior",
+      "lane": "Project init",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi starts in a fresh project and explains project-init guidance before any apply or recovery mutation.",
+      "technical_contract": "The shim/helper reads project-local state, offers a plan-first path, and preserves no-mutation evidence until explicit approval."
+    },
+    {
+      "issue": 202,
+      "title": "Initialized project imports approved ContextForge tools",
+      "story_type": "intended_behavior",
+      "lane": "Client adapters",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi shows approved ContextForge-backed tools after initialization in an ordinary session.",
+      "technical_contract": "The Pi adapter imports only approved services from project state and routes them through the ContextForge wrapper."
+    },
+    {
+      "issue": 203,
+      "title": "Select, decline, and defer ContextForge services",
+      "story_type": "intended_behavior",
+      "lane": "Project init",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "The user can select, decline, or defer service activation choices and see the result clearly.",
+      "technical_contract": "The helper records explicit choices without silently promoting unchosen services."
+    },
+    {
+      "issue": 204,
+      "title": "Scoped consent plan approval and apply",
+      "story_type": "intended_behavior",
+      "lane": "Authorization",
+      "effort": "High",
+      "complexity": "High",
+      "observable_contract": "The user sees a scoped plan, approves it, and Pi reports only the approved apply result.",
+      "technical_contract": "Consent receipts bind plan digest, challenge, approval, and apply scope before state mutation."
+    },
+    {
+      "issue": 205,
+      "title": "Safe governance read through ContextForge tool",
+      "story_type": "intended_behavior",
+      "lane": "Governance",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "The user asks Pi about project governance and gets a safe read-only answer through a ContextForge tool.",
+      "technical_contract": "The ContextForge route exposes read-only governance data with no ledger mutation or secret leakage."
+    },
+    {
+      "issue": 206,
+      "title": "Repairable service import failure with plan-first recovery",
+      "story_type": "intended_behavior",
+      "lane": "Apply recovery",
+      "effort": "High",
+      "complexity": "High",
+      "observable_contract": "A failed service import is explained with a repair plan instead of being hidden or half-applied.",
+      "technical_contract": "The helper classifies the failure, preserves current state, and produces a bounded recovery proposal."
+    },
+    {
+      "issue": 207,
+      "title": "Authenticated route without token exposure",
+      "story_type": "intended_behavior",
+      "lane": "Auth",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "The user sees an authenticated ContextForge tool work without seeing bearer tokens or secret values.",
+      "technical_contract": "The wrapper and Pi shim pass scoped credentials through redacted environment or cache paths only."
+    },
+    {
+      "issue": 208,
+      "title": "Reload boundary after shim install or update",
+      "story_type": "intended_behavior",
+      "lane": "Client adapters",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "After a shim install or update, Pi clearly indicates that a reload is required before relying on new behavior.",
+      "technical_contract": "Install/update state is separate from live-session readiness and requires explicit Pi reload evidence."
+    },
+    {
+      "issue": 209,
+      "title": "Multi-turn plan persistence and stale digest rejection",
+      "story_type": "intended_behavior",
+      "lane": "Authorization",
+      "effort": "High",
+      "complexity": "High",
+      "observable_contract": "The user can continue a plan across turns, but stale approval input is rejected with a clear explanation.",
+      "technical_contract": "Plan cache, challenge id, and digest must match before apply can proceed."
+    },
+    {
+      "issue": 210,
+      "title": "Helper and shim state readback for current project",
+      "story_type": "intended_behavior",
+      "lane": "Project state",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "The user can ask Pi what ContextForge state it is using for the current project.",
+      "technical_contract": "Readback reports current project root, imported services, tool names, skips, and bounded errors."
+    },
+    {
+      "issue": 211,
+      "title": "Capability discovery with ContextForge as authority",
+      "story_type": "intended_behavior",
+      "lane": "Inventory",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "The user asks what capabilities are available and Pi answers from ContextForge-backed authority.",
+      "technical_contract": "Capability discovery flows through project state and ContextForge readback, not stale client-local assumptions."
+    },
+    {
+      "issue": 212,
+      "title": "Service onboarding handoff for uncataloged capability",
+      "story_type": "intended_behavior",
+      "lane": "Service onboarding",
+      "effort": "High",
+      "complexity": "High",
+      "observable_contract": "When the user asks for an uncataloged capability, Pi offers an onboarding handoff instead of pretending it exists.",
+      "technical_contract": "The helper creates a service-onboarding path with classification, feasibility, and implementation footprint planning."
+    },
+    {
+      "issue": 213,
+      "title": "Project-root safety refusal for broad or unsafe roots",
+      "story_type": "intended_behavior",
+      "lane": "Trust",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi refuses or defers activation when the working directory is too broad or unsafe.",
+      "technical_contract": "Project-root inspection enforces configured root boundaries before helper planning or tool import."
+    },
+    {
+      "issue": 214,
+      "title": "Dev Docker baseline session imports mentality tools",
+      "story_type": "intended_behavior",
+      "lane": "Client adapters",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "A Pi dev Docker baseline session imports and can see the expected mentality tools.",
+      "technical_contract": "The client harness starts Pi against ContextForge dev Docker and exposes the project-local mentality route."
+    },
+    {
+      "issue": 215,
+      "title": "Manual validation choice when safe probe is unavailable",
+      "story_type": "intended_behavior",
+      "lane": "Evidence",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "If no safe automated probe exists, Pi tells the user that manual validation is required.",
+      "technical_contract": "Validation policy distinguishes safe probes, conditional probes, skipped probes, and manual proof requirements."
+    },
+    {
+      "issue": 216,
+      "title": "Layered readiness answer without collapsed claims",
+      "story_type": "intended_behavior",
+      "lane": "Readiness",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi reports readiness by layer instead of saying generic done, ready, or validated.",
+      "technical_contract": "Readiness answers use the project vocabulary and cite missing stronger layers."
+    },
+    {
+      "issue": 219,
+      "title": "Dev gateway unreachable at session start",
+      "story_type": "failure_recovery",
+      "lane": "Readiness",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi starts, detects that the dev gateway is unreachable, and gives a bounded recovery path.",
+      "technical_contract": "Startup checks classify ContextForge dev Docker reachability separately from Pi shim load failure."
+    },
+    {
+      "issue": 220,
+      "title": "Corrupt project-state file blocks activation safely",
+      "story_type": "failure_recovery",
+      "lane": "Project state",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "Pi refuses activation when project state is corrupt and explains the repair boundary.",
+      "technical_contract": "Project-state parsing fails closed, preserves the file, and reports schema or JSON errors without apply mutation."
+    },
+    {
+      "issue": 221,
+      "title": "ContextForge server id drift rebind",
+      "story_type": "failure_recovery",
+      "lane": "Registry validation",
+      "effort": "Medium",
+      "complexity": "High",
+      "observable_contract": "Pi notices that the stored server id no longer matches ContextForge and offers a rebind path.",
+      "technical_contract": "Registry readback detects server-id drift and distinguishes rebind planning from unapproved registry mutation."
+    },
+    {
+      "issue": 222,
+      "title": "Scoped token expires during interaction",
+      "story_type": "failure_recovery",
+      "lane": "Auth",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "When a scoped token expires, Pi reports auth expiry and prompts for a safe refresh path.",
+      "technical_contract": "Wrapper errors classify token expiry, redact token material, and avoid silent fallback to broader credentials."
+    },
+    {
+      "issue": 223,
+      "title": "Unsafe tool request redirected to safe path",
+      "story_type": "failure_recovery",
+      "lane": "Tool policy",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "A risky tool request is refused or redirected to a safe read-only or plan-first alternative.",
+      "technical_contract": "Tool policy gates distinguish safe calls, conditional calls, and approval-required mutation paths."
+    },
+    {
+      "issue": 224,
+      "title": "Wrapper crash produces bounded diagnostics",
+      "story_type": "failure_recovery",
+      "lane": "Wrapper validation",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "If a wrapper crashes, Pi shows a concise diagnostic instead of dumping noisy stderr or hanging.",
+      "technical_contract": "The wrapper captures bounded stderr tails, exit class, and recovery hints without leaking secrets."
+    },
+    {
+      "issue": 225,
+      "title": "Project root changes mid-session",
+      "story_type": "failure_recovery",
+      "lane": "Project state",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "If the user changes project roots mid-session, Pi detects the mismatch before using stale tools.",
+      "technical_contract": "Session state binds the project root and invalidates or refreshes tool routes when the root changes."
+    },
+    {
+      "issue": 226,
+      "title": "Concurrent session stale plan conflict",
+      "story_type": "failure_recovery",
+      "lane": "Apply recovery",
+      "effort": "High",
+      "complexity": "High",
+      "observable_contract": "Two Pi sessions cannot apply the same stale plan without a clear conflict message.",
+      "technical_contract": "Plan/apply state uses digests, timestamps, or journals to reject stale concurrent applies."
+    },
+    {
+      "issue": 227,
+      "title": "Interrupted apply resumes through recovery journal",
+      "story_type": "failure_recovery",
+      "lane": "Apply recovery",
+      "effort": "High",
+      "complexity": "High",
+      "observable_contract": "After an interrupted apply, Pi can explain what happened and offer journal-based recovery.",
+      "technical_contract": "Apply operations write enough recovery journal evidence to classify complete, partial, and rollback-needed states."
+    },
+    {
+      "issue": 228,
+      "title": "User asks for absent tool and Pi admits gap",
+      "story_type": "failure_recovery",
+      "lane": "Tool guidance",
+      "effort": "Medium",
+      "complexity": "Medium",
+      "observable_contract": "When the user asks for a missing tool, Pi admits the gap and offers the next useful path.",
+      "technical_contract": "Tool guidance maps absent capability to discovery, onboarding, or explicit unsupported status without hallucinating availability."
+    }
+  ]
+}
