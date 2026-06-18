@@ -79,11 +79,22 @@ class ContextForgeCleanupInspectorTests(unittest.TestCase):
             "prompts": [
                 {"id": "prompt-associated", "name": "ssh prompt", "customName": "ssh_prompt", "enabled": True},
                 {"id": "prompt-orphan", "name": "old project init", "customName": "old_project_init", "enabled": True},
+                {
+                    "id": "prompt-project-init-current",
+                    "name": inspector.PROJECT_INIT_PROMPT_NAME,
+                    "customName": inspector.PROJECT_INIT_PROMPT_NAME,
+                    "enabled": True,
+                },
             ],
             "resources": [
                 {"id": "resource-associated", "name": "ssh resource", "uri": "contextforge://ssh/current"},
                 {"id": "resource-orphan", "name": "old resource", "uri": "contextforge://project-init/old"},
                 {"id": "resource-retired", "name": "retired resource", "uri": RETIRED_REGISTRY_URI},
+                {
+                    "id": "resource-project-init-current",
+                    "name": "current project init resource",
+                    "uri": inspector.PROJECT_INIT_RESOURCE_URI,
+                },
             ],
         }
         with tempfile.TemporaryDirectory() as tmp:
@@ -129,6 +140,15 @@ class ContextForgeCleanupInspectorTests(unittest.TestCase):
         self.assertEqual(2, operations["DELETE /tools/{tool_id}"])
         self.assertEqual(1, operations["DELETE /prompts/{prompt_id}"])
         self.assertEqual(1, operations["DELETE /resources/{resource_id}"])
+        self.assertEqual(
+            [],
+            [
+                candidate
+                for candidate in manifest["cleanup_candidates"]
+                if candidate.get("prompt_id") == "prompt-project-init-current"
+                or candidate.get("resource_id") == "resource-project-init-current"
+            ],
+        )
         self.assertEqual(1, manifest["summary"]["retired_registry_surface_records"])
         self.assertEqual(
             [],

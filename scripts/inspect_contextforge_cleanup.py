@@ -16,6 +16,11 @@ from pathlib import Path
 from typing import Any
 
 import contextforge_mcp_wrapper as gateway
+from project_init_common import (
+    PROJECT_INIT_PROMPT_NAME,
+    PROJECT_INIT_RESOURCE_URI,
+    SERENA_GUIDANCE_RESOURCE_URI,
+)
 import register_tool_guidance as guidance
 
 
@@ -265,7 +270,7 @@ def _record_mentions_retired_registry_surface(row: dict[str, Any]) -> bool:
 
 def retired_registry_surface_records(
     prompt_orphans: list[dict[str, Any]],
-    resource_orphans: list[dict[str, Any]],
+    resource_rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for prompt in prompt_orphans:
@@ -279,7 +284,7 @@ def retired_registry_surface_records(
                     "reason": "orphaned registry record still references the retired project surface",
                 }
             )
-    for resource in resource_orphans:
+    for resource in resource_rows:
         if _record_mentions_retired_registry_surface(resource):
             rows.append(
                 {
@@ -291,6 +296,14 @@ def retired_registry_surface_records(
                 }
             )
     return rows
+
+
+def is_current_project_init_prompt(prompt: dict[str, Any]) -> bool:
+    return prompt.get("name") == PROJECT_INIT_PROMPT_NAME or prompt.get("custom_name") == PROJECT_INIT_PROMPT_NAME
+
+
+def is_current_project_init_resource(resource: dict[str, Any]) -> bool:
+    return resource.get("uri") in {PROJECT_INIT_RESOURCE_URI, SERENA_GUIDANCE_RESOURCE_URI}
 
 
 def guidance_gap_summary(live: dict[str, Any]) -> dict[str, dict[str, int]]:
@@ -362,6 +375,8 @@ def cleanup_candidates(
     for prompt in prompt_orphans:
         if prompt["id"] in retired_prompt_ids:
             continue
+        if is_current_project_init_prompt(prompt):
+            continue
         candidates.append(
             {
                 "operation": "DELETE /prompts/{prompt_id}",
@@ -375,6 +390,8 @@ def cleanup_candidates(
         )
     for resource in resource_orphans:
         if resource["id"] in retired_resource_ids:
+            continue
+        if is_current_project_init_resource(resource):
             continue
         candidates.append(
             {
@@ -393,7 +410,7 @@ def cleanup_candidates(
 def build_manifest(live: dict[str, Any], instances: list[dict[str, Any]], instance_roots: list[Path]) -> dict[str, Any]:
     tool_rows, classification_counts = classify_tools(live, instances)
     prompt_orphans, resource_orphans = orphan_prompt_resource_rows(live)
-    retired_records = retired_registry_surface_records(prompt_orphans, resource_orphans)
+    retired_records = retired_registry_surface_records(prompt_orphans, live["resources"])
     candidates = cleanup_candidates(tool_rows, prompt_orphans, resource_orphans, retired_records)
     operation_counts = Counter(candidate["operation"] for candidate in candidates)
     return {
