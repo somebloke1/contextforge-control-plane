@@ -412,10 +412,15 @@ def _questions(
     if blockers:
         return _unique([blocker["question"] for blocker in blockers])
     questions = []
-    if strategy["primary_paradigm"] == "Package-provided bridge/transceiver":
+    paradigms = {strategy["primary_paradigm"], *strategy.get("secondary_validation_paradigms", [])}
+    if "Package-provided bridge/transceiver" in paradigms:
         questions.append("Which stock bridge/transceiver command exposes the missing HTTP/SSE transport?")
     if strategy["primary_paradigm"] == "Project-scoped backend":
         questions.append("What project-local state does the backend read or write, and how will it be isolated?")
+    if strategy["primary_paradigm"] == "Credential-scoped backend":
+        questions.append("Which credential, account, tenant, token, or installation boundary defines this service binding?")
+    if strategy["primary_paradigm"] == "Client-local or session-scoped backend":
+        questions.append("Which client-local state, live session, caller identity, or process authority defines this service binding?")
     if classification["approval_type"]["value"] not in {"source_only", "local_ignored_state"}:
         questions.append("Which exact approval packet should unlock the next runtime or client surface?")
     return _unique(questions)

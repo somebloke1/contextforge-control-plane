@@ -153,6 +153,37 @@ containers, edit client config, or mutate runtime state. Resumption is explicit:
 the emitted `current_state`, `next_questions`, and `source_descriptor` tell the
 operator or model what evidence to add before rerunning the helper.
 
+## Fixture Coverage
+
+The source helper is fixture-backed. The fixture set should grow with the
+service classes that drive the roadmap, not only with happy-path examples.
+Current required examples include:
+
+- `serena_project_scoped_stdio_dev_docker_gate`: project-scoped code
+  intelligence with stdio transport, Docker development-surface approval, and
+  secondary stock bridge/transceiver validation.
+- `native_http_shared_docs_source_only`: shared canonical HTTP service that can
+  produce a source-only handoff without runtime approval.
+- `shared_stdio_bridge_dev_docker_gate`: shared stdio backend that must be
+  fronted by a stock package bridge/transceiver before ContextForge dev Docker
+  validation.
+- `github_credential_scoped_registry_gate`: credential-scoped remote API tool
+  binding that must preserve the account, token, installation, or tenant
+  boundary before registry mutation.
+- `ssh_tmux_client_session_local_bridge`: client/session-local shell-control
+  service that records live session authority and client Docker validation
+  without claiming durable project ownership.
+- `missing_evidence_prompts_questions`: incomplete intake that proves stable
+  questions, explicit blockers, and redaction.
+
+For stdio services, the helper should ask for the stock bridge/transceiver command
+even when bridge validation is secondary to a project-scoped,
+credential-scoped, or client/session-local primary strategy. For
+credential-scoped services, it should ask which credential, account, tenant, token, or installation boundary
+defines the binding. For client/session-local services, it should ask which
+client-local state, live session, caller identity, or process authority defines
+the binding.
+
 ## Non-Mutation Default
 
 The helper must default to source-only planning. It must not register services,

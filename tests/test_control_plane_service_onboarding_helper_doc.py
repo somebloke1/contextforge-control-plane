@@ -99,6 +99,22 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         ]:
             self.assertIn(forbidden_surface, self.doc)
 
+    def test_doc_records_fixture_coverage_for_scoped_service_classes(self) -> None:
+        for case_name in [
+            "`shared_stdio_bridge_dev_docker_gate`",
+            "`github_credential_scoped_registry_gate`",
+            "`ssh_tmux_client_session_local_bridge`",
+        ]:
+            self.assertIn(case_name, self.doc)
+
+        for phrase in [
+            "stock bridge/transceiver command",
+            "credential, account, tenant, token, or installation boundary",
+            "client-local state, live session, caller identity, or process authority",
+            "without claiming durable project ownership",
+        ]:
+            self.assertIn(phrase, self.doc)
+
 
 if __name__ == "__main__":
     unittest.main()
