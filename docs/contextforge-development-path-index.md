@@ -67,8 +67,8 @@ or project-init apply/recovery state.
 
 Open issues:
 
-- #107: post-merge refresh for this development path index after the
-  safe-probe contract series landed.
+- #111: post-merge refresh for this development path index after the
+  ssh-tmux safe-probe contract landed.
 - #52: guided MCP service-onboarding helper.
 - #3: host Pi global ContextForge shim prompt/resource parity and live
   Pi-visible readback.
@@ -94,10 +94,11 @@ Recent PR topology:
 - #104 merged the #103 helper guidance and expected-shape diagnostics for
   safe-probe result fields.
 - #106 merged the #105 Mentality safe-probe policy contract.
+- #110 merged the #109 ssh-tmux safe-probe policy contract.
 
-Recently closed path-setting issues include #105, #103, #101, #99, #97, #95,
-#91, #89, #79, #83, #85, #62, #58, #50, #41, #37, #31, #25, and #66. They are
-evidence and history, not substitutes for current path ownership.
+Recently closed path-setting issues include #109, #107, #105, #103, #101, #99,
+#97, #95, #91, #89, #79, #83, #85, #62, #58, #50, #41, #37, #31, #25, and #66.
+They are evidence and history, not substitutes for current path ownership.
 
 ## Named Development Paths
 
@@ -251,18 +252,21 @@ Current state:
   safe-probe result fields are visible to project-init callers.
 - #105/#106 added the Mentality safe-probe policy contract for governance
   list/read proof.
+- #109/#110 added the ssh-tmux safe-probe policy contract for target-client
+  list-sessions and existing-session metadata proof.
 - These are source-level contracts and tests. They do not prove live
   runtime/client validation, Docker behavior, host Pi install/reload, or
   ContextForge registry state.
 
 Near-term gap:
 
-- Continue implementing harmless read-only probe contracts one service at a
-  time. The next source-only candidates are ssh-tmux list/session metadata
-  proof or tighter scoping for conditional services such as GitHub,
-  web-search, Exa Search, Playwright, and Serena/project-scoped services.
-  Each future runtime validation claim must still be tied to the exact target
-  client and exercised surface.
+- Continue implementing harmless read-only probe contracts one service or
+  service class at a time. The next source-only candidates are tighter
+  conditional-probe scoping for credential, browser, generated-code, and
+  project-scoped services such as GitHub, web-search, Exa Search,
+  Playwright, OpenZeppelin Solidity Contracts, and Serena/project-scoped
+  services. Each future runtime validation claim must still be tied to the
+  exact target client and exercised surface.
 
 ### Operator Productization
 
@@ -330,7 +334,7 @@ items until they are promoted into concrete issues or PRs:
   should be marked done or cross-referenced rather than kept as a second active
   owner for the same work.
 - `Roadmap: Safe client-visible validation probes` was promoted through
-  #97/#99/#101/#103/#105 and should be marked done or cross-referenced rather
+  #97/#99/#101/#103/#105/#109 and should be marked done or cross-referenced rather
   than kept as a second active owner for the same completed source-contract
   series.
 - `Roadmap: Operator productization` for helper, registration, readback,
@@ -359,9 +363,10 @@ active items for the same work.
 These are candidates for future GitHub issues when the operator chooses to
 promote them:
 
-- next safe client-visible validation probe contract, likely ssh-tmux
-  list/session metadata or conditional-probe scoping for GitHub, web-search,
-  Exa Search, Playwright, and Serena/project-scoped services;
+- next safe client-visible validation probe contract or policy slice for
+  conditional-probe scoping across GitHub, web-search, Exa Search,
+  Playwright, OpenZeppelin Solidity Contracts, and Serena/project-scoped
+  services;
 - operator productization of helper/registration/readback workflows;
 - next dev Docker service expansion driven by #52 onboarding records;
 - project inspector and language-profile proof path;
