@@ -196,11 +196,45 @@ Operational consequences:
   workflow miss; `Status` is workflow-owned for normal issue/PR lifecycle
   transitions.
 - Do manually manage `Agent state` as the agent coordination field.
+- Do manually manage `Agent owner`; built-in GitHub Project workflows do not
+  clear custom text fields when an issue closes or a PR merges.
 - Do manually manage roadmap draft items because they are not native
   repository issues or PRs.
 - When a roadmap draft item is promoted to a real issue, let the workflow add
   the issue item, then mark the draft item `Done`, `Deferred`, or
   cross-referenced so the board has one active owner for the work.
+
+## Custom Agent Field Automation
+
+Treat `Status` as workflow-owned and `Agent state` / `Agent owner` as
+agent-owned until a separate automation is explicitly installed and verified.
+GitHub's built-in Project workflows can move native issue and PR lifecycle
+state into `Status`, but they should not be assumed to update or clear custom
+agent coordination fields.
+
+If automated cleanup is desired, use a GitHub Actions workflow or a local
+controller/helper reconciliation job that reacts to issue/PR lifecycle events
+and calls Project item field mutations. The required operation is ordinary
+Project field mutation, not Project workflow editing:
+
+- set `Agent state: Done` when an owned issue closes or owned PR merges;
+- clear `Agent owner` when a lease is completed, superseded, or accepted;
+- skip no-op mutations after targeted readback;
+- do not create duplicate Project items while waiting for auto-add latency;
+- preserve manual controller authority for unusual handoffs, reopen events, and
+  partial issue completion.
+
+Current evidence from 2026-06-18:
+
+- `gh project` exposes item and field commands but no workflow edit/list
+  surface for Project workflow definitions;
+- Project item fields can be set or cleared with `gh project item-edit` or the
+  GraphQL Project field-value mutations;
+- observed post-merge behavior set workflow-owned `Status: Done` while stale
+  `Agent state` and `Agent owner` remained until the controller cleared them.
+
+Do not infer that `Agent owner` was cleared merely because `Status` is `Done`.
+Always read back agent-owned fields before claiming a lease is retired.
 
 ## Workflow Knowledge Persistence
 
