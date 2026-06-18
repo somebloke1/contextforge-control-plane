@@ -180,6 +180,29 @@ class ProjectInitReadinessInspectorTests(unittest.TestCase):
             self.assertEqual(str(legacy), report["helper_processes"][0]["source_root"])
             self.assertIn("read-only inspection; no project files are written", report["non_actions"])
 
+    def test_disabled_comparison_root_does_not_warn_as_live_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            base = Path(tmp).resolve()
+            primary = base / "clean-dev-root"
+            archive = base / "legacy-controlplane-archive"
+            primary.mkdir()
+            archive.mkdir()
+            write_fake_python(primary)
+            project_state.write_state_atomic(primary, project_state.default_state(primary, status="initialized"))
+            project_state.write_state_atomic(archive, project_state.default_state(archive, status="disabled"))
+
+            report = readiness.build_report(
+                project_root=primary,
+                compare_roots=[archive],
+                client_types=("codex",),
+                include_processes=False,
+            )
+
+            self.assertEqual("ready", report["status"])
+            self.assertNotIn("comparison_root_has_valid_project_state", report["warnings"])
+            self.assertEqual("valid", report["roots"][1]["readiness_status"])
+            self.assertEqual("disabled", report["roots"][1]["state"]["raw_status"])
+
     def test_report_blocks_mixed_helper_process_sources(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             base = Path(tmp).resolve()
