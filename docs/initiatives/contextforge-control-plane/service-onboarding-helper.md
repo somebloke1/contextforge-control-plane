@@ -267,6 +267,11 @@ Current required examples include:
 - `ssh_tmux_client_session_local_bridge`: client/session-local shell-control
   service that records live session authority and client Docker validation
   without claiming durable project ownership.
+- `openzeppelin_remote_native_hosted_source_only`: real tracked remote/native
+  OpenZeppelin Solidity Contracts service that produces a source-only handoff
+  from the tracked manifest and safe-probe contract without claiming live
+  client validation, generated-code audit, deployment readiness, or registry
+  state.
 - `missing_evidence_prompts_questions`: incomplete intake that proves stable
   questions, explicit blockers, and redaction.
 
