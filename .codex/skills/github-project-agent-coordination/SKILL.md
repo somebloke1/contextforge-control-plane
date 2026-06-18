@@ -110,6 +110,24 @@ Operational consequences:
   the issue item, then mark the draft item `Done`, `Deferred`, or
   cross-referenced so the board has one active owner for the work.
 
+## Workflow Knowledge Persistence
+
+Persist the workflow automation map in this skill. Goal text, issue comments,
+PR bodies, and roadmap docs may point here or quote a short reminder, but they
+must not become the canonical store for GitHub Project workflow behavior.
+
+When a browser or API readback discovers a workflow change, update this section
+and `Configured Project Workflows` in the same source/docs/tests branch that
+depends on the change. Record the readback date and whether the evidence came
+from the GitHub UI, `gh project` commands, or both. If the workflow cannot be
+read, do not infer changes from project item state alone; report the limitation
+and treat the last verified workflow map as stale-but-operative until refreshed.
+
+Successor formal goals should carry only the compact directive: read Project #6
+`Agent Issue View` at goal re-entry and maintenance, and use this skill for the
+workflow contract. This keeps the goal persistent without turning it into a
+copy of the skill.
+
 ## Agent State Values
 
 - `Candidate`: plausible future work, not selected now.
