@@ -22,13 +22,16 @@ secret, project-init apply, Serena, or retired-checkout mutation.
 
 - Backend-only ContextForge health or registry readback is insufficient for a
   client-visible activation claim.
-- #62 provides source/test baseline launchers and fixture coverage for Pi and
-  OpenCode client Docker, but it did not prove ordinary live first-prompt
-  behavior.
+- #62 is closed for the Pi/OpenCode client Docker baseline after runtime
+  evidence proved the harness can expose callable helper/shim behavior through
+  ordinary baseline sessions against the ContextForge dev Docker surface.
+- #62 does not prove host Pi global extension install/reload behavior, host
+  OpenCode global config behavior, or Codex project hook activation.
 - #3 remains the host Pi global shim install, reload, and live Pi readback
   track.
-- Pi and OpenCode development validation should use the isolated ContextForge
-  dev Docker surface plus the matching client Docker foil.
+- Future Pi and OpenCode development validation should continue to use the
+  isolated ContextForge dev Docker surface plus the matching client Docker
+  foil unless a later approval names another surface.
 - The legacy/live ContextForge surface is read-only comparison or operator
   evidence. It is not proof that dev Docker or client Docker flows work.
 
@@ -42,6 +45,9 @@ secret, project-init apply, Serena, or retired-checkout mutation.
   Do not require a Codex-style hook banner for OpenCode.
 - If a client has source fixtures but no current runtime/client evidence, state
   that the source path is prepared and runtime validation remains unproven.
+- For #62-style Pi/OpenCode container claims, cite the client Docker runtime
+  evidence and label the exercised surface. Do not generalize that evidence to
+  host Pi global install/reload or Codex hook behavior.
 
 ## Non-Actions
 
