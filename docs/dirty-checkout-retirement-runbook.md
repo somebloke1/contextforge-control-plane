@@ -174,9 +174,12 @@ hook-state provenance by default.
 
 Post-write readback reported `status=ready` for the file plan, with only
 `legacy_project_trust` and `legacy_project_local_hook_state` remaining as
-intentional preserved provenance. The apply result status is
-`pending_restart`, not `verified`, until issue #31 runtime readback is
-performed after an explicit Codex restart or fresh-session validation.
+intentional preserved provenance. At that point the apply result status was
+`pending_restart`, not `verified`, until issue #31 runtime readback was
+performed after an explicit Codex restart or fresh-session validation. On
+2026-06-17, issue #31 later closed with final `readback_clean` evidence after
+the approved global helper/hook cleanup and exact-match stale helper process
+retirement.
 
 The same report includes `hook_retarget_preflight`, which must be reviewed
 before any retargeted `SessionStart` or `UserPromptSubmit` hook is allowed to

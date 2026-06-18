@@ -19,16 +19,16 @@ or archived.
 - Issue #37 is open for `cf-controlplane` project-local operating-context
   activation:
   <https://github.com/somebloke1/contextforge-control-plane/issues/37>
-- Issue #31 is open for Codex `pending_restart` and runtime readback
-  after the approved global config migration:
+- Issue #31 is closed after approved global config/helper cleanup and final
+  runtime readback:
   <https://github.com/somebloke1/contextforge-control-plane/issues/31>
-- Current #31 readback: global config/trust migration is verified at disk and
-  fresh CLI readback level, but this active Codex Desktop project remains rooted
-  in the legacy workspace and has active project-local wrapper processes from
-  `/home/dgk/workspace/legacy-controlplane-archive`.
+- Final #31 readback: `readback_clean`, no blockers, all ContextForge-owned
+  Codex MCP transports and owned helper/hook command paths under
+  `/home/dgk/workspace/cf-controlplane`, and no stale helper processes from the
+  prior helper root.
 - Therefore dirty-checkout retirement is no longer the active tracker, but
-  project-local operating-context activation and runtime readback are not
-  complete.
+  project-local activation-readiness queue review remains active under issue
+  #37.
 
 ## Surface Boundary
 
@@ -59,7 +59,7 @@ identify the exercised surface.
 | Artifact class | Current paths | Disposition | Reason / migration handling |
 | --- | --- | --- | --- |
 | Migration roadmap | `docs/cf-controlplane-migration-stage-roadmap.md` | Track/promote | Active stage contract for goal loop, Git cleanup, clone, handoff, and replacement gates. |
-| Project status roadmap | `docs/project-status-roadmap-2026-06-16.md` | Track/promote after drift review | Durable roadmap pointer; must stay aligned with the migration stage, issue #37, and issue #31. |
+| Project status roadmap | `docs/project-status-roadmap-2026-06-16.md` | Track/promote after drift review | Durable roadmap pointer; must stay aligned with the migration stage, active issue #37, and closed issue #31 disposition. |
 | Codex precompact hook source | `.codex/hooks/contextforge_precompact_continuity.py` | Track/promote | Agent continuity infrastructure; source is project-local and uses repo-root discovery. |
 | Hook bytecode | `.codex/hooks/__pycache__/` | Ignore/local only | Generated runtime artifact; must not be copied or tracked. |
 | Repo-local skills | `.codex/skills/**` | Track/promote after path cleanup | Agent operating infrastructure; several files still mention the legacy path and need classification/rewrite before `cf-controlplane` handoff. |
@@ -83,8 +83,9 @@ identify the exercised surface.
 ## Source-Curation Boundary
 
 This section records the migration-source set for the next subgoal. It is not
-an activation-complete claim; issue #37 and issue #31 remain open until their
-project-context and runtime-readback gates retire.
+an activation-complete claim; issue #37 remains open for the current
+activation-readiness queue, while issue #31 has retired the global/runtime
+readback gate.
 
 Sidecar audit integration:
 
@@ -98,7 +99,7 @@ Sidecar audit integration:
 
 | Source class | Initial curation decision | Condition before clone |
 | --- | --- | --- |
-| Migration roadmap and artifact disposition docs | Promote through Git | Keep issue #37/#31 state current; do not present these docs as proof that activation/runtime readback is complete. |
+| Migration roadmap and artifact disposition docs | Promote through Git | Keep issue #37 and follow-up issue state current; do not present these docs as proof that activation or client/runtime validation is complete. |
 | `.gitignore` runtime boundaries | Promote through Git | Preserve ignores for Docker env/evidence, run state, generated caches, and local workspaces while allowing templates and `.gitkeep` files. |
 | Codex precompact hook source | Integrate from clean `dev-root` plus targeted edits | Track source only; keep bytecode and generated continuity snapshots ignored/local. Legacy label strings are compatibility metadata, not hardcoded workspace paths. |
 | Repo-local skills | Integrate from clean `dev-root` plus path cleanup/classification | Remove accidental legacy absolute paths; retain only deliberate compatibility identifiers with explanation. |
@@ -113,18 +114,18 @@ Sidecar audit integration:
 
 This checklist is the enforcement layer for the disposition map. A future
 operator must treat any `FAIL` or `PENDING` row as proof that issue #37
-activation or issue #31 runtime readback is not complete.
+activation or another named follow-up gate is not complete.
 
 | Gate | Current status | Evidence | Required next action |
 | --- | --- | --- | --- |
-| GitHub dirty-retirement authority | `PASS / transferred` | Issue #15 is closed; issue #37 and issue #31 own the remaining operating-context and runtime-readback gates. | Do not reopen #15 for ordinary #37 work; update #37/#31 with evidence instead. |
-| Runtime restart/readback authority | `FAIL` | Issue #31 is open. Global helper is clean-root by disk/fresh CLI readback, but this Desktop project still launches legacy project-local wrappers. | Validate from the clean-root or future `cf-controlplane` Codex project context, then close/supersede #31 with evidence. |
+| GitHub dirty-retirement authority | `PASS / transferred` | Issue #15 is closed; issue #37 owns the remaining activation-readiness queue, and issue #31 is closed after runtime readback. | Do not reopen #15 or #31 for ordinary #37 work; update #37 or the specific owning follow-up issue with evidence instead. |
+| Runtime restart/readback authority | `PASS` | Issue #31 is closed after final `readback_clean` evidence. Global helper and owned project-init hook commands target `/home/dgk/workspace/cf-controlplane`; exact-match stale helper processes from the prior helper root were retired under explicit approval. | Keep future runtime/client validation on the specific owning issues such as #37, #62, #3, and #50 rather than reopening #31. |
 | Cloneable source artifacts | `PASS` | PR #35 merged the curated migration source into `dev-root` as `75aa437573ac3a8be38f584ab629da2bb0cfa814`; `/home/dgk/workspace/cf-controlplane` is now a clean clone of that branch. | Continue with project-local operating artifact activation; do not copy runtime state as part of this gate. |
-| Project-local Codex config | `PASS` | Current branch has no active old-root config references; `codex -C /home/dgk/workspace/cf-controlplane mcp list --json` reads the expected project-local entries. | Keep broader runtime/readback evidence on #31; do not treat it as a blocker for this #37 branch. |
-| Project state identity | `PASS` | `.project/context_forge_state.json` root/root hash/name match `/home/dgk/workspace/cf-controlplane`; revision 13 reports `initialized`, Codex `verified`, and validation `passed`. | Keep deeper client/runtime smoke testing on #31 or future Pi/OpenCode branches. |
-| Serena project instance identity | `PENDING / abeyant hard requirement` | Existing `server-instances/serena-cf-controlplane-d46fe58a2a20/**` points at the `cf-controlplane` root but retains compatibility slug/tool naming; expected `server-instances/serena-cf-controlplane-d46fe58a2a20` is not provisioned. This non-mutating slice parks the provisioning action only; it does not make Serena optional. | Generate a `cf-controlplane`-scoped Serena instance or explicitly retain `serena-cf-controlplane-d46fe58a2a20` as compatibility naming in a separate approved Serena/project-init slice with target-client-visible validation. |
+| Project-local Codex config | `PASS` | Current branch has no active old-root config references; `codex -C /home/dgk/workspace/cf-controlplane mcp list --json` reads the expected project-local entries. #31 separately closed the global/runtime readback path. | Keep activation-readiness evidence on #37; route future client/runtime smoke testing to the owning Pi/OpenCode or service issue. |
+| Project state identity | `PASS` | `.project/context_forge_state.json` root/root hash/name match `/home/dgk/workspace/cf-controlplane`; revision 13 reports `initialized`, Codex `verified`, and validation `passed`. | Keep activation-readiness evidence on #37; route deeper client/runtime smoke testing to focused follow-up branches. |
+| Serena project instance identity | `PENDING / abeyant hard requirement` | Existing `server-instances/serena-cf-controlplane-d46fe58a2a20/**` points at the `cf-controlplane` root and records canonical source/readiness, but runtime/client validation remains open under #50 and the retained slug/tool naming still needs an explicit compatibility decision. This non-mutating slice parks provisioning and runtime closure only; it does not make Serena optional. | Retire #50 with target-client-visible validation or an explicitly approved Serena/project-init slice; decide whether to retain `serena-cf-controlplane-d46fe58a2a20` as compatibility naming or migrate it deliberately. |
 | Project-init resource identity | `PENDING` | `scripts/project_init_common.py` uses `contextforge://cf-controlplane/...`; `scripts/register_serena_cf_controlplane_service.py` uses `serena-cf-controlplane-d46fe58a2a20` names/tags but is fail-closed unless explicitly approved with a live-registration flag. | Decide whether these are durable compatibility identifiers or need a `cf-controlplane` naming migration. |
-| Codex hook/skill source | `PASS for tracked source cleanup / PENDING runtime trust` | `.codex/hooks/` and `.codex/skills/` are tracked source surfaces in `cf-controlplane`; active stale old-root readback was fixed, while compatibility identifiers remain documented. | Keep generated hook bytecode ignored; prove hook trust and active runtime origin under #31 or a new `cf-controlplane` Codex project session. |
+| Codex hook/skill source | `PASS for tracked source cleanup and runtime readback` | `.codex/hooks/` and `.codex/skills/` are tracked source surfaces in `cf-controlplane`; #31 closed after target-root helper/hook readback and stale helper process retirement. | Keep generated hook bytecode ignored; route future hook/client behavior proof to the specific owning activation or client issue. |
 | Runtime secrets and evidence | `PASS` for ignore posture, `PENDING` for recreation | `.gitignore` ignores Docker env/evidence, run state, local DBs, and generated caches. | Recreate env/evidence in `cf-controlplane`; copy only sanitized summaries if needed. |
 | Legacy archive posture | `PASS` as interim, not final | Dirty preservation bundles and legacy workspace remain readable. | Preserve archive until the `cf-controlplane` project context is proven; do not use it as an active source of skills, hooks, MCP commands, or roadmap truth after handoff. |
 
@@ -132,11 +133,11 @@ activation or issue #31 runtime readback is not complete.
 
 | Gate | Owner | Next action / retirement condition |
 | --- | --- | --- |
-| GitHub dirty-retirement authority | Operating agent, with user approval for destructive or global actions | #15 is closed; keep remaining project-context evidence on #37 and #31. |
-| Runtime restart/readback authority | Operating agent for evidence; user for Desktop workspace switch/trust actions | Close or supersede #31 after a clean-root or `cf-controlplane` Codex project proves hook/MCP/runtime readback without active legacy project-local wrapper dependence. |
+| GitHub dirty-retirement authority | Operating agent, with user approval for destructive or global actions | #15 and #31 are closed; keep remaining activation-readiness evidence on #37 and specific follow-up issues. |
+| Runtime restart/readback authority | Operating agent for evidence; user for Desktop workspace switch/trust actions | Retired by #31 final `readback_clean` evidence; reopen only for a new concrete runtime regression. |
 | Cloneable source artifacts | Operating agent | Retired by PR #35 and the clean `cf-controlplane` clone; keep runtime/local state ignored or recreate-only. |
-| Project-local Codex config | Operating agent for branch evidence; #31 for broader runtime/readback | Retire the activation-readiness gate when this branch is reviewed; retire broader runtime/readback under #31. |
-| Project state identity | ContextForge project-init slice / operating agent | Retire activation-readiness with revision 13 initialized/verified state; keep future client smoke testing under #31 or focused follow-up branches. |
+| Project-local Codex config | Operating agent for branch evidence | Retire the activation-readiness gate when this branch is reviewed; broader runtime/readback was retired by #31. |
+| Project state identity | ContextForge project-init slice / operating agent | Retire activation-readiness with revision 13 initialized/verified state; keep future client smoke testing under focused follow-up branches. |
 | Serena project instance identity | Serena/project-init slice / operating agent | Generate a new canonical project-scoped Serena instance or classify old `serena-cf-controlplane-d46fe58a2a20` as historical compatibility state. This is a hard requirement that can be abeyant until the appropriate provisioning juncture, but it is not optional roadmap cleanup. |
 | Project-init resource identity | Control-plane/project-init slice / operating agent | Decide compatibility naming versus rename; retire when resource URIs and registration names are intentionally documented for `cf-controlplane`. |
 | Codex hook/skill source | Operating agent | Track curated source files after path cleanup/classification; retire when new project can read expected hooks and skills from its own root. |
@@ -160,9 +161,9 @@ Before moving from Subgoal 1 to Git curation, the operator must have:
    activation gates with accepted residual risk. The current branch proves the
    project-local activation-readiness subset, not Codex Desktop approval or
    live runtime readback.
-2. Issue #31 must be closed, superseded, or explicitly no longer blocking the
-   `cf-controlplane` project-context transition before claiming live runtime
-   replacement.
+2. Issue #31 is closed and no longer blocks the `cf-controlplane`
+   project-context transition; new runtime/client gaps must be tracked on their
+   owning follow-up issues.
 3. The source set intended for cloning into `cf-controlplane` must be staged or
    otherwise made cloneable. This gate is satisfied by PR #35 and merge commit
    `75aa437573ac3a8be38f584ab629da2bb0cfa814`.
