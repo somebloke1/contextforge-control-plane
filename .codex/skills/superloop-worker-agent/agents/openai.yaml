@@ -1,0 +1,4 @@
+interface:
+  display_name: "SuperLoop Worker Agent"
+  short_description: "Run leased SuperLoop work units."
+  default_prompt: "Use $superloop-worker-agent to execute a leased ContextForge work unit, verify local evidence, and report back without crossing authority boundaries."

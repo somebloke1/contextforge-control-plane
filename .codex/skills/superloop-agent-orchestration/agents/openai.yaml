@@ -1,0 +1,4 @@
+interface:
+  display_name: "SuperLoop Agent Orchestration"
+  short_description: "Coordinate controller worker leases."
+  default_prompt: "Use $superloop-agent-orchestration to coordinate controller-owned work assignment, worker leases, Agent owner fields, and integration boundaries."

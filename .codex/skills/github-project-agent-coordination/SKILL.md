@@ -48,6 +48,11 @@ body, PR body, evidence ledger, or goal store.
 - `Created` and `Updated`: native timestamps. Do not manually maintain.
 - `Agent state`: agent-facing coordination state. This is the main field agents
   may update.
+- `Agent owner`: text lease owner for controller/worker coordination. Use
+  stable IDs such as `codex-thread:<thread-id>`,
+  `codex-agent:<worker-agent-id>`, or
+  `codex-agent:<parent-agent-id>/<child-agent-id>`. Do not use rotating Codex
+  display names as owner identity.
 
 ## Project Enum Value Semantics
 
