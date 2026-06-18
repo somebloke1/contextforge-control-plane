@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GUARDRAILS = ROOT / "docs" / "readiness-claim-guardrails.md"
 MATRIX = ROOT / "docs" / "client-visible-activation-matrix.md"
 SAFE_PROBES = ROOT / "docs" / "safe-client-visible-validation-probes.md"
+SURFACE_LABELS = ROOT / "docs" / "evidence-surface-labels.md"
 
 
 class ReadinessClaimGuardrailTests(unittest.TestCase):
@@ -17,6 +18,7 @@ class ReadinessClaimGuardrailTests(unittest.TestCase):
         cls.normalized = " ".join(cls.doc.split())
         cls.matrix = MATRIX.read_text(encoding="utf-8")
         cls.safe_probes = SAFE_PROBES.read_text(encoding="utf-8")
+        cls.surface_labels = SURFACE_LABELS.read_text(encoding="utf-8")
 
     def test_guardrail_declares_issue_and_non_mutating_scope(self) -> None:
         for phrase in [
@@ -91,6 +93,21 @@ class ReadinessClaimGuardrailTests(unittest.TestCase):
             "non-actions and boundaries",
         ]:
             self.assertIn(phrase, self.doc)
+
+    def test_surface_label_standard_names_canonical_trace_surfaces(self) -> None:
+        self.assertIn("docs/evidence-surface-labels.md", self.doc)
+        self.assertIn("Issue: #158", self.surface_labels)
+        for label in [
+            "`legacy_live_read_only`",
+            "`contextforge_dev_docker`",
+            "`pi_client_docker`",
+            "`opencode_client_docker`",
+            "`local_source`",
+            "`target_client`",
+            "`generated_run_evidence`",
+        ]:
+            with self.subTest(label=label):
+                self.assertIn(label, self.surface_labels)
 
     def test_existing_validation_docs_link_to_guardrails(self) -> None:
         for text in [self.matrix, self.safe_probes]:

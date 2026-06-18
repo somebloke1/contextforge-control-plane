@@ -197,6 +197,7 @@ def verification_trace() -> dict[str, object]:
         "schema_uri": "contextforge://control-plane/schemas/verification-trace/v1",
         "plan_id": "plan-serena",
         "service_binding": "serena:project-root",
+        "exercised_surface": "contextforge_dev_docker",
         "target_client": "codex",
         "adapter_conformance_pack": ref("client-adapters/codex"),
         "probe_events": [

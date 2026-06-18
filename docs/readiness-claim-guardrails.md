@@ -8,6 +8,10 @@ source/docs/tests contract. It does not validate runtime behavior, mutate
 project state, approve service changes, or replace issue/PR/runtime evidence.
 It does not approve service changes.
 
+Use `docs/evidence-surface-labels.md` for the canonical #158
+`exercised_surface` values that verification traces attach to readiness
+evidence.
+
 ## Purpose
 
 Readiness claims must name the layer that was actually exercised. A source

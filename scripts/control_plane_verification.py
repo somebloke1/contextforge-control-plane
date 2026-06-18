@@ -17,6 +17,17 @@ import control_plane_contracts as contracts
 SCHEMA_URI = "contextforge://control-plane/schemas/verification-trace/v1"
 TRACE_REF_PREFIX = "run/verification-traces"
 REDACTED_MARKER = "<redacted>"
+EVIDENCE_SURFACES = frozenset(
+    {
+        "legacy_live_read_only",
+        "contextforge_dev_docker",
+        "pi_client_docker",
+        "opencode_client_docker",
+        "local_source",
+        "target_client",
+        "generated_run_evidence",
+    }
+)
 VERIFICATION_LAYERS = frozenset(
     {
         "backend",
@@ -31,6 +42,15 @@ VERIFICATION_LAYERS = frozenset(
 TRACE_RESULT_STATUSES = frozenset({"passed", "failed", "stale", "pending", "not_applicable", "inconclusive"})
 PASSING_STATUSES = frozenset({"passed"})
 BLOCKING_STATUSES = frozenset({"failed", "stale", "pending", "missing", "mismatched", "inconclusive"})
+SURFACE_LAYER_SUPPORT = {
+    "legacy_live_read_only": frozenset({"backend", "contextforge_gateway", "virtual_server", "target_client"}),
+    "contextforge_dev_docker": frozenset({"backend", "contextforge_gateway", "virtual_server"}),
+    "pi_client_docker": frozenset({"target_client"}),
+    "opencode_client_docker": frozenset({"target_client"}),
+    "local_source": frozenset({"trust", "tool_policy", "redaction"}),
+    "target_client": frozenset({"target_client"}),
+    "generated_run_evidence": VERIFICATION_LAYERS,
+}
 SECRET_KEY_RE = re.compile(
     r"(api[_-]?key|auth[_-]?token|bearer|client[_-]?secret|credential|jwt|password|"
     r"private[_-]?key|refresh[_-]?token|secret|session[_-]?token|token)",
@@ -77,6 +97,7 @@ def build_verification_trace(
     subject: str,
     status: str,
     observations: Any,
+    exercised_surface: str | None = None,
     target_client: str | None = None,
     adapter_conformance_pack: Mapping[str, Any] | None = None,
     failure_classification: str | None = None,
@@ -96,6 +117,7 @@ def build_verification_trace(
         raise VerificationTraceError("service_binding is required")
     if layer not in VERIFICATION_LAYERS:
         raise VerificationTraceError(f"unknown verification layer: {layer}")
+    normalized_surface = _normalize_exercised_surface(exercised_surface or _default_surface_for_layer(layer))
     normalized_status = _normalize_status(status)
     if normalized_status in {"failed", "stale"} and not failure_classification:
         raise VerificationTraceError("failed or stale traces require failure_classification")
@@ -128,6 +150,7 @@ def build_verification_trace(
         "schema_uri": SCHEMA_URI,
         "plan_id": plan_id,
         "service_binding": service_binding,
+        "exercised_surface": normalized_surface,
         "target_client": target_client,
         "adapter_conformance_pack": copy.deepcopy(dict(adapter_conformance_pack)) if adapter_conformance_pack else None,
         "probe_events": [probe_event],
@@ -153,6 +176,7 @@ def build_verification_trace(
         "redaction_status": "redacted",
         "x_step_id": step_id,
         "x_verification_layer": layer,
+        "x_exercised_surface": normalized_surface,
         "x_probe_type": str(probe_type),
         "x_subject": str(subject),
         "x_result_status": normalized_status,
@@ -162,6 +186,48 @@ def build_verification_trace(
     assert_no_secret_material(trace, raw_sensitive_values=raw_sensitive_values)
     contracts.validate_artifact("verification_trace", trace)
     return trace
+
+
+def validate_surface_claim(
+    *,
+    target_state: str,
+    required_layers: Sequence[str],
+    trace_artifacts: Mapping[str, Mapping[str, Any]] | Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Return whether trace surfaces can support a target readiness claim."""
+
+    required = list(required_layers)
+    for layer in required:
+        if layer not in VERIFICATION_LAYERS:
+            raise VerificationTraceError(f"unknown verification layer: {layer}")
+    trace_index = _trace_index(trace_artifacts)
+    unsupported: list[dict[str, str]] = []
+    for ref, trace in trace_index.items():
+        layer = str(trace.get("x_verification_layer") or _first_probe_layer(trace) or "")
+        surface = _trace_exercised_surface(trace)
+        supported_layers = SURFACE_LAYER_SUPPORT[surface]
+        if layer in required and layer not in supported_layers:
+            unsupported.append(
+                {
+                    "trace_ref": ref,
+                    "trace_id": str(trace.get("trace_id") or ""),
+                    "layer": layer,
+                    "exercised_surface": surface,
+                    "reason": f"{surface} evidence cannot prove {layer}",
+                }
+            )
+    valid = not unsupported
+    reason = "passed"
+    if unsupported:
+        reason = "surface_cannot_support_required_layer"
+    return {
+        "target_state": target_state,
+        "valid": valid,
+        "decision": "allow" if valid else "block",
+        "reason": reason,
+        "required_layers": required,
+        "unsupported_surfaces": unsupported,
+    }
 
 
 def build_verification_trace_ref(
@@ -214,6 +280,11 @@ def validate_lifecycle_transition(
         trace_artifacts=trace_artifacts,
         target_client=target_client,
     )
+    surface_claim = validate_surface_claim(
+        target_state=target_state,
+        required_layers=required_layers,
+        trace_artifacts=trace_artifacts,
+    )
     requires_passed = target_state in {"backend_ready", "registered", "verified", "removed"}
     missing_refs = [ref for ref in refs if ref not in trace_index]
     digest_mismatches = [
@@ -232,9 +303,13 @@ def validate_lifecycle_transition(
     valid = not missing_refs and not digest_mismatches and not invalid_layers
     if requires_passed and not refs:
         valid = False
+    if valid and not surface_claim["valid"]:
+        valid = False
     reason = "passed"
     if not refs and requires_passed:
         reason = "missing_trace_ref"
+    elif not surface_claim["valid"]:
+        reason = surface_claim["reason"]
     elif missing_refs:
         reason = "trace_ref_not_found"
     elif digest_mismatches:
@@ -255,6 +330,7 @@ def validate_lifecycle_transition(
         "trace_refs": refs,
         "missing_trace_refs": missing_refs,
         "digest_mismatched_trace_refs": [_ref_key(ref) for ref in digest_mismatches],
+        "surface_claim": surface_claim,
         "matrix": matrix,
     }
 
@@ -416,6 +492,33 @@ def _normalize_status(status: str) -> str:
     return normalized
 
 
+def _normalize_exercised_surface(surface: str) -> str:
+    normalized = str(surface).strip().lower().replace("-", "_").replace(" ", "_").replace("/", "_")
+    aliases = {
+        "legacy_live_contextforge_read_only": "legacy_live_read_only",
+        "legacy_live_read_only_contextforge": "legacy_live_read_only",
+        "contextforge_development_docker": "contextforge_dev_docker",
+        "pi_docker": "pi_client_docker",
+        "opencode_docker": "opencode_client_docker",
+        "source": "local_source",
+        "local": "local_source",
+        "run_evidence": "generated_run_evidence",
+        "generated_evidence": "generated_run_evidence",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in EVIDENCE_SURFACES:
+        raise VerificationTraceError(f"unknown exercised surface: {surface}")
+    return normalized
+
+
+def _default_surface_for_layer(layer: str) -> str:
+    if layer in {"backend", "contextforge_gateway", "virtual_server"}:
+        return "contextforge_dev_docker"
+    if layer == "target_client":
+        return "target_client"
+    return "local_source"
+
+
 def _trace_index(trace_artifacts: Mapping[str, Mapping[str, Any]] | Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
     if isinstance(trace_artifacts, Mapping):
         index: dict[str, Mapping[str, Any]] = {}
@@ -460,6 +563,20 @@ def _trace_has_layer(trace: Mapping[str, Any], layer: str) -> bool:
     if trace.get("x_verification_layer") == layer:
         return True
     return any(event.get("layer") == layer for event in trace.get("probe_events", []))
+
+
+def _first_probe_layer(trace: Mapping[str, Any]) -> str | None:
+    for event in trace.get("probe_events", []):
+        if isinstance(event, Mapping) and event.get("layer"):
+            return str(event["layer"])
+    return None
+
+
+def _trace_exercised_surface(trace: Mapping[str, Any]) -> str:
+    surface = trace.get("exercised_surface") or trace.get("x_exercised_surface")
+    if surface is None:
+        return "local_source"
+    return _normalize_exercised_surface(str(surface))
 
 
 def _trace_step_id(trace: Mapping[str, Any]) -> str | None:

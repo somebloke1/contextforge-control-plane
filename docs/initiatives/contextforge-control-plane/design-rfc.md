@@ -600,9 +600,9 @@ Minimal v1 contract artifact shapes:
   ledger, not by mutating the receipt.
 - **Adapter-Independent Verification Trace Format** records `trace_id`,
   `schema_uri`, `plan_id`, `service_binding`, `target_client`,
-  `adapter_conformance_pack`, ordered `probe_events`, `negative_checks`,
-  `redaction_checks`, `result`, `failed_layer`, `result_hash`, and
-  `generated_at`.
+  `exercised_surface`, `adapter_conformance_pack`, ordered `probe_events`,
+  `negative_checks`, `redaction_checks`, `result`, `failed_layer`,
+  `result_hash`, and `generated_at`.
 - **Client Adapter Conformance Packs** record `pack_id`, `client_name`,
   `version_constraints`, `config_surface_fixtures`, owned-block classes,
   direct HTTP/header support, stdio wrapper behavior, trust requirements,

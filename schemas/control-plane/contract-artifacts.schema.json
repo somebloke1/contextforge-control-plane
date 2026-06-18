@@ -821,6 +821,7 @@
         "schema_uri",
         "plan_id",
         "service_binding",
+        "exercised_surface",
         "target_client",
         "adapter_conformance_pack",
         "probe_events",
@@ -837,6 +838,18 @@
         "schema_uri": { "const": "contextforge://control-plane/schemas/verification-trace/v1" },
         "plan_id": { "anyOf": [{ "$ref": "#/$defs/identifier" }, { "type": "null" }] },
         "service_binding": { "type": "string", "minLength": 1 },
+        "exercised_surface": {
+          "type": "string",
+          "enum": [
+            "legacy_live_read_only",
+            "contextforge_dev_docker",
+            "pi_client_docker",
+            "opencode_client_docker",
+            "local_source",
+            "target_client",
+            "generated_run_evidence"
+          ]
+        },
         "target_client": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "adapter_conformance_pack": { "anyOf": [{ "$ref": "#/$defs/artifact_ref" }, { "type": "null" }] },
         "probe_events": { "type": "array", "items": { "$ref": "#/$defs/probe_event" } },
