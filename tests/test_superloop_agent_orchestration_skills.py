@@ -123,6 +123,20 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
         ]:
             self.assertIn(text, self.controller)
 
+    def test_controller_skill_defines_creative_discussion_agents(self) -> None:
+        for text in [
+            "Creative Discussion Agents",
+            "keep the prompt light",
+            "Do not wrap idea generation in a full\nwork-unit lease",
+            "Send the agent to the discussion",
+            "repo/codebase files remain read-only",
+            "the named GitHub discussion is writable",
+            "idea fuel, not accepted roadmap",
+            "read back the discussion URL",
+            "whether any idea deserves a real issue,\nProject item, work-unit lease, or governance record",
+        ]:
+            self.assertIn(text, self.controller)
+
     def test_worker_skill_enforces_assigned_scope_and_boundaries(self) -> None:
         for text in [
             "name: superloop-worker-agent",
