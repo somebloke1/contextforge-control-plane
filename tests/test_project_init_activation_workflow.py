@@ -554,6 +554,59 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("pending", rejected_record["status"])
         self.assertIs(rejected["target_client_visible"], False)
 
+    def test_mentality_builder_output_controls_project_init_validation_state(self) -> None:
+        root = "/home/dgk/workspace/legacy-controlplane-archive"
+        state = project_state.default_state(root)
+        service = service_descriptor("mentality")
+        config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+        validation_plan = binding.build_project_init_validation_plan([service], validation_mode="validate_now")
+
+        passing = common.build_safe_probe_validation_result(
+            "mentality",
+            target_client="codex",
+            tool_name="mentality-governance-list",
+            verification_trace_refs=["contextforge://control-plane/traces/mentality-target-client"],
+        )
+        passing_state = project_state.apply_project_init_activation_to_state(
+            state,
+            [service],
+            target_client="codex",
+            client_config_plan=config_plan,
+            validation_plan=validation_plan,
+            validation_results={"mentality:canonical": passing},
+            consent_receipt_refs=CONSENT_REFS,
+        )
+
+        self.assertEqual("initialized", passing_state["status"])
+        record = passing_state["services"]["mentality:canonical"]["verification_layers"]["target_client"]
+        self.assertEqual("passed", record["status"])
+        job = passing_state["project_init"]["activation_jobs"][passing_state["project_init"]["current_job_id"]]
+        validation_record = job["validation_records"][job["selected_service_ids"][0]]
+        self.assertEqual("target_client_safe_probe_result", validation_record["x_proof_kind"])
+        self.assertEqual("passed", validation_record["x_safe_probe_result"])
+        self.assertEqual("governance-list", validation_record["safe_probe_id"])
+
+        rejected = common.build_safe_probe_validation_result(
+            "mentality",
+            target_client="codex",
+            tool_name="cat DECISIONS.md",
+            verification_trace_refs=["file://DECISIONS.md"],
+        )
+        rejected_state = project_state.apply_project_init_activation_to_state(
+            state,
+            [service],
+            target_client="codex",
+            client_config_plan=config_plan,
+            validation_plan=validation_plan,
+            validation_results={"mentality:canonical": rejected},
+            consent_receipt_refs=CONSENT_REFS,
+        )
+
+        self.assertEqual("in_progress", rejected_state["status"])
+        rejected_record = rejected_state["services"]["mentality:canonical"]["verification_layers"]["target_client"]
+        self.assertEqual("pending", rejected_record["status"])
+        self.assertIs(rejected["target_client_visible"], False)
+
     def test_pending_validation_choice_records_job_without_verified_status(self) -> None:
         state = project_state.default_state("/home/dgk/workspace/legacy-controlplane-archive")
         service = service_descriptor("context7")

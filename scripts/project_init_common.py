@@ -447,6 +447,44 @@ def safe_validation_policy(service_family: str) -> dict[str, Any]:
             "mode": "read_only",
             "description": "list or read governance entries only",
             "safe_operations": ["governance-list", "governance-read"],
+            "probe_contract": {
+                "status": "known_safe_probe",
+                "target_client_proof_layers": ["list_tools", "call_tool"],
+                "allowed_tool_name_patterns": [
+                    "mentality-governance-list",
+                    "mentality-governance-read",
+                    "governance_list",
+                    "governance_read",
+                ],
+                "default_probe": {
+                    "safe_probe_id": "governance-list",
+                    "tool_name_hint": "mentality-governance-list",
+                    "arguments": {"repo": "PROJECT_ROOT", "ledger": "decisions"},
+                    "expected_result": "non-error governance entry listing with no ledger mutation",
+                },
+                "accepted_proof_kinds": [
+                    "target_client_safe_probe_result",
+                    "pi_safe_probe_result",
+                ],
+                "validation_result_shape": {
+                    "status": "passed",
+                    "target_client_visible": True,
+                    "proof_kind": "target_client_safe_probe_result",
+                    "safe_probe_result": "passed",
+                    "safe_probe_id": "governance-list",
+                    "verification_trace_refs": [
+                        "contextforge://control-plane/traces/mentality-target-client"
+                    ],
+                },
+                "forbidden_substitutions": [
+                    "governance create",
+                    "governance update",
+                    "governance delete",
+                    "local ledger file read",
+                    "backend health",
+                    "direct registry or bridge check",
+                ],
+            },
             "requires_mutation_approval": False,
         },
         "ssh_tmux": {
