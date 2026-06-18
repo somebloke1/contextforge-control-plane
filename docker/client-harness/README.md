@@ -193,12 +193,15 @@ For an ordinary Pi baseline session against the same development ContextForge
 surface, use:
 
 ```sh
-scripts/start-pi-contextforge-dev-baseline.sh --no-session --no-context-files -p "..."
+scripts/start-pi-contextforge-dev-baseline.sh -p "..."
 ```
 
 That launcher uses the same scoped-token and wrapper environment contract, but
 starts the baseline Pi entrypoint with a matching `mentality:dev_docker`
 project-state fixture instead of forcing the validation tool call itself.
+Do not use `--no-session` as evidence for ordinary Pi session-start behavior:
+Pi's `before_agent_start` guidance and `session_start` route activation are the
+client lifecycle under test.
 
 Do not install or reload the host user-global Pi extension for this harness
 without separate approval.

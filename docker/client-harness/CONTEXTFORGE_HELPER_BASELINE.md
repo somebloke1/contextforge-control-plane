@@ -75,6 +75,11 @@ MCP-aware client does. The sustainable baseline route is:
 The existing smoke script may keep its explicit `--extension` proof. The
 baseline session launcher now carries that extension path by default so the
 developer does not have to remember the special flag.
+The shim's ordinary-session contract includes two Pi lifecycle hooks:
+`before_agent_start` injects hidden project-init guidance and `session_start`
+activates ContextForge routes from the project state. A run that disables Pi
+session handling, such as a diagnostic `--no-session` probe, is not sufficient
+ordinary-session evidence for #62.
 
 For project-state readback, the baseline launcher now mounts the canonical
 repository root at `/workspace`, so the session starts in the same project root
@@ -121,7 +126,10 @@ The existing smoke script may keep its temporary `opencode mcp add` proof.
 Baseline helper availability now uses both a harness-owned `contextforge-helper`
 MCP entry in `opencode.json` and a project plugin fixture copied into
 `/workspace/.opencode/plugins/contextforge-project-init.js` inside the client
-container, so it does not depend on that one-shot command.
+container, so it does not depend on that one-shot command. The plugin invokes
+the project-init hook through OpenCode's `experimental.chat.system.transform`
+surface, and the Python hook also accepts `session.created`; both are
+OpenCode-native session surfaces, not Codex hook banners.
 
 ## Runtime Validation Boundary
 
@@ -139,11 +147,13 @@ Runtime evidence should identify the exercised surface explicitly:
 Minimum future runtime checks:
 
 - Pi ad hoc session imports the expected ContextForge helper/shim bindings from
-  either the canonical project state or the dev fixture, and then lists or can
+  either the canonical project state or the dev fixture, through an ordinary Pi
+  run that does not disable session lifecycle events, and then lists or can
   invoke service tools through a reachable matching ContextForge surface without
   host-global Pi mutation.
 - OpenCode ad hoc session receives project-init helper/hook context from the
-  harness-owned fixture without user-global OpenCode mutation.
+  harness-owned fixture through `experimental.chat.system.transform` or
+  `session.created` behavior without user-global OpenCode mutation.
 - Both clients continue using the local llama.cpp Qwen model path.
 - Any scoped development token is created, used, redacted in evidence, and
   revoked before exit.

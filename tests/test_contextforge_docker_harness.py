@@ -262,6 +262,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
     def test_pi_baseline_launcher_loads_shim_without_host_global_mutation(self) -> None:
         container_launcher = (ROOT / "docker/client-harness/config/pi/start-contextforge-baseline.sh").read_text(encoding="utf-8")
         host_launcher = (ROOT / "docker/client-harness/scripts/start-pi-contextforge-baseline.sh").read_text(encoding="utf-8")
+        shim_source = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
 
         self.assertIn("--extension \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\"", container_launcher)
         self.assertIn("--provider local-llama-qwen", container_launcher)
@@ -273,12 +274,16 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("-v \"${REPO_ROOT}:/repo:ro\"", host_launcher)
         self.assertNotIn("/home/dgk/.pi", container_launcher + host_launcher)
         self.assertNotIn("/home/agent/.pi/agent/extensions", container_launcher + host_launcher)
+        self.assertIn('pi.on("before_agent_start"', shim_source)
+        self.assertIn('pi.on("session_start"', shim_source)
+        self.assertIn("await activateProject(pi, ctx.cwd, clients)", shim_source)
 
     def test_opencode_baseline_launcher_installs_project_plugin_fixture(self) -> None:
         container_launcher = (ROOT / "docker/client-harness/config/opencode/start-contextforge-baseline.sh").read_text(encoding="utf-8")
         host_launcher = (ROOT / "docker/client-harness/scripts/start-opencode-contextforge-baseline.sh").read_text(encoding="utf-8")
         plugin = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").read_text(encoding="utf-8")
         opencode_config = (ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8")
+        hook = (ROOT / "scripts/opencode_project_init_hook.py").read_text(encoding="utf-8")
 
         self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE:=/config/opencode/plugins/contextforge-project-init.js", container_launcher)
         self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_TARGET:=/workspace/.opencode/plugins/contextforge-project-init.js", container_launcher)
@@ -291,6 +296,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("CONTEXTFORGE_OPENCODE_HOOK", plugin)
         self.assertIn("opencode_project_init_hook.py", plugin)
         self.assertIn("CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace", container_launcher)
+        self.assertIn("session.created", hook)
         self.assertIn('"contextforge-helper"', opencode_config)
         self.assertIn('"{env:CONTEXTFORGE_HELPER_PYTHON}"', opencode_config)
         self.assertIn('"{env:CONTEXTFORGE_HELPER_SCRIPT}"', opencode_config)
@@ -367,6 +373,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("contextforge-dev-project-state.template.json", launcher)
         self.assertIn("scripts/start-pi-contextforge-dev-baseline.sh", readme)
         self.assertIn("starts the baseline Pi entrypoint", readme)
+        self.assertIn("Pi's `before_agent_start` guidance and `session_start` route activation", readme)
+        self.assertNotIn("scripts/start-pi-contextforge-dev-baseline.sh --no-session", readme)
         self.assertNotIn('-v "${REPO_ROOT}:/workspace:ro"', launcher)
         self.assertNotIn("127.0.0.1:4444", launcher)
 

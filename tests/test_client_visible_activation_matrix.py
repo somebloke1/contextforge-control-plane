@@ -33,8 +33,10 @@ class ClientVisibleActivationMatrixTests(unittest.TestCase):
         required_phrases = [
             "Codex project context may show project-init hook/helper guidance",
             "No Codex-style hook banner is expected",
-            "Pi should expose shim/helper tools and guidance",
-            "OpenCode should receive project-local plugin/helper behavior",
+            "before_agent_start",
+            "session_start",
+            "experimental.chat.system.transform",
+            "session.created",
             "Missing a Codex hook banner is expected for Pi",
             "Missing a Codex hook banner is expected for OpenCode",
         ]
@@ -67,6 +69,7 @@ class ClientVisibleActivationMatrixTests(unittest.TestCase):
             "#62 does not prove host Pi global extension install/reload behavior",
             "#3 remains the host Pi global shim install",
             "Claim `Pi active` only from Pi-visible shim/helper/guidance",
+            "ordinary Pi session that has not disabled session lifecycle events",
             "Claim `OpenCode active` only from OpenCode-visible plugin/helper/MCP readback",
             "state that the source path is prepared and runtime validation remains unproven",
             "Do not generalize that evidence to host Pi global install/reload or Codex hook behavior",
