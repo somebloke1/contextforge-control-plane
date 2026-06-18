@@ -14,14 +14,24 @@ docker compose -f compose.yml run --rm pi bash -lc '
   mkdir -p "${PI_CODING_AGENT_DIR}"
   cp /config/pi/models.json "${PI_CODING_AGENT_DIR}/models.json"
   cp /config/pi/AGENTS.md "${PI_CODING_AGENT_DIR}/AGENTS.md"
-  echo "LOCAL_LLAMA_KEY_PRESENT=${LOCAL_LLAMA_KEY:+yes}"
-  curl -sS -H "Authorization: Bearer ${LOCAL_LLAMA_KEY}" "${LOCAL_LLAMA_BASE_URL}/models" \
-    | jq -r ".data[]?.id // .models[]? // empty" | grep -E "qwen|local-llama" || true
-' | tee evidence/pi-llama-models.txt
+  models_json="$(curl -sS -H "Authorization: Bearer ${LOCAL_LLAMA_KEY}" "${LOCAL_LLAMA_BASE_URL}/models")"
+  printf "%s" "${models_json}" \
+    | python3 /repo/scripts/client_model_identity.py \
+      --surface "Pi client Docker" \
+      --client pi \
+      --base-url "${LOCAL_LLAMA_BASE_URL}" \
+      --expected-model-id "${LOCAL_LLAMA_MODEL}" \
+      --fail-on-stale
+' | tee evidence/pi-llama-model-identity.json
 
 docker compose -f compose.yml run --rm opencode bash -lc '
   set -euo pipefail
-  echo "LOCAL_LLAMA_KEY_PRESENT=${LOCAL_LLAMA_KEY:+yes}"
-  curl -sS -H "Authorization: Bearer ${LOCAL_LLAMA_KEY}" "${LOCAL_LLAMA_BASE_URL}/models" \
-    | jq -r ".data[]?.id // .models[]? // empty" | grep -E "qwen|local-llama" || true
-' | tee evidence/opencode-llama-models.txt
+  models_json="$(curl -sS -H "Authorization: Bearer ${LOCAL_LLAMA_KEY}" "${LOCAL_LLAMA_BASE_URL}/models")"
+  printf "%s" "${models_json}" \
+    | python3 /repo/scripts/client_model_identity.py \
+      --surface "OpenCode client Docker" \
+      --client opencode \
+      --base-url "${LOCAL_LLAMA_BASE_URL}" \
+      --expected-model-id "${LOCAL_LLAMA_MODEL}" \
+      --fail-on-stale
+' | tee evidence/opencode-llama-model-identity.json

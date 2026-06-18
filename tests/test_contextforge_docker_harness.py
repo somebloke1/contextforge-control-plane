@@ -333,6 +333,18 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
             contract,
         )
 
+    def test_llama_probe_records_exact_advertised_model_identity(self) -> None:
+        probe = (ROOT / "docker/client-harness/scripts/probe-llama.sh").read_text(encoding="utf-8")
+        readme = (ROOT / "docker/client-harness/README.md").read_text(encoding="utf-8")
+
+        self.assertIn("client_model_identity.py", probe)
+        self.assertIn("--expected-model-id \"${LOCAL_LLAMA_MODEL}\"", probe)
+        self.assertIn("--fail-on-stale", probe)
+        self.assertIn("evidence/pi-llama-model-identity.json", probe)
+        self.assertIn("evidence/opencode-llama-model-identity.json", probe)
+        self.assertIn("exact advertised model identity reports", readme)
+        self.assertIn("current`, `stale`, or `unverified`", readme)
+
 
 if __name__ == "__main__":
     unittest.main()

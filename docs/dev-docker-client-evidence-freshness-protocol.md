@@ -138,8 +138,11 @@ For this protocol, the only client Docker foils are:
 
 The local Qwen model served by llama.cpp is a configuration target. The refresh
 may verify endpoint/model visibility, but it must not install or replace the
-model server. Do not expand #58 evidence claims to Codex CLI, Gemini CLI,
-Claude Code, or Claude Desktop without a later scoped issue and approval.
+model server. Pi/OpenCode model evidence must record the exact advertised model
+id returned by the endpoint, compare it with the harness expected model id, and
+mark the evidence `stale` when they differ rather than accepting a nearby Qwen
+alias. Do not expand #58 evidence claims to Codex CLI, Gemini CLI, Claude Code,
+or Claude Desktop without a later scoped issue and approval.
 
 ## Non-Actions
 
