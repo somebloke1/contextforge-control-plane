@@ -225,6 +225,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py", compose)
         self.assertIn("CONTEXTFORGE_PI_SHIM_EXTENSION: /repo/pi-extensions/contextforge-global-shim/index.ts", compose)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py", compose)
+        self.assertIn("CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace", compose)
 
         for service in ("opencode", "pi"):
             match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
@@ -245,6 +246,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("--model qwen3.6-a3b", container_launcher)
         self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON:=/opt/contextforge-wrapper-venv/bin/python", container_launcher)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WRAPPER:=/repo/scripts/contextforge_mcp_wrapper.py", container_launcher)
+        self.assertIn("CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace", container_launcher)
         self.assertIn("docker compose -f compose.yml run --rm --no-deps", host_launcher)
         self.assertIn("-v \"${REPO_ROOT}:/repo:ro\"", host_launcher)
         self.assertNotIn("/home/dgk/.pi", container_launcher + host_launcher)
@@ -266,6 +268,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("spawnSync", plugin)
         self.assertIn("CONTEXTFORGE_OPENCODE_HOOK", plugin)
         self.assertIn("opencode_project_init_hook.py", plugin)
+        self.assertIn("CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace", container_launcher)
         self.assertIn('"contextforge-helper"', opencode_config)
         self.assertIn('"{env:CONTEXTFORGE_HELPER_PYTHON}"', opencode_config)
         self.assertIn('"{env:CONTEXTFORGE_HELPER_SCRIPT}"', opencode_config)

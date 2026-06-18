@@ -7,6 +7,7 @@ set -euo pipefail
 : "${CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT:=/workspace}"
 : "${CONTEXTFORGE_PI_SHIM_PYTHON:=/opt/contextforge-wrapper-venv/bin/python}"
 : "${CONTEXTFORGE_PI_SHIM_WRAPPER:=/repo/scripts/contextforge_mcp_wrapper.py}"
+: "${CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace}"
 
 mkdir -p "${PI_CODING_AGENT_DIR}"
 cp /config/pi/AGENTS.md "${PI_CODING_AGENT_DIR}/AGENTS.md"
@@ -29,6 +30,7 @@ export CONTEXTFORGE_PI_SHIM_PORTAL_ROOT
 export CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT
 export CONTEXTFORGE_PI_SHIM_PYTHON
 export CONTEXTFORGE_PI_SHIM_WRAPPER
+export CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS
 
 exec pi \
   --extension "${CONTEXTFORGE_PI_SHIM_EXTENSION}" \

@@ -37,6 +37,7 @@ WORKSPACE_ROOT = Path("/home/dgk/workspace").resolve()
 CMU_MATH_FOUNDATIONS_ROOT = Path("/home/dgk/gdrive/__CMU/classes/00_MathFoundationsML").resolve()
 SAFE_PROJECT_ROOTS = frozenset({WORKSPACE_ROOT, CMU_MATH_FOUNDATIONS_ROOT})
 DENIED_PROJECT_ROOTS = frozenset({Path("/").resolve(), HOME, WORKSPACE_ROOT})
+ADDITIONAL_SAFE_ROOTS_ENV = "CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS"
 LEGACY_ENV_KEYS = frozenset(
     {
         "CONTEXTFORGE_PROJECT_INIT_DIALOGUE_STATUS",
@@ -135,6 +136,20 @@ def canonical_root(root: str | Path) -> Path:
     return Path(root).expanduser().resolve(strict=False)
 
 
+def additional_safe_project_roots() -> frozenset[Path]:
+    raw = os.environ.get(ADDITIONAL_SAFE_ROOTS_ENV, "")
+    roots = {
+        canonical_root(item)
+        for item in raw.split(os.pathsep)
+        if item.strip()
+    }
+    return frozenset(root for root in roots if root not in DENIED_PROJECT_ROOTS)
+
+
+def safe_project_roots() -> frozenset[Path]:
+    return SAFE_PROJECT_ROOTS | additional_safe_project_roots()
+
+
 def is_relative_to(path: Path, parent: Path) -> bool:
     try:
         path.relative_to(parent)
@@ -144,7 +159,7 @@ def is_relative_to(path: Path, parent: Path) -> bool:
 
 
 def is_safe_project_root(path: Path) -> bool:
-    return any(is_relative_to(path, root) for root in SAFE_PROJECT_ROOTS) and path not in DENIED_PROJECT_ROOTS
+    return any(is_relative_to(path, root) for root in safe_project_roots()) and path not in DENIED_PROJECT_ROOTS
 
 
 def validate_project_root(
@@ -163,7 +178,7 @@ def validate_project_root(
     if canonical == HOME or is_relative_to(HOME, canonical):
         raise RootValidationError(f"refusing user home or parent of user home as project root: {canonical}")
     if require_workspace:
-        if not any(is_relative_to(display_path.resolve(strict=False), root) for root in SAFE_PROJECT_ROOTS):
+        if not any(is_relative_to(display_path.resolve(strict=False), root) for root in safe_project_roots()):
             raise RootValidationError(f"project root is not a safe workspace child: {canonical}")
         if not is_safe_project_root(canonical):
             raise RootValidationError(f"project root resolves outside safe workspace: {canonical}")
