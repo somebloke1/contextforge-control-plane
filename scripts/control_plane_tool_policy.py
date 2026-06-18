@@ -61,6 +61,10 @@ RISK_HINT_RE = re.compile(
     r"trust|token|secret|network[_-]?exposure|remote[_-]?exposure|expose[_-]?remote)",
     re.IGNORECASE,
 )
+SAFE_VALIDATION_NAME_RE = re.compile(
+    r"(^|[_-])(list|read|get|inspect|status|describe|lookup|query|resolve|view|show)([_-]|$)",
+    re.IGNORECASE,
+)
 
 
 class ToolPolicyInputError(ValueError):
@@ -197,6 +201,67 @@ def compile_tool_policy(
 
 def now_timestamp() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def classify_validation_probe_request(
+    policy: Mapping[str, Any],
+    requested_tool_name: str,
+    *,
+    safe_probe_candidates: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Classify a requested tool call as validation evidence.
+
+    The classifier is source-only and side-effect free. It does not run a tool,
+    mutate ContextForge, or mark validation as passed. Its job is to keep
+    mutating tools from becoming validation probes and to identify safe
+    read/list alternatives when the compiled policy exposes one.
+    """
+
+    if not requested_tool_name:
+        raise ToolPolicyInputError("requested_tool_name is required")
+
+    allowed = [_validation_record(item, "allowed") for item in policy.get("x_allowed_tools", [])]
+    excluded = [_validation_record(item, "excluded") for item in policy.get("x_excluded_tools", [])]
+    requested = _find_validation_record(allowed + excluded, requested_tool_name)
+    alternatives = _safe_validation_alternatives(allowed, safe_probe_candidates=safe_probe_candidates)
+
+    if requested is None:
+        return _validation_probe_decision(
+            requested_tool_name=requested_tool_name,
+            status="skipped",
+            requested_tool_status="missing",
+            reason="requested_validation_tool_missing",
+            alternatives=alternatives,
+        )
+
+    if _record_safe_for_validation(requested):
+        return _validation_probe_decision(
+            requested_tool_name=requested_tool_name,
+            status="allowed",
+            requested_tool_status="allowed_safe_for_validation",
+            reason="safe_validation_probe_allowed",
+            requested_record=requested,
+            alternatives=[requested],
+        )
+
+    requested_status = "allowed_unsafe_for_validation" if requested["policy_decision"] == "allowed" else "excluded_unsafe_for_validation"
+    if alternatives:
+        return _validation_probe_decision(
+            requested_tool_name=requested_tool_name,
+            status="redirected",
+            requested_tool_status=requested_status,
+            reason="mutating_validation_probe_rejected",
+            requested_record=requested,
+            alternatives=alternatives,
+        )
+    return _validation_probe_decision(
+        requested_tool_name=requested_tool_name,
+        status="skipped",
+        requested_tool_status=requested_status,
+        reason="mutating_validation_probe_rejected",
+        requested_record=requested,
+        alternatives=[],
+    )
 
 
 def stable_digest(value: Any) -> str:
@@ -616,6 +681,84 @@ def _open_item_id(service_binding: str, target_client: str, blocker: Mapping[str
 
 def _policy_id(payload: Mapping[str, Any]) -> str:
     return f"policy-{stable_digest(payload)[7:19]}"
+
+
+def _validation_record(item: Mapping[str, Any], policy_decision: str) -> dict[str, Any]:
+    return {
+        "tool_id": str(item.get("tool_id") or "<unknown>"),
+        "original_name": str(item.get("original_name") or "<unknown>"),
+        "exposed_name": str(item.get("exposed_name") or "<unknown>"),
+        "policy_decision": policy_decision,
+        "semantic_risk_classes": sorted(str(value) for value in item.get("semantic_risk_classes", [])),
+        "scope_impacts": sorted(str(value) for value in item.get("scope_impacts", [])),
+        "required_consent_classes": sorted(str(value) for value in item.get("required_consent_classes", [])),
+    }
+
+
+def _find_validation_record(records: Sequence[Mapping[str, Any]], requested_tool_name: str) -> dict[str, Any] | None:
+    requested = str(requested_tool_name)
+    for record in records:
+        if requested in _validation_record_names(record):
+            return copy.deepcopy(dict(record))
+    return None
+
+
+def _safe_validation_alternatives(
+    allowed: Sequence[Mapping[str, Any]],
+    *,
+    safe_probe_candidates: Sequence[str],
+) -> list[dict[str, Any]]:
+    safe = [copy.deepcopy(dict(record)) for record in allowed if _record_safe_for_validation(record)]
+    if not safe_probe_candidates:
+        return safe
+    preferred: list[dict[str, Any]] = []
+    remaining = safe.copy()
+    for candidate in safe_probe_candidates:
+        match = _find_validation_record(remaining, str(candidate))
+        if match is not None:
+            preferred.append(match)
+            remaining = [record for record in remaining if str(record["tool_id"]) != str(match["tool_id"])]
+    return preferred + remaining
+
+
+def _record_safe_for_validation(record: Mapping[str, Any]) -> bool:
+    if str(record.get("policy_decision")) != "allowed":
+        return False
+    risk_classes = {str(value) for value in record.get("semantic_risk_classes", [])}
+    if "read_only" not in risk_classes:
+        return False
+    if risk_classes & CONSENT_REQUIRED_RISK_CLASSES:
+        return False
+    if set(record.get("required_consent_classes", [])):
+        return False
+    return any(SAFE_VALIDATION_NAME_RE.search(name) for name in _validation_record_names(record))
+
+
+def _validation_record_names(record: Mapping[str, Any]) -> set[str]:
+    return {str(record.get("tool_id")), str(record.get("original_name")), str(record.get("exposed_name"))}
+
+
+def _validation_probe_decision(
+    *,
+    requested_tool_name: str,
+    status: str,
+    requested_tool_status: str,
+    reason: str,
+    alternatives: Sequence[Mapping[str, Any]],
+    requested_record: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    safe_alternatives = [copy.deepcopy(dict(item)) for item in alternatives]
+    return {
+        "requested_tool_name": requested_tool_name,
+        "status": status,
+        "requested_tool_status": requested_tool_status,
+        "reason": reason,
+        "requested_tool": copy.deepcopy(dict(requested_record)) if requested_record else None,
+        "safe_alternative": copy.deepcopy(dict(safe_alternatives[0])) if safe_alternatives else None,
+        "safe_alternatives": safe_alternatives,
+        "validation_result_status": "pending" if status in {"allowed", "redirected"} else "skipped",
+        "readiness_effect": "not_verified",
+    }
 
 
 def _placeholder_ref() -> dict[str, str | None]:

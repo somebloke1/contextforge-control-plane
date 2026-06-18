@@ -57,6 +57,7 @@ class ControlPlaneToolPolicyFixtureTests(unittest.TestCase):
                 "read_only_tools_compile_to_allowed_associations",
                 "semantic_scope_changing_and_admin_risks_are_excluded",
                 "unknown_missing_metadata_and_service_binding_fail_closed",
+                "validation_probe_request_redirects_mutating_tool_to_safe_read",
                 "target_client_mismatch_and_stale_inputs_fail_closed",
                 "manual_allow_without_required_evidence_stays_excluded",
                 "manual_allow_with_consent_requirement_and_negative_checks_can_allow",
@@ -124,6 +125,48 @@ class ControlPlaneToolPolicyFixtureTests(unittest.TestCase):
         self.assertIn("unknown_risk_class", blocker_types)
         self.assertTrue(all(item["type"] == "tool_policy" for item in result["x_open_items"]))
         self.assertTrue(all(item["severity"] == "blocking" for item in result["x_open_items"]))
+
+    def test_mutating_validation_probe_redirects_to_safe_read_alternative(self) -> None:
+        result = self.compile_case("validation_probe_request_redirects_mutating_tool_to_safe_read")
+
+        decision = tool_policy.classify_validation_probe_request(
+            result,
+            "governance_create_decision",
+            safe_probe_candidates=["governance_list"],
+        )
+
+        self.assertEqual("redirected", decision["status"])
+        self.assertEqual("excluded_unsafe_for_validation", decision["requested_tool_status"])
+        self.assertEqual("mutating_validation_probe_rejected", decision["reason"])
+        self.assertEqual("pending", decision["validation_result_status"])
+        self.assertEqual("not_verified", decision["readiness_effect"])
+        self.assertEqual("cf-tool-governance-create", decision["requested_tool"]["tool_id"])
+        self.assertEqual("cf-tool-governance-list", decision["safe_alternative"]["tool_id"])
+        self.assertEqual(["read_only"], decision["safe_alternative"]["semantic_risk_classes"])
+
+    def test_manual_allowed_mutating_tool_is_still_not_a_validation_probe(self) -> None:
+        result = self.compile_case("manual_allow_with_consent_requirement_and_negative_checks_can_allow")
+
+        decision = tool_policy.classify_validation_probe_request(result, "write_project_state")
+
+        self.assertEqual("skipped", decision["status"])
+        self.assertEqual("allowed_unsafe_for_validation", decision["requested_tool_status"])
+        self.assertEqual("mutating_validation_probe_rejected", decision["reason"])
+        self.assertEqual("skipped", decision["validation_result_status"])
+        self.assertEqual("not_verified", decision["readiness_effect"])
+        self.assertIsNone(decision["safe_alternative"])
+        self.assertEqual([], decision["safe_alternatives"])
+
+    def test_missing_validation_probe_is_skipped_not_verified(self) -> None:
+        result = self.compile_case("read_only_tools_compile_to_allowed_associations")
+
+        decision = tool_policy.classify_validation_probe_request(result, "missing_safe_probe")
+
+        self.assertEqual("skipped", decision["status"])
+        self.assertEqual("missing", decision["requested_tool_status"])
+        self.assertEqual("requested_validation_tool_missing", decision["reason"])
+        self.assertEqual("skipped", decision["validation_result_status"])
+        self.assertEqual("not_verified", decision["readiness_effect"])
 
     def test_stale_inputs_block_even_otherwise_read_only_tools(self) -> None:
         result = self.compile_case("target_client_mismatch_and_stale_inputs_fail_closed")

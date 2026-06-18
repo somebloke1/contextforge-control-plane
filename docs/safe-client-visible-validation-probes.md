@@ -173,6 +173,11 @@ ContextForge-exposed OpenZeppelin tool.
 - Report source, backend, ContextForge, and target-client readiness with
   `docs/readiness-claim-guardrails.md`; do not collapse those layers into one
   generic validation state.
+- Reject create, update, delete, trust, token, registry, state-changing, or
+  otherwise mutating tools as validation probes even when a broader policy or
+  consent path makes that tool available for normal use. Offer a safe read/list
+  alternative when one is imported and policy-allowed; otherwise record the
+  proof as skipped or pending, not validated.
 - Record `validated` only after the exact target client lists and, where safe,
   calls the intended ContextForge-visible probe.
 - Record `skipped` when no safe payload exists or the target-client probe tool

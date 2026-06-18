@@ -131,6 +131,39 @@
       }
     },
     {
+      "name": "validation_probe_request_redirects_mutating_tool_to_safe_read",
+      "inputs": {
+        "tools": [
+          {
+            "tool_id": "cf-tool-governance-list",
+            "original_name": "governance_list",
+            "exposed_name": "mentality__governance_list",
+            "service_binding": "project-inspector:cf-controlplane",
+            "target_clients": ["codex"],
+            "risk_classes": ["read_only"],
+            "scope_impacts": ["project_scope_read"]
+          },
+          {
+            "tool_id": "cf-tool-governance-create",
+            "original_name": "governance_create_decision",
+            "exposed_name": "mentality__governance_create_decision",
+            "service_binding": "project-inspector:cf-controlplane",
+            "target_clients": ["codex"],
+            "risk_classes": ["write"],
+            "scope_impacts": ["project_state"]
+          }
+        ],
+        "manual_overrides": []
+      },
+      "expected": {
+        "status": "blocked",
+        "compiled_tool_ids": ["cf-tool-governance-list"],
+        "excluded_tool_ids": ["cf-tool-governance-create"],
+        "negative_check_count": 3,
+        "blocker_types": ["semantic_risk_excluded"]
+      }
+    },
+    {
       "name": "target_client_mismatch_and_stale_inputs_fail_closed",
       "inputs": {
         "current_gateway_revision": "gw-r2",
