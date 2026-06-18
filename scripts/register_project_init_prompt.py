@@ -258,6 +258,7 @@ def verify_prompt_render(token: str, prompt: dict[str, Any]) -> None:
     args = {
         "project_name": "cf-controlplane",
         "project_root": "/home/dgk/workspace/cf-controlplane",
+        "target_client": "codex",
         "project_root_hash": "verification",
         "dialogue_status": "unasked",
         "serena_decision": "unasked",
