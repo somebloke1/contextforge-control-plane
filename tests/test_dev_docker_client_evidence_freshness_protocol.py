@@ -33,6 +33,9 @@ class DevDockerClientEvidenceFreshnessProtocolTests(unittest.TestCase):
             "`mentality_dev_docker_server`",
             "short-lived scoped probe tokens",
             "prove OpenCode through its remote MCP client surface",
+            "`opencode mcp list` connection evidence",
+            "known-safe governance list/read call",
+            "same OpenCode client Docker run",
             "prove Pi through the extension/shim validation path",
             "local Qwen/llama.cpp as configuration",
         ]

@@ -135,6 +135,31 @@ The script creates a one-day scoped token for
 under ignored `evidence/`, and revokes the token before exit. It prints only
 the token id, never the raw token value.
 
+Issue #144 requires this smoke to distinguish connection/list evidence from a
+real target-client safe call through the `mentality` route. By default, the
+script now requires an explicitly reviewed OpenCode command in
+`OPENCODE_SAFE_CALL_COMMAND` and fails with
+`smoke_result=failed_missing_required_safe_call` if that command is absent. The
+safe-call contract is:
+
+- surface labels: `OpenCode client Docker` against `ContextForge dev Docker`;
+- route: `mentality_dev_docker_server` through the OpenCode remote MCP entry;
+- safe probe id: `governance-list`;
+- allowed tools: `mentality-governance-list`,
+  `mentality-governance-read`, `governance_list`, and `governance_read`;
+- default expected tool: `mentality-governance-list`;
+- accepted result: `opencode mcp list` evidence plus
+  `safe_call_status=passed` from the same OpenCode container run.
+
+This repository slice does not claim the exact OpenCode CLI command for MCP
+tool invocation is proven. When runtime execution is later approved, set
+`OPENCODE_SAFE_CALL_COMMAND` to the reviewed target-client invocation and keep
+the command from printing raw bearer tokens. The smoke transcript is still
+redacted for the scoped token before it is appended to evidence. For list-only
+diagnostics that must not be cited as target-client safe-call proof, set
+`OPENCODE_REQUIRE_SAFE_CALL=0`; that path records
+`smoke_result=list_only_without_safe_call`.
+
 ## Pi ContextForge Dev Gateway Path
 
 Pi remains shim-first. The real Pi validation target is
