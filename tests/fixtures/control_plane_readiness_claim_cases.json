@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "source_ready_with_current_evidence_surface_and_boundary",
+      "text": "The readiness-claim linter is source_ready for local_source based on `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_control_plane_readiness_claim_linter -v` and tests/fixtures/control_plane_readiness_claim_cases.json. It is not contextforge_ready because no ContextForge registry or runtime surface was exercised.",
+      "expected_codes": []
+    },
+    {
+      "name": "target_client_ready_with_matching_client_surface",
+      "text": "Pi client Docker helper visibility is target_client_ready for pi_client_docker based on docker/client-harness/evidence/pi-contextforge-dev-baseline.local.jsonl and a safe target-client readback command. It is not host Pi ready because host Pi install and reload remain pending.",
+      "expected_codes": []
+    },
+    {
+      "name": "readiness_claim_without_evidence_reference",
+      "text": "The ContextForge client path is verified and ready for operators.",
+      "expected_codes": [
+        "readiness_claim_missing_evidence"
+      ]
+    },
+    {
+      "name": "evidence_claim_without_surface_label",
+      "text": "The helper is verified based on `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_helper -v` and the probe output passed.",
+      "expected_codes": [
+        "evidence_missing_surface_label"
+      ]
+    },
+    {
+      "name": "historical_evidence_promoted_to_current_readiness",
+      "text": "Historical Wave 12 evidence proves the Pi client path is target_client_ready and complete.",
+      "expected_codes": [
+        "historical_evidence_current_readiness"
+      ]
+    },
+    {
+      "name": "historical_evidence_with_current_boundary",
+      "text": "Historical Wave 12 evidence in docs/initiatives/contextforge-control-plane/acceptance-checklist.md is comparison-only context and does not prove current target_client_ready status; the client proof must be refreshed on pi_client_docker.",
+      "expected_codes": []
+    },
+    {
+      "name": "backend_only_claimed_as_target_client_ready",
+      "text": "The Pi client integration is target_client_ready because backend health and listener checks passed on the upstream backend.",
+      "expected_codes": [
+        "readiness_claim_missing_evidence",
+        "evidence_missing_surface_label",
+        "backend_only_target_client_overclaim"
+      ]
+    },
+    {
+      "name": "backend_evidence_with_explicit_client_boundary",
+      "text": "The service is backend_ready for contextforge_dev_docker based on `curl /health` and listener readback. It is not target_client_ready because no pi_client_docker, opencode_client_docker, or target_client list/call proof was collected.",
+      "expected_codes": []
+    }
+  ]
+}

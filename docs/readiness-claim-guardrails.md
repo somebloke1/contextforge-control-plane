@@ -113,6 +113,11 @@ If a claim spans more than one surface, list the surfaces separately. Evidence
 from one surface cannot prove another surface unless the bridge is itself
 current and evidenced.
 
+`scripts/control_plane_readiness_claim_linter.py` provides source_ready
+local_source coverage for these prose guardrails by flagging missing evidence
+references, missing canonical surface labels, stale evidence promoted as
+current, and backend-only proof promoted to target-client readiness.
+
 ## Non-Actions
 
 This guardrail does not approve runtime/client validation, Docker/container
