@@ -115,6 +115,23 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         ]:
             self.assertIn(phrase, self.doc)
 
+    def test_doc_records_source_only_resume_envelope(self) -> None:
+        for phrase in [
+            "Source-Only Resume Envelope",
+            "--previous-record",
+            "--session-id",
+            "`dialogue_session`",
+            "`turn_index`",
+            "`state_history`",
+            "`answered_questions`",
+            "`decision_log`",
+            "`storage_mode: stdout_only`",
+            "`write_persistence: false`",
+            "introducing hidden local files",
+            "long-running helper behavior",
+        ]:
+            self.assertIn(phrase, self.doc)
+
 
 if __name__ == "__main__":
     unittest.main()

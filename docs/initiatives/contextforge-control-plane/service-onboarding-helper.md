@@ -1,10 +1,11 @@
 # ContextForge Service Onboarding Helper
 
 Issue #52 requests a stateful helper process for onboarding new MCP services
-into the cf-controlplane service offering. This document records the first
-source-only contract for that helper. It is not an implementation and it must
-not mutate ContextForge, Docker, client, global, service, registry, systemd,
-hook, trust, secret, Pi, or legacy archive state.
+into the cf-controlplane service offering. This document records the source-only
+contract and current deterministic record/resume CLI for that helper. It is not
+a runtime daemon, file-backed session store, or live service implementation, and
+it must not mutate ContextForge, Docker, client, global, service, registry,
+systemd, hook, trust, secret, Pi, or legacy archive state.
 
 ## Outcome
 
@@ -149,9 +150,40 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboard
 
 The CLI reads a JSON descriptor and emits a deterministic onboarding record. It
 does not write session state, register services, call ContextForge, start
-containers, edit client config, or mutate runtime state. Resumption is explicit:
-the emitted `current_state`, `next_questions`, and `source_descriptor` tell the
-operator or model what evidence to add before rerunning the helper.
+containers, edit client config, or mutate runtime state.
+
+## Source-Only Resume Envelope
+
+Resumption is explicit and still no-mutation. The emitted `current_state`,
+`next_questions`, and `source_descriptor` tell the operator or model what
+evidence to add before rerunning the helper. A later turn may pass the previous
+record and an updated descriptor patch:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboarding_helper.py \
+  --descriptor updated-service-evidence.json \
+  --previous-record previous-onboarding-record.json \
+  --session-id svc-onboarding-example \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --issue '#52'
+```
+
+The helper merges the previous record's redacted `source_descriptor` with the
+new descriptor and emits `dialogue_session` metadata containing:
+
+- `session_id`;
+- `turn_index`;
+- `state_history`;
+- `answered_questions`;
+- `decision_log`;
+- `storage_mode: stdout_only`;
+- `write_persistence: false`.
+
+This resume envelope makes stateful human-agent dialogue reviewable without
+introducing hidden local files, daemon state, ContextForge API calls, Docker
+mutation, client/global config writes, or secret handling. Durable storage,
+long-running helper behavior, and richer session management remain later slices
+that need their own evidence and approval boundaries.
 
 ## Fixture Coverage
 

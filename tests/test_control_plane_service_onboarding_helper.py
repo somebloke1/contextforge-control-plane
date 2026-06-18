@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -128,6 +129,52 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertIn("source_evidence", {blocker["field"] for blocker in first["blockers"]})  # type: ignore[index]
         self.assertIn("plan_type", {blocker["field"] for blocker in _blockers(first)})
 
+    def test_previous_record_resume_merges_new_evidence_without_writing_state(self) -> None:
+        previous = self.record("missing_evidence_prompts_questions")
+        resumed = helper.build_onboarding_record(
+            {
+                "source_evidence": [{"type": "upstream_doc", "ref": "https://example.invalid/unknown-service"}],
+                "classification": {
+                    "plan_type": "source_only_scaffolding",
+                    "localization_type": "shared_canonical",
+                    "functional_type": "search_retrieval",
+                    "transport_type": "streamable_http",
+                    "state_type": "stateless",
+                    "approval_type": "source_only",
+                },
+            },
+            project_root=PROJECT_ROOT,
+            issue="#52",
+            previous_record=previous,
+            session_id="svc-onboarding-unknown-service",
+        )
+
+        self.assertEqual("ready_for_handoff", resumed["status"])
+        self.assertEqual("handoff", resumed["current_state"])
+        self.assertEqual("unknown-service", resumed["candidate_service"])
+        self.assertFalse(resumed["mutation_allowed"])
+        self.assertEqual("stdout_only", resumed["dialogue_session"]["storage_mode"])  # type: ignore[index]
+        self.assertFalse(resumed["dialogue_session"]["write_persistence"])  # type: ignore[index]
+        self.assertEqual("previous_record", resumed["dialogue_session"]["resume_source"])  # type: ignore[index]
+        self.assertEqual("source_discovery", resumed["dialogue_session"]["previous_state"])  # type: ignore[index]
+        self.assertEqual(2, resumed["dialogue_session"]["turn_index"])  # type: ignore[index]
+        self.assertEqual(["source_discovery", "handoff"], resumed["dialogue_session"]["state_history"])  # type: ignore[index]
+        self.assertIn(
+            "What upstream docs, package names, commands, local paths, or issue links prove the service shape?",
+            resumed["dialogue_session"]["answered_questions"],  # type: ignore[index]
+        )
+        self.assertEqual("svc-onboarding-unknown-service", resumed["dialogue_session"]["session_id"])  # type: ignore[index]
+        self.assertEqual(
+            {"from_state": "source_discovery", "from_status": "needs_user_input", "to_state": "handoff", "status": "ready_for_handoff"},
+            resumed["dialogue_session"]["history"][-1],  # type: ignore[index]
+        )
+        self.assertEqual("Direct native registration", resumed["dialogue_session"]["decision_log"][-1]["primary_paradigm"])  # type: ignore[index]
+        self.assertFalse(resumed["dialogue_session"]["decision_log"][-1]["mutation_allowed"])  # type: ignore[index]
+        self.assertIn(
+            {"type": "upstream_doc", "ref": "https://example.invalid/unknown-service"},
+            resumed["source_evidence"],
+        )
+
     def test_output_is_json_compatible_and_no_mutation_recorded(self) -> None:
         record = self.record("serena_project_scoped_stdio_dev_docker_gate")
 
@@ -166,9 +213,61 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("needs_user_input", output["status"])
         self.assertEqual("source_discovery", output["current_state"])
 
+    def test_cli_resumes_from_previous_record(self) -> None:
+        previous = self.record("missing_evidence_prompts_questions")
+        descriptor = {
+            "classification": {
+                "plan_type": "source_only_scaffolding",
+                "localization_type": "shared_canonical",
+                "functional_type": "search_retrieval",
+                "transport_type": "streamable_http",
+                "state_type": "stateless",
+                "approval_type": "source_only",
+            },
+            "source_evidence": [{"type": "package", "ref": "unknown-service"}],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            previous_path = Path(tmp) / "previous.json"
+            descriptor_path = Path(tmp) / "descriptor.json"
+            previous_path.write_text(json.dumps(previous), encoding="utf-8")
+            descriptor_path.write_text(json.dumps(descriptor), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--descriptor",
+                    str(descriptor_path),
+                    "--previous-record",
+                    str(previous_path),
+                    "--session-id",
+                    "svc-onboarding-cli",
+                    "--project-root",
+                    PROJECT_ROOT,
+                    "--issue",
+                    "#52",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+
+        self.assertEqual("", result.stderr)
+        output = json.loads(result.stdout)
+        self.assertEqual("ready_for_handoff", output["status"])
+        self.assertEqual("previous_record", output["dialogue_session"]["resume_source"])
+        self.assertEqual("svc-onboarding-cli", output["dialogue_session"]["session_id"])
+        self.assertEqual(2, output["dialogue_session"]["turn_index"])
+        self.assertEqual(["source_discovery", "handoff"], output["dialogue_session"]["state_history"])
+
     def test_descriptor_must_be_mapping(self) -> None:
         with self.assertRaises(helper.ServiceOnboardingInputError):
             helper.build_onboarding_record(["not", "a", "mapping"])  # type: ignore[arg-type]
+
+    def test_previous_record_must_include_source_descriptor_for_resume(self) -> None:
+        with self.assertRaises(helper.ServiceOnboardingInputError):
+            helper.build_onboarding_record({}, previous_record={"status": "needs_user_input"})
 
 
 def _blockers(record: dict[str, object]) -> list[dict[str, str]]:
