@@ -72,6 +72,56 @@ During execution:
 5. Integrate returned evidence with current repo/GitHub/runtime evidence.
 6. Make final acceptance, merge, closure, or deferral decisions.
 
+## Worker Pool Cadence
+
+Run the controller as a small worker pool, not as a serial implementer. Start
+with three as a maximum concurrency cap, not a quota to keep full. Dispatch a
+worker when the controller would otherwise be idle after catching up on
+orchestration administration: integrating returned reports, updating issue/PR
+comments, reconciling Project #6, refreshing PR state, packaging accepted
+worker output, and performing goal maintenance. Keep one slot available for
+verification when possible so implementation output does not wait on
+controller-local rework.
+
+Use this pool loop:
+
+1. Read Project #6 and open PR state.
+2. Select independent work units with disjoint files, branches, or read-only
+   evidence surfaces.
+3. Dispatch workers with explicit leases and formal worker goal text.
+4. Record the lease in issue/PR comments and set `Agent owner` to the active
+   worker when the item is represented in Project #6.
+5. Continue controller-side queue integration, but do not duplicate worker-local
+   implementation or verification just because a worker is still running.
+6. When a worker finishes, integrate the report, close or retire that worker,
+   update `Agent owner` for handoff or clear it, and dispatch another worker
+   only if controller administration is caught up and an independent assignable
+   work unit is available.
+
+Prefer `gpt-5.3-codex-spark` for tiny, isolated, low-risk work such as
+read-only grep mapping, focused PR metadata checks, test-list confirmation, or
+boilerplate verification. Use stronger inherited workers for architecture,
+multi-file implementation, risky acceptance, or runtime-adjacent reasoning.
+
+Trust the pipeline when evidence is clean. If a worker and verifier provide
+bounded evidence and GitHub/Project automation reflects the expected state, do
+not redo the whole task locally. Rerun only the acceptance commands needed for
+controller confidence, then package, merge, defer, or lease the next fix.
+
+Worker-local commits are acceptable when the lease permits them and the worker
+owns an isolated branch/worktree. Treat the commit as a reviewable artifact, not
+as accepted global state. The controller verifies the diff and evidence before
+pushing, opening PRs, promoting drafts, merging, or closing issues. Do not allow
+workers to commit on controller baselines, shared branches, or branches owned by
+another worker unless the controller explicitly reassigns ownership.
+
+GitHub Project automation has latency. After creating a PR or issue, do not
+immediately create a duplicate Project item or treat missing board visibility as
+failure. First rely on the native PR/issue URL and comment evidence, then run a
+targeted Project readback after a short delay or at the next maintenance pass.
+Set `Agent owner` only after the auto-added item is visible; if it is still
+missing, record the pending reconciliation instead of fighting the workflow.
+
 At maintenance:
 
 1. Record durable evidence, non-actions, residual risk, GitHub state, and branch
