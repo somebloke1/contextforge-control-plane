@@ -69,6 +69,121 @@
       }
     },
     {
+      "name": "shared_stdio_bridge_dev_docker_gate",
+      "descriptor": {
+        "candidate_service": "local-stdio-mcp",
+        "operator_goal": "Prove a shared stdio MCP backend can be fronted for ContextForge dev Docker validation.",
+        "source_evidence": [
+          {
+            "type": "local_path",
+            "ref": "server-instances/local-stdio-mcp/instance.json"
+          },
+          {
+            "type": "issue",
+            "ref": "#41"
+          }
+        ],
+        "classification": {
+          "plan_type": "dev_docker_proof",
+          "localization_type": "shared_canonical",
+          "functional_type": "governance_memory",
+          "transport_type": "stdio",
+          "state_type": "local_filesystem_state",
+          "approval_type": "docker_dev_surface"
+        },
+        "footprint_plan": {
+          "service_slug": "local-stdio-mcp",
+          "scripts": [
+            "docker/contextforge-harness/scripts/register_mentality_dev.py"
+          ],
+          "docker_surfaces": [
+            "ContextForge dev Docker"
+          ],
+          "cleanup_or_rollback": [
+            "remove only the dev Docker registration and generated local evidence for this proof"
+          ]
+        }
+      }
+    },
+    {
+      "name": "github_credential_scoped_registry_gate",
+      "descriptor": {
+        "candidate_service": "github",
+        "operator_goal": "Represent a GitHub installation or token-scoped service binding without broadening credentials.",
+        "source_evidence": [
+          {
+            "type": "local_path",
+            "ref": "server-instances/github/instance.json"
+          },
+          {
+            "type": "issue",
+            "ref": "#79"
+          }
+        ],
+        "classification": {
+          "plan_type": "runtime_registration",
+          "localization_type": "credential_scoped",
+          "functional_type": "remote_api_tool",
+          "transport_type": "streamable_http",
+          "state_type": "credential_state",
+          "approval_type": "contextforge_dev_registry"
+        },
+        "footprint_plan": {
+          "service_slug": "github",
+          "scripts": [
+            "scripts/register_github_service.py"
+          ],
+          "contextforge_surfaces": [
+            "ContextForge dev Docker registry"
+          ],
+          "cleanup_or_rollback": [
+            "revoke disposable probe tokens and remove only the scoped dev registry binding"
+          ]
+        },
+        "residual_risks": [
+          "credential scope must be proven by metadata and negative readback before broader client exposure"
+        ]
+      }
+    },
+    {
+      "name": "ssh_tmux_client_session_local_bridge",
+      "descriptor": {
+        "candidate_service": "ssh-tmux-session",
+        "operator_goal": "Model a client/session-local shell control service without claiming durable project ownership.",
+        "source_evidence": [
+          {
+            "type": "local_path",
+            "ref": "server-instances/ssh-tmux/instance.json"
+          },
+          {
+            "type": "issue",
+            "ref": "#41"
+          }
+        ],
+        "classification": {
+          "plan_type": "client_validation",
+          "localization_type": "client_local_session_scoped",
+          "functional_type": "shell_process_control",
+          "transport_type": "stdio",
+          "state_type": "runtime_evidence_state",
+          "approval_type": "local_ignored_state"
+        },
+        "footprint_plan": {
+          "service_slug": "ssh-tmux-session",
+          "client_surfaces": [
+            "Pi client Docker",
+            "OpenCode client Docker"
+          ],
+          "generated_artifacts": [
+            "docker/client-harness/evidence/"
+          ],
+          "cleanup_or_rollback": [
+            "discard generated client-harness evidence and do not claim ownership of live sessions"
+          ]
+        }
+      }
+    },
+    {
       "name": "missing_evidence_prompts_questions",
       "descriptor": {
         "candidate_service": "unknown-service",

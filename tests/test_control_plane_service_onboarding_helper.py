@@ -58,6 +58,61 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("docs-search", record["footprint_plan"]["service_slug"])  # type: ignore[index]
         self.assertIn("open or update a focused issue/PR", " ".join(record["next_issue_pr_steps"]))  # type: ignore[index]
 
+    def test_shared_stdio_bridge_service_stops_at_dev_docker_approval_gate(self) -> None:
+        record = self.record("shared_stdio_bridge_dev_docker_gate")
+
+        self.assertEqual("approval_required", record["status"])
+        self.assertEqual("approval_gate", record["current_state"])
+        self.assertEqual("Package-provided bridge/transceiver", record["integration_strategy"]["primary_paradigm"])  # type: ignore[index]
+        self.assertIn("Dev Docker sidecar", record["integration_strategy"]["secondary_validation_paradigms"])  # type: ignore[index]
+        self.assertIn("docker_dev_surface", record["approval_gate"]["required_approval_types"])  # type: ignore[index]
+        self.assertIn(
+            "Which stock bridge/transceiver command exposes the missing HTTP/SSE transport?",
+            record["next_questions"],
+        )
+        self.assertIn(
+            "Direct native registration rejected until packetized HTTP/SSE endpoint evidence exists",
+            record["integration_strategy"]["rejected_alternatives"],  # type: ignore[index]
+        )
+
+    def test_credential_scoped_service_records_scope_question_and_registry_gate(self) -> None:
+        record = self.record("github_credential_scoped_registry_gate")
+
+        self.assertEqual("approval_required", record["status"])
+        self.assertEqual("Credential-scoped backend", record["integration_strategy"]["primary_paradigm"])  # type: ignore[index]
+        self.assertIn("contextforge_dev_registry", record["approval_gate"]["required_approval_types"])  # type: ignore[index]
+        self.assertIn(
+            "Which credential, account, tenant, token, or installation boundary defines this service binding?",
+            record["next_questions"],
+        )
+        self.assertIn(
+            "Which exact approval packet should unlock the next runtime or client surface?",
+            record["next_questions"],
+        )
+        self.assertIn(
+            "credential scope must be proven by metadata and negative readback before broader client exposure",
+            record["residual_risks"],
+        )
+
+    def test_client_session_local_stdio_service_keeps_source_only_handoff(self) -> None:
+        record = self.record("ssh_tmux_client_session_local_bridge")
+
+        self.assertEqual("ready_for_handoff", record["status"])
+        self.assertEqual("handoff", record["current_state"])
+        self.assertFalse(record["approval_gate"]["approval_required"])  # type: ignore[index]
+        self.assertEqual("Client-local or session-scoped backend", record["integration_strategy"]["primary_paradigm"])  # type: ignore[index]
+        self.assertIn("Package-provided bridge/transceiver", record["integration_strategy"]["secondary_validation_paradigms"])  # type: ignore[index]
+        self.assertIn(
+            "Which client-local state, live session, caller identity, or process authority defines this service binding?",
+            record["next_questions"],
+        )
+        self.assertIn(
+            "Which stock bridge/transceiver command exposes the missing HTTP/SSE transport?",
+            record["next_questions"],
+        )
+        self.assertIn("Pi client Docker", record["footprint_plan"]["client_surfaces"])  # type: ignore[index]
+        self.assertIn("do not write global or client config", record["non_actions"])
+
     def test_missing_source_and_classification_evidence_emits_stable_questions_and_redacts(self) -> None:
         first = self.record("missing_evidence_prompts_questions")
         second = self.record("missing_evidence_prompts_questions")
