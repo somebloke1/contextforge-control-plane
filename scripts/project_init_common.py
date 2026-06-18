@@ -406,6 +406,41 @@ def safe_validation_policy(service_family: str) -> dict[str, Any]:
             "mode": "safe_call",
             "description": "list tools and call a non-mutating docs lookup or library-id resolution",
             "safe_operations": ["resolve-library-id", "query-docs"],
+            "probe_contract": {
+                "status": "known_safe_probe",
+                "target_client_proof_layers": ["list_tools", "call_tool"],
+                "allowed_tool_name_patterns": [
+                    "context7-local-resolve-library-id",
+                    "context7-local-query-docs",
+                ],
+                "default_probe": {
+                    "safe_probe_id": "resolve-library-id",
+                    "tool_name_hint": "context7-local-resolve-library-id",
+                    "arguments": {"libraryName": "python"},
+                    "expected_result": "non-error library resolution result or explicit no-match response",
+                },
+                "accepted_proof_kinds": [
+                    "target_client_safe_probe_result",
+                    "pi_safe_probe_result",
+                ],
+                "validation_result_shape": {
+                    "status": "passed",
+                    "target_client_visible": True,
+                    "proof_kind": "target_client_safe_probe_result",
+                    "safe_probe_result": "passed",
+                    "safe_probe_id": "resolve-library-id",
+                    "verification_trace_refs": [
+                        "contextforge://control-plane/traces/context7-target-client"
+                    ],
+                },
+                "forbidden_substitutions": [
+                    "backend health",
+                    "direct bridge call",
+                    "local package lookup",
+                    "built-in web search",
+                    "direct Upstash or Context7 backend call",
+                ],
+            },
             "requires_mutation_approval": False,
         },
         "mentality": {

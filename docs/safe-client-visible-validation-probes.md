@@ -55,6 +55,27 @@ to implement later, one service at a time.
 | Pi/OpenCode activation helpers | `conditional_probe` | Client-visible helper, guidance, or shim readback on the matching client surface. | Codex hook banners, host global state, or Docker evidence generalized to host installs. |
 | Any unlisted service | `skip_until_probe_exists` | None until a service-specific safe payload is reviewed and tracked. | Presuming validation from backend health, local tools, or another service's probe. |
 
+## Context7 Probe Contract
+
+Context7 is the first known-safe probe contract. A future runtime validation
+may use this contract only when the exact target client can see the
+ContextForge-exposed Context7 tools.
+
+- Required proof layers: target-client `list-tools` evidence plus one
+  target-client safe `call-tool` result.
+- Allowed tool names: `context7-local-resolve-library-id` and
+  `context7-local-query-docs`.
+- Default payload: call `context7-local-resolve-library-id` with
+  `{"libraryName": "python"}` or an equivalent harmless library lookup.
+- Accepted proof kinds: `target_client_safe_probe_result` or
+  `pi_safe_probe_result`.
+- Required successful result shape: `status: passed`,
+  `target_client_visible: true`, `safe_probe_result: passed`,
+  `safe_probe_id: resolve-library-id`, and at least one target-client trace
+  reference.
+- Forbidden substitutions: backend health, direct bridge calls, local package
+  lookup, built-in web search, or direct Upstash/Context7 backend calls.
+
 ## Claim Rules
 
 - Record `validated` only after the exact target client lists and, where safe,
