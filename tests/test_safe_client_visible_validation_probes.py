@@ -68,7 +68,8 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             "target-client `list-tools` evidence plus one",
             "context7-local-resolve-library-id",
             "context7-local-query-docs",
-            '{"libraryName": "python"}',
+            '{"libraryName": "python", "query": "standard library documentation lookup"}',
+            "requires both `libraryName` and `query`",
             "target_client_safe_probe_result",
             "pi_safe_probe_result",
             "safe_probe_result: passed",
@@ -88,7 +89,13 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             contract["allowed_tool_name_patterns"],
         )
         self.assertEqual("resolve-library-id", contract["default_probe"]["safe_probe_id"])
-        self.assertEqual({"libraryName": "python"}, contract["default_probe"]["arguments"])
+        self.assertEqual(
+            {
+                "libraryName": "python",
+                "query": "standard library documentation lookup",
+            },
+            contract["default_probe"]["arguments"],
+        )
         self.assertEqual(
             {"target_client_safe_probe_result", "pi_safe_probe_result"},
             set(contract["accepted_proof_kinds"]),
@@ -746,6 +753,9 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
         self.assertIn('proof_kind: "pi_safe_probe_result"', text)
         self.assertIn("safe_probe_result", text)
         self.assertIn("safeProbeId", text)
+        self.assertIn('base.libraryName = "python"', text)
+        self.assertIn('base.query = "standard library documentation lookup"', text)
+        self.assertIn("for (const operation of service.safeOperations)", text)
 
     def test_catalog_classifies_conditional_and_skipped_probes(self) -> None:
         for service in [

@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -74,7 +75,37 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
         self.assertIn('CONTEXTFORGE_TOKEN_LOCK", f"{TOKEN_CACHE}.lock"', source)
         self.assertIn('os.environ.get("CONTEXTFORGE_BEARER_TOKEN")', source)
         self.assertIn('os.environ.get("CONTEXTFORGE_SERVER_ID", "").strip()', source)
+        self.assertIn("SCOPED_SERVER_TOKEN_PERMISSIONS", source)
+        self.assertIn('"/tokens"', source)
+        self.assertIn('"servers.use"', source)
+        self.assertIn("refresh_email = None if scoped_token_id else email", source)
+        self.assertIn("refresh_password = None if scoped_token_id else password", source)
         self.assertIn("if not email or not password:", source)
+
+    def test_wrapper_scoped_server_token_create_and_revoke_use_catalog_api(self) -> None:
+        calls: list[dict[str, object]] = []
+
+        def fake_request(method: str, path: str, *, token: str | None = None, body: dict | None = None):
+            calls.append({"method": method, "path": path, "token": token, "body": body})
+            if method == "POST":
+                return {"token": {"id": "tok-123"}, "access_token": "scoped-token"}
+            return None
+
+        with mock.patch.object(wrapper, "_request", side_effect=fake_request):
+            token_id, access_token = wrapper._create_scoped_server_token("admin-token", "server-123", "context7_local_server")
+            wrapper._revoke_scoped_server_token("admin-token", token_id)
+
+        self.assertEqual("tok-123", token_id)
+        self.assertEqual("scoped-token", access_token)
+        self.assertEqual("POST", calls[0]["method"])
+        self.assertEqual("/tokens", calls[0]["path"])
+        self.assertEqual("admin-token", calls[0]["token"])
+        body = calls[0]["body"]
+        assert isinstance(body, dict)
+        self.assertEqual("server-123", body["scope"]["server_id"])
+        self.assertIn("servers.use", body["scope"]["permissions"])
+        self.assertEqual("DELETE", calls[1]["method"])
+        self.assertEqual("/tokens/tok-123", calls[1]["path"])
 
     def test_wrapper_can_bootstrap_with_bearer_token_without_env_file(self) -> None:
         env = os.environ.copy()

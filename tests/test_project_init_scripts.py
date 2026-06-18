@@ -1909,6 +1909,8 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertIn("helper cache is missing or stale", text)
         self.assertIn("do not silently replace the challenge id", text)
         self.assertIn("first call cf_project_init_record_client_reload", text)
+        self.assertIn("with client_type=", text)
+        self.assertIn("prefer that tool with client_type=opencode", text)
         self.assertIn("honor that choice after recording the reload acknowledgement instead of asking again", text)
         self.assertIn("after the reload or new session, resume project init", text)
         self.assertIn("Codex launches configured MCP servers and exposes their tools when a session starts", text)

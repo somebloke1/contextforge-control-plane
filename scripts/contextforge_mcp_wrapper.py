@@ -16,6 +16,7 @@ import fcntl
 import time
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_ENV = Path(os.environ.get("CONTEXTFORGE_CONFIG_ENV", REPO_ROOT / "config" / "contextforge.env"))
@@ -28,6 +29,13 @@ GATEWAY_BASE = os.environ.get(
 ).rstrip("/")
 DEFAULT_WRAPPER_IDLE_TIMEOUT_SECONDS = 300
 DEFAULT_WRAPPER_TOOL_TIMEOUT_SECONDS = 120
+SCOPED_SERVER_TOKEN_PERMISSIONS = [
+    "servers.use",
+    "tools.read",
+    "tools.execute",
+    "resources.read",
+    "prompts.read",
+]
 
 
 @dataclass
@@ -256,6 +264,43 @@ def _token(email: str | None, password: str | None) -> str:
         return _login_token(email, password)
 
 
+def _create_scoped_server_token(admin_token: str, server_id: str, server_name: str) -> tuple[str, str]:
+    response = _request(
+        "POST",
+        "/tokens",
+        token=admin_token,
+        body={
+            "name": f"wrapper-{server_name}-{uuid4().hex[:12]}",
+            "description": f"Ephemeral wrapper token for {server_name}.",
+            "expires_in_days": 1,
+            "scope": {
+                "server_id": server_id,
+                "permissions": SCOPED_SERVER_TOKEN_PERMISSIONS,
+            },
+            "tags": ["contextforge", "wrapper", "ephemeral"],
+        },
+    )
+    if not isinstance(response, dict):
+        raise RuntimeError("ContextForge scoped token create did not return JSON")
+    token_record = response.get("token")
+    token_id = token_record.get("id") if isinstance(token_record, dict) else None
+    access_token = response.get("access_token")
+    if not isinstance(token_id, str) or not token_id:
+        raise RuntimeError("ContextForge scoped token create did not return token.id")
+    if not isinstance(access_token, str) or not access_token:
+        raise RuntimeError("ContextForge scoped token create did not return access_token")
+    return token_id, access_token
+
+
+def _revoke_scoped_server_token(admin_token: str, token_id: str) -> None:
+    _request(
+        "DELETE",
+        f"/tokens/{token_id}",
+        token=admin_token,
+        body={"reason": "wrapper process complete"},
+    )
+
+
 def _jsonrpc_ids(payload: Any) -> set[Any]:
     if isinstance(payload, dict) and "id" in payload:
         return {payload["id"]}
@@ -420,6 +465,7 @@ def main() -> int:
     email = env.get("PLATFORM_ADMIN_EMAIL")
     password = env.get("PLATFORM_ADMIN_PASSWORD")
 
+    env_bearer_token = os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
     try:
         token = _token(email, password)
     except RuntimeError as exc:
@@ -443,8 +489,20 @@ def main() -> int:
             return 1
         server_id = matches[0]["id"]
 
+    scoped_token_id = ""
+    scoped_token_admin_token = ""
+    mcp_token = token
+    if not env_bearer_token:
+        try:
+            scoped_token_id, mcp_token = _create_scoped_server_token(token, server_id, server_name)
+            scoped_token_admin_token = token
+        except Exception as exc:
+            _log_bootstrap_error(server_name, "scoped_server_token", exc)
+            print(str(exc), file=sys.stderr)
+            return 1
+
     os.environ["MCP_SERVER_URL"] = f"{GATEWAY_BASE}/servers/{server_id}/mcp/"
-    os.environ["MCP_AUTH"] = f"Bearer {token}"
+    os.environ["MCP_AUTH"] = f"Bearer {mcp_token}"
     if GATEWAY_BASE.startswith("https://"):
         os.environ["SSL_CERT_FILE"] = str(TLS_CERT)
     os.environ["CONTEXTFORGE_WRAPPER_SERVER_NAME"] = server_name
@@ -460,7 +518,23 @@ def main() -> int:
             DEFAULT_WRAPPER_IDLE_TIMEOUT_SECONDS,
         ),
     )
-    return _run_stock_wrapper(lifecycle, email, password)
+    refresh_email = None if scoped_token_id else email
+    refresh_password = None if scoped_token_id else password
+    try:
+        return _run_stock_wrapper(lifecycle, refresh_email, refresh_password)
+    finally:
+        if scoped_token_id and scoped_token_admin_token:
+            try:
+                _revoke_scoped_server_token(scoped_token_admin_token, scoped_token_id)
+                _log_lifecycle("contextforge_wrapper_scoped_token_revoked", lifecycle, token_id=scoped_token_id)
+            except Exception as exc:  # pragma: no cover - process boundary logging
+                _log_lifecycle(
+                    "contextforge_wrapper_scoped_token_revoke_failed",
+                    lifecycle,
+                    token_id=scoped_token_id,
+                    error_type=exc.__class__.__name__,
+                    error=str(exc),
+                )
 
 
 if __name__ == "__main__":

@@ -27,6 +27,9 @@ Evidence freshness and PR citation rules for this harness are defined in
 - First dev MCP sidecar: `mentality-transceiver` on host
   `http://127.0.0.1:9201` and compose-network
   `http://mentality-transceiver:9201`
+- Context7 dev MCP sidecar: `context7-transceiver` on host
+  `http://127.0.0.1:9203` and compose-network
+  `http://context7-transceiver:9203`
 
 The named Docker volume has no explicit size cap. Initial gateway-only usage is
 expected to stay small; use `scripts/volume-usage.sh` to inspect it.
@@ -44,6 +47,12 @@ scripts/verify-auth.sh
 
 The generated `env/contextforge.env` contains local admin and signing secrets
 and is ignored by Git.
+
+If the Docker volume already exists, `env/contextforge.env` must match the admin
+credentials in that volume. Use `scripts/ensure-env-auth.sh` before registration
+or client validation. It is idempotent: it succeeds when the env matches, or can
+copy a supplied ignored known-good env through `CONTEXTFORGE_DEV_ENV_SYNC_FROM`
+without printing secret values.
 
 ## Dev MCP Transceiver
 
@@ -78,6 +87,30 @@ development gateway must register compose-network upstreams such as
 legacy/live ContextForge surface without a separate approval and threat review.
 It also sets `REQUIRE_USER_IN_DB=false` so the generated bootstrap admin can use
 virtual MCP endpoints during disposable dev-harness validation.
+
+## Context7 Dev MCP Transceiver
+
+The Context7 sidecar fronts `@upstash/context7-mcp` through the same stock
+bridge pattern, but it does not copy secret values into tracked files or images.
+Export `CONTEXT7_API_KEY` from the ignored `server-instances/context7/.env`
+before starting the sidecar:
+
+```sh
+set -a
+source ../../server-instances/context7/.env
+set +a
+docker compose -f compose.yml up -d --build contextforge-gateway context7-transceiver
+scripts/probe-context7-dev.py --direct-only
+scripts/register_context7_dev.py
+scripts/probe-context7-dev.py
+```
+
+`scripts/register_context7_dev.py` registers
+`http://context7-transceiver:9203/mcp` as the canonical `context7-local`
+gateway and `context7_local_server` virtual server in the development gateway.
+The names intentionally match the project-init wrapper contract while the
+registry, volume, token, and upstream process remain isolated to the dev Docker
+surface.
 
 ## Operations
 

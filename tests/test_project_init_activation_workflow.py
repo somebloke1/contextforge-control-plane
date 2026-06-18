@@ -4,6 +4,7 @@ import json
 import contextlib
 import io
 import inspect
+import os
 import subprocess
 import sys
 import tempfile
@@ -287,6 +288,42 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("plugin_next_text", plan)
         self.assertNotIn("plugin_change", plan)
         self.assertIn("does not write user-global OpenCode config, plugin, or trust", plan["non_actions"])
+
+    def test_opencode_config_plan_honors_docker_wrapper_overrides(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON": "/opt/contextforge-helper-venv/bin/python",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT": "/repo/scripts/contextforge_mcp_wrapper.py",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/config/contextforge/contextforge.env",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/tmp/contextforge-wrapper-token.local.json",
+            },
+            clear=False,
+        ):
+            plan = binding.plan_project_init_opencode_config_write(
+                "/home/dgk/workspace/legacy-controlplane-archive",
+                [service_descriptor("context7")],
+                existing_text='{"$schema":"https://opencode.ai/config.json"}\n',
+                plugin_existing_text="",
+            )
+
+        entry = json.loads(plan["next_text"])["mcp"]["context7"]
+        self.assertEqual(
+            [
+                "/opt/contextforge-helper-venv/bin/python",
+                "/repo/scripts/contextforge_mcp_wrapper.py",
+                "context7_server",
+            ],
+            entry["command"],
+        )
+        self.assertEqual("/config/contextforge/contextforge.env", entry["environment"]["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual("http://host.docker.internal:4445", entry["environment"]["CONTEXTFORGE_BASE_URL"])
+        self.assertEqual("/tmp/contextforge-wrapper-token.local.json", entry["environment"]["CONTEXTFORGE_TOKEN_CACHE"])
+        self.assertEqual(
+            "/tmp/contextforge-wrapper-token.local.json.lock",
+            entry["environment"]["CONTEXTFORGE_TOKEN_LOCK"],
+        )
 
     def test_opencode_config_plan_blocks_unmanaged_same_name(self) -> None:
         plan = binding.plan_project_init_opencode_config_write(
@@ -1408,7 +1445,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("defaultSafeOperationsFor", text)
         self.assertIn("safeProbeArgs", text)
         self.assertIn("fitArgsToSchema", text)
-        self.assertIn('base.libraryName = "React"', text)
+        self.assertIn('base.libraryName = "python"', text)
+        self.assertIn('base.query = "standard library documentation lookup"', text)
         self.assertIn('base.query = "modelcontextprotocol"', text)
         self.assertIn('base.ledger = "decisions"', text)
         self.assertIn("probeArgsAvailable", text)
@@ -1729,6 +1767,45 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         job = after["project_init"]["activation_jobs"][after["project_init"]["current_job_id"]]
         self.assertEqual("pending_user_choice", job["validation_records"][job["selected_service_ids"][0]]["status"])
 
+    def test_helper_requires_validate_now_results_without_recording_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_codex_config_write(root, selected, existing_text="")
+            (root / ".codex").mkdir()
+            (root / ".codex/config.toml").write_text(config_plan["next_text"], encoding="utf-8")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="pending_choice"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            before = project_state.write_state_atomic(root, state)
+            record_codex_new_session(root)
+            before = project_state.load_state(root)
+
+            result = helper.record_project_init_validation(
+                project_root=root,
+                validation_mode="validate_now",
+            )
+            after = project_state.load_state(root)
+
+        self.assertEqual("validation_results_required", result["status"])
+        self.assertNotIn("state_revision", result)
+        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["missing_keys"])
+        self.assertIn("context7:canonical", result["expected_validation_results_shape"])
+        self.assertIn(
+            "validate_now requires target-client-visible safe probe results before validation can be recorded",
+            result["non_actions"],
+        )
+        assert after is not None
+        self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
+        job = after["project_init"]["activation_jobs"][after["project_init"]["current_job_id"]]
+        self.assertEqual("pending_user_choice", job["validation_records"][job["selected_service_ids"][0]]["status"])
+
     def test_helper_reports_unmatched_validation_result_keys_without_recording_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -1912,6 +1989,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 self.assertIn("target_client_safe_probe_result", text)
                 self.assertIn("safe_probe_result", text)
                 self.assertIn("safe_probe_id", text)
+                self.assertIn("validation_results", text)
                 self.assertIn("resolve-library-id", text)
                 self.assertIn("contextforge://control-plane/traces/context7:canonical-target-client", text)
 

@@ -19,6 +19,21 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('"127.0.0.1:9201:9201"', compose)
         self.assertIn("docker/contextforge-harness/mcp-transceiver/Dockerfile", compose)
 
+    def test_compose_defines_dev_context7_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/context7-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("context7-transceiver:", compose)
+        self.assertIn("contextforge-harness-context7-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9203:9203"', compose)
+        self.assertIn("docker/contextforge-harness/context7-transceiver/Dockerfile", compose)
+        self.assertIn('CONTEXT7_API_KEY: "${CONTEXT7_API_KEY:-}"', compose)
+        self.assertIn("/opt/contextforge-transceiver-venv", dockerfile)
+        self.assertIn("@upstash/context7-mcp@latest", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--expose-streamable-http", dockerfile)
+        self.assertIn('"9203"', dockerfile)
+
     def test_transceiver_dockerfile_uses_stock_contextforge_translate(self) -> None:
         dockerfile = (ROOT / "docker/contextforge-harness/mcp-transceiver/Dockerfile").read_text(encoding="utf-8")
 
@@ -37,6 +52,28 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('DEFAULT_UPSTREAM_URL = "http://mentality-transceiver:9201/mcp"', source)
         self.assertIn('DEFAULT_GATEWAY_BASE = "http://127.0.0.1:4445"', source)
         self.assertNotIn("127.0.0.1:4444", source)
+
+    def test_context7_register_script_targets_dev_harness_names_and_network_url(self) -> None:
+        source = (ROOT / "docker/contextforge-harness/scripts/register_context7_dev.py").read_text(encoding="utf-8")
+
+        self.assertIn('GATEWAY_NAME = "context7-local"', source)
+        self.assertIn('SERVER_NAME = "context7_local_server"', source)
+        self.assertIn('DEFAULT_UPSTREAM_URL = "http://context7-transceiver:9203/mcp"', source)
+        self.assertIn('DEFAULT_GATEWAY_BASE = "http://127.0.0.1:4445"', source)
+        self.assertNotIn("127.0.0.1:4444", source)
+
+    def test_context7_probe_uses_safe_probe_and_revokes_token(self) -> None:
+        source = (ROOT / "docker/contextforge-harness/scripts/probe-context7-dev.py").read_text(encoding="utf-8")
+
+        self.assertIn('DEFAULT_DIRECT_URL = "http://127.0.0.1:9203/mcp"', source)
+        self.assertIn('"libraryName": "python"', source)
+        self.assertIn('"query": "standard library documentation lookup"', source)
+        self.assertIn("def create_probe_token", source)
+        self.assertIn("def revoke_probe_token", source)
+        self.assertIn('print(f"probe_token_id={probe_token_id}")', source)
+        self.assertIn("virtual_safe_probe_status=passed", source)
+        self.assertNotIn("print(probe_token", source)
+        self.assertNotIn("print(access_token", source)
 
     def test_probe_imports_registration_script_by_filename(self) -> None:
         source = (ROOT / "docker/contextforge-harness/scripts/probe-mentality-dev.py").read_text(encoding="utf-8")
@@ -83,6 +120,17 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("SSRF_ALLOW_PRIVATE_NETWORKS=true", env_example)
         self.assertIn("REQUIRE_USER_IN_DB=false", env_example)
 
+    def test_dev_harness_has_env_auth_preflight(self) -> None:
+        source = (ROOT / "docker/contextforge-harness/scripts/ensure-env-auth.sh").read_text(encoding="utf-8")
+        readme = (ROOT / "docker/contextforge-harness/README.md").read_text(encoding="utf-8")
+
+        self.assertIn("CONTEXTFORGE_DEV_ENV_SYNC_FROM", source)
+        self.assertIn("/auth/login", source)
+        self.assertIn("install -m 600", source)
+        self.assertIn("env_auth_status=passed", source)
+        self.assertIn("does not authenticate against the current dev gateway volume", source)
+        self.assertIn("scripts/ensure-env-auth.sh", readme)
+
     def test_mentality_manifest_records_dev_docker_surface(self) -> None:
         manifest = (ROOT / "server-instances/mentality/instance.json").read_text(encoding="utf-8")
 
@@ -96,6 +144,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
 
         self.assertIn("contextforge-gateway", service_names)
         self.assertIn("mentality-transceiver", service_names)
+        self.assertIn("context7-transceiver", service_names)
 
     def test_service_locality_records_project_scoped_container_matrix(self) -> None:
         policy = (ROOT / "docker/contextforge-harness/SERVICE_LOCALITY.md").read_text(encoding="utf-8")
@@ -188,6 +237,28 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON=/opt/contextforge-wrapper-venv/bin/python", source)
         self.assertIn("CONTEXTFORGE_CONFIG_ENV=/tmp/missing-contextforge.env", source)
         self.assertIn("CONTEXTFORGE_TOKEN_CACHE=/tmp/contextforge-wrapper-token.local.json", source)
+        self.assertIn("revoke_probe_token", source)
+        self.assertIn("probe_token_revoked", source)
+        self.assertIn("workspace/.project/context_forge_state.json", source)
+        self.assertNotIn("127.0.0.1:4444", source)
+        self.assertNotIn("/home/dgk/.pi", source)
+
+    def test_pi_context7_dev_smoke_uses_context7_safe_probe(self) -> None:
+        source = (ROOT / "docker/client-harness/scripts/smoke-pi-context7-dev.sh").read_text(encoding="utf-8")
+
+        self.assertIn("surface=Pi client Docker", source)
+        self.assertIn("contextforge_surface=ContextForge dev Docker", source)
+        self.assertIn("CONTEXTFORGE_DEV_SERVER_NAME:-context7_local_server", source)
+        self.assertIn("register_context7_dev", source)
+        self.assertIn("probe-context7-dev.py", source)
+        self.assertIn("context7:canonical", source)
+        self.assertIn("safe_probe_service=context7", source)
+        self.assertIn("safe_probe_id=resolve-library-id", source)
+        self.assertIn("cf_contextforge_pi_validate", source)
+        self.assertIn("CONTEXTFORGE_SERVER_ID", source)
+        self.assertIn("CONTEXTFORGE_BEARER_TOKEN", source)
+        self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON=/opt/contextforge-wrapper-venv/bin/python", source)
+        self.assertIn("CONTEXTFORGE_CONFIG_ENV=/tmp/missing-contextforge.env", source)
         self.assertIn("revoke_probe_token", source)
         self.assertIn("probe_token_revoked", source)
         self.assertIn("workspace/.project/context_forge_state.json", source)
@@ -305,10 +376,16 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         entrypoint = (ROOT / "docker/client-harness/opencode/entrypoint.sh").read_text(encoding="utf-8")
         dockerfile = (ROOT / "docker/client-harness/opencode/Dockerfile").read_text(encoding="utf-8")
         opencode_config = (ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8")
+        compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
 
+        self.assertIn("OPENCODE_CONFIG:=/home/agent/.config/opencode/opencode.json", container_launcher)
         self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE:=/config/opencode/plugins/contextforge-project-init.js", container_launcher)
         self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_TARGET:=/home/agent/.config/opencode/plugins/contextforge-project-init.js", container_launcher)
         self.assertIn("CONTEXTFORGE_OPENCODE_HOOK_PYTHON:=${CONTEXTFORGE_HELPER_PYTHON:-/opt/contextforge-helper-venv/bin/python}", container_launcher)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON:=/opt/contextforge-helper-venv/bin/python", container_launcher)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT:=/repo/scripts/contextforge_mcp_wrapper.py", container_launcher)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV:=/config/contextforge/contextforge.env", container_launcher)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL:=http://host.docker.internal:4445", container_launcher)
         self.assertIn("CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/tmp/contextforge-client-harness-runtime/project-init", container_launcher)
         self.assertIn("exec opencode \"$@\"", container_launcher)
         self.assertIn("docker compose -f compose.yml run --rm --no-deps", host_launcher)
@@ -317,7 +394,15 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("OPENCODE_CONFIG_DIR:=/home/agent/.config/opencode", entrypoint)
         self.assertIn("CONTEXTFORGE_OPENCODE_CONFIG_TARGET:=${OPENCODE_CONFIG_DIR}/opencode.json", entrypoint)
         self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_TARGET:=${OPENCODE_CONFIG_DIR}/plugins/contextforge-project-init.js", entrypoint)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON:=/opt/contextforge-helper-venv/bin/python", entrypoint)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT:=/repo/scripts/contextforge_mcp_wrapper.py", entrypoint)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV:=/config/contextforge/contextforge.env", entrypoint)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL:=http://host.docker.internal:4445", entrypoint)
         self.assertIn("CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/tmp/contextforge-client-harness-runtime/project-init", entrypoint)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV: /config/contextforge/contextforge.env", compose)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL: http://host.docker.internal:4445", compose)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json", compose)
+        self.assertIn("../contextforge-harness/env:/config/contextforge:ro", compose)
         self.assertIn("cp \"${CONTEXTFORGE_OPENCODE_CONFIG_SOURCE}\" \"${CONTEXTFORGE_OPENCODE_CONFIG_TARGET}\"", entrypoint)
         self.assertIn("cp \"${CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE}\" \"${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}\"", entrypoint)
         self.assertIn('const HOOK_EVENT = "chat.message"', plugin)

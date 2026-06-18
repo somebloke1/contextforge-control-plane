@@ -1134,7 +1134,14 @@ function validationCandidateFor(service: ProjectService, tools: RegisteredTool[]
       const args = safeProbeId ? safeProbeArgs(service, tool, safeProbeId, projectRoot) : undefined;
       return { tool, safeProbeId, args };
     });
-  const selected = candidates.find((candidate) => candidate.args) || candidates[0];
+  let selected = candidates.find((candidate) => candidate.args) || candidates[0];
+  for (const operation of service.safeOperations) {
+    const preferred = candidates.find((candidate) => candidate.safeProbeId === operation && candidate.args);
+    if (preferred) {
+      selected = preferred;
+      break;
+    }
+  }
   const tool = selected?.tool;
   if (!tool) {
     return {
@@ -1161,11 +1168,11 @@ function safeProbeArgs(service: ProjectService, tool: RegisteredTool, safeProbeI
   const mcpName = slug(tool.mcpName);
   const base: JsonObject = {};
   if (binding.startsWith("context7:") && safeProbeId === "resolve-library-id") {
-    base.libraryName = "React";
-    base.query = "Resolve the React library id for a non-mutating validation probe.";
+    base.libraryName = "python";
+    base.query = "standard library documentation lookup";
   } else if (binding.startsWith("context7:") && safeProbeId === "query-docs") {
-    base.libraryId = "/reactjs/react.dev";
-    base.query = "React hooks overview for a non-mutating validation probe.";
+    base.libraryId = "/python/cpython";
+    base.query = "standard library documentation lookup";
   } else if (binding.startsWith("github:") && safeProbeId === "search-repositories") {
     base.query = "modelcontextprotocol";
     base.perPage = 1;

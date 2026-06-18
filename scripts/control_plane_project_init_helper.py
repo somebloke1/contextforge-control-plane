@@ -1087,6 +1087,19 @@ def record_project_init_validation(
     validation_plan = binding.build_project_init_validation_plan(services, validation_mode=validation_mode, target_client=client_type)
     validation_results_dict = dict(validation_results or {})
     validation_diagnostic = _validation_results_diagnostic(services, validation_results_dict)
+    if validation_mode == "validate_now" and not validation_results_dict:
+        return {
+            "status": "validation_results_required",
+            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
+            "validation_diagnostic": validation_diagnostic,
+            "expected_validation_results_shape": _expected_validation_results_shape(services),
+            "next_turn": validation_choice_turn(),
+            "non_actions": [
+                _validation_not_recorded_label(client_type),
+                "validate_now requires target-client-visible safe probe results before validation can be recorded",
+                "do not call record validation again until a selected service tool has been called through the target client",
+            ],
+        }
     if (
         validation_mode == "validate_now"
         and validation_results_dict

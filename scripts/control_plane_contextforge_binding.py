@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
 import argparse
 from collections.abc import Iterable, Mapping, Sequence
@@ -79,6 +80,11 @@ PROJECT_INIT_APPROVAL_SCOPE = "project-local-client-config-and-state"
 PI_SHIM_SURFACE = "global Pi extension + .project/context_forge_state.json"
 OPENCODE_CONFIG_SURFACE = "opencode.json"
 OPENCODE_GLOBAL_TRIGGER_SURFACE = "~/.config/opencode/plugins/contextforge-project-init.js"
+OPENCODE_WRAPPER_PYTHON_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON"
+OPENCODE_WRAPPER_SCRIPT_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT"
+OPENCODE_WRAPPER_CONFIG_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV"
+OPENCODE_WRAPPER_BASE_URL_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL"
+OPENCODE_WRAPPER_TOKEN_CACHE_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE"
 PROJECT_INIT_CLIENT_ADAPTERS: dict[str, dict[str, Any]] = {
     "codex": {
         "client_type": "codex",
@@ -640,14 +646,27 @@ def build_project_init_opencode_binding_entry(service: Mapping[str, Any]) -> dic
 
     virtual_server = str(service.get("virtual_server") or "")
     _require("virtual_server", virtual_server)
+    wrapper_python = os.environ.get(OPENCODE_WRAPPER_PYTHON_ENV) or str(PYTHON_PATH)
+    wrapper_script = os.environ.get(OPENCODE_WRAPPER_SCRIPT_ENV) or str(WRAPPER_PATH)
+    environment = {
+        "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
+        "MCP_WRAPPER_LOG_LEVEL": "INFO",
+    }
+    config_env = os.environ.get(OPENCODE_WRAPPER_CONFIG_ENV)
+    if config_env:
+        environment["CONTEXTFORGE_CONFIG_ENV"] = config_env
+    base_url = os.environ.get(OPENCODE_WRAPPER_BASE_URL_ENV)
+    if base_url:
+        environment["CONTEXTFORGE_BASE_URL"] = base_url
+    token_cache = os.environ.get(OPENCODE_WRAPPER_TOKEN_CACHE_ENV)
+    if token_cache:
+        environment["CONTEXTFORGE_TOKEN_CACHE"] = token_cache
+        environment["CONTEXTFORGE_TOKEN_LOCK"] = f"{token_cache}.lock"
     return {
         "type": "local",
-        "command": [str(PYTHON_PATH), str(WRAPPER_PATH), virtual_server],
+        "command": [wrapper_python, wrapper_script, virtual_server],
         "enabled": True,
-        "environment": {
-            "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
-            "MCP_WRAPPER_LOG_LEVEL": "INFO",
-        },
+        "environment": environment,
     }
 
 

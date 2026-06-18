@@ -292,6 +292,8 @@ def prompt_text_is_fresh(text: str) -> bool:
         "start a new OpenCode session from the project root before target-client-visible validation",
         'choose 1 or reply "validate" to run validation',
         "first call cf_project_init_record_client_reload",
+        "with client_type=",
+        "prefer that tool with client_type=opencode",
         "honor that choice after recording the reload acknowledgement instead of asking again",
         "the Pi agent must issue /reload before validation",
         "Choose 1 to validate now",

@@ -416,7 +416,10 @@ def safe_validation_policy(service_family: str) -> dict[str, Any]:
                 "default_probe": {
                     "safe_probe_id": "resolve-library-id",
                     "tool_name_hint": "context7-local-resolve-library-id",
-                    "arguments": {"libraryName": "python"},
+                    "arguments": {
+                        "libraryName": "python",
+                        "query": "standard library documentation lookup",
+                    },
                     "expected_result": "non-error library resolution result or explicit no-match response",
                 },
                 "accepted_proof_kinds": [
