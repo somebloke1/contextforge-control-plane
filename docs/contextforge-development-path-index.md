@@ -71,6 +71,16 @@ Open issues after this refresh:
 - #3: host Pi global ContextForge shim prompt/resource parity and live
   Pi-visible readback.
 - #2: deferred Serena runtime blockers for the later migration/cutoff phase.
+- #130-#161: review-agent ideal-form intake issues created on 2026-06-18.
+  They are roadmap and acceptance-shaping material, not an automatic
+  implementation queue.
+  - Project #6 `Agent state: Ready`: #140, #144, #152, #153, #158, #160,
+    #161.
+  - Project #6 `Agent state: Deferred`: #146, #147, #148.
+  - Project #6 `Agent state: Candidate`: #130-#139, #141-#143, #145,
+    #149-#157, #159.
+  - #160 comment `4740100419` records the read-only intake, scout
+    classification, controller judgment, non-actions, and Project #6 readback.
 
 Recent PR topology:
 
@@ -109,11 +119,12 @@ Recent PR topology:
   compact no-mutation local session inventory.
 - #129 merged the #128 service-onboarding session-template readback surface for
   deterministic no-mutation resume patch scaffolding.
+- #163 merged the #162 path-index refresh after #129 landed.
 
 Recently closed path-setting issues include #128, #124, #122, #120, #118,
 #115, #113, #111, #109, #107, #105, #103, #101, #99, #97, #95, #91, #89,
-#79, #83, #85, #62, #58, #50, #41, #37, #31, #25, and #66. They are evidence
-and history, not substitutes for current path ownership.
+#79, #83, #85, #62, #58, #50, #41, #37, #31, #25, #66, and #162. They are
+evidence and history, not substitutes for current path ownership.
 
 ## Named Development Paths
 
@@ -138,6 +149,9 @@ Near-term gap:
 - No open issue currently owns continuing operator-grade runtime readiness
   checks after future service additions. Create a focused issue when a new
   service or registry change needs runtime evidence beyond source planning.
+- #140 is now the ready validation issue for ContextForge registry mutation
+  discipline. #141 remains a candidate feature issue for native transport
+  preservation when a concrete service slice needs it.
 
 ### Project-State And Helper Control Plane
 
@@ -159,6 +173,10 @@ Near-term gap:
 - The helper surface is still script-oriented. Operator productization should
   eventually make helper flows easier to inspect, resume, and retry without
   hiding consent or approval boundaries.
+- #131 and #135-#139 are candidate ideal-form issues for project state,
+  plan-first initialization, consent receipts, approved apply journals,
+  recovery workflows, and service-management handoffs. They should shape
+  future source/docs/tests slices before any mutating project-init apply work.
 
 ### Client Adapter And Visible UX
 
@@ -183,6 +201,11 @@ Near-term gap:
 - After #90, keep client-visible validation claims tied to the matrix:
   do not generalize #62 Pi/OpenCode client Docker proof to host Pi global
   install/reload, host OpenCode global config, or Codex hook activation.
+- #143, #144, #145, #158, and #161 now provide issue-level acceptance
+  language for client conformance, target-client-visible verification,
+  verification traces, surface-labeled evidence, and readiness claim
+  guardrails. #144, #158, and #161 are ready source/docs/tests guardrail
+  candidates; #3 remains the separate host Pi operational front.
 
 ### Dev Docker Integration Lab
 
@@ -202,6 +225,9 @@ Near-term gap:
   runtime approvals, not by broad container expansion. #52, including the
   merged #87/#93/#94/#117/#125/#129 helper increments, is the current
   source-side feeder for that work.
+- #153 is ready as the inventory-as-discovery validation issue. It reinforces
+  that Docker, client config, and package inventory may propose candidates or
+  handoffs but must not become canonical service authority.
 
 ### MCP Service Onboarding Lifecycle
 
@@ -249,6 +275,11 @@ Near-term gap:
   dialogue/session management on top of the ignored store and readback
   surfaces, or add another selected service record with similarly explicit
   no-overclaim boundaries.
+- #152 is now the ready ideal-form issue for the service onboarding workflow.
+  Treat it as an acceptance boundary and roadmap reference for #52, not as a
+  replacement owner. #130, #132, #133, #134, #139, #141, and #153 are
+  supporting service identity, classification, contract, shared capability,
+  handoff, transport, and discovery-only issues.
 
 ### Serena/Project-Scoped Service Lifecycle
 
@@ -268,6 +299,9 @@ Near-term gap:
 - Do not treat #2 as ordinary cleanup pressure. The remaining blockers belong
   to a later phase after the new stack is stable and the operator no longer
   depends on the legacy/live substrate for continuity.
+- #149 and #150 are candidate issues for reusable project-scoped service
+  patterns and a read-only project-inspector proof service. They can inform a
+  later non-Serena proof path but do not pull #2 forward.
 
 ### Safe Client-Visible Validation Probes
 
@@ -305,6 +339,9 @@ Near-term gap:
   project-scoped services such as GitHub, web-search, Exa Search, Playwright,
   and Serena/project-scoped services. Each future runtime validation claim
   must still be tied to the exact target client and exercised surface.
+- #144 now owns the ready validation request for target-client-visible
+  verification. It should be used to prevent backend health, registration, or
+  source contracts from being overclaimed as target-client readiness.
 
 ### Operator Productization
 
@@ -323,6 +360,9 @@ Near-term gap:
 - Create a productization issue when the next operator-facing pain point is
   concrete enough to slice: command grouping, status dashboard, guided
   retries, evidence summaries, or approval packet generation.
+- #159 is now the candidate operator productization issue. Promote it only
+  when a concrete command grouping, dashboard, retry, evidence-summary, or
+  approval-packet slice is selected.
 
 ### Governance/Evidence/SuperLoop
 
@@ -343,6 +383,10 @@ Near-term gap:
 
 - Keep this index current when a path changes phase. Do not let closed
   migration issues remain the only roadmap map for future agents.
+- #160 is now the ready validation issue for idempotent GitHub coordination.
+  Its 2026-06-18 intake comment `4740100419` records the #130-#161
+  classification and Project #6 Agent state readback. #155 and #156 remain
+  candidate issues for governance ledger authority and service memory boundary.
 
 ### Legacy Retirement
 
@@ -362,6 +406,9 @@ Policy:
 - Do not shut down or cut off legacy/live ContextForge merely because a
   retired surface still exists. Cutoff belongs only after the new stack is
   rigorously proven and changes can be made one bounded refinement at a time.
+- #146, #147, and #148 are deferred trust, auth/token-safety, and remote
+  exposure issues. They are important, but they imply global trust, credential,
+  token, or remote-exposure boundaries and should not be selected casually.
 
 ## Project #6 Roadmap Draft Items
 
@@ -376,17 +423,22 @@ items until they are promoted into concrete issues or PRs:
   cross-referenced rather than kept as a second active owner for the same
   completed source-contract series.
 - `Roadmap: Operator productization` for helper, registration, readback,
-  retry, and approval packet workflows.
+  retry, and approval packet workflows. Issue #159 now owns the first
+  issue-level expression of this lane.
 - `Roadmap: Dev Docker service expansion` driven by #52 onboarding records and
   bounded runtime approvals.
 - `Roadmap: Project inspector and language-profile proof path` for expanding
-  project-specific service evidence beyond Serena.
+  project-specific service evidence beyond Serena. Issues #150 and #151 now
+  capture the proof-service and language-profile issue-level candidates.
 - `Roadmap: Requirement/scenario QA and evidence ledger` for durable
-  acceptance evidence across services and clients.
+  acceptance evidence across services and clients. Issues #145, #158, and
+  #161 now capture verification-trace, surface-label, and readiness-language
+  standards.
 - `Roadmap: Upstream ContextForge dependency and packaging watch` for tracking
   ContextForge capabilities, bridge behavior, and packaging assumptions.
 - `Roadmap: Security/auth/remote exposure gate` for later remote or
-  credential-sensitive exposure decisions.
+  credential-sensitive exposure decisions. Issues #146, #147, and #148 now
+  own the deferred trust, token, and remote-exposure issue-level work.
 
 Keep #2 as the explicit deferred late-phase legacy/Serena blocker instead of
 creating a duplicate roadmap draft item for legacy cutoff.
@@ -403,13 +455,19 @@ promote them:
 
 - next safe client-visible validation probe contract or policy slice for
   conditional-probe scoping across GitHub, web-search, Exa Search,
-  Playwright, and Serena/project-scoped services;
-- operator productization of helper/registration/readback workflows;
-- next dev Docker service expansion driven by #52 onboarding records;
-- project inspector and language-profile proof path;
-- requirement/scenario QA and evidence ledger;
+  Playwright, and Serena/project-scoped services, now shaped by #144, #158,
+  and #161;
+- operator productization of helper/registration/readback workflows, now
+  represented by candidate issue #159;
+- next dev Docker service expansion driven by #52 onboarding records, now
+  constrained by #152 and #153;
+- project inspector and language-profile proof path, now represented by
+  candidate issues #150 and #151;
+- requirement/scenario QA and evidence ledger, now partially represented by
+  #145, #158, and #161;
 - upstream ContextForge dependency and packaging watch;
-- security/auth/remote exposure gate;
+- security/auth/remote exposure gate, now represented by deferred issues #146,
+  #147, and #148;
 - late legacy-retirement phase for the remaining #2 Serena blockers.
 
 Do not implement these gaps from this index alone. Each needs its own bounded
