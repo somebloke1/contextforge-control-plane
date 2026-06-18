@@ -71,6 +71,9 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("ready_for_pre_runtime_handoff", gate["gate_status"])  # type: ignore[index]
         self.assertEqual([], gate["missing_dimensions"])  # type: ignore[index]
         self.assertIn("serena_project_backend_provisioning_readback", _probe_layers(gate))  # type: ignore[arg-type]
+        provisioning_readback = _probe_layer(gate, "serena_project_backend_provisioning_readback")
+        self.assertTrue(provisioning_readback["required_before_runtime"])
+        self.assertFalse(provisioning_readback["runtime_execution"])
 
     def test_native_source_only_service_is_ready_for_handoff(self) -> None:
         record = self.record("native_http_shared_docs_source_only")
@@ -854,6 +857,13 @@ def _probe_layers(gate: object) -> list[str]:
         layer["layer"]
         for layer in gate["planned_validation_probe_layers"]  # type: ignore[index]
     ]
+
+
+def _probe_layer(gate: object, name: str) -> dict[str, object]:
+    for layer in gate["planned_validation_probe_layers"]:  # type: ignore[index]
+        if layer["layer"] == name:
+            return layer
+    raise AssertionError(f"missing probe layer: {name}")
 
 
 if __name__ == "__main__":

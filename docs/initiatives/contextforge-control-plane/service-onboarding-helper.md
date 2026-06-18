@@ -345,7 +345,9 @@ Serena is modeled as a source-only project-scoped onboarding record when the
 backend exists in the repository but provisioning is still abeyant. The helper
 must keep that record no-mutation, name the project-scoped backend, and make it
 clear that a later approved runtime turn will hard-require the same Serena
-backend before live integration.
+backend before live integration. The `pre_runtime_workflow_gate` preserves that
+requirement with `required_before_runtime: true` on the Serena backend
+provisioning readback probe.
 
 ## Non-Mutation Default
 

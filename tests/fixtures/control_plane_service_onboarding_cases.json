@@ -81,6 +81,7 @@
         "validation_probe_plan": [
           {
             "layer": "serena_project_backend_provisioning_readback",
+            "required_before_runtime": true,
             "description": "later approved turn should prove the project-scoped Serena backend is provisioned before any runtime or client mutation"
           }
         ],

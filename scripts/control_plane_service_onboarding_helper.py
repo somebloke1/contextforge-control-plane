@@ -811,7 +811,13 @@ def _planned_validation_probe_layers(
             layer = _first_string(item.get("layer"), item.get("name"), item.get("type"))
             description = _first_string(item.get("description"), item.get("plan"), item.get("ref"))
             if layer:
-                explicit.append(_probe_layer(layer, description or "operator-supplied source-only probe plan"))
+                explicit.append(
+                    _probe_layer(
+                        layer,
+                        description or "operator-supplied source-only probe plan",
+                        required_before_runtime=bool(item.get("required_before_runtime")),
+                    )
+                )
         elif isinstance(item, str):
             explicit.append(_probe_layer(_normalize_token(item) or "operator_supplied_probe", item))
     if explicit:
@@ -840,11 +846,12 @@ def _planned_validation_probe_layers(
     return _unique_probe_layers(layers)
 
 
-def _probe_layer(layer: str, description: str) -> dict[str, Any]:
+def _probe_layer(layer: str, description: str, *, required_before_runtime: bool = False) -> dict[str, Any]:
     return {
         "layer": layer,
         "status": "planned",
         "runtime_execution": False,
+        "required_before_runtime": required_before_runtime,
         "description": description,
     }
 
