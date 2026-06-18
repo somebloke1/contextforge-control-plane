@@ -13,7 +13,9 @@ from typing import Any
 
 
 SCHEMA_URI = "contextforge://control-plane/schemas/diagnostic-bundle/v1"
+FAILURE_DIAGNOSTICS_SCHEMA_URI = "contextforge://control-plane/schemas/failure-diagnostics-bundle/v1"
 REDACTED_MARKER = "<redacted>"
+FAILURE_DIAGNOSTIC_WORKFLOWS = frozenset({"add", "repair", "verify", "activation"})
 
 SENSITIVE_KEY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("private_key", re.compile(r"(^|_)private(_|$)|(^|_)private_key($|_)|(^|_)pem($|_)")),
@@ -137,11 +139,11 @@ def redact_data(data: Any) -> Any:
     return redact_with_report(data).data
 
 
-def redact_with_report(data: Any) -> RedactionResult:
+def redact_with_report(data: Any, *, raw_values: Sequence[str] = ()) -> RedactionResult:
     """Return redacted data and structured redaction events."""
 
     events: list[RedactionEvent] = []
-    redacted = _redact_value(data, (), None, events)
+    redacted = _redact_value(data, (), None, events, raw_values={value for value in raw_values if value})
     return RedactionResult(redacted, tuple(events))
 
 
@@ -214,6 +216,85 @@ def build_diagnostic_bundle(
     return bundle
 
 
+def build_failure_diagnostics_bundle(
+    *,
+    workflow: str,
+    service_slug: str,
+    canonical_service_identity: str,
+    registry_id: str | None = None,
+    virtual_server_id: str | None = None,
+    transport_path: str,
+    bridge_or_transceiver_reason: str,
+    client_visibility_target: str,
+    last_probe: Mapping[str, Any],
+    failing_call_shape: Mapping[str, Any],
+    next_safe_diagnostic_action: str,
+    failure_summary: Mapping[str, Any] | None = None,
+    generated_at: str | None = None,
+    raw_values: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Build a compact redacted failure packet for add/repair/verify/activation flows."""
+
+    normalized_workflow = _failure_workflow(workflow)
+    required_strings = {
+        "service_slug": service_slug,
+        "canonical_service_identity": canonical_service_identity,
+        "transport_path": transport_path,
+        "bridge_or_transceiver_reason": bridge_or_transceiver_reason,
+        "client_visibility_target": client_visibility_target,
+        "next_safe_diagnostic_action": next_safe_diagnostic_action,
+    }
+    missing = [name for name, value in required_strings.items() if not str(value or "").strip()]
+    if missing:
+        raise ValueError(f"missing failure diagnostics field(s): {', '.join(missing)}")
+    if not isinstance(last_probe, Mapping):
+        raise ValueError("last_probe must be a mapping")
+    if not isinstance(failing_call_shape, Mapping):
+        raise ValueError("failing_call_shape must be a mapping")
+
+    sections: dict[str, Any] = {
+        "service": {
+            "service_slug": str(service_slug),
+            "canonical_service_identity": str(canonical_service_identity),
+            "registry_id": _optional_text(registry_id),
+            "virtual_server_id": _optional_text(virtual_server_id),
+        },
+        "transport": {
+            "path": str(transport_path),
+            "bridge_or_transceiver_reason": str(bridge_or_transceiver_reason),
+        },
+        "client_visibility": {
+            "target": str(client_visibility_target),
+        },
+    }
+    events: list[RedactionEvent] = []
+    for name, value in (
+        ("last_probe", last_probe),
+        ("failing_call_shape", failing_call_shape),
+        ("failure_summary", failure_summary or {}),
+    ):
+        result = redact_with_report(dict(value), raw_values=raw_values)
+        sections[name] = result.data
+        events.extend(_prefix_events(name, result.events))
+
+    bundle = {
+        "schema_uri": FAILURE_DIAGNOSTICS_SCHEMA_URI,
+        "generated_at": generated_at or now_timestamp(),
+        "workflow": normalized_workflow,
+        "redaction_status": "redacted",
+        "service": sections["service"],
+        "transport": sections["transport"],
+        "client_visibility": sections["client_visibility"],
+        "last_probe": sections["last_probe"],
+        "failing_call_shape": sections["failing_call_shape"],
+        "failure_summary": sections["failure_summary"],
+        "next_safe_diagnostic_action": str(next_safe_diagnostic_action),
+        "redaction": RedactionResult(None, tuple(events)).summary(),
+    }
+    assert_no_sensitive_raw_values(bundle, raw_values=raw_values)
+    return bundle
+
+
 def assert_no_sensitive_raw_values(data: Any, *, raw_values: Iterable[str] = ()) -> None:
     """Reject raw sensitive values in a JSON-compatible redacted object."""
 
@@ -238,7 +319,14 @@ def format_path(path: Iterable[str]) -> str:
     return ".".join(parts) if parts else "<root>"
 
 
-def _redact_value(value: Any, path: tuple[str, ...], key: str | None, events: list[RedactionEvent]) -> Any:
+def _redact_value(
+    value: Any,
+    path: tuple[str, ...],
+    key: str | None,
+    events: list[RedactionEvent],
+    *,
+    raw_values: set[str],
+) -> Any:
     key_classification = classify_sensitive_key(key or "") if key is not None else None
     if key_classification and not _already_redacted(value):
         events.append(
@@ -253,9 +341,21 @@ def _redact_value(value: Any, path: tuple[str, ...], key: str | None, events: li
         return _redacted_metadata(value, classification=key_classification, reason="sensitive_key")
 
     if isinstance(value, Mapping):
-        return {str(child_key): _redact_value(child, (*path, str(child_key)), str(child_key), events) for child_key, child in value.items()}
+        return {
+            str(child_key): _redact_value(
+                child,
+                (*path, str(child_key)),
+                str(child_key),
+                events,
+                raw_values=raw_values,
+            )
+            for child_key, child in value.items()
+        }
     if isinstance(value, list):
-        return [_redact_value(child, (*path, str(index)), None, events) for index, child in enumerate(value)]
+        return [
+            _redact_value(child, (*path, str(index)), None, events, raw_values=raw_values)
+            for index, child in enumerate(value)
+        ]
     if isinstance(value, str):
         value_classification = classify_sensitive_value(value)
         if value_classification:
@@ -269,6 +369,17 @@ def _redact_value(value: Any, path: tuple[str, ...], key: str | None, events: li
                 )
             )
             return _redacted_metadata(value, classification=value_classification, reason="sensitive_value")
+        if any(raw in value for raw in raw_values):
+            events.append(
+                RedactionEvent(
+                    path=path,
+                    classification="explicit_raw_value",
+                    reason="caller_supplied_raw_value",
+                    digest=stable_digest(value),
+                    value_type="str",
+                )
+            )
+            return _redacted_metadata(value, classification="explicit_raw_value", reason="caller_supplied_raw_value")
     return value
 
 
@@ -359,3 +470,26 @@ def _prefix_events(prefix: str, events: Iterable[RedactionEvent]) -> tuple[Redac
         )
         for event in events
     )
+
+
+def _failure_workflow(workflow: str) -> str:
+    normalized = str(workflow).strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "service_add": "add",
+        "service_repair": "repair",
+        "service_verify": "verify",
+        "validation": "verify",
+        "project_activation": "activation",
+        "activate": "activation",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in FAILURE_DIAGNOSTIC_WORKFLOWS:
+        raise ValueError(f"unknown failure diagnostics workflow: {workflow}")
+    return normalized
+
+
+def _optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

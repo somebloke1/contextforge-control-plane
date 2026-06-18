@@ -85,5 +85,52 @@
       "Bearer <placeholder>",
       "fixture trace token value"
     ]
+  },
+  "failure_diagnostics": {
+    "workflow": "verify",
+    "service_slug": "context7",
+    "canonical_service_identity": "context7:canonical",
+    "registry_id": "gateway-context7",
+    "virtual_server_id": "server-context7",
+    "transport_path": "/mcp/context7",
+    "bridge_or_transceiver_reason": "native_http_sse_no_bridge_required",
+    "client_visibility_target": "opencode",
+    "last_probe": {
+      "command": "curl -H 'Authorization: Bearer fixture-probe-token' https://contextforge.example/mcp/context7",
+      "result": "failed",
+      "summary": "HTTP 401 from ContextForge gateway readback",
+      "stdout": "auth_token=fixture-probe-stdout-token"
+    },
+    "failing_call_shape": {
+      "method": "tools/call",
+      "url": "https://contextforge.example/mcp/context7?access_token=fixture-url-token",
+      "headers": {
+        "Authorization": "Bearer fixture-call-token"
+      },
+      "arguments": {
+        "libraryName": "requests",
+        "password": "fixture-call-password"
+      }
+    },
+    "failure_summary": {
+      "classification": "gateway_readback_failed",
+      "error": "OpenCode client could not call ContextForge-backed tool",
+      "client_secret": "fixture-summary-secret"
+    },
+    "next_safe_diagnostic_action": "repeat OpenCode list-tools readback after refreshing the scoped ContextForge dev token",
+    "expected": {
+      "schema_uri": "contextforge://control-plane/schemas/failure-diagnostics-bundle/v1",
+      "workflow": "verify",
+      "redaction_status": "redacted",
+      "redacted_value_count": 6,
+      "raw_values_absent": [
+        "Bearer fixture-probe-token",
+        "fixture-probe-stdout-token",
+        "fixture-url-token",
+        "Bearer fixture-call-token",
+        "fixture-call-password",
+        "fixture-summary-secret"
+      ]
+    }
   }
 }

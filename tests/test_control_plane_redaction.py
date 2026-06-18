@@ -124,6 +124,91 @@ class ControlPlaneRedactionTests(unittest.TestCase):
         self.assertGreaterEqual(bundle["redaction"]["redacted_value_count"], 8)
         redaction.assert_no_sensitive_raw_values(bundle, raw_values=expected["raw_values_absent"])
 
+    def test_failure_diagnostics_bundle_is_compact_and_redacted(self) -> None:
+        fixture = self.fixture["failure_diagnostics"]
+        expected = fixture["expected"]
+        bundle = redaction.build_failure_diagnostics_bundle(
+            workflow=fixture["workflow"],
+            service_slug=fixture["service_slug"],
+            canonical_service_identity=fixture["canonical_service_identity"],
+            registry_id=fixture["registry_id"],
+            virtual_server_id=fixture["virtual_server_id"],
+            transport_path=fixture["transport_path"],
+            bridge_or_transceiver_reason=fixture["bridge_or_transceiver_reason"],
+            client_visibility_target=fixture["client_visibility_target"],
+            last_probe=fixture["last_probe"],
+            failing_call_shape=fixture["failing_call_shape"],
+            failure_summary=fixture["failure_summary"],
+            next_safe_diagnostic_action=fixture["next_safe_diagnostic_action"],
+            generated_at=self.fixture["generated_at"],
+            raw_values=expected["raw_values_absent"],
+        )
+
+        self.assertEqual(expected["schema_uri"], bundle["schema_uri"])
+        self.assertEqual(expected["workflow"], bundle["workflow"])
+        self.assertEqual(expected["redaction_status"], bundle["redaction_status"])
+        self.assertEqual(fixture["service_slug"], bundle["service"]["service_slug"])
+        self.assertEqual(fixture["canonical_service_identity"], bundle["service"]["canonical_service_identity"])
+        self.assertEqual(fixture["registry_id"], bundle["service"]["registry_id"])
+        self.assertEqual(fixture["virtual_server_id"], bundle["service"]["virtual_server_id"])
+        self.assertEqual(fixture["transport_path"], bundle["transport"]["path"])
+        self.assertEqual(fixture["bridge_or_transceiver_reason"], bundle["transport"]["bridge_or_transceiver_reason"])
+        self.assertEqual(fixture["client_visibility_target"], bundle["client_visibility"]["target"])
+        self.assertIn(bundle["client_visibility"]["target"], {"pi", "opencode"})
+        self.assertEqual(fixture["next_safe_diagnostic_action"], bundle["next_safe_diagnostic_action"])
+        self.assertEqual("failed", bundle["last_probe"]["result"])
+        self.assertEqual("tools/call", bundle["failing_call_shape"]["method"])
+        self.assertEqual("requests", bundle["failing_call_shape"]["arguments"]["libraryName"])
+        self.assertEqual("bearer_token", bundle["failing_call_shape"]["headers"]["Authorization"]["classification"])
+        self.assertEqual("explicit_raw_value", bundle["failing_call_shape"]["url"]["classification"])
+        self.assertEqual("password", bundle["failing_call_shape"]["arguments"]["password"]["classification"])
+        self.assertEqual("secret", bundle["failure_summary"]["client_secret"]["classification"])
+        self.assertGreaterEqual(bundle["redaction"]["redacted_value_count"], expected["redacted_value_count"])
+        redaction.assert_no_sensitive_raw_values(bundle, raw_values=expected["raw_values_absent"])
+
+    def test_failure_diagnostics_validates_workflow_and_required_context(self) -> None:
+        fixture = self.fixture["failure_diagnostics"]
+        bundle = redaction.build_failure_diagnostics_bundle(
+            workflow="project activation",
+            service_slug=fixture["service_slug"],
+            canonical_service_identity=fixture["canonical_service_identity"],
+            transport_path=fixture["transport_path"],
+            bridge_or_transceiver_reason=fixture["bridge_or_transceiver_reason"],
+            client_visibility_target=fixture["client_visibility_target"],
+            last_probe=fixture["last_probe"],
+            failing_call_shape=fixture["failing_call_shape"],
+            next_safe_diagnostic_action=fixture["next_safe_diagnostic_action"],
+            raw_values=fixture["expected"]["raw_values_absent"],
+        )
+
+        self.assertEqual("activation", bundle["workflow"])
+        self.assertIsNone(bundle["service"]["registry_id"])
+        self.assertIsNone(bundle["service"]["virtual_server_id"])
+        with self.assertRaises(ValueError):
+            redaction.build_failure_diagnostics_bundle(
+                workflow="delete",
+                service_slug=fixture["service_slug"],
+                canonical_service_identity=fixture["canonical_service_identity"],
+                transport_path=fixture["transport_path"],
+                bridge_or_transceiver_reason=fixture["bridge_or_transceiver_reason"],
+                client_visibility_target=fixture["client_visibility_target"],
+                last_probe=fixture["last_probe"],
+                failing_call_shape=fixture["failing_call_shape"],
+                next_safe_diagnostic_action=fixture["next_safe_diagnostic_action"],
+            )
+        with self.assertRaises(ValueError):
+            redaction.build_failure_diagnostics_bundle(
+                workflow="repair",
+                service_slug="",
+                canonical_service_identity=fixture["canonical_service_identity"],
+                transport_path=fixture["transport_path"],
+                bridge_or_transceiver_reason=fixture["bridge_or_transceiver_reason"],
+                client_visibility_target=fixture["client_visibility_target"],
+                last_probe=fixture["last_probe"],
+                failing_call_shape=fixture["failing_call_shape"],
+                next_safe_diagnostic_action=fixture["next_safe_diagnostic_action"],
+            )
+
     def test_assert_no_sensitive_raw_values_detects_leaks(self) -> None:
         with self.assertRaises(redaction.RedactionLeakError):
             redaction.assert_no_sensitive_raw_values(
