@@ -101,6 +101,12 @@ See `CONTEXTFORGE_HELPER_BASELINE.md` for the Pi/OpenCode baseline contract
 that closes the gap between specialized ContextForge smoke scripts and ordinary
 ad hoc client sessions.
 
+See `USE_CASE_1_E2E_GATE.md` for the required PR #271 / Use Case 1 gate before
+human validation. Human validation must be preceded by passing Pi and OpenCode
+full command-line agent-session transcripts, with stable session ids and
+observed tool outputs, verified by
+`scripts/verify-use-case-1-e2e-evidence.py`.
+
 See `../../docs/client-visible-activation-matrix.md` for the client-specific
 activation/readiness observables. Pi and OpenCode are not expected to show a
 Codex-style hook banner; they have their own shim/plugin/helper readback paths.
