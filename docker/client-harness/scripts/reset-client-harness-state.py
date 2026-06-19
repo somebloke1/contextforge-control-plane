@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Idempotently reset one client harness surface for dialogue validation."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+CLIENTS = {
+    "pi": {
+        "services": ["pi", "pi-ephemeral"],
+        "home_volume": "contextforge-client-harness_pi-home",
+    },
+    "opencode": {
+        "services": ["opencode", "opencode-ephemeral"],
+        "home_volume": "contextforge-client-harness_opencode-home",
+    },
+}
+
+
+def run(command: list[str], *, cwd: Path, dry_run: bool) -> dict[str, object]:
+    if dry_run:
+        return {"command": command, "returncode": 0, "stdout": "", "stderr": "", "dry_run": True}
+    completed = subprocess.run(command, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    return {
+        "command": command,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout.strip(),
+        "stderr": completed.stderr.strip(),
+    }
+
+
+def docker_ids(command: list[str], *, cwd: Path, dry_run: bool) -> list[str]:
+    result = run(command, cwd=cwd, dry_run=dry_run)
+    if result["returncode"] != 0:
+        return []
+    return [line.strip() for line in str(result["stdout"]).splitlines() if line.strip()]
+
+
+def preserve_workspace(workspace: Path, evidence_dir: Path, *, dry_run: bool) -> dict[str, object]:
+    entries = sorted(item for item in workspace.iterdir() if item.name != ".gitkeep") if workspace.exists() else []
+    if not entries:
+        return {"preserved": False, "entries": []}
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    target = evidence_dir / f"workspace-preserved-{stamp}"
+    if not dry_run:
+        target.mkdir(parents=True, exist_ok=False)
+        for item in entries:
+            shutil.move(str(item), str(target / item.name))
+    return {"preserved": True, "target": str(target), "entries": [item.name for item in entries]}
+
+
+def reset_workspace(workspace: Path, evidence_dir: Path, *, dry_run: bool) -> dict[str, object]:
+    workspace.mkdir(parents=True, exist_ok=True)
+    preserved = preserve_workspace(workspace, evidence_dir, dry_run=dry_run)
+    if not dry_run:
+        for item in list(workspace.iterdir()):
+            if item.name == ".gitkeep":
+                continue
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+        (workspace / ".gitkeep").write_text("\n", encoding="utf-8")
+    entries = [".gitkeep"] if dry_run else sorted(item.name for item in workspace.iterdir())
+    return {
+        "preservation": preserved,
+        "entries": entries,
+        "allowlist": [".gitkeep"],
+        "postcondition": entries == [".gitkeep"],
+    }
+
+
+def reset_client(client: str, compose_file: Path, repo_root: Path, *, reset_home_volume: bool, dry_run: bool) -> dict[str, object]:
+    spec = CLIENTS[client]
+    commands: list[dict[str, object]] = []
+    compose = ["docker", "compose", "-f", str(compose_file)]
+    commands.append(run([*compose, "rm", "-sf", *spec["services"]], cwd=repo_root, dry_run=dry_run))
+    volume = str(spec["home_volume"])
+    holder_ids = docker_ids(["docker", "ps", "-aq", "--filter", f"volume={volume}"], cwd=repo_root, dry_run=dry_run)
+    if holder_ids:
+        commands.append(run(["docker", "rm", "-f", *holder_ids], cwd=repo_root, dry_run=dry_run))
+    if reset_home_volume:
+        commands.append(run(["docker", "volume", "rm", volume], cwd=repo_root, dry_run=dry_run))
+    remaining = docker_ids(["docker", "ps", "-aq", "--filter", f"volume={volume}"], cwd=repo_root, dry_run=dry_run)
+    return {
+        "client": client,
+        "commands": commands,
+        "home_volume": volume,
+        "home_volume_reset_requested": reset_home_volume,
+        "remaining_target_volume_containers": remaining,
+        "postcondition": not remaining,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--client", required=True, choices=sorted(CLIENTS))
+    parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[3]))
+    parser.add_argument("--compose-file", default="docker/client-harness/compose.yml")
+    parser.add_argument("--workspace", default="docker/client-harness/workspace")
+    parser.add_argument("--evidence-dir", default="docker/client-harness/evidence/use-case-1/prior")
+    parser.add_argument("--reset-home-volume", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    repo_root = Path(args.repo_root).resolve()
+    compose_file = (repo_root / args.compose_file).resolve()
+    workspace = (repo_root / args.workspace).resolve()
+    evidence_dir = (repo_root / args.evidence_dir).resolve()
+    result = {
+        "ok": True,
+        "client": args.client,
+        "repo_root": str(repo_root),
+        "workspace": str(workspace),
+        "evidence_dir": str(evidence_dir),
+        "client_reset": reset_client(args.client, compose_file, repo_root, reset_home_volume=args.reset_home_volume, dry_run=args.dry_run),
+        "workspace_reset": reset_workspace(workspace, evidence_dir, dry_run=args.dry_run),
+    }
+    result["ok"] = bool(result["client_reset"]["postcondition"] and result["workspace_reset"]["postcondition"])
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

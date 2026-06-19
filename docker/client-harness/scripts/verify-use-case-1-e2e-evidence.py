@@ -28,6 +28,13 @@ REJECTION_PATTERNS = {
     "validation_could_not_run": re.compile(r"validation couldn't run|validation could not run", re.I),
 }
 
+PRESUMED_WORKING_ACTION_PATTERNS = [
+    re.compile(r'"validation_mode"\s*:\s*"presume_working"'),
+    re.compile(r'"validationMode"\s*:\s*"presume_working"'),
+    re.compile(r"client_reload_recorded_presume_working_requested"),
+    re.compile(r"record(?:ing)? validation as presume[sd]?[-_ ]working", re.I),
+]
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify Use Case 1 full agent-session evidence.")
@@ -68,9 +75,13 @@ def verify(*, client: str, evidence_path: Path, text: str, session_id: str = "")
     if not checks["observed_tool_outputs"]:
         failures.append(failure("missing_observed_outputs", "evidence must include observed assistant/tool outputs"))
 
+    checks.update(verify_persistent_container_surface(client, text, failures))
+
     for name, pattern in REJECTION_PATTERNS.items():
         if pattern.search(text):
             failures.append(failure(name, "passing gate evidence must not contain helper rejection or missing-tool recovery"))
+    if any(pattern.search(text) for pattern in PRESUMED_WORKING_ACTION_PATTERNS):
+        failures.append(failure("presumed_working_validation", "passing gate evidence must not record presumed-working validation"))
 
     if client == "pi":
         checks.update(verify_pi(text, failures))
@@ -87,14 +98,84 @@ def verify(*, client: str, evidence_path: Path, text: str, session_id: str = "")
     }
 
 
-def verify_pi(text: str, failures: list[dict[str, str]]) -> dict[str, bool]:
+def verify_persistent_container_surface(client: str, text: str, failures: list[dict[str, str]]) -> dict[str, bool]:
+    service = re.escape(client)
+    client_cleanup_pattern = re.compile(rf"\bdocker\s+compose\b[^\n]*\brm\b[^\n]*\b{service}\b")
+    reset_script_pattern = re.compile(
+        rf"reset-client-harness-state\.py[^\n]*--client\s+{service}\b|"
+        rf'"client"\s*:\s*"{service}"'
+    )
+    non_ephemeral_launch_pattern = re.compile(
+        rf"\bdocker\s+compose\b[^\n]*\brun\b(?=[^\n]*\b{service}\b)(?![^\n]*\b{service}-ephemeral\b)(?![^\n]*\s--rm\b)"
+    )
+    reset_postcondition = (
+        '"postcondition": true' in text
+        or "client_reset.postcondition=true" in text
+        or "client_reset.postcondition: true" in text
+    )
+    reset_workspace_postcondition = (
+        '"workspace_reset"' in text
+        or "workspace_reset.postcondition=true" in text
+        or "workspace_reset.postcondition: true" in text
+    )
+    reset_script_cleanup = bool(reset_script_pattern.search(text)) and all(
+        (reset_postcondition, reset_workspace_postcondition, "remaining_target_volume_containers" in text)
+    )
     checks = {
-        "pi_reload_recorded": "cf_project_init_record_client_reload" in text,
-        "pi_validate_tool_called": "cf_contextforge_pi_validate" in text,
-        "pi_validation_complete": "pi_validation_complete" in text,
-        "record_validation_called": "cf_project_init_record_validation" in text,
-        "validation_recorded": "validation_recorded" in text,
-        "project_initialized": "project_status" in text and "initialized" in text,
+        "client_stale_container_cleanup": bool(client_cleanup_pattern.search(text)) or reset_script_cleanup,
+        "non_ephemeral_container_launch": bool(non_ephemeral_launch_pattern.search(text)),
+        "no_ephemeral_container_launch": True,
+    }
+    if not checks["client_stale_container_cleanup"]:
+        failures.append(
+            failure(
+                "missing_client_stale_container_cleanup",
+                f"{client} evidence must show stale-container cleanup scoped to the target client",
+            )
+        )
+    if not checks["non_ephemeral_container_launch"]:
+        failures.append(
+            failure(
+                "missing_non_ephemeral_container_launch",
+                f"{client} evidence must show non-ephemeral Docker client harness launch",
+            )
+        )
+    launch_lines = [
+        line for line in text.splitlines() if re.search(r"\bdocker\s+compose\b", line) and re.search(r"\brun\b", line)
+    ]
+    ephemeral_launches = [
+        line
+        for line in launch_lines
+        if re.search(r"\b(?:pi|opencode)-ephemeral\b", line)
+        or re.search(r"\s--rm\b", line)
+        or re.search(r"\btmpfs\b", line, re.I)
+    ]
+    if ephemeral_launches:
+        checks["no_ephemeral_container_launch"] = False
+        failures.append(
+            failure(
+                "ephemeral_container_launch",
+                "dialogue validation must not launch with --rm, ephemeral services, or tmpfs workspace modes",
+            )
+        )
+    return checks
+
+
+def verify_pi(text: str, failures: list[dict[str, str]]) -> dict[str, bool]:
+    reload_index = first_tool_call_index(text, ["cf_project_init_record_client_reload"])
+    validate_index = first_tool_call_index(text, ["cf_contextforge_pi_validate"])
+    record_index = first_tool_call_index(text, ["cf_project_init_record_validation"])
+    validation_complete_index = text.find("pi_validation_complete", validate_index) if validate_index >= 0 else -1
+    validation_recorded_index = text.find("validation_recorded", record_index) if record_index >= 0 else -1
+    project_initialized_index = first_index_from(text, ["project_status", "initialized"], record_index)
+    checks = {
+        "pi_reload_recorded": reload_index >= 0,
+        "pi_validate_tool_called": validate_index >= 0,
+        "pi_validation_complete": validation_complete_index >= 0,
+        "record_validation_called": record_index >= 0,
+        "record_validation_after_validate": record_index >= 0 and validate_index >= 0 and record_index > validate_index,
+        "validation_recorded": validation_recorded_index >= 0,
+        "project_initialized": project_initialized_index >= 0,
     }
     required_messages = {
         "pi_reload_recorded": "Pi gate requires cf_project_init_record_client_reload",
@@ -107,6 +188,13 @@ def verify_pi(text: str, failures: list[dict[str, str]]) -> dict[str, bool]:
     for check, message in required_messages.items():
         if not checks[check]:
             failures.append(failure(check, message))
+    if not checks["record_validation_after_validate"]:
+        failures.append(
+            failure(
+                "pi_record_validation_before_validate",
+                "Pi passing evidence must call cf_contextforge_pi_validate before record-validation",
+            )
+        )
 
     for name, pattern in DIRECT_SUBSTITUTION_PATTERNS.items():
         if pattern.search(text):
@@ -118,7 +206,14 @@ def verify_opencode(text: str, failures: list[dict[str, str]]) -> dict[str, bool
     safe_probe_index = first_index(text, ["context7_context7-local-resolve-library-id", "context7_context7-local-query-docs"])
     record_index = first_index(text, ["cf_project_init_record_validation", "contextforge-helper_cf_project_init_record_validation"])
     checks = {
-        "opencode_context_checked": "cf_project_init_get_context" in text or "contextforge-helper_cf_project_init_get_context" in text,
+        "opencode_context_checked": any(
+            marker in text
+            for marker in (
+                "cf_project_init_get_context",
+                "contextforge-helper_cf_project_init_get_context",
+                "contextforge-helper_get_project_context",
+            )
+        ),
         "opencode_reload_recorded": "cf_project_init_record_client_reload" in text,
         "opencode_safe_probe_called": safe_probe_index >= 0,
         "record_validation_called": record_index >= 0,
@@ -161,6 +256,30 @@ def detect_session_id(text: str) -> str:
 
 def first_index(text: str, needles: list[str]) -> int:
     positions = [text.find(needle) for needle in needles if text.find(needle) >= 0]
+    return min(positions) if positions else -1
+
+
+def first_index_from(text: str, needles: list[str], start: int) -> int:
+    if start < 0:
+        return -1
+    positions = [text.find(needle, start) for needle in needles if text.find(needle, start) >= 0]
+    return max(positions) if len(positions) == len(needles) else -1
+
+
+def first_tool_call_index(text: str, tool_names: list[str]) -> int:
+    positions: list[int] = []
+    for tool_name in tool_names:
+        escaped = re.escape(tool_name)
+        patterns = [
+            re.compile(rf"(?m)^\s*Tool:\s*{escaped}\b"),
+            re.compile(rf'"name"\s*:\s*"{escaped}"'),
+            re.compile(rf'"toolName"\s*:\s*"{escaped}"'),
+            re.compile(rf'"tool_name"\s*:\s*"{escaped}"'),
+        ]
+        for pattern in patterns:
+            match = pattern.search(text)
+            if match:
+                positions.append(match.start())
     return min(positions) if positions else -1
 
 

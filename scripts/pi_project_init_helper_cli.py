@@ -85,6 +85,12 @@ def _render_prompt(project_root: str, *, client_type: str = "pi") -> dict[str, A
     }
 
 
+def _mcp_helper():
+    import contextforge_helper_mcp
+
+    return contextforge_helper_mcp
+
+
 def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
     project_root = _project_root(data)
     client_type = str(data.get("client_type") or data.get("clientType") or "pi")
@@ -101,53 +107,42 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
             )
         )
     if operation == "propose_project_init":
-        return _ok(
-            helper.propose_project_init(
-                project_root=project_root,
-                selected_services=data.get("selected_services") or data.get("selectedServices") or [],
-                client_type=client_type,
-                inputs=data.get("inputs"),
-                contextforge_servers=data.get("contextforge_servers") or data.get("contextforgeServers"),
-                server_instances_root=data.get("server_instances_root") or data.get("serverInstancesRoot"),
-            )
+        return _mcp_helper().propose_project_init(
+            project_root,
+            data.get("selected_services") or data.get("selectedServices") or [],
+            client_type=client_type,
+            inputs=data.get("inputs"),
+            contextforge_servers=data.get("contextforge_servers") or data.get("contextforgeServers"),
+            server_instances_root=data.get("server_instances_root") or data.get("serverInstancesRoot"),
         )
     if operation == "approve_project_init_plan":
         plan = _plan_object(data.get("plan"))
         approval = data.get("approval")
         if not isinstance(approval, Mapping):
             raise ValueError("approval object is required")
-        helper.restore_process_local_approval_session(project_root=project_root, plan=plan)
-        local_event = helper.record_local_approval_event(
-            project_root=project_root,
-            plan=plan,
-            issuer_token=helper._LOCAL_APPROVAL_ISSUER_TOKEN,
-            channel="interactive_user",
-        )
-        return _ok(
-            helper.approve_project_init_plan(
-                project_root=project_root,
-                plan=plan,
-                approval=approval,
-                local_approval_event_ref=local_event["event_ref"],
-                actor="developer",
-                source_client=str(plan.get("client_type") or client_type),
-                source_client_auth_strength="shared_token",
-            )
-        )
+        return _mcp_helper().approve_project_init_plan(project_root, plan, dict(approval))
+    if operation == "cf_project_init_approve":
+        challenge_id = str(data.get("challenge_id") or data.get("challengeId") or "")
+        plan_digest = str(data.get("plan_digest") or data.get("planDigest") or "")
+        return _mcp_helper().cf_project_init_approve(project_root, challenge_id, plan_digest)
     if operation == "apply_approved_project_init":
         plan = _plan_object(data.get("plan"))
         receipts = data.get("receipts")
         if not isinstance(receipts, list):
             raise ValueError("receipts array is required")
-        helper.restore_process_local_approval_session(project_root=project_root, plan=plan, receipts=receipts)
-        return _ok(
-            helper.apply_approved_project_init(
-                project_root=project_root,
-                plan=plan,
-                receipts=receipts,
-                contextforge_servers=data.get("contextforge_servers") or data.get("contextforgeServers"),
-                dry_run=bool(data.get("dry_run") or data.get("dryRun")),
-            )
+        return _mcp_helper().apply_approved_project_init(
+            project_root,
+            plan,
+            receipts,
+            contextforge_servers=data.get("contextforge_servers") or data.get("contextforgeServers"),
+            dry_run=bool(data.get("dry_run") or data.get("dryRun")),
+        )
+    if operation == "cf_project_init_apply":
+        return _mcp_helper().cf_project_init_apply(
+            project_root,
+            receipts=data.get("receipts") if isinstance(data.get("receipts"), list) else None,
+            contextforge_servers=data.get("contextforge_servers") or data.get("contextforgeServers"),
+            dry_run=bool(data.get("dry_run") or data.get("dryRun")),
         )
     if operation == "repair_pending_project_init_config":
         return _ok(

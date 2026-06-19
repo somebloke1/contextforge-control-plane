@@ -1375,6 +1375,39 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(common.safe_validation_policy("context7"), policy)
         self.assertEqual("passed", written["services"]["context7:canonical"]["target_clients"]["pi"]["validation_status"])
 
+    def test_pi_validation_result_keyed_by_service_identity_is_recordable(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            written_state = project_state.write_state_atomic(root, state)
+            service_identity_id = written_state["services"]["context7:canonical"]["x_service_identity_id"]
+
+            record_pi_reload(root)
+            result = helper.record_project_init_validation(
+                project_root=root,
+                client_type="pi",
+                validation_mode="validate_now",
+                validation_results={service_identity_id: pi_safe_probe_validation()},
+            )
+            written = project_state.load_state(root)
+
+        self.assertEqual("validation_recorded", result["status"])
+        self.assertEqual("initialized", result["project_status"])
+        assert written is not None
+        self.assertEqual("passed", written["services"]["context7:canonical"]["target_clients"]["pi"]["validation_status"])
+        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+
     def test_pi_helper_can_revalidate_after_stale_skipped_readback(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -1491,6 +1524,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("runHelperOperationJson", text)
         self.assertIn("projectInitCache", text)
         self.assertIn("resolveCachedPlan", text)
+        self.assertIn('runHelperOperationJson("cf_project_init_approve"', text)
+        self.assertIn('runHelperOperationJson("cf_project_init_apply"', text)
         self.assertIn("status: \"already_approved_from_pi_shim_cache\"", text)
         self.assertIn("status: \"already_applied_from_pi_shim_cache\"", text)
         self.assertIn("Supplying the full plan is optional", text)
@@ -1551,6 +1586,31 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("console.error", text)
         self.assertNotIn("mcp-bridge", text)
         self.assertNotIn("registerContext7Tools", text)
+
+    def test_pi_validation_output_is_record_validation_ready_on_first_attempt(self) -> None:
+        text = (REPO_ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
+
+        required_fields = [
+            "status",
+            "target_client_visible",
+            'target_client: "pi"',
+            'proof_kind: "pi_safe_probe_result"',
+            "safe_probe_result",
+            "safe_probe_id",
+            "tool_name",
+            "result_summary",
+            "verification_trace_refs",
+        ]
+        for field in required_fields:
+            with self.subTest(field=field):
+                self.assertIn(field, text)
+
+        self.assertIn("function recordValidationResult", text)
+        self.assertIn("service.serviceBinding", text)
+        self.assertIn("service.serviceIdentityId", text)
+        self.assertIn("results[key] = result", text)
+        self.assertEqual(4, text.count("recordValidationResult(validationResults, service, result)"))
+        self.assertIn("copy this exact top-level validation_results object", text)
 
     def test_pi_helper_cli_stdout_is_clean_json(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2400,6 +2460,110 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(applied["ok"])
         self.assertEqual("codex-client-reload-before-validation", applied["next_turn"]["question_id"])
         self.assertEqual("start_new_session", applied["client_reload_requirement"]["command"])
+
+    def test_pi_project_init_cli_id_digest_tools_survive_separate_processes(self) -> None:
+        def run_cli(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+            env = dict(os.environ)
+            env["PYTHONPATH"] = str(REPO_ROOT / "scripts")
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "pi_project_init_helper_cli.py"),
+                    "--operation",
+                    operation,
+                    "--payload-json",
+                    json.dumps(payload),
+                ],
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                timeout=30,
+            )
+            try:
+                parsed = json.loads(completed.stdout)
+            except json.JSONDecodeError as exc:
+                self.fail(f"{operation} returned non-JSON stdout={completed.stdout!r} stderr={completed.stderr!r}: {exc}")
+            self.assertEqual(0, completed.returncode, f"{operation} stderr={completed.stderr} stdout={completed.stdout}")
+            return parsed
+
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._PENDING_CHALLENGES.clear()
+            helper._LOCAL_APPROVAL_EVENTS.clear()
+
+            proposal = run_cli(
+                "propose_project_init",
+                {"project_root": str(root), "client_type": "pi", "selected_services": [service_descriptor("context7")]},
+            )
+            challenge = proposal["approval_challenge"]
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._PENDING_CHALLENGES.clear()
+            helper._LOCAL_APPROVAL_EVENTS.clear()
+
+            approval = run_cli(
+                "cf_project_init_approve",
+                {
+                    "project_root": str(root),
+                    "client_type": "pi",
+                    "challenge_id": challenge["challenge_id"],
+                    "plan_digest": proposal["plan_digest"],
+                },
+            )
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._APPROVED_RECEIPT_IDS_BY_PLAN.clear()
+
+            applied = run_cli(
+                "cf_project_init_apply",
+                {"project_root": str(root), "client_type": "pi", "dry_run": True},
+            )
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+
+        self.assertTrue(proposal["ok"])
+        self.assertTrue(approval["ok"])
+        self.assertEqual("allow", approval["decision"])
+        self.assertTrue(applied["ok"], applied.get("error"))
+        self.assertEqual("pi-client-reload-before-validation", applied["next_turn"]["question_id"])
+        self.assertEqual("/reload", applied["client_reload_requirement"]["command"])
+
+    def test_contextforge_helper_mcp_apply_prefers_cached_full_receipts_over_lossy_replay(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            challenge = proposal["approval_challenge"]
+            approval = contextforge_helper_mcp.cf_project_init_approve(
+                str(root),
+                challenge["challenge_id"],
+                proposal["plan_digest"],
+            )
+            lossy_receipts = json.loads(json.dumps(approval["receipts"]))
+            for receipt in lossy_receipts:
+                receipt.pop("plan_presented_digest", None)
+
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._APPROVED_RECEIPT_IDS_BY_PLAN.clear()
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root), receipts=lossy_receipts, dry_run=True)
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+
+        self.assertTrue(proposal["ok"])
+        self.assertTrue(approval["ok"])
+        self.assertEqual("allow", approval["decision"])
+        self.assertTrue(applied["ok"], applied.get("error"))
+        self.assertEqual("opencode-client-reload-before-validation", applied["next_turn"]["question_id"])
 
     def test_contextforge_helper_mcp_accepts_service_ids_and_expands_descriptors(self) -> None:
         with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:

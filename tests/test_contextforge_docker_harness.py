@@ -114,6 +114,21 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         ]:
             self.assertIn(pattern, dockerignore)
 
+    def test_client_harness_reset_script_is_idempotent_and_target_scoped(self) -> None:
+        source = (ROOT / "docker/client-harness/scripts/reset-client-harness-state.py").read_text(encoding="utf-8")
+
+        self.assertIn('"pi"', source)
+        self.assertIn('"opencode"', source)
+        self.assertIn("contextforge-client-harness_pi-home", source)
+        self.assertIn("contextforge-client-harness_opencode-home", source)
+        self.assertIn("workspace-preserved-", source)
+        self.assertIn('"allowlist": [".gitkeep"]', source)
+        self.assertIn('"postcondition": entries == [".gitkeep"]', source)
+        self.assertIn("--reset-home-volume", source)
+        self.assertIn("remaining_target_volume_containers", source)
+        self.assertNotIn("docker system prune", source)
+        self.assertNotIn("docker volume prune", source)
+
     def test_dev_harness_env_allows_compose_network_upstreams(self) -> None:
         env_example = (ROOT / "docker/contextforge-harness/env/contextforge.env.example").read_text(encoding="utf-8")
 

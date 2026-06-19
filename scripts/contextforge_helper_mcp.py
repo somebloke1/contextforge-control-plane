@@ -220,6 +220,45 @@ def _remember_receipts(project_root: str, receipts: list[dict[str, Any]]) -> Non
     _write_durable_cache(project_root, {**current, "receipts": list(receipts)})
 
 
+def _receipts_match_current_plan(receipts: Any, plan: dict[str, Any]) -> bool:
+    if not isinstance(receipts, list):
+        return False
+    plan_id = str(plan.get("plan_id") or "")
+    plan_digest = str(plan.get("plan_digest") or "")
+    required = {str(item) for item in plan.get("required_consent_classes") or []}
+    if not plan_id or not plan_digest:
+        return False
+    if not required:
+        return receipts == []
+    if len(receipts) != len(required):
+        return False
+    observed: set[str] = set()
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            return False
+        if str(receipt.get("plan_id") or "") != plan_id:
+            return False
+        if str(receipt.get("plan_digest") or "") != plan_digest:
+            return False
+        if not str(receipt.get("plan_presented_digest") or ""):
+            return False
+        observed.add(str(receipt.get("consent_class") or ""))
+    return observed == required
+
+
+def _matching_cached_receipts(project_root: str, plan: dict[str, Any]) -> list[dict[str, Any]] | None:
+    cached_receipts = _CACHED_RECEIPTS.get(_cache_key(project_root))
+    if _receipts_match_current_plan(cached_receipts, plan):
+        return list(cached_receipts or [])
+    durable = _read_durable_cache(project_root)
+    durable_receipts = durable.get("receipts") if isinstance(durable.get("receipts"), list) else None
+    if _receipts_match_current_plan(durable_receipts, plan):
+        remembered = list(durable_receipts or [])
+        _CACHED_RECEIPTS[_cache_key(project_root)] = remembered
+        return remembered
+    return None
+
+
 def _remember_recovery_plan(project_root: str, plan: dict[str, Any]) -> dict[str, Any]:
     _CACHED_RECOVERY_PLANS[_cache_key(project_root)] = dict(plan)
     current = _read_durable_cache(project_root)
@@ -735,13 +774,9 @@ def cf_project_init_apply(
     """Apply the cached approved project-init plan and receipts."""
     try:
         plan = _matching_cached_plan(project_root, None, None)
-        cached_receipts = receipts if receipts is not None else _CACHED_RECEIPTS.get(_cache_key(project_root))
-        if cached_receipts is None:
-            durable = _read_durable_cache(project_root)
-            durable_receipts = durable.get("receipts") if isinstance(durable.get("receipts"), list) else None
-            if durable_receipts is not None:
-                cached_receipts = list(durable_receipts)
-                _CACHED_RECEIPTS[_cache_key(project_root)] = cached_receipts
+        cached_receipts = _matching_cached_receipts(project_root, plan)
+        if cached_receipts is None and receipts is not None:
+            cached_receipts = receipts
         if not isinstance(cached_receipts, list):
             raise ValueError("no cached project-init receipts are available; call cf_project_init_approve first")
         helper.restore_process_local_approval_session(project_root=project_root, plan=plan, receipts=cached_receipts)

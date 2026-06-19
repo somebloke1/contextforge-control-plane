@@ -414,7 +414,7 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
 
 async function renderFirstPromptSelectionTurn(projectRoot: string): Promise<string> {
   try {
-    const capabilities = await runProjectInitHelperOperationJson("list_available_capabilities", {
+    const capabilities = await runProjectInitHelperOperationJson("list_available_capabilities", projectRoot, {
       project_root: projectRoot,
       client_type: "pi",
     });
@@ -886,7 +886,22 @@ async function runProjectInitHelperOperationJson(operation: string, projectRoot:
     const approved = asObject(cache.approval);
     const approval = normalizedApproval(payload);
     const plan = resolveCachedPlan(projectRoot, payload);
-    if (!plan) return helperError("MissingCachedPlan", "No cached project-init proposal matches this approval. Call cf_project_init_propose again, then approve the returned challenge ID and plan digest.");
+    if (!plan) {
+      const challengeId = String(approval.challenge_id || "");
+      const planDigest = String(approval.plan_digest || "");
+      if (!challengeId || !planDigest) {
+        return helperError("MissingCachedPlan", "No cached project-init proposal matches this approval. Call cf_project_init_propose again, then approve the returned challenge ID and plan digest.");
+      }
+      const result = await runHelperOperationJson("cf_project_init_approve", {
+        ...payload,
+        project_root: projectRoot,
+        client_type: "pi",
+        challenge_id: challengeId,
+        plan_digest: planDigest,
+      });
+      if (result.ok !== false && result.decision === "allow") cache.approval = result;
+      return result;
+    }
     if (approved.decision === "allow" && approved.plan_digest === plan.plan_digest) {
       return { ...approved, ok: true, status: "already_approved_from_pi_shim_cache" };
     }
@@ -898,7 +913,17 @@ async function runProjectInitHelperOperationJson(operation: string, projectRoot:
     const plan = resolveCachedPlan(projectRoot, payload);
     const approval = asObject(cache.approval);
     const receipts = Array.isArray(payload.receipts) ? payload.receipts : approval.receipts;
-    if (!plan) return helperError("MissingCachedPlan", "No cached project-init proposal is available to apply. Call cf_project_init_propose again.");
+    if (!plan) {
+      const result = await runHelperOperationJson("cf_project_init_apply", {
+        ...payload,
+        project_root: projectRoot,
+        client_type: "pi",
+      });
+      if (result.ok !== false && !payload.dryRun && !payload.dry_run) {
+        cache.apply = result;
+      }
+      return result;
+    }
     if (!Array.isArray(receipts)) return helperError("MissingCachedReceipts", "No cached scoped consent receipts are available. Call cf_project_init_approve before apply.");
     const applied = asObject(cache.apply);
     if (applied.ok !== false && applied.plan_digest === plan.plan_digest && !payload.dryRun && !payload.dry_run) {
@@ -1047,7 +1072,6 @@ async function runPiValidation(projectRoot: string): Promise<JsonObject> {
   const probes: JsonObject[] = [];
   for (const service of readback.services) {
     const candidate = validationCandidateFor(service, readback.tools, projectRoot);
-    const key = service.serviceIdentityId || service.serviceBinding;
     if (!candidate.tool || !candidate.route || !candidate.safeProbeId) {
       const skippedReason = candidate.skippedReason || "no_matching_safe_pi_tool";
       const result = {
@@ -1057,7 +1081,7 @@ async function runPiValidation(projectRoot: string): Promise<JsonObject> {
         service_binding: service.serviceBinding,
         service_identity_id: service.serviceIdentityId,
       };
-      validationResults[key] = result;
+      recordValidationResult(validationResults, service, result);
       probes.push({ ...result, serviceBinding: service.serviceBinding });
       continue;
     }
@@ -1073,7 +1097,7 @@ async function runPiValidation(projectRoot: string): Promise<JsonObject> {
         mcp_name: candidate.tool.mcpName,
         safe_probe_id: candidate.safeProbeId,
       };
-      validationResults[key] = result;
+      recordValidationResult(validationResults, service, result);
       probes.push({ ...result, serviceBinding: service.serviceBinding });
       continue;
     }
@@ -1097,7 +1121,7 @@ async function runPiValidation(projectRoot: string): Promise<JsonObject> {
         verification_trace_refs: [`pi://contextforge-global-shim/tools/${candidate.tool.piName}`],
         result_summary: summarizeToolCallResult(raw, semanticError),
       };
-      validationResults[key] = result;
+      recordValidationResult(validationResults, service, result);
       probes.push({ ...result, serviceBinding: service.serviceBinding });
     } catch (error) {
       const result = {
@@ -1113,8 +1137,9 @@ async function runPiValidation(projectRoot: string): Promise<JsonObject> {
         service_binding: service.serviceBinding,
         service_identity_id: service.serviceIdentityId,
         skipped_reason: errorMessage(error),
+        result_summary: `Pi-visible safe probe failed: ${errorMessage(error)}`,
       };
-      validationResults[key] = result;
+      recordValidationResult(validationResults, service, result);
       probes.push({ ...result, serviceBinding: service.serviceBinding });
     }
   }
@@ -1127,8 +1152,15 @@ async function runPiValidation(projectRoot: string): Promise<JsonObject> {
     projectRoot,
     summary: { total: probes.length, passed, skipped, pending },
     validation_results: validationResults,
-    next_action: "Call cf_project_init_record_validation with validationMode validate_now and this validation_results object.",
+    next_action: "Call cf_project_init_record_validation with validationMode validate_now and copy this exact top-level validation_results object.",
   };
+}
+
+function recordValidationResult(results: Record<string, JsonObject>, service: ProjectService, result: JsonObject): void {
+  const keys = [service.serviceBinding, service.serviceIdentityId].filter((key): key is string => Boolean(key));
+  for (const key of [...new Set(keys)]) {
+    results[key] = result;
+  }
 }
 
 function validationCandidateFor(service: ProjectService, tools: RegisteredTool[], projectRoot: string): ValidationCandidate {
