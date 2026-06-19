@@ -14,9 +14,13 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && npm cache clean --force
+COPY --chown=agent:agent contextforge-pi-bootstrap.sh /usr/local/bin/contextforge-pi-bootstrap
+COPY --chown=agent:agent pi-wrapper.sh /usr/local/bin/pi
+RUN chmod 0755 /usr/local/bin/contextforge-pi-bootstrap /usr/local/bin/pi
 USER agent
 
 ENV PI_CODING_AGENT_DIR=/home/agent/.pi/agent
 ENV CONTEXTFORGE_PI_SHIM_PYTHON=/opt/contextforge-wrapper-venv/bin/python
+ENV CONTEXTFORGE_PI_REAL_BIN=/usr/bin/pi
 
 CMD ["pi", "--version"]

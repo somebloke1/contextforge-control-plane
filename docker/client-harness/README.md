@@ -139,6 +139,12 @@ idempotency: rerunning the same activation/resume flow should converge on the
 same project-local state and should not leave duplicate, stale, or orphaned
 library/config artifacts behind.
 
+The Pi service also wraps bare `pi` commands inside the container. A developer
+who enters the persistent container with `docker compose -f
+docker/client-harness/compose.yml run pi bash` and then runs `pi` gets the same
+container-local Qwen model file and ContextForge shim bootstrap as the baseline
+launcher, without touching host/global Pi state.
+
 Use `pi-ephemeral` and `opencode-ephemeral` when a dev-time test needs a clean
 project workspace on each container run. These services mount `/workspace` as
 tmpfs, so project-local state is discarded when the container stops while the

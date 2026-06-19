@@ -56,6 +56,8 @@ Harness-owned baseline entrypoints:
 
 - `docker/client-harness/scripts/start-pi-contextforge-baseline.sh`
 - `docker/client-harness/config/pi/start-contextforge-baseline.sh`
+- `docker/client-harness/pi/pi-wrapper.sh`
+- `docker/client-harness/pi/contextforge-pi-bootstrap.sh`
 - `docker/client-harness/scripts/start-opencode-contextforge-baseline.sh`
 - `docker/client-harness/config/opencode/start-contextforge-baseline.sh`
 - `docker/client-harness/config/opencode/plugins/contextforge-project-init.js`
@@ -73,6 +75,14 @@ MCP-aware client does. The sustainable baseline route is:
 - point only at the ContextForge development Docker surface when runtime
   validation is separately approved;
 - avoid host Pi installs, host `/reload`, or host/global Pi state mutation.
+
+The persistent Pi Compose service must also support the common interactive
+debugging path `docker compose -f docker/client-harness/compose.yml run pi bash`
+followed by a bare `pi` command. The image-level wrapper at `/usr/local/bin/pi`
+seeds the same container-local `models.json`, AGENTS guidance, and shim files
+before delegating to the real npm Pi binary at `/usr/bin/pi`, and defaults that
+bare session to `local-llama-qwen/qwen3.6-a3b` unless the command explicitly
+selects another provider or model.
   Container-local writes under `/home/agent/.pi/agent/extensions` are harness
   setup, not project-init approval/apply writes.
 
