@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import subprocess
 import sys
@@ -28,6 +29,19 @@ class UseCase1E2EGateTests(unittest.TestCase):
             )
         self.assertEqual("", completed.stderr)
         return completed.returncode, json.loads(completed.stdout)
+
+    def pi_html_export(self, entries: list[dict[str, object]]) -> str:
+        data = {
+            "header": {
+                "type": "session",
+                "version": 3,
+                "id": "019edf2e-d7bb-7537-89e9-cd12ef678cff",
+                "cwd": "/workspace",
+            },
+            "entries": entries,
+        }
+        payload = base64.b64encode(json.dumps(data).encode("utf-8")).decode("ascii")
+        return f'<html><body><script id="session-data" type="application/json">{payload}</script></body></html>'
 
     def test_gate_document_requires_agent_e2e_before_human_validation(self) -> None:
         text = GATE_DOC.read_text(encoding="utf-8")
@@ -387,6 +401,121 @@ Output: {"status":"pi_validation_complete","summary":{"passed":1}}
         self.assertNotEqual(0, code)
         failure_codes = {failure["code"] for failure in result["failures"]}  # type: ignore[index]
         self.assertIn("pi_record_validation_before_validate", failure_codes)
+
+    def test_pi_html_export_decodes_and_rejects_state_mutation_false_pass(self) -> None:
+        transcript = self.pi_html_export(
+            [
+                {"type": "model_change", "modelId": "qwen3.6-a3b"},
+                {
+                    "type": "message",
+                    "message": {
+                        "role": "assistant",
+                        "model": "qwen3.6-a3b",
+                        "content": [
+                            {
+                                "type": "toolCall",
+                                "id": "call-list",
+                                "name": "cf_project_init_list_capabilities",
+                                "arguments": {"projectRoot": "/workspace"},
+                            }
+                        ],
+                    },
+                },
+                {
+                    "type": "message",
+                    "message": {
+                        "role": "toolResult",
+                        "toolCallId": "call-list",
+                        "toolName": "cf_project_init_list_capabilities",
+                        "content": [{"type": "text", "text": '{"available_services":["context7:canonical"]}'}],
+                    },
+                },
+                {
+                    "type": "message",
+                    "message": {
+                        "role": "assistant",
+                        "model": "qwen3.6-a3b",
+                        "content": [
+                            {
+                                "type": "toolCall",
+                                "id": "call-bash-read",
+                                "name": "bash",
+                                "arguments": {
+                                    "command": "cat /workspace/.project/context_forge_state.json | head -50"
+                                },
+                            }
+                        ],
+                    },
+                },
+                {
+                    "type": "message",
+                    "message": {
+                        "role": "assistant",
+                        "model": "qwen3.6-a3b",
+                        "content": [
+                            {
+                                "type": "toolCall",
+                                "id": "call-bash-write",
+                                "name": "bash",
+                                "arguments": {
+                                    "command": (
+                                        "python3 -c \"import json\\n"
+                                        "with open('.project/context_forge_state.json', 'w') as f:\\n"
+                                        "    state = {'services': {'context7:canonical': {'verification_layers': {'target_client': {}}}}}\\n"
+                                        "    state['services']['context7:canonical']['verification_layers']['target_client']['mode'] = 'presumed_working'\\n"
+                                        "    json.dump(state, f)\""
+                                    )
+                                },
+                            }
+                        ],
+                    },
+                },
+                {
+                    "type": "message",
+                    "message": {
+                        "role": "toolResult",
+                        "toolCallId": "call-bash-write",
+                        "toolName": "bash",
+                        "content": [{"type": "text", "text": "Validation status updated"}],
+                    },
+                },
+            ]
+        )
+
+        code, result = self.run_verifier("pi", transcript)
+
+        self.assertNotEqual(0, code)
+        self.assertTrue(result["checks"]["stable_session_id"])  # type: ignore[index]
+        self.assertTrue(result["checks"]["workspace_surface"])  # type: ignore[index]
+        self.assertTrue(result["checks"]["qwen_model_visible"])  # type: ignore[index]
+        self.assertTrue(result["checks"]["context7_selected"])  # type: ignore[index]
+        self.assertTrue(result["checks"]["observed_tool_outputs"])  # type: ignore[index]
+        failure_codes = {failure["code"] for failure in result["failures"]}  # type: ignore[index]
+        self.assertIn("pi_validate_tool_called", failure_codes)
+        self.assertIn("pi_bash_tool_validation_substitute", failure_codes)
+        self.assertIn("pi_contextforge_state_file_inspection", failure_codes)
+        self.assertIn("pi_contextforge_state_direct_mutation", failure_codes)
+
+    def test_pi_rejects_direct_context7_tool_as_validate_substitute(self) -> None:
+        transcript = """
+Session ID: pi-direct-context7
+Command: docker compose -f docker/client-harness/compose.yml rm -sf pi pi-ephemeral
+Command: docker compose -f docker/client-harness/compose.yml run --name cf-pi-uc1 pi bash
+Build - qwen3.6-a3b
+projectRoot /workspace context7:canonical
+Tool: cf_project_init_record_client_reload
+Output: {"status":"client_reload_recorded"}
+Tool: cf_context7_server_context7-local-resolve-library-id
+Output: Available Libraries
+Tool: cf_project_init_record_validation
+Output: {"status":"validation_recorded","project_status":"initialized"}
+"""
+        code, result = self.run_verifier("pi", transcript)
+
+        self.assertNotEqual(0, code)
+        failure_codes = {failure["code"] for failure in result["failures"]}  # type: ignore[index]
+        self.assertIn("pi_validate_tool_called", failure_codes)
+        self.assertIn("direct_pi_context7_tool_substitute", failure_codes)
 
 
 if __name__ == "__main__":

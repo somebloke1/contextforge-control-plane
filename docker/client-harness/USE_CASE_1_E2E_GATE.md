@@ -150,6 +150,9 @@ The transcript must include:
   ContextForge, secrets, trust, systemd, and production registry state.
 - raw tool events when available and an observed tool-output index using
   literal `Tool:` markers that references only transcript entries.
+- Pi HTML exports are acceptable evidence only when the embedded
+  `session-data` payload is decoded and audited as ordered user, assistant,
+  tool-call, and tool-result events.
 - targeted readbacks for every live challenge id, plan digest, job id, and
   validation result copied into a later prompt.
 
@@ -192,8 +195,9 @@ The Pi evidence must show:
 
 The Pi gate fails if the agent uses shell substitutes such as
 `python3 -m context7_*`, `which context7-*`, `npx @upstash/context7-mcp`, direct
-backend probes, or local file inspection as validation proof. Pi validation must
-go through the Pi-visible ContextForge shim/tool surface.
+backend probes, direct generated Context7 service tools, local file inspection,
+or direct `.project/context_forge_state.json` mutation as validation proof. Pi
+validation must go through the Pi-visible ContextForge shim/tool surface. Pi validation must not be inferred from local state.
 
 The Pi gate also fails if the assistant records validation in `presume_working`
 mode, records validation before `cf_contextforge_pi_validate`, or claims

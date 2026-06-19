@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import re
 import sys
@@ -19,6 +20,18 @@ DIRECT_SUBSTITUTION_PATTERNS = {
     "which_context7_cli_substitute": re.compile(r"\bwhich\s+context7-", re.I),
     "npx_context7_backend_substitute": re.compile(r"npx\s+-y\s+@upstash/context7-mcp", re.I),
     "direct_context7_stdio_substitute": re.compile(r'"method"\s*:\s*"tools/(list|call)"'),
+    "direct_pi_context7_tool_substitute": re.compile(
+        r"\b(?:cf_)?context7[_-][A-Za-z0-9_.:-]*context7-local-(?:resolve-library-id|query-docs)\b",
+        re.I,
+    ),
+    "pi_bash_tool_validation_substitute": re.compile(r"(?m)^\s*Tool:\s*bash\b"),
+    "pi_contextforge_state_file_inspection": re.compile(r"\b(?:cat|head|tail)\s+/workspace/\.project/context_forge_state\.json\b"),
+    "pi_contextforge_state_direct_mutation": re.compile(
+        r"open\(['\"]\.project/context_forge_state\.json['\"]\s*,\s*['\"]w['\"]\)|"
+        r"json\.dump\(state,\s*f|"
+        r"['\"](?:mode|validation_status)['\"]\]\s*=\s*['\"]presumed_working['\"]",
+        re.I,
+    ),
 }
 
 REJECTION_PATTERNS = {
@@ -44,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--format", choices=["json"], default="json")
     args = parser.parse_args(argv)
 
-    text = args.evidence.read_text(encoding="utf-8", errors="replace")
+    text = expand_embedded_session_export(args.evidence.read_text(encoding="utf-8", errors="replace"))
     result = verify(client=args.client, evidence_path=args.evidence, text=text, session_id=args.session_id)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["ok"] else 1
@@ -96,6 +109,71 @@ def verify(*, client: str, evidence_path: Path, text: str, session_id: str = "")
         "checks": checks,
         "failures": failures,
     }
+
+
+def expand_embedded_session_export(text: str) -> str:
+    match = re.search(
+        r"<script[^>]*\bid=[\"']session-data[\"'][^>]*>([\s\S]*?)</script>",
+        text,
+        re.I,
+    )
+    if not match:
+        return text
+    payload = re.sub(r"\s+", "", match.group(1))
+    try:
+        decoded = base64.b64decode(payload).decode("utf-8", errors="replace")
+        data = json.loads(decoded)
+    except Exception:
+        return text
+    return "\n".join([text, "\n# decoded-session-data", render_session_data(data), decoded])
+
+
+def render_session_data(data: object) -> str:
+    if not isinstance(data, dict):
+        return ""
+    lines: list[str] = []
+    header = data.get("header")
+    if isinstance(header, dict):
+        if header.get("id"):
+            lines.append(f"Session ID: {header['id']}")
+        if header.get("cwd"):
+            lines.append(f"CWD: {header['cwd']}")
+    calls_by_id: dict[str, str] = {}
+    for entry in data.get("entries", []):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") == "model_change" and entry.get("modelId"):
+            lines.append(f"Model: {entry['modelId']}")
+        if entry.get("type") == "custom_message" and entry.get("content"):
+            lines.append(f"Custom: {entry['content']}")
+        message = entry.get("message")
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role", "message")
+        if message.get("model"):
+            lines.append(f"Model: {message['model']}")
+        content = message.get("content", [])
+        if not isinstance(content, list):
+            continue
+        if role in {"user", "assistant"}:
+            rendered_text = "\n".join(part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") == "text")
+            if rendered_text:
+                lines.append(f"{str(role).title()}: {rendered_text}")
+            for part in content:
+                if not isinstance(part, dict) or part.get("type") != "toolCall":
+                    continue
+                tool_name = str(part.get("name", ""))
+                if part.get("id"):
+                    calls_by_id[str(part["id"])] = tool_name
+                lines.append(f"Tool: {tool_name}")
+                lines.append(f"Input: {json.dumps(part.get('arguments', {}), sort_keys=True)}")
+        elif role == "toolResult":
+            tool_name = str(message.get("toolName") or calls_by_id.get(str(message.get("toolCallId", "")), "unknown"))
+            lines.append(f"ToolResult: {tool_name}")
+            rendered_text = "\n".join(part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") == "text")
+            if rendered_text:
+                lines.append(f"Output: {rendered_text}")
+    return "\n".join(lines)
 
 
 def verify_persistent_container_surface(client: str, text: str, failures: list[dict[str, str]]) -> dict[str, bool]:

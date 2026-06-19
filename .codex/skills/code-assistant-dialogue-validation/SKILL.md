@@ -134,10 +134,13 @@ The validator must not decide PR readiness. It returns evidence only.
    not choose skip or presumed-working, and do not record final validation until
    the target-client-visible safe probe or validation tool has actually run.
 11. Capture full user, assistant, tool-call, and tool-output transcript. If the
-   client emits JSON, preserve the raw tool events and add an observed tool
-   index with `Tool:` markers that reference only real transcript entries.
-   The observed tool index must be built from real tool-call events, not prose
-   such as "I will call tool X next."
+    client emits JSON, preserve the raw tool events and add an observed tool
+    index with `Tool:` markers that reference only real transcript entries.
+    Pi HTML exports must have their embedded `session-data` payload decoded
+    before pass/fail judgment; the base64 wrapper is not itself auditable
+    dialogue evidence.
+    The observed tool index must be built from real tool-call events, not prose
+    such as "I will call tool X next."
    Large raw streams may be stored separately from the narrative transcript, but
    the narrative must cite targeted readbacks from the raw stream for every live
    value used in later prompts.
@@ -174,7 +177,8 @@ A dialogue validation pass requires:
   approval/apply, reload acknowledgement, and validation recording;
 - target-client validation uses the actual visible ContextForge tool or
   client shim, not backend health, shell commands, package CLIs, direct stdio,
-  local files, or invented JSON;
+  direct generated Context7 service tools, local files, direct
+  `.project/context_forge_state.json` mutation, or invented JSON;
 - the assistant calls safe probe before record-validation;
 - every required client-visible tool in the full story is observed in order
   before the lease is considered complete;
