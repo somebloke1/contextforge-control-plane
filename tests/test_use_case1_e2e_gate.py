@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VERIFIER = ROOT / "docker/client-harness/scripts/verify-use-case-1-e2e-evidence.py"
 GATE_DOC = ROOT / "docker/client-harness/USE_CASE_1_E2E_GATE.md"
+DIALOGUE_SKILL = ROOT / ".codex/skills/code-assistant-dialogue-validation/SKILL.md"
 
 
 class UseCase1E2EGateTests(unittest.TestCase):
@@ -32,14 +33,29 @@ class UseCase1E2EGateTests(unittest.TestCase):
         text = GATE_DOC.read_text(encoding="utf-8")
 
         self.assertIn("Human validation must not be requested until this gate has passed", text)
+        self.assertIn("code-assistant-dialogue-validation", text)
+        self.assertIn("Delegate a Pi dialogue-validation lease to a dev agent", text)
+        self.assertIn("Delegate an OpenCode dialogue-validation lease to a dev agent", text)
         self.assertIn("Repeat testing -> remediation -> testing until both clients pass", text)
         self.assertIn("This is a loop, not a one-shot checklist", text)
         self.assertIn("Human testing is an acceptance check after", text)
+        self.assertIn("The verifier is an audit gate, not the validation actor", text)
         self.assertIn("one continuous command-line agent session with a stable", text)
         self.assertIn("scripts/verify-use-case-1-e2e-evidence.py", text)
         self.assertIn("The OpenCode gate fails if the agent calls record-validation before the safe", text)
         self.assertIn("Pi validation must", text)
         self.assertIn("go through the Pi-visible ContextForge shim/tool surface", text)
+
+    def test_dialogue_validation_skill_defines_delegated_agent_contract(self) -> None:
+        text = DIALOGUE_SKILL.read_text(encoding="utf-8")
+
+        self.assertIn("name: code-assistant-dialogue-validation", text)
+        self.assertIn("A scripted smoke test can prepare the environment or audit captured evidence.", text)
+        self.assertIn("It cannot satisfy a human-facing dialogue gate.", text)
+        self.assertIn("validator agent conducting the same interaction a human would conduct", text)
+        self.assertIn("stable session id", text)
+        self.assertIn("target-client validation uses the actual visible ContextForge tool", text)
+        self.assertIn("no helper rejection is needed to teach the required sequence", text)
 
     def test_opencode_rejects_record_validation_before_safe_probe(self) -> None:
         transcript = """

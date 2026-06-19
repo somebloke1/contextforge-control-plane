@@ -4,16 +4,22 @@ This gate applies to PR #271 and the first cumulative #247 service slice:
 `context7:canonical` through Pi client Docker and OpenCode client Docker.
 
 Human validation must not be requested until this gate has passed with full
-agent-session evidence for both clients. Source tests, direct helper calls,
-backend probes, smoke scripts, and hand-shaped validation payloads are useful
-diagnostics, but they are not substitutes for this gate.
+delegated code-assistant dialogue evidence for both clients. Use the project
+skill `.codex/skills/code-assistant-dialogue-validation/SKILL.md` for that
+lease. Source tests, direct helper calls, backend probes, smoke scripts,
+evidence verifiers, and hand-shaped validation payloads are useful diagnostics,
+but they are not substitutes for a delegated agent actually driving the client
+dialogue.
 
 ## Required Order
 
 1. Run the existing source/unit/static checks.
 2. Rebuild any changed client harness images.
-3. Run the Pi end-to-end agent session from the command line.
-4. Run the OpenCode end-to-end agent session from the command line.
+3. Delegate a Pi dialogue-validation lease to a dev agent. That agent must run
+   the Pi client from the command line and conduct the full use-case dialogue.
+4. Delegate an OpenCode dialogue-validation lease to a dev agent. That agent
+   must run OpenCode from the command line and conduct the full use-case
+   dialogue.
 5. Verify the two captured transcripts with
    `scripts/verify-use-case-1-e2e-evidence.py`.
 6. If any required outcome fails, remediate the source/harness/prompt defect,
@@ -30,18 +36,21 @@ This is a loop, not a one-shot checklist. A partial pass followed by a later
 agent failure resets the gate to remediation. A helper rejection that the agent
 eventually recovers from is still a failed gate when the required user-facing
 interaction was supposed to be clean. Human testing is an acceptance check after
-agent evidence passes; it is not the mechanism for discovering ordinary
-integration failures.
+delegated dialogue-agent evidence passes; it is not the mechanism for
+discovering ordinary integration failures.
 
 ## What Counts As End-to-End Agent Evidence
 
 Each client needs one continuous command-line agent session with a stable
-session id. The evidence must show the real model-driven assistant behavior,
-not only helper or shell probes.
+session id or explicit continuation chain. A delegated dev agent must conduct
+the session by prompting/instructing the target assistant and observing its
+responses. The evidence must show the real model-driven assistant behavior, not
+only helper calls, shell probes, or scripted command output.
 
 The transcript must include:
 
 - the session id used for the run;
+- the delegated validator agent id and lease id;
 - the command line used to start or resume the session;
 - the complete user prompts and assistant/tool outputs for the lifecycle;
 - service discovery/menu presentation for `context7:canonical`;
@@ -54,8 +63,9 @@ The transcript must include:
 - explicit non-actions for host/global client config, legacy/live
   ContextForge, secrets, trust, systemd, and production registry state.
 
-Captured summaries are not enough. The evidence must contain the observed tool
-calls and outputs that prove the agent followed the flow.
+Captured summaries are not enough. The evidence must contain the observed
+assistant messages, tool calls, and tool outputs that prove the agent followed
+the flow.
 
 The expected outcome is not merely that a final helper field says initialized.
 The observed agent interaction must complete the use case cleanly: correct
@@ -141,8 +151,10 @@ python3 docker/client-harness/scripts/verify-use-case-1-e2e-evidence.py \
   --evidence docker/client-harness/evidence/use-case-1/opencode-session.md
 ```
 
-The verifier is a gate, not a repair tool. If it fails, keep the work in agent
-repair and attach the verifier output to the issue/PR.
+The verifier is an audit gate, not the validation actor and not a repair tool.
+It can reject bad evidence after a delegated dialogue run, but it cannot
+replace the delegated code-assistant validator. If it fails, keep the work in
+agent repair and attach the verifier output to the issue/PR.
 
 ## Human Validation Handoff
 
@@ -150,6 +162,7 @@ The human validation handoff must be a single PR comment titled
 `Human Validation Checklist for PR #271`. It must include:
 
 - links or paths to the passing Pi and OpenCode agent transcripts;
+- validator agent ids and lease ids for both runs;
 - verifier command lines and pass output for both clients;
 - the exact PR head SHA;
 - the human commands to rerun the same surfaces;
