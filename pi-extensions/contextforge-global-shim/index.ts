@@ -826,8 +826,9 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
     {
       name: "cf_project_init_record_client_reload",
       operation: "record_project_init_client_reload",
-      description: "Record that the user has issued the required Pi reload before validation.",
+      description: "Record that the user has issued the required Pi reload before validation. Pass validationMode when the resumed user turn already chose validation or skip.",
       parameters: helperSchema({
+        validationMode: { type: "string", enum: ["validate_now", "presume_working"] },
         dryRun: { type: "boolean" },
       }),
     },

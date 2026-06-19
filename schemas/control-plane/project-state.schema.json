@@ -578,6 +578,9 @@
             "not_required",
             "required",
             "acknowledged",
+            "pending_reload",
+            "reload_observed",
+            "reload_acknowledged",
             "unknown"
           ]
         },

@@ -573,7 +573,7 @@ def _normalize_client_state_record(
     if validation_status not in {"not_started", "pending", "passed", "presumed_working", "skipped", "mixed", "blocked"}:
         validation_status = "pending"
     reload_status = str(record.get("reload_status") or fallback.get("reload_status") or "unknown")
-    if reload_status not in {"not_required", "required", "acknowledged", "unknown"}:
+    if reload_status not in {"not_required", "required", "acknowledged", "pending_reload", "reload_observed", "reload_acknowledged", "unknown"}:
         reload_status = "unknown"
     return {
         "client_type": client_type,
@@ -637,12 +637,17 @@ def _client_lifecycle_status_from_validation(validation_status: str) -> str:
 def _client_reload_status_from_job(client_type: str, job: dict[str, Any]) -> str:
     if client_type not in CLIENTS_REQUIRING_PROJECT_RELOAD:
         return "not_required"
+    fsm = job.get("x_client_reload_fsm") if isinstance(job.get("x_client_reload_fsm"), dict) else {}
+    if str(fsm.get("client_type") or "") == client_type:
+        state = str(fsm.get("state") or "")
+        if state in {"pending_reload", "reload_observed", "reload_acknowledged"}:
+            return state
     ack = job.get("x_client_reload_ack") if isinstance(job.get("x_client_reload_ack"), dict) else {}
     if str(ack.get("client_type") or "") == client_type and bool(ack.get("acknowledged_at")):
-        return "acknowledged"
+        return "reload_acknowledged"
     if job.get("status") in {"verified", "presumed_working"}:
         return "unknown"
-    return "required"
+    return "pending_reload"
 
 
 def _client_lifecycle_status_from_job(job: dict[str, Any], *, validation_status: str, reload_status: str) -> str:
@@ -654,7 +659,7 @@ def _client_lifecycle_status_from_job(job: dict[str, Any], *, validation_status:
         return "presumed_working"
     if job_status in {"failed", "fresh_approval_required", "manual_recovery"} or recovery_state in {"manual_recovery", "fresh_approval_required"}:
         return "blocked"
-    if reload_status == "required":
+    if reload_status in {"required", "pending_reload", "reload_observed"}:
         return "reload_required"
     return "validation_pending"
 
@@ -1512,7 +1517,30 @@ def _activation_job_record(
     }
     if isinstance(record.get("x_client_reload_ack"), dict):
         result["x_client_reload_ack"] = json.loads(json.dumps(record["x_client_reload_ack"]))
+    if isinstance(record.get("x_client_reload_fsm"), dict):
+        result["x_client_reload_fsm"] = json.loads(json.dumps(record["x_client_reload_fsm"]))
+    elif target_client in CLIENTS_REQUIRING_PROJECT_RELOAD and status in {"applied_validation_choice_pending", "validation_pending"}:
+        result["x_client_reload_fsm"] = {
+            "state": "pending_reload",
+            "client_type": target_client,
+            "job_id": job_id,
+            "plan_id": result["plan_id"],
+            "command": _client_reload_command(target_client),
+            "local_client_config_digest": client_config_plan.get("after_digest"),
+        }
     return result
+
+
+def _client_reload_command(target_client: str) -> str | None:
+    if target_client == "codex":
+        return "start_new_session"
+    if target_client == "gemini":
+        return "restart_session"
+    if target_client == "opencode":
+        return "start_new_session"
+    if target_client == "pi":
+        return "/reload"
+    return None
 
 
 def _client_activation_operation_id(target_client: str) -> str:

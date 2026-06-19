@@ -78,12 +78,12 @@ def context7_safe_probe_validation(target_client: str = "codex") -> dict[str, An
     )
 
 
-def record_pi_reload(root: Path) -> dict[str, Any]:
-    return helper.record_project_init_client_reload(project_root=root, client_type="pi")
+def record_pi_reload(root: Path, *, validation_mode: str | None = None) -> dict[str, Any]:
+    return helper.record_project_init_client_reload(project_root=root, client_type="pi", validation_mode=validation_mode)
 
 
-def record_codex_new_session(root: Path) -> dict[str, Any]:
-    return helper.record_project_init_client_reload(project_root=root, client_type="codex")
+def record_codex_new_session(root: Path, *, validation_mode: str | None = None) -> dict[str, Any]:
+    return helper.record_project_init_client_reload(project_root=root, client_type="codex", validation_mode=validation_mode)
 
 
 def serena_descriptor() -> dict[str, Any]:
@@ -1155,6 +1155,79 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(["context7:canonical"], capabilities["current_job"]["selected_service_bindings"])
         self.assertEqual("resume_validation", proposal["status"])
         self.assertEqual("validation-choice", proposal["next_turn"]["question_id"])
+
+    def test_client_reload_fsm_carries_resumed_validation_intent_without_second_choice(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            (root / "opencode.json").write_text(str(config_plan["next_text"]), encoding="utf-8")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            written = project_state.write_state_atomic(root, state)
+
+            job_id = written["project_init"]["current_job_id"]
+            pending_job = written["project_init"]["activation_jobs"][job_id]
+            pending_client_state = written["project_init"]["client_states"]["opencode"]
+            ack = helper.record_project_init_client_reload(
+                project_root=root,
+                client_type="opencode",
+                validation_mode="validate_now",
+            )
+            after = project_state.load_state(root)
+            assert after is not None
+            ack_job = after["project_init"]["activation_jobs"][job_id]
+            ack_client_state = after["project_init"]["client_states"]["opencode"]
+            premature_validation = helper.record_project_init_validation(
+                project_root=root,
+                client_type="opencode",
+                validation_mode="validate_now",
+                dry_run=True,
+            )
+
+        self.assertEqual("pending_reload", pending_job["x_client_reload_fsm"]["state"])
+        self.assertEqual("pending_reload", pending_client_state["reload_status"])
+        self.assertEqual("client_reload_recorded_validation_requested", ack["status"])
+        self.assertNotIn("next_turn", ack)
+        self.assertEqual("run-target-client-validation-probes", ack["next_action"]["id"])
+        self.assertIn("context7:canonical", ack["next_action"]["expected_validation_results_shape"])
+        self.assertEqual("reload_acknowledged", ack["current_job"]["client_reload_fsm"]["state"])
+        self.assertEqual("validate_now", ack["current_job"]["client_reload_fsm"]["validation_intent"])
+        self.assertEqual("reload_acknowledged", ack_job["x_client_reload_fsm"]["state"])
+        self.assertEqual("reload_acknowledged", ack_client_state["reload_status"])
+        self.assertEqual("validation_results_required", premature_validation["status"])
+
+    def test_client_reload_fsm_carries_resumed_skip_intent_without_second_choice(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            project_state.write_state_atomic(root, state)
+
+            ack = record_pi_reload(root, validation_mode="presume_working")
+
+        self.assertEqual("client_reload_recorded_presume_working_requested", ack["status"])
+        self.assertNotIn("next_turn", ack)
+        self.assertEqual("record-presumed-working", ack["next_action"]["id"])
+        self.assertEqual("presume_working", ack["current_job"]["client_reload_fsm"]["validation_intent"])
 
     def test_pi_helper_detects_and_repairs_pending_shim_metadata_drift(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -3126,8 +3199,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("do not silently replace the challenge id", text)
         self.assertIn("prefer those cached id/digest tools over reconstructing a full plan object", text)
         self.assertIn("first call cf_project_init_record_client_reload", text)
-        self.assertIn("honor that choice after recording the reload acknowledgement instead of asking again", text)
-        self.assertIn("after the reload or new session, resume project init", text)
+        self.assertIn("pass validation mode validate_now or presume_working to the reload call", text)
+        self.assertIn("after reload or new session, resume project init", text)
         self.assertIn("Codex launches configured MCP servers and exposes their tools when a session starts", text)
         self.assertIn("/mcp is a status view, not an in-place MCP tool reload", text)
         self.assertIn("start a new Codex session from the project root before target-client-visible validation", text)

@@ -174,6 +174,7 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
             helper.record_project_init_client_reload(
                 project_root=project_root,
                 client_type=client_type,
+                validation_mode=data.get("validation_mode") or data.get("validationMode"),
                 dry_run=bool(data.get("dry_run") or data.get("dryRun")),
             )
         )

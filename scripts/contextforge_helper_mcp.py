@@ -738,15 +738,23 @@ def cf_project_init_record_validation(
 def record_project_init_client_reload(
     project_root: str,
     client_type: str = "codex",
+    validation_mode: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Record that the target client has been reloaded after project activation."""
+    """Record that the target client has been reloaded after project activation.
+
+    If the resumed user turn already chose validation or skip validation, pass
+    validation_mode="validate_now" or "presume_working" so the helper can carry
+    that intent forward without asking the same validation-choice question
+    again. Reload acknowledgement is not service validation proof.
+    """
     try:
         return {
             "ok": True,
             **helper.record_project_init_client_reload(
                 project_root=project_root,
                 client_type=client_type,
+                validation_mode=validation_mode,
                 dry_run=dry_run,
             ),
         }
@@ -758,12 +766,14 @@ def record_project_init_client_reload(
 def cf_project_init_record_client_reload(
     project_root: str,
     client_type: str = "codex",
+    validation_mode: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Alias for record_project_init_client_reload with the project-init tool id."""
     return record_project_init_client_reload(
         project_root=project_root,
         client_type=client_type,
+        validation_mode=validation_mode,
         dry_run=dry_run,
     )
 

@@ -749,25 +749,45 @@ def record_project_init_client_reload(
     *,
     project_root: str | Path,
     client_type: str = "pi",
+    validation_mode: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
+    if validation_mode is not None and validation_mode not in {"validate_now", "presume_working"}:
+        raise ProjectInitHelperError("validation_mode must be validate_now, presume_working, or omitted")
     root = project_state.validate_project_root(project_root, require_workspace=True)
     state, job, selected = _pending_validation_state_job(root, client_type=client_type)
+    selected_bindings = _job_selected_service_bindings(job)
     reload_requirement = client_reload_requirement(client_type, event="project_activation_apply")
     if not reload_requirement or not reload_requirement.get("blocks_validation_until_done"):
-        return {
+        result = {
             "status": "reload_not_required",
             "client_type": client_type,
-            "current_job": _job_resume_summary(job, selected, selected_bindings=_job_selected_service_bindings(job)),
-            "next_turn": validation_choice_turn(),
+            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
         }
+        result.update(_post_reload_validation_continuation(root, state, job, selected, selected_bindings=selected_bindings, client_type=client_type, validation_mode=validation_mode))
+        return result
     updated_job = json.loads(json.dumps(job))
+    acknowledged_at = now_timestamp()
     updated_job["x_client_reload_ack"] = {
         "client_type": client_type,
         "command": reload_requirement.get("command"),
-        "acknowledged_at": now_timestamp(),
+        "acknowledged_at": acknowledged_at,
         "acknowledged_by": "control_plane_project_init_helper",
     }
+    prior_fsm = job.get("x_client_reload_fsm") if isinstance(job.get("x_client_reload_fsm"), Mapping) else {}
+    updated_job["x_client_reload_fsm"] = {
+        "state": "reload_acknowledged",
+        "previous_state": str(prior_fsm.get("state") or "pending_reload"),
+        "client_type": client_type,
+        "job_id": str(updated_job.get("job_id") or ""),
+        "plan_id": str(updated_job.get("plan_id") or ""),
+        "command": reload_requirement.get("command"),
+        "local_client_config_digest": updated_job.get("local_client_config_digest"),
+        "acknowledged_at": acknowledged_at,
+        "acknowledged_by": "control_plane_project_init_helper",
+    }
+    if validation_mode:
+        updated_job["x_client_reload_fsm"]["validation_intent"] = validation_mode
     next_state = json.loads(json.dumps(state))
     next_state["project_init"]["activation_jobs"][str(updated_job["job_id"])] = updated_job
     client_state = dict(project_state.project_init_client_state(next_state, client_type) or {})
@@ -779,8 +799,8 @@ def record_project_init_client_reload(
             "selected_service_ids": [str(item) for item in updated_job.get("selected_service_ids") or [] if item],
             "selected_service_bindings": [str(item) for item in updated_job.get("selected_service_bindings") or [] if item],
             "validation_status": "pending",
-            "reload_status": "acknowledged",
-            "updated_at": updated_job["x_client_reload_ack"]["acknowledged_at"],
+            "reload_status": "reload_acknowledged",
+            "updated_at": acknowledged_at,
             "last_plan_id": updated_job.get("plan_id"),
             "local_client_config_digest": updated_job.get("local_client_config_digest"),
         }
@@ -799,7 +819,6 @@ def record_project_init_client_reload(
         "status": "client_reload_recorded_dry_run" if dry_run else "client_reload_recorded",
         "client_type": client_type,
         "current_job": _job_resume_summary(updated_job, selected, selected_bindings=_job_selected_service_bindings(updated_job)),
-        "next_turn": validation_choice_turn(),
         "non_actions": [
             _validation_not_recorded_label(client_type),
             "no project-local client config write",
@@ -807,10 +826,60 @@ def record_project_init_client_reload(
             "no ContextForge registry or catalog mutation",
         ],
     }
+    if validation_mode == "validate_now":
+        result["status"] = "client_reload_recorded_validation_requested_dry_run" if dry_run else "client_reload_recorded_validation_requested"
+    elif validation_mode == "presume_working":
+        result["status"] = "client_reload_recorded_presume_working_requested_dry_run" if dry_run else "client_reload_recorded_presume_working_requested"
+    result.update(
+        _post_reload_validation_continuation(
+            root,
+            next_state,
+            updated_job,
+            selected,
+            selected_bindings=_job_selected_service_bindings(updated_job),
+            client_type=client_type,
+            validation_mode=validation_mode,
+        )
+    )
     if not dry_run:
         written = project_state.write_state_atomic(root, next_state, updated_by="control_plane_project_init_helper")
         result["state_revision"] = written["meta"]["revision"]
     return result
+
+
+def _post_reload_validation_continuation(
+    root: Path,
+    state: Mapping[str, Any],
+    job: Mapping[str, Any],
+    selected: Sequence[str],
+    *,
+    selected_bindings: Sequence[str],
+    client_type: str,
+    validation_mode: str | None,
+) -> dict[str, Any]:
+    if validation_mode is None:
+        return {"next_turn": validation_choice_turn()}
+    if validation_mode == "presume_working":
+        return {
+            "next_action": {
+                "id": "record-presumed-working",
+                "operation": "record_project_init_validation",
+                "validation_mode": "presume_working",
+                "client_type": client_type,
+                "description": "Record the already-selected skip validation choice without asking the user the same validation-choice question again.",
+            }
+        }
+    services = _services_from_state_or_catalog(root, state, selected, selected_bindings=selected_bindings, client_type=client_type)
+    return {
+        "next_action": {
+            "id": "run-target-client-validation-probes",
+            "operation": "record_project_init_validation",
+            "validation_mode": "validate_now",
+            "client_type": client_type,
+            "description": "Call the selected service safe probe through the target client, then record validation with service-keyed validation_results.",
+            "expected_validation_results_shape": _expected_validation_results_shape(services),
+        }
+    }
 
 
 def repair_pending_project_init_config(
@@ -1360,6 +1429,14 @@ def _job_selected_service_bindings(job: Mapping[str, Any]) -> list[str]:
 
 
 def _job_reload_acknowledged(job: Mapping[str, Any], reload_requirement: Mapping[str, Any]) -> bool:
+    fsm = job.get("x_client_reload_fsm") if isinstance(job.get("x_client_reload_fsm"), Mapping) else {}
+    if (
+        str(fsm.get("state") or "") == "reload_acknowledged"
+        and str(fsm.get("client_type") or "") == str(reload_requirement.get("client_type") or "")
+        and str(fsm.get("command") or "") == str(reload_requirement.get("command") or "")
+        and bool(fsm.get("acknowledged_at"))
+    ):
+        return True
     ack = job.get("x_client_reload_ack") if isinstance(job.get("x_client_reload_ack"), Mapping) else {}
     return (
         str(ack.get("client_type") or "") == str(reload_requirement.get("client_type") or "")
@@ -1379,6 +1456,7 @@ def _job_resume_summary(job: Mapping[str, Any], selected_service_ids: Sequence[s
         "selected_service_bindings": list(selected_bindings if selected_bindings is not None else _job_selected_service_bindings(job)),
         "local_client_config_digest": job.get("local_client_config_digest"),
         "client_reload_acknowledged": bool(job.get("x_client_reload_ack")),
+        "client_reload_fsm": dict(job.get("x_client_reload_fsm") or {}) if isinstance(job.get("x_client_reload_fsm"), Mapping) else None,
     }
 
 
