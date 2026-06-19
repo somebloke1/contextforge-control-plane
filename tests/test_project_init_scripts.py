@@ -1416,7 +1416,10 @@ class SerenaManagerTests(unittest.TestCase):
 
     def test_gemini_project_init_hook_uses_gemini_lifecycle_events(self) -> None:
         self.assertEqual({"SessionStart", "BeforeAgent"}, set(gemini_project_init_hook.GEMINI_HOOK_EVENTS))
-        self.assertEqual({"chat.message", "session.created"}, set(opencode_project_init_hook.OPENCODE_HOOK_EVENTS))
+        self.assertEqual(
+            {"experimental.chat.messages.transform", "chat.message", "session.created"},
+            set(opencode_project_init_hook.OPENCODE_HOOK_EVENTS),
+        )
         self.assertEqual({"SessionStart", "UserPromptSubmit"}, set(init_hook.CODEX_HOOK_EVENTS))
 
     def test_opencode_project_init_hook_routes_to_opencode_client_context(self) -> None:
@@ -1439,14 +1442,14 @@ class SerenaManagerTests(unittest.TestCase):
             opencode_project_init_hook.codex_project_init_hook.main_for_events = original  # type: ignore[assignment]
 
         self.assertEqual(1, len(calls))
-        self.assertEqual({"chat.message", "session.created"}, calls[0]["events"])
+        self.assertEqual({"experimental.chat.messages.transform", "chat.message", "session.created"}, calls[0]["events"])
         self.assertTrue(calls[0]["suppress_output"])
         self.assertEqual("opencode", calls[0]["target_client"])
 
     def test_gemini_project_init_hook_import_suppresses_gateway_stderr(self) -> None:
         cases = [
             ("gemini_project_init_hook", "GEMINI_HOOK_EVENTS", "BeforeAgent,SessionStart"),
-            ("opencode_project_init_hook", "OPENCODE_HOOK_EVENTS", "chat.message,session.created"),
+            ("opencode_project_init_hook", "OPENCODE_HOOK_EVENTS", "chat.message,experimental.chat.messages.transform,session.created"),
         ]
         for module_name, attr_name, expected in cases:
             with self.subTest(module=module_name):
@@ -1891,7 +1894,7 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertIn("for OpenCode this is project-local opencode.json plus .project/context_forge_state.json", text)
         self.assertIn("user-home OpenCode ContextForge plugin and contextforge-helper bootstrap entries", text)
         self.assertIn("input-triggered hidden message", text)
-        self.assertIn("chat.message hook as the first-prompt trigger", text)
+        self.assertIn("messages transform hook as the first-prompt trigger", text)
         self.assertIn("does not rely on experimental.chat.system.transform as the primary init mechanism", text)
         self.assertIn("cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only", text)
         self.assertIn("do not reconstruct the full plan object from visible text", text)
@@ -2083,7 +2086,7 @@ class SerenaManagerTests(unittest.TestCase):
             root = Path(tmp).resolve()
             run_root = Path(run_tmp)
             payload = {
-                "hook_event_name": "chat.message",
+                "hook_event_name": "experimental.chat.messages.transform",
                 "session_id": "opencode-fresh-project",
                 "cwd": str(root),
             }
@@ -2100,7 +2103,7 @@ class SerenaManagerTests(unittest.TestCase):
                 contextlib.redirect_stdout(stdout),
             ):
                 code = init_hook.main_for_events(
-                    {"chat.message"},
+                    {"experimental.chat.messages.transform"},
                     suppress_output=True,
                     target_client="opencode",
                 )

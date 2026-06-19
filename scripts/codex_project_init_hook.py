@@ -284,7 +284,7 @@ def prompt_text_is_fresh(text: str) -> bool:
         "Gemini CLI launches configured MCP servers and exposes their tools when a session starts",
         "Gemini's user-global ContextForge hook injects this project-init guidance through SessionStart/BeforeAgent additionalContext",
         "OpenCode discovers configured MCP servers and loads user-home plugins when a session starts",
-        "OpenCode's user-home ContextForge plugin uses the chat.message hook as the first-prompt trigger",
+        "OpenCode's user-home ContextForge plugin uses the messages transform hook as the first-prompt trigger",
         "does not rely on experimental.chat.system.transform as the primary init mechanism",
         "/mcp is a status view, not an in-place MCP tool reload",
         "start a new Codex session from the project root before target-client-visible validation",

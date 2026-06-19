@@ -104,7 +104,7 @@ project-local after helper approval/apply. The sustainable baseline route is:
   instead of the host `.venv`;
 - reuse the project-local hook behavior implemented by
   `scripts/opencode_project_init_hook.py`;
-- use the `chat.message` OpenCode plugin hook as the first-prompt trigger,
+- use the OpenCode messages transform plugin hook as the first-prompt trigger,
   not `experimental.chat.system.transform` as the primary init path;
 - keep hook runtime state under writable container-local runtime paths, not
   under the read-only `/repo` mount;

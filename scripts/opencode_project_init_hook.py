@@ -16,7 +16,7 @@ def _load_codex_project_init_hook():
 
 codex_project_init_hook = _load_codex_project_init_hook()
 
-OPENCODE_HOOK_EVENTS = frozenset({"chat.message", "session.created"})
+OPENCODE_HOOK_EVENTS = frozenset({"experimental.chat.messages.transform", "chat.message", "session.created"})
 
 
 def main() -> int:
