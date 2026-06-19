@@ -332,6 +332,10 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("CONTEXTFORGE_PI_SHIM_EXTENSION: /repo/pi-extensions/contextforge-global-shim/index.ts", compose)
         self.assertIn("CONTEXTFORGE_PI_SHIM_INSTALL_DIR: /home/agent/.pi/agent/extensions/contextforge-global-shim", compose)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py", compose)
+        self.assertIn("CONTEXTFORGE_CONFIG_ENV: /config/contextforge/contextforge.env", compose)
+        self.assertIn("CONTEXTFORGE_BASE_URL: http://host.docker.internal:4445", compose)
+        self.assertIn("CONTEXTFORGE_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json", compose)
+        self.assertIn("CONTEXTFORGE_TOKEN_LOCK: /tmp/contextforge-wrapper-token.local.json.lock", compose)
         self.assertIn("CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace", compose)
 
         for service in ("opencode", "pi"):
@@ -339,6 +343,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
             self.assertIsNotNone(match, service)
             self.assertIn("- ../..:/repo:ro", match.group(0))
             self.assertIn("- ./workspace:/workspace", match.group(0))
+            if service == "pi":
+                self.assertIn("- ../contextforge-harness/env:/config/contextforge:ro", match.group(0))
 
         for service in ("opencode-ephemeral", "pi-ephemeral"):
             match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
@@ -347,6 +353,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
             self.assertIn("tmpfs:", match.group(0))
             self.assertIn("- /workspace:uid=1000,gid=1000,mode=0755", match.group(0))
             self.assertNotIn("- ./workspace:/workspace", match.group(0))
+            if service == "pi-ephemeral":
+                self.assertIn("- ../contextforge-harness/env:/config/contextforge:ro", match.group(0))
 
         for service in ("codex-cli", "claude-code", "gemini-cli"):
             match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
@@ -367,6 +375,10 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("--model qwen3.6-a3b", container_launcher)
         self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON:=/opt/contextforge-wrapper-venv/bin/python", container_launcher)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WRAPPER:=/repo/scripts/contextforge_mcp_wrapper.py", container_launcher)
+        self.assertIn("CONTEXTFORGE_CONFIG_ENV:=/config/contextforge/contextforge.env", container_launcher)
+        self.assertIn("CONTEXTFORGE_BASE_URL:=http://host.docker.internal:4445", container_launcher)
+        self.assertIn("CONTEXTFORGE_TOKEN_CACHE:=/tmp/contextforge-wrapper-token.local.json", container_launcher)
+        self.assertIn("CONTEXTFORGE_TOKEN_LOCK:=${CONTEXTFORGE_TOKEN_CACHE}.lock", container_launcher)
         self.assertIn("CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace", container_launcher)
         self.assertIn("docker compose -f compose.yml run --rm --no-deps", host_launcher)
         self.assertIn("-v \"${REPO_ROOT}:/repo:ro\"", host_launcher)
@@ -426,6 +438,11 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("opencode_project_init_hook.py", plugin)
         self.assertIn("hookSpecificOutput", plugin)
         self.assertIn("additionalContext", plugin)
+        self.assertIn("freshInitialization", plugin)
+        self.assertIn("ContextForge first-prompt trigger:", plugin)
+        self.assertIn("ContextForge continuation trigger:", plugin)
+        self.assertIn("The current project already has ContextForge project-init state.", plugin)
+        self.assertIn("Do not restart service selection.", plugin)
         self.assertIn("output.messages.unshift", plugin)
         self.assertIn("export default ContextForgeProjectInit", plugin)
         self.assertIn("CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace", container_launcher)
@@ -436,6 +453,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('"CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1"', opencode_config)
         self.assertIn('"CONTEXTFORGE_HELPER_REQUIRE_USER_RELOAD_TEXT": "1"', opencode_config)
         self.assertIn('"CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT": "1"', opencode_config)
+        self.assertIn('"CONTEXTFORGE_HELPER_RECORD_RELOAD_ON_VALIDATION_REQUEST": "1"', opencode_config)
         self.assertIn('"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH"', opencode_config)
         self.assertIn('"CONTEXTFORGE_OPENCODE_DENY_RAW_WORKSPACE_MUTATION": "1"', opencode_config)
         self.assertIn("contextforge-client-harness-runtime", opencode_config)

@@ -66,6 +66,10 @@ x-pi-contextforge-baseline: &pi-contextforge-baseline
     CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT: /workspace
     CONTEXTFORGE_PI_SHIM_PYTHON: /opt/contextforge-wrapper-venv/bin/python
     CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py
+    CONTEXTFORGE_CONFIG_ENV: /config/contextforge/contextforge.env
+    CONTEXTFORGE_BASE_URL: http://host.docker.internal:4445
+    CONTEXTFORGE_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
+    CONTEXTFORGE_TOKEN_LOCK: /tmp/contextforge-wrapper-token.local.json.lock
     CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
 
 services:
@@ -182,6 +186,7 @@ services:
       - pi-home:/home/agent
       - ../..:/repo:ro
       - ./config/pi:/config/pi:ro
+      - ../contextforge-harness/env:/config/contextforge:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
 
@@ -191,6 +196,7 @@ services:
       - pi-home:/home/agent
       - ../..:/repo:ro
       - ./config/pi:/config/pi:ro
+      - ../contextforge-harness/env:/config/contextforge:ro
       - ./evidence:/evidence
     tmpfs:
       - /workspace:uid=1000,gid=1000,mode=0755

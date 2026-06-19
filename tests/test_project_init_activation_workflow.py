@@ -1480,6 +1480,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Do not invent, rename, summarize, or substitute service names from memory", text)
         self.assertIn("helper could not be called; do not invent a service list", text)
         self.assertIn("Which ContextForge services should I activate for this project?", text)
+        self.assertIn('items: { type: "string" }', text)
+        self.assertIn("minItems: 1", text)
+        self.assertIn("next_turn.choices[].id", text)
+        self.assertIn('for example \\"context7:canonical\\"', text)
+        self.assertIn('target_client: "pi"', text)
+        self.assertIn("tool_name: candidate.route.mcpName", text)
         self.assertIn("root === workspaceRoot", text)
         self.assertNotIn("systemPrompt:", text)
         self.assertIn("runHelperOperationJson", text)
@@ -2137,6 +2143,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 "CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1",
                 "CONTEXTFORGE_HELPER_REQUIRE_USER_RELOAD_TEXT": "1",
                 "CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT": "1",
+                "CONTEXTFORGE_HELPER_RECORD_RELOAD_ON_VALIDATION_REQUEST": "1",
                 "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source),
             }
 
@@ -2204,12 +2211,13 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with mock.patch.dict(os.environ, guarded_env):
-                reload_recorded = contextforge_helper_mcp.cf_project_init_record_client_reload(
+                reload_recorded = contextforge_helper_mcp.cf_project_init_record_validation(
                     str(root),
-                    client_type="opencode",
                     validation_mode="validate_now",
+                    client_type="opencode",
                 )
             self.assertTrue(reload_recorded["ok"])
+            self.assertEqual("client_reload_recorded_validation_requested", reload_recorded["status"])
 
     def test_contextforge_helper_validation_guidance_exposes_safe_probe_shape(self) -> None:
         helper_doc = contextforge_helper_mcp.record_project_init_validation.__doc__ or ""

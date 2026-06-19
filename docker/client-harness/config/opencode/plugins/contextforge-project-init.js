@@ -16,7 +16,9 @@ const APPROVAL_SOURCE =
   `${process.env.CONTEXTFORGE_PROJECT_INIT_RUN_ROOT ?? "/home/agent/.local/state/contextforge-client-harness-runtime/project-init"}/opencode-latest-user-message.json`
 
 const latestUserMessageText = (messages) => {
-  const latest = Array.isArray(messages) ? messages[messages.length - 1] : undefined
+  const latest = Array.isArray(messages)
+    ? [...messages].reverse().find((message) => message?.info?.role === "user")
+    : undefined
   const parts = Array.isArray(latest?.parts) ? latest.parts : []
   return parts
     .filter((part) => part?.type === "text" && typeof part?.text === "string")
@@ -93,19 +95,36 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         const payload = JSON.parse(result.stdout)
         const context = payload?.hookSpecificOutput?.additionalContext
         if (typeof context === "string") {
-          const trigger = [
-            "ContextForge first-prompt trigger:",
-            "The current project is not initialized for ContextForge.",
-            "The helper-discovered service choices are included below in this hidden context.",
-            "Before answering the user's ordinary message, ask exactly:",
-            '"Which ContextForge services should I activate for this project?"',
-            "Immediately include the numbered helper-discovered service list from this context.",
-            "Then stop and wait for the user's selection.",
-            "Do not write project state or configuration yet.",
+          const freshInitialization = context.includes("Lifecycle: missing / fresh_initialization")
+          const commonTrigger = [
             "Use contextforge-helper project-init tools for activation writes; never use bash, write, or edit to create activation files.",
             "After an approved apply, if the helper says reload or new session is required, report that instruction and stop.",
             "Do not call reload or validation record tools until the user has started or resumed a session and asked to validate or skip.",
-          ].join("\n")
+          ]
+          const trigger = (
+            freshInitialization
+              ? [
+                  "ContextForge first-prompt trigger:",
+                  "The current project is not initialized for ContextForge.",
+                  "The helper-discovered service choices are included below in this hidden context.",
+                  "Before answering the user's ordinary message, ask exactly:",
+                  '"Which ContextForge services should I activate for this project?"',
+                  "Immediately include the numbered helper-discovered service list from this context.",
+                  "Then stop and wait for the user's selection.",
+                  "Do not write project state or configuration yet.",
+                  ...commonTrigger,
+                ]
+              : [
+                  "ContextForge continuation trigger:",
+                  "The current project already has ContextForge project-init state.",
+                  "Do not ask which services to activate.",
+                  "Do not restart service selection.",
+                  "If this context says resume_validation, reload_required, or pending_reload and the user's current message asks to validate or skip, first call cf_project_init_record_client_reload with client_type opencode and validation_mode validate_now or presume_working.",
+                  "If the helper then asks for validation and the user's current message asked to validate, continue with the helper validation/readback path.",
+                  "If the user's current message asked to skip or presume working, record that helper-visible choice instead of validating.",
+                  ...commonTrigger,
+                ]
+          ).join("\n")
           output.messages.unshift({
             info: {
               id: messageID,

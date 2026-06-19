@@ -164,6 +164,34 @@ def _require_user_validation_text(project_root: str, validation_mode: str) -> No
     )
 
 
+def _record_reload_from_validation_request_if_configured(
+    project_root: str,
+    *,
+    validation_mode: str,
+    client_type: str,
+    dry_run: bool,
+) -> dict[str, Any] | None:
+    if not _env_truthy("CONTEXTFORGE_HELPER_RECORD_RELOAD_ON_VALIDATION_REQUEST"):
+        return None
+    if validation_mode not in {"validate_now", "presume_working"}:
+        return None
+    try:
+        resume = helper.pending_validation_resume(project_root=project_root, client_type=client_type)
+    except Exception:
+        return None
+    if not isinstance(resume, dict) or resume.get("status") != "client_reload_required":
+        return None
+    return {
+        "ok": True,
+        **helper.record_project_init_client_reload(
+            project_root=project_root,
+            client_type=client_type,
+            validation_mode=validation_mode,
+            dry_run=dry_run,
+        ),
+    }
+
+
 def _remember_plan(project_root: str, plan: dict[str, Any]) -> dict[str, Any]:
     _CACHED_PLANS[_cache_key(project_root)] = dict(plan)
     current = _read_durable_cache(project_root)
@@ -792,6 +820,14 @@ def record_project_init_validation(
     """
     try:
         _require_user_validation_text(project_root, validation_mode)
+        reload_result = _record_reload_from_validation_request_if_configured(
+            project_root,
+            validation_mode=validation_mode,
+            client_type=client_type,
+            dry_run=dry_run,
+        )
+        if reload_result is not None:
+            return reload_result
         return {
             "ok": True,
             **helper.record_project_init_validation(

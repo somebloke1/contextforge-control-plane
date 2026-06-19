@@ -127,6 +127,16 @@ class ProjectInitCommonTests(unittest.TestCase):
             self.assertTrue(common.safe_workspace_project_root(root))
             self.assertEqual(root, common.validate_project_root(root, require_workspace=True))
 
+    def test_detect_project_root_accepts_non_empty_explicit_safe_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            child = root / "nested"
+            child.mkdir()
+            (root / ".gitkeep").write_text("\n", encoding="utf-8")
+            with mock.patch.dict(common.os.environ, {common.ADDITIONAL_SAFE_ROOTS_ENV: str(root)}):
+                self.assertEqual(root, common.detect_project_root(root))
+                self.assertEqual(root, common.detect_project_root(child))
+
     def test_additional_safe_project_roots_do_not_override_denied_roots(self) -> None:
         with mock.patch.dict(common.os.environ, {common.ADDITIONAL_SAFE_ROOTS_ENV: str(Path.home())}):
             with self.assertRaises(ValueError):
@@ -2123,6 +2133,56 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertFalse(project_state.project_state_path(root).exists())
             self.assertFalse((root / "opencode.json").exists())
             self.assertFalse((root / ".opencode").exists())
+
+    def test_pending_validation_hook_uses_local_prompt_when_gateway_prompt_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            run_root = Path(run_tmp)
+            service = service_descriptor("context7")
+            planned = binding.apply_project_init_service_activation(
+                root,
+                [service],
+                validation_mode="pending_choice",
+                approval_scope=binding.PROJECT_INIT_APPROVAL_SCOPE,
+                target_client="opencode",
+                consent_receipt_refs=CONSENT_REFS,
+                dry_run=True,
+            )
+            project_state.write_state_atomic(root, planned["planned_state"])
+            payload = {
+                "hook_event_name": "experimental.chat.messages.transform",
+                "session_id": "opencode-pending-validation",
+                "cwd": str(root),
+            }
+            stdin = io.StringIO(json.dumps(payload))
+            stdout = io.StringIO()
+            log_path = run_root / "project-init-hook.local.log"
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", log_path),
+                mock.patch.object(init_hook.gateway, "_read_env", side_effect=FileNotFoundError("no gateway env")),
+                mock.patch.object(sys, "stdin", stdin),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = init_hook.main_for_events(
+                    {"experimental.chat.messages.transform"},
+                    suppress_output=True,
+                    target_client="opencode",
+                )
+
+            self.assertEqual(0, code)
+            emitted = json.loads(stdout.getvalue())
+            self.assertTrue(emitted["suppressOutput"])
+            context = emitted["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("Target client: opencode", context)
+            self.assertIn("State: in_progress", context)
+            self.assertIn("resume_validation", context)
+            self.assertIn("start a new OpenCode session from the project root before target-client-visible validation", context)
+            self.assertIn("first call cf_project_init_record_client_reload", context)
+            self.assertIn("choose 1 or reply \"validate\" to run validation", context)
+            self.assertIn("registered project_init_prompt render unavailable; using local prompt fallback", log_path.read_text(encoding="utf-8"))
 
     def test_hook_decision_uses_project_init_lifecycle_inspector(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

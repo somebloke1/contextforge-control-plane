@@ -759,6 +759,15 @@ def _empty_workspace_dir_root(cwd: Path) -> Path | None:
     return None
 
 
+def _explicit_safe_root(cwd: Path) -> Path | None:
+    if not safe_workspace_project_root(cwd):
+        return None
+    for root in sorted(additional_safe_project_roots(), key=lambda path: len(path.parts), reverse=True):
+        if cwd == root or is_relative_to(cwd, root):
+            return root
+    return None
+
+
 def _workspace_child_root(cwd: Path) -> Path | None:
     if not is_relative_to(cwd, WORKSPACE_ROOT) or cwd == WORKSPACE_ROOT:
         return None
@@ -776,6 +785,9 @@ def detect_project_root(cwd: str | Path) -> Path | None:
     git_root = _git_root(canonical_cwd)
     if git_root is not None:
         candidates.append(git_root)
+    explicit_safe_root = _explicit_safe_root(canonical_cwd)
+    if explicit_safe_root is not None:
+        candidates.append(explicit_safe_root)
     empty_workspace_dir = _empty_workspace_dir_root(canonical_cwd)
     if empty_workspace_dir is not None:
         candidates.append(empty_workspace_dir)

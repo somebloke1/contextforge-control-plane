@@ -435,25 +435,29 @@ def main_for_events(
                 if target_client == "opencode" and service_menu:
                     text = f"{service_menu}\n\n{text}"
             else:
-                env = gateway._read_env(gateway.CONFIG_ENV)
-                token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
-                prompt = get_prompt_record(token)
-                resource = get_project_init_resource_record(token)
-                prompt_id = str(prompt.get("id")) if prompt and prompt.get("id") else None
-                if prompt_id is None:
-                    log_failure("registered project_init_prompt is missing; attempting prompt/resource self-upgrade")
-                    prompt_id = upgrade_project_init_prompt(token)
-                elif not prompt_record_is_fresh(prompt):
-                    log_failure("registered project_init_prompt metadata is stale; attempting prompt/resource self-upgrade")
-                    prompt_id = upgrade_project_init_prompt(token) or prompt_id
-                elif not resource_record_is_fresh(resource):
-                    log_failure("registered project_init_resource metadata is missing or stale; attempting prompt/resource self-upgrade")
-                    prompt_id = upgrade_project_init_prompt(token) or prompt_id
-                text = (
-                    render_prompt(token, prompt_id, identity, values, target_client=target_client)
-                    if prompt_id
-                    else render_local_prompt(args)
-                )
+                try:
+                    env = gateway._read_env(gateway.CONFIG_ENV)
+                    token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
+                    prompt = get_prompt_record(token)
+                    resource = get_project_init_resource_record(token)
+                    prompt_id = str(prompt.get("id")) if prompt and prompt.get("id") else None
+                    if prompt_id is None:
+                        log_failure("registered project_init_prompt is missing; attempting prompt/resource self-upgrade")
+                        prompt_id = upgrade_project_init_prompt(token)
+                    elif not prompt_record_is_fresh(prompt):
+                        log_failure("registered project_init_prompt metadata is stale; attempting prompt/resource self-upgrade")
+                        prompt_id = upgrade_project_init_prompt(token) or prompt_id
+                    elif not resource_record_is_fresh(resource):
+                        log_failure("registered project_init_resource metadata is missing or stale; attempting prompt/resource self-upgrade")
+                        prompt_id = upgrade_project_init_prompt(token) or prompt_id
+                    text = (
+                        render_prompt(token, prompt_id, identity, values, target_client=target_client)
+                        if prompt_id
+                        else render_local_prompt(args)
+                    )
+                except Exception as exc:
+                    log_failure(f"registered project_init_prompt render unavailable; using local prompt fallback: {type(exc).__name__}: {exc}")
+                    text = render_local_prompt(args)
             if not text:
                 return 0
 
