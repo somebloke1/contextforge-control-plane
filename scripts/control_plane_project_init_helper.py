@@ -1087,11 +1087,13 @@ def record_project_init_validation(
     validation_plan = binding.build_project_init_validation_plan(services, validation_mode=validation_mode, target_client=client_type)
     validation_results_dict = dict(validation_results or {})
     validation_diagnostic = _validation_results_diagnostic(services, validation_results_dict)
+    proof_diagnostic = _validation_proof_diagnostic(services, validation_results_dict, client_type=client_type)
     if validation_mode == "validate_now" and not validation_results_dict:
         return {
             "status": "validation_results_required",
             "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
             "validation_diagnostic": validation_diagnostic,
+            "validation_proof_diagnostic": proof_diagnostic,
             "expected_validation_results_shape": _expected_validation_results_shape(services),
             "next_turn": validation_choice_turn(),
             "non_actions": [
@@ -1109,10 +1111,25 @@ def record_project_init_validation(
             "status": "validation_results_unmatched",
             "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
             "validation_diagnostic": validation_diagnostic,
+            "validation_proof_diagnostic": proof_diagnostic,
             "expected_validation_results_shape": _expected_validation_results_shape(services),
             "non_actions": [
                 _validation_not_recorded_label(client_type),
                 "validation_results must be a top-level object keyed by selected service binding, normalized binding key, or service identity id",
+            ],
+        }
+    if validation_mode == "validate_now" and proof_diagnostic["insufficient_keys"]:
+        return {
+            "status": "validation_results_insufficient",
+            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
+            "validation_diagnostic": validation_diagnostic,
+            "validation_proof_diagnostic": proof_diagnostic,
+            "expected_validation_results_shape": _expected_validation_results_shape(services),
+            "next_turn": validation_choice_turn(),
+            "non_actions": [
+                _validation_not_recorded_label(client_type),
+                "validation_results must describe an observed target-client safe probe, not only an asserted passed status",
+                "call the selected service tool through the target client before recording validate_now",
             ],
         }
     activation_job = dict(job)
@@ -1152,6 +1169,7 @@ def record_project_init_validation(
             "no ContextForge registry or catalog mutation",
         ],
         "validation_diagnostic": validation_diagnostic,
+        "validation_proof_diagnostic": proof_diagnostic,
         "expected_validation_results_shape": _expected_validation_results_shape(services),
     }
     if validation_mode == "validate_now" and (
@@ -1200,6 +1218,90 @@ def _validation_results_diagnostic(services: Sequence[Mapping[str, Any]], valida
     }
 
 
+def _validation_proof_diagnostic(
+    services: Sequence[Mapping[str, Any]],
+    validation_results: Mapping[str, Any],
+    *,
+    client_type: str,
+) -> dict[str, Any]:
+    insufficient_keys: list[str] = []
+    missing_fields_by_key: dict[str, list[str]] = {}
+    invalid_fields_by_key: dict[str, list[str]] = {}
+    for service in services:
+        binding_id = str(service.get("service_binding") or service.get("service_family") or "")
+        service_identity_id = str(service.get("service_identity_id") or "")
+        result_key = next(
+            (
+                key
+                for key in (binding_id, project_state._state_map_key(binding_id), service_identity_id)
+                if key and isinstance(validation_results.get(key), Mapping)
+            ),
+            None,
+        )
+        if not result_key:
+            continue
+        result = validation_results.get(result_key)
+        if not isinstance(result, Mapping):
+            continue
+        service_family = str(service.get("service_family") or binding_id.split(":", 1)[0] or "")
+        missing, invalid = _safe_probe_proof_gaps(service_family, result, client_type=client_type)
+        if missing or invalid:
+            insufficient_keys.append(result_key)
+            if missing:
+                missing_fields_by_key[result_key] = missing
+            if invalid:
+                invalid_fields_by_key[result_key] = invalid
+    return {
+        "insufficient_keys": insufficient_keys,
+        "missing_fields_by_key": missing_fields_by_key,
+        "invalid_fields_by_key": invalid_fields_by_key,
+    }
+
+
+def _safe_probe_proof_gaps(service_family: str, result: Mapping[str, Any], *, client_type: str) -> tuple[list[str], list[str]]:
+    contract = safe_probe_contract(service_family)
+    if not contract:
+        return [], []
+    if result.get("status") == "skipped":
+        return ([] if result.get("skipped_reason") else ["skipped_reason"]), []
+    missing: list[str] = []
+    invalid: list[str] = []
+    for field in (
+        "status",
+        "target_client_visible",
+        "target_client",
+        "proof_kind",
+        "safe_probe_result",
+        "safe_probe_id",
+        "tool_name",
+        "result_summary",
+        "verification_trace_refs",
+    ):
+        value = result.get(field)
+        if value is None or value == "" or value == []:
+            missing.append(field)
+
+    if result.get("target_client") not in {client_type, None}:
+        invalid.append("target_client")
+    accepted_proof_kinds = {str(item) for item in contract.get("accepted_proof_kinds") or []}
+    if result.get("proof_kind") not in accepted_proof_kinds:
+        invalid.append("proof_kind")
+    safe_operations = {str(item) for item in safe_validation_policy(service_family).get("safe_operations") or []}
+    if result.get("safe_probe_id") not in safe_operations:
+        invalid.append("safe_probe_id")
+    allowed_tools = [str(item) for item in contract.get("allowed_tool_name_patterns") or []]
+    tool_name = str(result.get("tool_name") or "")
+    if allowed_tools and not any(pattern and pattern in tool_name for pattern in allowed_tools):
+        invalid.append("tool_name")
+    if result.get("status") not in {"passed", "verified"}:
+        invalid.append("status")
+    if result.get("safe_probe_result") != "passed":
+        invalid.append("safe_probe_result")
+    if result.get("target_client_visible") is not True:
+        invalid.append("target_client_visible")
+    return list(dict.fromkeys(missing)), list(dict.fromkeys(invalid))
+
+
 def _expected_validation_results_shape(services: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     service = services[0] if services else {}
     binding_id = str(service.get("service_binding") or "context7:canonical")
@@ -1210,11 +1312,17 @@ def _expected_validation_results_shape(services: Sequence[Mapping[str, Any]]) ->
     if contract_shape:
         shape = dict(contract_shape)
         shape["verification_trace_refs"] = [trace_ref]
+        shape["tool_name"] = str((contract.get("default_probe") or {}).get("tool_name_hint") or "")
+        shape["target_client"] = "TARGET_CLIENT"
+        shape["result_summary"] = "brief summary of the actual target-client tool output"
     else:
         shape = {
             "status": "passed",
             "target_client_visible": True,
             "verification_trace_refs": [trace_ref],
+            "target_client": "TARGET_CLIENT",
+            "tool_name": "target-client-visible safe probe tool name",
+            "result_summary": "brief summary of the actual target-client tool output",
         }
     return {
         binding_id: shape,

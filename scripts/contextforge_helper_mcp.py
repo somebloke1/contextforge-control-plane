@@ -675,11 +675,15 @@ def record_project_init_validation(
     top-level object keyed by selected service binding, normalized binding key,
     or service identity id, for example:
     {"context7:canonical": {"status": "passed", "target_client_visible": true,
+    "target_client": "opencode",
     "proof_kind": "target_client_safe_probe_result",
     "safe_probe_result": "passed", "safe_probe_id": "resolve-library-id",
+    "tool_name": "context7_context7-local-resolve-library-id",
+    "result_summary": "brief summary of the actual tool output",
     "verification_trace_refs": ["contextforge://control-plane/traces/context7:canonical-target-client"]}}.
     Do not call validate_now with missing or empty validation_results. Do not
-    nest results under {"services": ...}.
+    invent validation_results before calling the target-client service tool. Do
+    not nest results under {"services": ...}.
     """
     try:
         return {
@@ -711,11 +715,15 @@ def cf_project_init_record_validation(
     top-level object keyed by selected service binding, normalized binding key,
     or service identity id, for example:
     {"context7:canonical": {"status": "passed", "target_client_visible": true,
+    "target_client": "opencode",
     "proof_kind": "target_client_safe_probe_result",
     "safe_probe_result": "passed", "safe_probe_id": "resolve-library-id",
+    "tool_name": "context7_context7-local-resolve-library-id",
+    "result_summary": "brief summary of the actual tool output",
     "verification_trace_refs": ["contextforge://control-plane/traces/context7:canonical-target-client"]}}.
     Do not call validate_now with missing or empty validation_results. Do not
-    nest results under {"services": ...}.
+    invent validation_results before calling the target-client service tool. Do
+    not nest results under {"services": ...}.
     """
     return record_project_init_validation(
         project_root=project_root,

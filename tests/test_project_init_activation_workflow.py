@@ -58,11 +58,24 @@ def pi_safe_probe_validation(tool_name: str = "cf_context7_s123__context7-local-
     return {
         "status": "passed",
         "target_client_visible": True,
+        "target_client": "pi",
         "proof_kind": "pi_safe_probe_result",
         "safe_probe_result": "passed",
         "safe_probe_id": "resolve-library-id",
+        "tool_name": tool_name,
+        "result_summary": "resolved python standard library documentation through Pi-visible ContextForge tool",
         "verification_trace_refs": [f"pi://contextforge-global-shim/tools/{tool_name}"],
     }
+
+
+def context7_safe_probe_validation(target_client: str = "codex") -> dict[str, Any]:
+    return common.build_safe_probe_validation_result(
+        "context7",
+        target_client=target_client,
+        tool_name="context7_context7-local-resolve-library-id",
+        verification_trace_refs=[f"contextforge://control-plane/traces/context7-{target_client}-target-client"],
+        result_summary="resolved python standard library documentation through target-client-visible context7 tool",
+    )
 
 
 def record_pi_reload(root: Path) -> dict[str, Any]:
@@ -1244,10 +1257,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("client_reload_required", blocked_before_reload["status"])
         self.assertEqual("pi-client-reload-before-validation", blocked_before_reload["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("validation_recorded_dry_run", backend_only["status"])
-        self.assertEqual("in_progress", backend_only["project_status"])
-        self.assertEqual("validation_recorded_dry_run", weak_visible["status"])
-        self.assertEqual("in_progress", weak_visible["project_status"])
+        self.assertEqual("validation_results_insufficient", backend_only["status"])
+        self.assertEqual(["context7:canonical"], backend_only["validation_proof_diagnostic"]["insufficient_keys"])
+        self.assertEqual("validation_results_insufficient", weak_visible["status"])
+        self.assertEqual(["context7:canonical"], weak_visible["validation_proof_diagnostic"]["insufficient_keys"])
         self.assertEqual("validation_recorded", visible["status"])
         self.assertEqual("initialized", visible["project_status"])
         self.assertFalse((root / ".codex/config.toml").exists())
@@ -1694,11 +1707,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 project_root=root,
                 validation_mode="validate_now",
                 validation_results={
-                    "context7:canonical": {
-                        "status": "passed",
-                        "target_client_visible": True,
-                        "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
-                    },
+                    "context7:canonical": context7_safe_probe_validation(),
                     "github:canonical": {
                         "status": "skipped",
                         "skipped_reason": "credentials unavailable in this client turn",
@@ -1878,6 +1887,52 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
 
+    def test_helper_rejects_asserted_passed_validation_without_observed_probe_artifact(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_codex_config_write(root, selected, existing_text="")
+            (root / ".codex").mkdir()
+            (root / ".codex/config.toml").write_text(config_plan["next_text"], encoding="utf-8")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="pending_choice"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+            record_codex_new_session(root)
+            before = project_state.load_state(root)
+
+            result = helper.record_project_init_validation(
+                project_root=root,
+                validation_mode="validate_now",
+                validation_results={
+                    "context7:canonical": {
+                        "status": "passed",
+                        "target_client_visible": True,
+                        "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
+                    }
+                },
+            )
+            after = project_state.load_state(root)
+
+        self.assertEqual("validation_results_insufficient", result["status"])
+        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["matched_keys"])
+        self.assertEqual(["context7:canonical"], result["validation_proof_diagnostic"]["insufficient_keys"])
+        expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
+        self.assertEqual("target_client_safe_probe_result", expected_shape["proof_kind"])
+        self.assertEqual("passed", expected_shape["safe_probe_result"])
+        self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
+        self.assertEqual("context7-local-resolve-library-id", expected_shape["tool_name"])
+        assert before is not None
+        assert after is not None
+        self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
+        self.assertEqual("pending", after["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+
     def test_helper_valid_top_level_binding_keyed_validation_marks_service_passed(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -1900,23 +1955,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             result = helper.record_project_init_validation(
                 project_root=root,
                 validation_mode="validate_now",
-                validation_results={
-                    "context7:canonical": {
-                        "status": "passed",
-                        "target_client_visible": True,
-                        "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
-                    }
-                },
+                validation_results={"context7:canonical": context7_safe_probe_validation()},
             )
             written = project_state.load_state(root)
 
         self.assertEqual("validation_recorded", result["status"])
         self.assertEqual("initialized", result["project_status"])
         self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["matched_keys"])
-        expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
-        self.assertEqual("target_client_safe_probe_result", expected_shape["proof_kind"])
-        self.assertEqual("passed", expected_shape["safe_probe_result"])
-        self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
+        self.assertEqual([], result["validation_proof_diagnostic"]["insufficient_keys"])
         assert written is not None
         self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
@@ -1943,11 +1989,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 project_root=root,
                 validation_mode="validate_now",
                 validation_results={
-                    "context7:canonical": {
-                        "status": "passed",
-                        "target_client_visible": True,
-                        "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
-                    },
+                    "context7:canonical": context7_safe_probe_validation(),
                     "github:canonical": {
                         "status": "skipped",
                         "skipped_reason": "credentials unavailable in this client turn",
