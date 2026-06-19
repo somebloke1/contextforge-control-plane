@@ -9,6 +9,60 @@ x-client-common: &client-common
     - ./workspace:/workspace
     - ./evidence:/evidence
 
+x-opencode-contextforge-baseline: &opencode-contextforge-baseline
+  <<: *client-common
+  image: contextforge-client-opencode:${OPENCODE_VERSION:-latest}
+  build:
+    context: ./opencode
+    args:
+      BASE_IMAGE: contextforge-client-base:bookworm
+      MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"
+      OPENCODE_VERSION: "${OPENCODE_VERSION:-latest}"
+  env_file:
+    - ./env/local-llama.env
+  environment:
+    OPENAI_API_KEY: "${LOCAL_LLAMA_KEY:-}"
+    LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
+    OPENCODE_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
+    LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
+    OPENCODE_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
+    LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
+    OPENCODE_CONFIG: /home/agent/.config/opencode/opencode.json
+    CONTEXTFORGE_OPENCODE_CONFIG_SOURCE: /config/opencode/opencode.json
+    CONTEXTFORGE_OPENCODE_CONFIG_TARGET: /home/agent/.config/opencode/opencode.json
+    CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE: /config/opencode/plugins/contextforge-project-init.js
+    CONTEXTFORGE_OPENCODE_PLUGIN_TARGET: /home/agent/.config/opencode/plugins/contextforge-project-init.js
+    CONTEXTFORGE_OPENCODE_HOOK: /repo/scripts/opencode_project_init_hook.py
+    CONTEXTFORGE_OPENCODE_HOOK_PYTHON: /opt/contextforge-helper-venv/bin/python
+    CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /tmp/contextforge-client-harness-runtime/project-init
+    CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python
+    CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py
+    CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
+
+x-pi-contextforge-baseline: &pi-contextforge-baseline
+  <<: *client-common
+  image: contextforge-client-pi:${PI_CODING_AGENT_VERSION:-latest}
+  build:
+    context: ./pi
+    args:
+      BASE_IMAGE: contextforge-client-base:bookworm
+      MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"
+      PI_CODING_AGENT_VERSION: "${PI_CODING_AGENT_VERSION:-latest}"
+  env_file:
+    - ./env/local-llama.env
+  environment:
+    LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
+    LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
+    LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
+    PI_CODING_AGENT_DIR: /home/agent/.pi/agent
+    CONTEXTFORGE_PI_SHIM_EXTENSION: /repo/pi-extensions/contextforge-global-shim/index.ts
+    CONTEXTFORGE_PI_SHIM_INSTALL_DIR: /home/agent/.pi/agent/extensions/contextforge-global-shim
+    CONTEXTFORGE_PI_SHIM_PORTAL_ROOT: /repo
+    CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT: /workspace
+    CONTEXTFORGE_PI_SHIM_PYTHON: /opt/contextforge-wrapper-venv/bin/python
+    CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py
+    CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
+
 services:
   base:
     image: contextforge-client-base:bookworm
@@ -74,37 +128,23 @@ services:
       GOOGLE_GENAI_USE_VERTEXAI: "${GOOGLE_GENAI_USE_VERTEXAI:-true}"
 
   opencode:
-    <<: *client-common
-    image: contextforge-client-opencode:${OPENCODE_VERSION:-latest}
-    build:
-      context: ./opencode
-      args:
-        BASE_IMAGE: contextforge-client-base:bookworm
-        MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"
-        OPENCODE_VERSION: "${OPENCODE_VERSION:-latest}"
-    env_file:
-      - ./env/local-llama.env
-    environment:
-      OPENAI_API_KEY: "${LOCAL_LLAMA_KEY:-}"
-      LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
-      OPENCODE_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
-      LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
-      OPENCODE_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
-      LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
-      OPENCODE_CONFIG: /config/opencode/opencode.json
-      CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE: /config/opencode/plugins/contextforge-project-init.js
-      CONTEXTFORGE_OPENCODE_PLUGIN_TARGET: /workspace/.opencode/plugins/contextforge-project-init.js
-      CONTEXTFORGE_OPENCODE_HOOK: /repo/scripts/opencode_project_init_hook.py
-      CONTEXTFORGE_OPENCODE_HOOK_PYTHON: python3
-      CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python
-      CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py
-      CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
+    <<: *opencode-contextforge-baseline
     volumes:
       - opencode-home:/home/agent
       - ../..:/repo:ro
       - ./config/opencode:/config/opencode:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
+
+  opencode-ephemeral:
+    <<: *opencode-contextforge-baseline
+    volumes:
+      - opencode-home:/home/agent
+      - ../..:/repo:ro
+      - ./config/opencode:/config/opencode:ro
+      - ./evidence:/evidence
+    tmpfs:
+      - /workspace:uid=1000,gid=1000,mode=0755
 
   opencode-alpine:
     <<: *client-common
@@ -130,33 +170,23 @@ services:
       - ./evidence:/evidence
 
   pi:
-    <<: *client-common
-    image: contextforge-client-pi:${PI_CODING_AGENT_VERSION:-latest}
-    build:
-      context: ./pi
-      args:
-        BASE_IMAGE: contextforge-client-base:bookworm
-        MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"
-        PI_CODING_AGENT_VERSION: "${PI_CODING_AGENT_VERSION:-latest}"
-    env_file:
-      - ./env/local-llama.env
-    environment:
-      LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
-      LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
-      LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
-      PI_CODING_AGENT_DIR: /home/agent/.pi/agent
-      CONTEXTFORGE_PI_SHIM_EXTENSION: /repo/pi-extensions/contextforge-global-shim/index.ts
-      CONTEXTFORGE_PI_SHIM_PORTAL_ROOT: /repo
-      CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT: /workspace
-      CONTEXTFORGE_PI_SHIM_PYTHON: /opt/contextforge-wrapper-venv/bin/python
-      CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py
-      CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
+    <<: *pi-contextforge-baseline
     volumes:
       - pi-home:/home/agent
       - ../..:/repo:ro
       - ./config/pi:/config/pi:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
+
+  pi-ephemeral:
+    <<: *pi-contextforge-baseline
+    volumes:
+      - pi-home:/home/agent
+      - ../..:/repo:ro
+      - ./config/pi:/config/pi:ro
+      - ./evidence:/evidence
+    tmpfs:
+      - /workspace:uid=1000,gid=1000,mode=0755
 
   pi-alpine:
     <<: *client-common

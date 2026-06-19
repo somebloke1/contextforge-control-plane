@@ -34,7 +34,7 @@ class ClientVisibleActivationMatrixTests(unittest.TestCase):
             "Codex project context may show project-init hook/helper guidance",
             "No Codex-style hook banner is expected",
             "Pi should expose shim/helper tools and guidance",
-            "OpenCode should receive project-local plugin/helper behavior",
+            "OpenCode should receive first-prompt plugin/helper behavior",
             "Missing a Codex hook banner is expected for Pi",
             "Missing a Codex hook banner is expected for OpenCode",
         ]

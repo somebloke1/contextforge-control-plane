@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OpenCode hook that injects ContextForge project initialization guidance."""
+"""OpenCode hook that returns ContextForge project initialization guidance."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def _load_codex_project_init_hook():
 
 codex_project_init_hook = _load_codex_project_init_hook()
 
-OPENCODE_HOOK_EVENTS = frozenset({"experimental.chat.system.transform", "session.created"})
+OPENCODE_HOOK_EVENTS = frozenset({"chat.message", "session.created"})
 
 
 def main() -> int:

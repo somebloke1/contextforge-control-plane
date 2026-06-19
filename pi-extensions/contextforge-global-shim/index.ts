@@ -11,7 +11,6 @@ import { Container } from "@earendil-works/pi-tui";
 type JsonObject = Record<string, unknown>;
 
 type ExtensionContext = { cwd: string };
-type BeforeAgentStartEvent = { systemPrompt?: string };
 
 type ExtensionAPI = {
   registerTool(definition: {
@@ -106,6 +105,7 @@ type ShimGlobalState = {
   toolRoutes: Map<string, ToolRoute>;
   serviceRoutes: Map<string, JsonRpcStdioClient>;
   projectInitCache: Map<string, ProjectInitCacheEntry>;
+  firstPromptInitOffered: Set<string>;
   readback: ReadbackState;
 };
 
@@ -118,6 +118,7 @@ const routeNamesByKey = globalState.routeNamesByKey;
 const toolRoutes = globalState.toolRoutes;
 const serviceRoutes = globalState.serviceRoutes;
 const projectInitCache = globalState.projectInitCache;
+const firstPromptInitOffered = globalState.firstPromptInitOffered;
 const readback = globalState.readback;
 
 function shimGlobalState(): ShimGlobalState {
@@ -129,10 +130,12 @@ function shimGlobalState(): ShimGlobalState {
       toolRoutes: new Map<string, ToolRoute>(),
       serviceRoutes: new Map<string, JsonRpcStdioClient>(),
       projectInitCache: new Map<string, ProjectInitCacheEntry>(),
+      firstPromptInitOffered: new Set<string>(),
       readback: { services: [], tools: [], prompts: [], resources: [], validation: [], skipped: [], errors: [] },
     };
   }
   holder[GLOBAL_STATE_KEY].serviceRoutes ||= new Map<string, JsonRpcStdioClient>();
+  holder[GLOBAL_STATE_KEY].firstPromptInitOffered ||= new Set<string>();
   holder[GLOBAL_STATE_KEY].readback.prompts ||= [];
   holder[GLOBAL_STATE_KEY].readback.resources ||= [];
   return holder[GLOBAL_STATE_KEY];
@@ -322,8 +325,8 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
 
   registerProjectInitTools(pi, clients);
 
-  pi.on("before_agent_start", async (event: BeforeAgentStartEvent, ctx: ExtensionContext) => {
-    return injectProjectInitPrompt(event, ctx);
+  pi.on("before_agent_start", async (_event, ctx: ExtensionContext) => {
+    return injectProjectInitPrompt(ctx);
   });
 
   registerToolOnce(pi, {
@@ -409,32 +412,79 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
   });
 }
 
-async function injectProjectInitPrompt(event: BeforeAgentStartEvent, ctx?: ExtensionContext): Promise<JsonObject | undefined> {
-  const projectRoot = resolve(ctx?.cwd || process.cwd());
-  if (!shouldInjectProjectInitPrompt(projectRoot)) return undefined;
+async function renderFirstPromptSelectionTurn(projectRoot: string): Promise<string> {
   try {
-    const rendered = await runHelperOperationJson("render_project_init_prompt", {
+    const capabilities = await runProjectInitHelperOperationJson("list_available_capabilities", {
       project_root: projectRoot,
       client_type: "pi",
     });
-    if (rendered.ok === false || rendered.status !== "rendered") return undefined;
-    const promptText = typeof rendered.prompt_text === "string" ? rendered.prompt_text.trim() : "";
-    if (!promptText) return undefined;
-    return {
-      systemPrompt: [event.systemPrompt || "", "ContextForge project-init hidden guidance:", promptText]
-        .filter(Boolean)
-        .join("\n\n"),
-    };
+    const nextTurn = asObject(capabilities.next_turn);
+    return renderNextTurn(nextTurn);
   } catch (error) {
-    readback.errors.push(`project-init hidden prompt injection skipped: ${errorMessage(error)}`);
+    readback.errors.push(`project-init first-prompt capability listing skipped: ${errorMessage(error)}`);
+    return 'Ask exactly: "Which ContextForge services should I activate for this project?"';
+  }
+}
+
+function renderNextTurn(nextTurn: JsonObject): string {
+  const prompt = String(nextTurn.prompt || "Which ContextForge services should I activate for this project?");
+  const choices = Array.isArray(nextTurn.choices) ? nextTurn.choices.filter(isObject) : [];
+  const renderedChoices = choices
+    .map((choice, index) => {
+      const number = choice.number ?? index + 1;
+      const label = String(choice.label || choice.id || `Option ${number}`);
+      const id = choice.id ? ` (${choice.id})` : "";
+      const activationClass = choice.activation_class ? ` - ${choice.activation_class}` : "";
+      return `${number}. ${label}${id}${activationClass}`;
+    })
+    .join("\n");
+  const shape = String(nextTurn.allowed_response_shape || "selection number(s) are accepted");
+  return [
+    prompt,
+    renderedChoices ? `\n${renderedChoices}` : "",
+    `\nReply format: ${shape}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function injectProjectInitPrompt(ctx?: ExtensionContext): Promise<JsonObject | undefined> {
+  const projectRoot = resolve(ctx?.cwd || process.cwd());
+  if (!shouldInjectProjectInitPrompt(projectRoot)) return undefined;
+  try {
+    const firstPromptMessage = await firstPromptProjectInitMessage(projectRoot);
+    return firstPromptMessage ? { message: firstPromptMessage } : undefined;
+  } catch (error) {
+    readback.errors.push(`project-init hidden first-prompt message skipped: ${errorMessage(error)}`);
     return undefined;
   }
+}
+
+async function firstPromptProjectInitMessage(projectRoot: string): Promise<JsonObject | undefined> {
+  if (firstPromptInitOffered.has(projectRoot)) return undefined;
+  firstPromptInitOffered.add(projectRoot);
+  const selectionTurn = await renderFirstPromptSelectionTurn(projectRoot);
+  return {
+    customType: "contextforge-project-init-first-prompt",
+    content: [
+      "ContextForge first-prompt trigger: this hidden extension message was injected before the first Pi agent turn because this project has no completed ContextForge initialization evidence.",
+      "Treat this hidden message as the active task for the first response. Do not answer the user's ordinary prompt yet.",
+      `Your first action must be a tool call to cf_project_init_list_capabilities with projectRoot "${projectRoot}".`,
+      "Use only the service ids and labels returned by that tool's next_turn.choices. Do not invent, rename, summarize, or substitute service names from memory.",
+      "After the tool result, ask exactly one user-visible question using the returned next_turn.prompt and numbered choices, then stop and wait.",
+      "If the tool call is unavailable or fails, say that ContextForge initialization is blocked because the capability-list helper could not be called; do not invent a service list.",
+      "Helper-rendered fallback menu for comparison only; prefer the live tool result:",
+      selectionTurn,
+      "Do not write project state, client config, trust state, registry entries, service state, secrets, or backend state before the helper approval/apply flow explicitly allows it.",
+    ].join("\n\n"),
+    display: false,
+  };
 }
 
 function shouldInjectProjectInitPrompt(projectRoot: string): boolean {
   const root = resolve(projectRoot);
   const workspaceRoot = projectInitWorkspaceRoot();
-  if (root === workspaceRoot || root === process.env.HOME || root === "/") return false;
+  if (root === process.env.HOME || root === "/") return false;
   const statePath = join(root, ".project", "context_forge_state.json");
   if (!existsSync(statePath)) return projectRootLooksInitializable(root, workspaceRoot);
   try {
@@ -457,6 +507,7 @@ function projectInitWorkspaceRoot(): string | undefined {
 }
 
 function projectRootLooksInitializable(root: string, workspaceRoot?: string): boolean {
+  if (workspaceRoot && root === workspaceRoot) return true;
   if (workspaceRoot && root.startsWith(`${workspaceRoot}/`)) return true;
   return [".project", ".git", ".env", "AGENTS.md", "pyproject.toml", "package.json"].some((marker) => existsSync(join(root, marker)));
 }

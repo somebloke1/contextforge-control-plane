@@ -269,7 +269,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(first["after_digest"], second["after_digest"])
         self.assertEqual(second["changes"][0]["expected_block_digest"], second["changes"][0]["existing_block_digest"])
 
-    def test_opencode_config_plan_writes_managed_mcp_and_plugin(self) -> None:
+    def test_opencode_config_plan_writes_managed_project_mcp_only(self) -> None:
         plan = binding.plan_project_init_opencode_config_write(
             "/home/dgk/workspace/legacy-controlplane-archive",
             [service_descriptor("context7")],
@@ -283,10 +283,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("local", parsed["mcp"]["context7"]["type"])
         self.assertTrue(parsed["mcp"]["context7"]["enabled"])
         self.assertIn("contextforge_mcp_wrapper.py", " ".join(parsed["mcp"]["context7"]["command"]))
-        self.assertIn("contextforge-project-init-owner", plan["plugin_next_text"])
-        self.assertIn("opencode_project_init_hook.py", plan["plugin_next_text"])
-        self.assertIn("timeout: 10000", plan["plugin_next_text"])
-        self.assertIn("does not write user-global OpenCode config or plugins", plan["non_actions"])
+        self.assertEqual(binding.OPENCODE_GLOBAL_TRIGGER_SURFACE, plan["global_trigger_surface"])
+        self.assertNotIn("plugin_next_text", plan)
+        self.assertNotIn("plugin_change", plan)
+        self.assertIn("does not write user-global OpenCode config, plugin, or trust", plan["non_actions"])
 
     def test_opencode_config_plan_blocks_unmanaged_same_name(self) -> None:
         plan = binding.plan_project_init_opencode_config_write(
@@ -891,7 +891,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("shared_contextforge_service", service["lifecycle"]["activation"])
         project_state.validate_state(result["planned_state"])
 
-    def test_opencode_is_supported_with_project_local_config_and_plugin_writer(self) -> None:
+    def test_opencode_is_supported_with_project_local_config_and_global_trigger_prerequisite(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             readiness = helper.helper_readiness(project_root=root, client_type="opencode")
@@ -918,14 +918,13 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(binding.OPENCODE_CONFIG_SURFACE, proposal["config_plan"]["surface"])
         self.assertEqual("local", parsed_config["mcp"]["context7"]["type"])
         self.assertIn("contextforge_mcp_wrapper.py", " ".join(parsed_config["mcp"]["context7"]["command"]))
-        self.assertIn("experimental.chat.system.transform", config_plan["plugin_next_text"])
-        self.assertIn("opencode_project_init_hook.py", config_plan["plugin_next_text"])
+        self.assertEqual(binding.OPENCODE_GLOBAL_TRIGGER_SURFACE, config_plan["global_trigger_surface"])
+        self.assertNotIn("plugin_next_text", config_plan)
         self.assertIn(str(root / "opencode.json"), proposal["plan_summary"]["project_local_writes"])
-        self.assertIn(str(root / ".opencode" / "plugins" / "contextforge-project-init.js"), proposal["plan_summary"]["project_local_writes"])
+        self.assertNotIn(str(root / ".opencode" / "plugins" / "contextforge-project-init.js"), proposal["plan_summary"]["project_local_writes"])
         self.assertEqual(
             [
                 str(root / "opencode.json"),
-                str(root / ".opencode" / "plugins" / "contextforge-project-init.js"),
                 str(project_state.project_state_path(root)),
             ],
             result["writes"],
@@ -934,6 +933,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("codex", service["target_clients"])
         self.assertEqual("project_local_opencode_config_planned", service["target_clients"]["opencode"]["status"])
         self.assertEqual(binding.OPENCODE_CONFIG_SURFACE, service["target_clients"]["opencode"]["surface"])
+        self.assertEqual(binding.OPENCODE_GLOBAL_TRIGGER_SURFACE, service["target_clients"]["opencode"]["global_trigger_surface"])
         self.assertEqual("shared_contextforge_service", service["lifecycle"]["activation"])
         project_state.validate_state(result["planned_state"])
 
@@ -1346,8 +1346,19 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("cf_project_init_approve", text)
         self.assertIn("cf_project_init_record_client_reload", text)
         self.assertIn("pi_project_init_helper_cli.py", text)
+        self.assertNotIn('pi.on("input"', text)
+        self.assertNotIn('action: "transform"', text)
         self.assertIn('pi.on("before_agent_start"', text)
         self.assertIn("injectProjectInitPrompt", text)
+        self.assertIn("contextforge-project-init-first-prompt", text)
+        self.assertIn("firstPromptInitOffered", text)
+        self.assertIn("display: false", text)
+        self.assertIn("Your first action must be a tool call to cf_project_init_list_capabilities", text)
+        self.assertIn("Do not invent, rename, summarize, or substitute service names from memory", text)
+        self.assertIn("helper could not be called; do not invent a service list", text)
+        self.assertIn("Which ContextForge services should I activate for this project?", text)
+        self.assertIn("root === workspaceRoot", text)
+        self.assertNotIn("systemPrompt:", text)
         self.assertIn("runHelperOperationJson", text)
         self.assertIn("projectInitCache", text)
         self.assertIn("resolveCachedPlan", text)
@@ -2972,7 +2983,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("for Codex this is project-local .codex/config.toml", text)
         self.assertIn("for Pi this is .project/context_forge_state.json records", text)
         self.assertIn("hidden or structured prompt/context injection", text)
-        self.assertIn("before_agent_start system-prompt context", text)
+        self.assertIn("input-triggered hidden message", text)
         self.assertIn("cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only", text)
         self.assertIn("cf_contextforge_pi_validate for validate-now", text)
         self.assertIn("Do not call unlisted or unavailable validation tool names", text)

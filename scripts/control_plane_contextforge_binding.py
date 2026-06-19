@@ -77,7 +77,8 @@ PROJECT_INIT_SERVER_MARKER = "# contextforge-project-init-virtual-server = \"{vi
 VALIDATION_MODES = frozenset({"pending_choice", "validate_now", "presume_working"})
 PROJECT_INIT_APPROVAL_SCOPE = "project-local-client-config-and-state"
 PI_SHIM_SURFACE = "global Pi extension + .project/context_forge_state.json"
-OPENCODE_CONFIG_SURFACE = "opencode.json + .opencode/plugins/contextforge-project-init.js"
+OPENCODE_CONFIG_SURFACE = "opencode.json"
+OPENCODE_GLOBAL_TRIGGER_SURFACE = "~/.config/opencode/plugins/contextforge-project-init.js"
 PROJECT_INIT_CLIENT_ADAPTERS: dict[str, dict[str, Any]] = {
     "codex": {
         "client_type": "codex",
@@ -116,11 +117,14 @@ PROJECT_INIT_CLIENT_ADAPTERS: dict[str, dict[str, Any]] = {
         "display_name": "OpenCode",
         "surface": OPENCODE_CONFIG_SURFACE,
         "scope": "project_local",
-        "plan_kind": "project_local_config_with_plugin",
-        "project_local_paths": ["opencode.json", ".opencode/plugins/contextforge-project-init.js"],
+        "plan_kind": "project_local_config",
+        "project_local_paths": ["opencode.json"],
+        "requires_global_trigger": True,
+        "global_trigger_surface": OPENCODE_GLOBAL_TRIGGER_SURFACE,
         "supports_stale_owned_replacement": False,
         "non_actions": [
-            "does not write user-global OpenCode config or plugins",
+            "does not write user-global OpenCode config, plugin, or trust",
+            "expects a separately bootstrapped user-home OpenCode ContextForge plugin",
             "does not mutate OpenCode trust",
             "does not restart OpenCode",
             "does not mutate ContextForge registry or service catalog",
@@ -647,60 +651,6 @@ def build_project_init_opencode_binding_entry(service: Mapping[str, Any]) -> dic
     }
 
 
-def build_project_init_opencode_plugin_text() -> str:
-    """Return the project-local OpenCode plugin that injects project-init context."""
-
-    return f"""// contextforge-project-init-owner = "ContextForge"
-// contextforge-project-init-hook = "{REPO_ROOT / "scripts" / "opencode_project_init_hook.py"}"
-import {{ spawnSync }} from "node:child_process"
-
-const PYTHON = {json.dumps(str(PYTHON_PATH))}
-const HOOK = {json.dumps(str(REPO_ROOT / "scripts" / "opencode_project_init_hook.py"))}
-const HOOK_EVENT = "experimental.chat.system.transform"
-
-export const ContextForgeProjectInit = async () => {{
-  let injected = false
-
-  return {{
-    [HOOK_EVENT]: async (input, output) => {{
-      if (injected) return
-
-      const sessionID =
-        input?.sessionID ??
-        input?.session?.id ??
-        input?.message?.sessionID ??
-        `${{process.pid}}:${{Date.now()}}`
-      const cwd = input?.cwd ?? input?.directory ?? process.cwd()
-
-      const result = spawnSync(PYTHON, [HOOK], {{
-        input: JSON.stringify({{
-          hook_event_name: HOOK_EVENT,
-          session_id: String(sessionID),
-          cwd: String(cwd),
-        }}),
-        encoding: "utf8",
-        timeout: 10000,
-        stdio: ["pipe", "pipe", "pipe"],
-      }})
-
-      if (result.status !== 0 || !result.stdout?.trim()) return
-
-      try {{
-        const payload = JSON.parse(result.stdout)
-        const context = payload?.hookSpecificOutput?.additionalContext
-        if (typeof context === "string" && Array.isArray(output?.system)) {{
-          output.system.push(context)
-          injected = true
-        }}
-      }} catch {{
-        return
-      }}
-    }},
-  }}
-}}
-"""
-
-
 def _opencode_managed_entry_matches(existing: Any, expected: Mapping[str, Any]) -> bool:
     if not isinstance(existing, Mapping):
         return False
@@ -725,27 +675,8 @@ def _read_opencode_config(config_path: Path, existing_text: str | None) -> tuple
     return text, data, []
 
 
-def _opencode_plugin_text_state(
-    plugin_path: Path,
-    plugin_existing_text: str | None,
-    *,
-    replace_unmanaged_conflicts: bool,
-) -> tuple[str, str, str, list[dict[str, Any]]]:
-    text = plugin_existing_text if plugin_existing_text is not None else (plugin_path.read_text(encoding="utf-8") if plugin_path.exists() else "")
-    expected = build_project_init_opencode_plugin_text()
-    blockers: list[dict[str, Any]] = []
-    if not text:
-        return text, expected, "append", blockers
-    if text == expected:
-        return text, expected, "unchanged", blockers
-    if "contextforge-project-init-owner = \"ContextForge\"" in text or replace_unmanaged_conflicts:
-        return text, expected, "replace", blockers
-    blockers.append(_blocker("client_plugin_conflict", f"unmanaged OpenCode project-init plugin already exists: {plugin_path}"))
-    return text, text, "blocked", blockers
-
-
-def _opencode_plan_digest(config_text: str, plugin_text: str) -> str:
-    return common_stable_digest({"opencode_json": config_text, "project_init_plugin": plugin_text})
+def _opencode_plan_digest(config_text: str) -> str:
+    return common_stable_digest({"opencode_json": config_text})
 
 
 def plan_project_init_opencode_config_write(
@@ -756,11 +687,11 @@ def plan_project_init_opencode_config_write(
     plugin_existing_text: str | None = None,
     replace_unmanaged_conflicts: bool = False,
 ) -> dict[str, Any]:
-    """Build a deterministic project-local OpenCode config/plugin write plan."""
+    """Build a deterministic project-local OpenCode MCP config write plan."""
 
     root = project_state.validate_project_root(project_root, require_workspace=False)
     config_path = root / "opencode.json"
-    plugin_path = root / ".opencode" / "plugins" / "contextforge-project-init.js"
+    _ = plugin_existing_text
     text, config, blockers = _read_opencode_config(config_path, existing_text)
     output = _json_copy(config)
     mcp_servers = output.get("mcp")
@@ -811,32 +742,19 @@ def plan_project_init_opencode_config_write(
             }
         )
 
-    plugin_before, plugin_next, plugin_operation, plugin_blockers = _opencode_plugin_text_state(
-        plugin_path,
-        plugin_existing_text,
-        replace_unmanaged_conflicts=replace_unmanaged_conflicts,
-    )
-    blockers.extend(plugin_blockers)
     next_text = _opencode_config_text(output)
     plan = {
         "surface": _client_surface("opencode"),
         "scope": _client_adapter("opencode")["scope"],
         "config_path": str(config_path),
-        "plugin_path": str(plugin_path),
+        "global_trigger_surface": OPENCODE_GLOBAL_TRIGGER_SURFACE,
         "decision": "block" if blockers else "allow_owned_project_local_write",
         "write_allowed": not blockers,
         "blockers": _dedupe_blockers(blockers),
         "changes": changes,
-        "plugin_change": {
-            "path": str(plugin_path),
-            "operation": plugin_operation,
-            "before_digest": common_stable_digest(plugin_before),
-            "after_digest": common_stable_digest(plugin_next),
-        },
-        "before_digest": _opencode_plan_digest(text, plugin_before),
-        "after_digest": _opencode_plan_digest(next_text, plugin_next),
+        "before_digest": _opencode_plan_digest(text),
+        "after_digest": _opencode_plan_digest(next_text),
         "next_text": next_text,
-        "plugin_next_text": plugin_next,
         "non_actions": _client_non_actions("opencode"),
         "redaction_status": "redacted",
     }
@@ -852,7 +770,7 @@ def plan_project_init_opencode_config_conflict_recovery(
     plugin_existing_text: str | None = None,
     conflict_aliases: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    """Plan replacement of conflicting project-local OpenCode MCP/plugin entries."""
+    """Plan replacement of conflicting project-local OpenCode MCP entries."""
 
     requested_aliases = {
         normalize_codex_alias(str(alias))
@@ -891,7 +809,7 @@ def plan_project_init_opencode_config_conflict_recovery(
         changed = any(
             isinstance(change, Mapping) and change.get("operation") == "replace"
             for change in plan.get("changes") or []
-        ) or (plan.get("plugin_change") or {}).get("operation") == "replace"
+        )
         plan["decision"] = "recover" if changed else "noop"
         plan["recovery_required"] = changed
     plan["operations"] = [

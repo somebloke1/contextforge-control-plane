@@ -14,8 +14,10 @@ Runtime model:
 - Pi loads this as a global TypeScript extension.
 - The extension always registers Pi-native `cf_project_init_*` bootstrap tools
   that proxy to the repo-local ContextForge helper workflow.
-- Project-init guidance is injected through Pi's hidden `before_agent_start`
-  system-prompt context. The `cf_project_init_prompt` tool is diagnostic only.
+- On the first user prompt in a project with no completed ContextForge
+  initialization evidence, the shim injects a hidden `before_agent_start`
+  message with the helper-discovered initialization menu before ordinary work.
+- The `cf_project_init_prompt` tool is diagnostic only.
 - `cf_project_init_*` helper tool calls use empty custom renderers so their
   model-visible JSON results do not fill the user's terminal.
 - The shim caches the latest exact project-init proposal, approval receipts, and

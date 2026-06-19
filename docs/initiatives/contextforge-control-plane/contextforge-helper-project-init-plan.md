@@ -180,7 +180,7 @@ The v1 registry covers:
 | --- | --- | --- | --- |
 | Codex | `.codex/config.toml` | project-local config | TOML managed blocks with ownership markers. |
 | Gemini | `.gemini/settings.json` | project-local config | JSON `mcpServers` entries. |
-| OpenCode | `opencode.json` plus `.opencode/plugins/contextforge-project-init.js` | project-local config plus plugin | JSON `mcp` entries and a project-local prompt-injection plugin. |
+| OpenCode | `opencode.json` plus user-home ContextForge plugin prerequisite | project-local service config plus global helper trigger bootstrap | JSON `mcp` entries for selected services stay project-local; the first-prompt trigger is a normal user-home OpenCode plugin. |
 | Pi | global Pi extension plus `.project/context_forge_state.json` | project state | Project-init records shim metadata only; global shim install/reload is a separate approved workflow. |
 
 Adapter capability flags include `supports_project_local_config`,

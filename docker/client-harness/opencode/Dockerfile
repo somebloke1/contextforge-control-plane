@@ -14,9 +14,12 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && npm cache clean --force
+COPY --chown=agent:agent entrypoint.sh /usr/local/bin/contextforge-opencode-entrypoint
+RUN chmod 0755 /usr/local/bin/contextforge-opencode-entrypoint
 USER agent
 
 ENV OPENCODE_CONFIG_DIR=/home/agent/.config/opencode
 ENV CONTEXTFORGE_HELPER_PYTHON=/opt/contextforge-helper-venv/bin/python
 
+ENTRYPOINT ["/usr/local/bin/contextforge-opencode-entrypoint"]
 CMD ["opencode", "--version"]
