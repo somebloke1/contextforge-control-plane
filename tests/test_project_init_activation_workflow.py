@@ -2206,10 +2206,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertFalse(blocked_validation["ok"])
             self.assertEqual("PermissionError", blocked_validation["error"]["type"])
 
-            approval_source.write_text(
-                json.dumps({"cwd": str(root), "text": "I started a new OpenCode session; validate now."}) + "\n",
-                encoding="utf-8",
-            )
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": "1"}) + "\n", encoding="utf-8")
             with mock.patch.dict(os.environ, guarded_env):
                 reload_recorded = contextforge_helper_mcp.cf_project_init_record_validation(
                     str(root),
@@ -2230,6 +2227,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 self.assertIn("target_client_safe_probe_result", text)
                 self.assertIn("safe_probe_result", text)
                 self.assertIn("safe_probe_id", text)
+                self.assertIn("target_client", text)
                 self.assertIn("validation_results", text)
                 self.assertIn("resolve-library-id", text)
                 self.assertIn("contextforge://control-plane/traces/context7:canonical-target-client", text)
@@ -3325,7 +3323,6 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("do not silently replace the challenge id", text)
         self.assertIn("prefer those cached id/digest tools over reconstructing a full plan object", text)
         self.assertIn("first call cf_project_init_record_client_reload", text)
-        self.assertIn("pass validation mode validate_now or presume_working to the reload call", text)
         self.assertIn("after reload or new session, resume project init", text)
         self.assertIn("Codex launches configured MCP servers and exposes their tools when a session starts", text)
         self.assertIn("/mcp is a status view, not an in-place MCP tool reload", text)

@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -122,6 +123,10 @@ def _require_latest_user_text(project_root: str, *, env_name: str, purpose: str,
     raise PermissionError(f"latest user message does not contain explicit {purpose} intent")
 
 
+def _contains_selection_number(text: str, selection_number: int) -> bool:
+    return re.search(rf"(?<!\d){selection_number}(?!\d)", text) is not None
+
+
 def _require_user_approval_text(project_root: str, challenge_id: str | None, plan_digest: str | None) -> None:
     if not _env_truthy("CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT"):
         return
@@ -150,18 +155,28 @@ def _require_user_reload_text(project_root: str) -> None:
 
 
 def _require_user_validation_text(project_root: str, validation_mode: str) -> None:
+    if not _env_truthy("CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT"):
+        return
+    text = _read_latest_user_message_text(project_root)
+    lowered = text.lower()
     if validation_mode == "validate_now":
-        keywords = {"validate", "validation"}
+        if "validate" in lowered or "validation" in lowered or _contains_selection_number(text, 1):
+            return
     elif validation_mode == "presume_working":
-        keywords = {"skip", "presume", "working"}
+        if "skip" in lowered or "presume" in lowered or "working" in lowered or _contains_selection_number(text, 2):
+            return
     else:
-        keywords = {"validate", "validation", "skip", "presume", "working"}
-    _require_latest_user_text(
-        project_root,
-        env_name="CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT",
-        purpose="validation",
-        keywords=keywords,
-    )
+        if (
+            "validate" in lowered
+            or "validation" in lowered
+            or "skip" in lowered
+            or "presume" in lowered
+            or "working" in lowered
+            or _contains_selection_number(text, 1)
+            or _contains_selection_number(text, 2)
+        ):
+            return
+    raise PermissionError("latest user message does not contain explicit validation intent")
 
 
 def _record_reload_from_validation_request_if_configured(

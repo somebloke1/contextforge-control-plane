@@ -877,7 +877,7 @@ def _post_reload_validation_continuation(
             "validation_mode": "validate_now",
             "client_type": client_type,
             "description": "Call the selected service safe probe through the target client, then record validation with service-keyed validation_results.",
-            "expected_validation_results_shape": _expected_validation_results_shape(services),
+            "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
         }
     }
 
@@ -1163,7 +1163,7 @@ def record_project_init_validation(
             "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
             "validation_diagnostic": validation_diagnostic,
             "validation_proof_diagnostic": proof_diagnostic,
-            "expected_validation_results_shape": _expected_validation_results_shape(services),
+            "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
             "next_turn": validation_choice_turn(),
             "non_actions": [
                 _validation_not_recorded_label(client_type),
@@ -1181,7 +1181,7 @@ def record_project_init_validation(
             "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
             "validation_diagnostic": validation_diagnostic,
             "validation_proof_diagnostic": proof_diagnostic,
-            "expected_validation_results_shape": _expected_validation_results_shape(services),
+            "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
             "non_actions": [
                 _validation_not_recorded_label(client_type),
                 "validation_results must be a top-level object keyed by selected service binding, normalized binding key, or service identity id",
@@ -1193,7 +1193,7 @@ def record_project_init_validation(
             "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
             "validation_diagnostic": validation_diagnostic,
             "validation_proof_diagnostic": proof_diagnostic,
-            "expected_validation_results_shape": _expected_validation_results_shape(services),
+            "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
             "next_turn": validation_choice_turn(),
             "non_actions": [
                 _validation_not_recorded_label(client_type),
@@ -1239,7 +1239,7 @@ def record_project_init_validation(
         ],
         "validation_diagnostic": validation_diagnostic,
         "validation_proof_diagnostic": proof_diagnostic,
-        "expected_validation_results_shape": _expected_validation_results_shape(services),
+        "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
     }
     if validation_mode == "validate_now" and (
         validation_diagnostic["missing_keys"] or validation_diagnostic["unmatched_keys"]
@@ -1371,7 +1371,7 @@ def _safe_probe_proof_gaps(service_family: str, result: Mapping[str, Any], *, cl
     return list(dict.fromkeys(missing)), list(dict.fromkeys(invalid))
 
 
-def _expected_validation_results_shape(services: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def _expected_validation_results_shape(services: Sequence[Mapping[str, Any]], *, target_client: str) -> dict[str, Any]:
     service = services[0] if services else {}
     binding_id = str(service.get("service_binding") or "context7:canonical")
     service_family = str(service.get("service_family") or binding_id.split(":", 1)[0] or "context7")
@@ -1382,14 +1382,14 @@ def _expected_validation_results_shape(services: Sequence[Mapping[str, Any]]) ->
         shape = dict(contract_shape)
         shape["verification_trace_refs"] = [trace_ref]
         shape["tool_name"] = str((contract.get("default_probe") or {}).get("tool_name_hint") or "")
-        shape["target_client"] = "TARGET_CLIENT"
+        shape["target_client"] = target_client
         shape["result_summary"] = "brief summary of the actual target-client tool output"
     else:
         shape = {
             "status": "passed",
             "target_client_visible": True,
             "verification_trace_refs": [trace_ref],
-            "target_client": "TARGET_CLIENT",
+            "target_client": target_client,
             "tool_name": "target-client-visible safe probe tool name",
             "result_summary": "brief summary of the actual target-client tool output",
         }
