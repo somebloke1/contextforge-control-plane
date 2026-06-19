@@ -2093,6 +2093,124 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("available", result["helper"]["status"])
         self.assertEqual("codex", result["root_attestation"]["client_type"])
 
+    def test_contextforge_helper_mcp_default_client_type_can_be_set_by_env(self) -> None:
+        self.assertEqual(
+            "codex",
+            inspect.signature(contextforge_helper_mcp.list_available_capabilities).parameters["client_type"].default,
+        )
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(REPO_ROOT / "scripts")
+        env["CONTEXTFORGE_HELPER_DEFAULT_CLIENT_TYPE"] = "opencode"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import inspect, contextforge_helper_mcp; "
+                    "print(inspect.signature(contextforge_helper_mcp.list_available_capabilities)"
+                    ".parameters['client_type'].default)"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=20,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("opencode", result.stdout.strip())
+
+    def test_contextforge_helper_mcp_approval_guard_requires_latest_user_approval_text(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            challenge = proposal["approval_challenge"]
+            guarded_env = {
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1",
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_RELOAD_TEXT": "1",
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT": "1",
+                "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source),
+            }
+
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "Activate context7:canonical only."}) + "\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, guarded_env):
+                denied = contextforge_helper_mcp.cf_project_init_approve(
+                    str(root),
+                    challenge["challenge_id"],
+                    challenge["plan_digest"],
+                )
+
+            self.assertFalse(denied["ok"])
+            self.assertEqual("PermissionError", denied["error"]["type"])
+
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "Approve this exact ContextForge activation plan."}) + "\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, guarded_env):
+                approved = contextforge_helper_mcp.cf_project_init_approve(
+                    str(root),
+                    challenge["challenge_id"],
+                    challenge["plan_digest"],
+                )
+
+            self.assertTrue(approved["ok"])
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root))
+            self.assertTrue(applied["ok"])
+
+            with mock.patch.dict(os.environ, guarded_env):
+                blocked_reload = contextforge_helper_mcp.cf_project_init_record_client_reload(
+                    str(root),
+                    client_type="opencode",
+                )
+            self.assertFalse(blocked_reload["ok"])
+            self.assertEqual("PermissionError", blocked_reload["error"]["type"])
+
+            with mock.patch.dict(os.environ, guarded_env):
+                blocked_validation = contextforge_helper_mcp.cf_project_init_record_validation(
+                    str(root),
+                    validation_mode="validate_now",
+                    validation_results={
+                        "context7:canonical": {
+                            "status": "passed",
+                            "target_client_visible": True,
+                            "target_client": "opencode",
+                            "proof_kind": "target_client_safe_probe_result",
+                            "safe_probe_result": "passed",
+                            "safe_probe_id": "resolve-library-id",
+                            "tool_name": "context7_context7-local-resolve-library-id",
+                            "result_summary": "test",
+                            "verification_trace_refs": ["contextforge://control-plane/traces/context7:canonical-target-client"],
+                        }
+                    },
+                    client_type="opencode",
+                )
+            self.assertFalse(blocked_validation["ok"])
+            self.assertEqual("PermissionError", blocked_validation["error"]["type"])
+
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "I started a new OpenCode session; validate now."}) + "\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, guarded_env):
+                reload_recorded = contextforge_helper_mcp.cf_project_init_record_client_reload(
+                    str(root),
+                    client_type="opencode",
+                    validation_mode="validate_now",
+                )
+            self.assertTrue(reload_recorded["ok"])
+
     def test_contextforge_helper_validation_guidance_exposes_safe_probe_shape(self) -> None:
         helper_doc = contextforge_helper_mcp.record_project_init_validation.__doc__ or ""
         plan_doc = (

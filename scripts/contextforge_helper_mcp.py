@@ -21,6 +21,7 @@ _CACHED_PLANS: dict[str, dict[str, Any]] = {}
 _CACHED_RECEIPTS: dict[str, list[dict[str, Any]]] = {}
 _CACHED_RECOVERY_PLANS: dict[str, dict[str, Any]] = {}
 _CACHED_RECOVERY_RECEIPTS: dict[str, list[dict[str, Any]]] = {}
+DEFAULT_CLIENT_TYPE = os.environ.get("CONTEXTFORGE_HELPER_DEFAULT_CLIENT_TYPE", "codex").strip() or "codex"
 
 
 def _cache_dir() -> Path:
@@ -83,6 +84,84 @@ def _unwrap_tool_envelope(value: dict[str, Any]) -> dict[str, Any]:
 
 def _cache_key(project_root: str) -> str:
     return str(Path(project_root).expanduser().resolve(strict=False))
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _approval_source_path() -> Path | None:
+    raw = os.environ.get("CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH", "").strip()
+    return Path(raw).expanduser() if raw else None
+
+
+def _read_latest_user_message_text(project_root: str) -> str:
+    path = _approval_source_path()
+    if path is None:
+        return ""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    cwd = data.get("cwd")
+    if cwd and _cache_key(str(cwd)) != _cache_key(project_root):
+        return ""
+    text = data.get("text")
+    return text if isinstance(text, str) else ""
+
+
+def _require_latest_user_text(project_root: str, *, env_name: str, purpose: str, keywords: set[str]) -> None:
+    if not _env_truthy(env_name):
+        return
+    text = _read_latest_user_message_text(project_root)
+    lowered = text.lower()
+    if any(keyword in lowered for keyword in keywords):
+        return
+    raise PermissionError(f"latest user message does not contain explicit {purpose} intent")
+
+
+def _require_user_approval_text(project_root: str, challenge_id: str | None, plan_digest: str | None) -> None:
+    if not _env_truthy("CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT"):
+        return
+    text = _read_latest_user_message_text(project_root)
+    lowered = text.lower()
+    approved = (
+        "approve" in lowered
+        or "approved" in lowered
+        or (bool(challenge_id) and str(challenge_id) in text)
+        or (bool(plan_digest) and str(plan_digest) in text)
+    )
+    if not approved:
+        raise PermissionError(
+            "latest user message does not contain explicit approval text, challenge id, or plan digest; "
+            "ask the user to approve the exact project-init plan before calling approval tools"
+        )
+
+
+def _require_user_reload_text(project_root: str) -> None:
+    _require_latest_user_text(
+        project_root,
+        env_name="CONTEXTFORGE_HELPER_REQUIRE_USER_RELOAD_TEXT",
+        purpose="reload or validation",
+        keywords={"reload", "reloaded", "restart", "restarted", "new session", "validate", "validation", "skip", "presume"},
+    )
+
+
+def _require_user_validation_text(project_root: str, validation_mode: str) -> None:
+    if validation_mode == "validate_now":
+        keywords = {"validate", "validation"}
+    elif validation_mode == "presume_working":
+        keywords = {"skip", "presume", "working"}
+    else:
+        keywords = {"validate", "validation", "skip", "presume", "working"}
+    _require_latest_user_text(
+        project_root,
+        env_name="CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT",
+        purpose="validation",
+        keywords=keywords,
+    )
 
 
 def _remember_plan(project_root: str, plan: dict[str, Any]) -> dict[str, Any]:
@@ -183,7 +262,7 @@ def _cached_recovery_continuation_plan(project_root: str, activation_plan: dict[
 
 
 @server.tool()
-def get_project_context(project_root: str, client_type: str = "codex") -> dict[str, Any]:
+def get_project_context(project_root: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
     """Return helper readiness and local project-root attestation."""
     try:
         return {"ok": True, **helper.helper_readiness(project_root=project_root, client_type=client_type)}
@@ -192,7 +271,7 @@ def get_project_context(project_root: str, client_type: str = "codex") -> dict[s
 
 
 @server.tool()
-def cf_project_init_get_context(project_root: str, client_type: str = "codex") -> dict[str, Any]:
+def cf_project_init_get_context(project_root: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
     """Alias for get_project_context with the project-init tool id."""
     return get_project_context(project_root=project_root, client_type=client_type)
 
@@ -200,7 +279,7 @@ def cf_project_init_get_context(project_root: str, client_type: str = "codex") -
 @server.tool()
 def list_available_capabilities(
     project_root: str,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     contextforge_servers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """List activation candidates and one service-selection next_turn."""
@@ -220,7 +299,7 @@ def list_available_capabilities(
 @server.tool()
 def cf_project_init_list_capabilities(
     project_root: str,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     contextforge_servers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Alias for list_available_capabilities with the project-init tool id."""
@@ -235,7 +314,7 @@ def cf_project_init_list_capabilities(
 def propose_project_init(
     project_root: str,
     selected_services: list[dict[str, Any] | str],
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     inputs: dict[str, Any] | None = None,
     contextforge_servers: list[dict[str, Any]] | None = None,
     server_instances_root: str | None = None,
@@ -263,7 +342,7 @@ def propose_project_init(
 def cf_project_init_propose(
     project_root: str,
     selected_services: list[dict[str, Any] | str],
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     inputs: dict[str, Any] | None = None,
     contextforge_servers: list[dict[str, Any]] | None = None,
     server_instances_root: str | None = None,
@@ -282,7 +361,7 @@ def cf_project_init_propose(
 @server.tool()
 def propose_project_init_recovery(
     project_root: str,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     contextforge_servers: list[dict[str, Any]] | None = None,
     server_instances_root: str | None = None,
     inputs: dict[str, Any] | None = None,
@@ -328,7 +407,7 @@ def propose_project_init_recovery(
 @server.tool()
 def cf_project_init_recovery_propose(
     project_root: str,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     contextforge_servers: list[dict[str, Any]] | None = None,
     server_instances_root: str | None = None,
     inputs: dict[str, Any] | None = None,
@@ -352,6 +431,18 @@ def approve_project_init_plan(
     """Issue helper-owned consent receipts for an exact approved plan digest."""
     try:
         clean_plan = _unwrap_tool_envelope(plan)
+        challenge = clean_plan.get("approval_challenge") if isinstance(clean_plan.get("approval_challenge"), dict) else {}
+        approval_challenge_id = (
+            approval.get("challenge_id")
+            if isinstance(approval, dict) and approval.get("challenge_id")
+            else challenge.get("challenge_id")
+        )
+        approval_plan_digest = (
+            approval.get("plan_digest")
+            if isinstance(approval, dict) and approval.get("plan_digest")
+            else clean_plan.get("plan_digest")
+        )
+        _require_user_approval_text(project_root, str(approval_challenge_id or ""), str(approval_plan_digest or ""))
         helper.restore_process_local_approval_session(project_root=project_root, plan=clean_plan)
         local_event = helper.record_local_approval_event(
             project_root=project_root,
@@ -387,6 +478,18 @@ def approve_project_init_recovery_plan(
     """Issue helper-owned recovery consent receipts for an exact approved recovery plan digest."""
     try:
         clean_plan = _unwrap_tool_envelope(plan)
+        challenge = clean_plan.get("approval_challenge") if isinstance(clean_plan.get("approval_challenge"), dict) else {}
+        approval_challenge_id = (
+            approval.get("challenge_id")
+            if isinstance(approval, dict) and approval.get("challenge_id")
+            else challenge.get("challenge_id")
+        )
+        approval_plan_digest = (
+            approval.get("plan_digest")
+            if isinstance(approval, dict) and approval.get("plan_digest")
+            else clean_plan.get("plan_digest")
+        )
+        _require_user_approval_text(project_root, str(approval_challenge_id or ""), str(approval_plan_digest or ""))
         helper.restore_process_local_approval_session(project_root=project_root, plan=clean_plan)
         local_event = helper.record_local_approval_event(
             project_root=project_root,
@@ -422,6 +525,7 @@ def cf_project_init_recovery_approve(
     """Approve the latest cached recovery plan by challenge id and plan digest."""
     try:
         plan = _matching_cached_recovery_plan(project_root, challenge_id, plan_digest)
+        _require_user_approval_text(project_root, challenge_id, plan_digest)
         helper.restore_process_local_approval_session(project_root=project_root, plan=plan)
         local_event = helper.record_local_approval_event(
             project_root=project_root,
@@ -521,6 +625,7 @@ def cf_project_init_approve(
     """Approve the latest cached project-init plan by challenge id and plan digest."""
     try:
         plan = _matching_cached_plan(project_root, challenge_id, plan_digest)
+        _require_user_approval_text(project_root, challenge_id, plan_digest)
         helper.restore_process_local_approval_session(project_root=project_root, plan=plan)
         local_event = helper.record_local_approval_event(
             project_root=project_root,
@@ -621,7 +726,7 @@ def cf_project_init_apply(
 @server.tool()
 def repair_pending_project_init_config(
     project_root: str,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     contextforge_servers: list[dict[str, Any]] | None = None,
     server_instances_root: str | None = None,
     dry_run: bool = False,
@@ -645,7 +750,7 @@ def repair_pending_project_init_config(
 @server.tool()
 def cf_project_init_repair(
     project_root: str,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     contextforge_servers: list[dict[str, Any]] | None = None,
     server_instances_root: str | None = None,
     dry_run: bool = False,
@@ -665,7 +770,7 @@ def record_project_init_validation(
     project_root: str,
     validation_mode: str,
     validation_results: dict[str, Any] | None = None,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Record validation choice/results.
@@ -686,6 +791,7 @@ def record_project_init_validation(
     not nest results under {"services": ...}.
     """
     try:
+        _require_user_validation_text(project_root, validation_mode)
         return {
             "ok": True,
             **helper.record_project_init_validation(
@@ -705,7 +811,7 @@ def cf_project_init_record_validation(
     project_root: str,
     validation_mode: str,
     validation_results: dict[str, Any] | None = None,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Record validation choice/results with the project-init tool id.
@@ -737,7 +843,7 @@ def cf_project_init_record_validation(
 @server.tool()
 def record_project_init_client_reload(
     project_root: str,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     validation_mode: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
@@ -749,6 +855,7 @@ def record_project_init_client_reload(
     again. Reload acknowledgement is not service validation proof.
     """
     try:
+        _require_user_reload_text(project_root)
         return {
             "ok": True,
             **helper.record_project_init_client_reload(
@@ -765,7 +872,7 @@ def record_project_init_client_reload(
 @server.tool()
 def cf_project_init_record_client_reload(
     project_root: str,
-    client_type: str = "codex",
+    client_type: str = DEFAULT_CLIENT_TYPE,
     validation_mode: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:

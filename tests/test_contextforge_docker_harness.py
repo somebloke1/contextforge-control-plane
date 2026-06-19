@@ -323,7 +323,10 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_TARGET: /home/agent/.config/opencode/plugins/contextforge-project-init.js", compose)
         self.assertIn("CONTEXTFORGE_OPENCODE_HOOK: /repo/scripts/opencode_project_init_hook.py", compose)
         self.assertIn("CONTEXTFORGE_OPENCODE_HOOK_PYTHON: /opt/contextforge-helper-venv/bin/python", compose)
-        self.assertIn("CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /tmp/contextforge-client-harness-runtime/project-init", compose)
+        self.assertIn(
+            "CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init",
+            compose,
+        )
         self.assertIn("CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python", compose)
         self.assertIn("CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py", compose)
         self.assertIn("CONTEXTFORGE_PI_SHIM_EXTENSION: /repo/pi-extensions/contextforge-global-shim/index.ts", compose)
@@ -386,7 +389,10 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT:=/repo/scripts/contextforge_mcp_wrapper.py", container_launcher)
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV:=/config/contextforge/contextforge.env", container_launcher)
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL:=http://host.docker.internal:4445", container_launcher)
-        self.assertIn("CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/tmp/contextforge-client-harness-runtime/project-init", container_launcher)
+        self.assertIn(
+            "CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/home/agent/.local/state/contextforge-client-harness-runtime/project-init",
+            container_launcher,
+        )
         self.assertIn("exec opencode \"$@\"", container_launcher)
         self.assertIn("docker compose -f compose.yml run --rm --no-deps", host_launcher)
         self.assertIn("-v \"${REPO_ROOT}:/repo:ro\"", host_launcher)
@@ -398,7 +404,10 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT:=/repo/scripts/contextforge_mcp_wrapper.py", entrypoint)
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV:=/config/contextforge/contextforge.env", entrypoint)
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL:=http://host.docker.internal:4445", entrypoint)
-        self.assertIn("CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/tmp/contextforge-client-harness-runtime/project-init", entrypoint)
+        self.assertIn(
+            "CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/home/agent/.local/state/contextforge-client-harness-runtime/project-init",
+            entrypoint,
+        )
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV: /config/contextforge/contextforge.env", compose)
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL: http://host.docker.internal:4445", compose)
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json", compose)
@@ -408,6 +417,10 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('const HOOK_EVENT = "experimental.chat.messages.transform"', plugin)
         self.assertNotIn("experimental.chat.system.transform", plugin)
         self.assertIn("spawnSync", plugin)
+        self.assertIn("recordLatestUserMessage", plugin)
+        self.assertIn("opencode-latest-user-message.json", plugin)
+        self.assertIn('"permission.ask"', plugin)
+        self.assertIn("CONTEXTFORGE_OPENCODE_DENY_RAW_WORKSPACE_MUTATION", plugin)
         self.assertIn("CONTEXTFORGE_HELPER_PYTHON", plugin)
         self.assertIn("CONTEXTFORGE_OPENCODE_HOOK", plugin)
         self.assertIn("opencode_project_init_hook.py", plugin)
@@ -419,6 +432,12 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('"contextforge-helper"', opencode_config)
         self.assertIn('"{env:CONTEXTFORGE_HELPER_PYTHON}"', opencode_config)
         self.assertIn('"{env:CONTEXTFORGE_HELPER_SCRIPT}"', opencode_config)
+        self.assertIn('"CONTEXTFORGE_HELPER_DEFAULT_CLIENT_TYPE": "opencode"', opencode_config)
+        self.assertIn('"CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1"', opencode_config)
+        self.assertIn('"CONTEXTFORGE_HELPER_REQUIRE_USER_RELOAD_TEXT": "1"', opencode_config)
+        self.assertIn('"CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT": "1"', opencode_config)
+        self.assertIn('"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH"', opencode_config)
+        self.assertIn('"CONTEXTFORGE_OPENCODE_DENY_RAW_WORKSPACE_MUTATION": "1"', opencode_config)
         self.assertIn("contextforge-client-harness-runtime", opencode_config)
         self.assertNotIn("/workspace/.opencode/plugins", container_launcher + entrypoint + plugin)
         self.assertNotIn("/repo/run", container_launcher + entrypoint + plugin)

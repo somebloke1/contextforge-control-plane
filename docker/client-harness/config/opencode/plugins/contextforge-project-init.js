@@ -1,6 +1,8 @@
 // contextforge-project-init-owner = "ContextForge client harness"
 // contextforge-project-init-hook = "scripts/opencode_project_init_hook.py"
 import { spawnSync } from "node:child_process"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname } from "node:path"
 
 const PYTHON =
   process.env.CONTEXTFORGE_OPENCODE_HOOK_PYTHON ??
@@ -8,19 +10,71 @@ const PYTHON =
   "/opt/contextforge-helper-venv/bin/python"
 const HOOK = process.env.CONTEXTFORGE_OPENCODE_HOOK ?? "/repo/scripts/opencode_project_init_hook.py"
 const HOOK_EVENT = "experimental.chat.messages.transform"
+const DENY_RAW_WORKSPACE_MUTATION = (process.env.CONTEXTFORGE_OPENCODE_DENY_RAW_WORKSPACE_MUTATION ?? "1") !== "0"
+const APPROVAL_SOURCE =
+  process.env.CONTEXTFORGE_OPENCODE_APPROVAL_SOURCE ??
+  `${process.env.CONTEXTFORGE_PROJECT_INIT_RUN_ROOT ?? "/home/agent/.local/state/contextforge-client-harness-runtime/project-init"}/opencode-latest-user-message.json`
+
+const latestUserMessageText = (messages) => {
+  const latest = Array.isArray(messages) ? messages[messages.length - 1] : undefined
+  const parts = Array.isArray(latest?.parts) ? latest.parts : []
+  return parts
+    .filter((part) => part?.type === "text" && typeof part?.text === "string")
+    .map((part) => part.text)
+    .join("\n")
+}
+
+const recordLatestUserMessage = (sessionID, cwd, text) => {
+  try {
+    mkdirSync(dirname(APPROVAL_SOURCE), { recursive: true })
+    writeFileSync(
+      APPROVAL_SOURCE,
+      JSON.stringify(
+        {
+          client_type: "opencode",
+          session_id: String(sessionID),
+          cwd: String(cwd),
+          text: String(text ?? ""),
+          recorded_at: new Date().toISOString(),
+        },
+        null,
+        2,
+      ) + "\n",
+      { mode: 0o600 },
+    )
+  } catch {
+    return
+  }
+}
 
 export const ContextForgeProjectInit = async ({ directory } = {}) => {
   let injected = false
 
   return {
+    "permission.ask": async (input, output) => {
+      if (!DENY_RAW_WORKSPACE_MUTATION) return
+      const values = [
+        input?.type,
+        input?.title,
+        input?.metadata?.tool,
+        input?.metadata?.name,
+        input?.metadata?.command,
+      ]
+        .filter((value) => typeof value === "string")
+        .map((value) => value.toLowerCase())
+      if (values.some((value) => value === "bash" || value === "write" || value === "edit")) {
+        output.status = "deny"
+      }
+    },
     [HOOK_EVENT]: async (_input, output) => {
-      if (injected) return
       if (!Array.isArray(output?.messages) || output.messages.length === 0) return
 
       const latest = output.messages[output.messages.length - 1]
       const sessionID = latest?.info?.sessionID ?? `${process.pid}:${Date.now()}`
       const messageID = `msg_contextforge_project_init_${Date.now()}`
       const cwd = directory ?? process.cwd()
+      recordLatestUserMessage(sessionID, cwd, latestUserMessageText(output.messages))
+      if (injected) return
 
       const result = spawnSync(PYTHON, [HOOK], {
         input: JSON.stringify({
@@ -48,6 +102,9 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
             "Immediately include the numbered helper-discovered service list from this context.",
             "Then stop and wait for the user's selection.",
             "Do not write project state or configuration yet.",
+            "Use contextforge-helper project-init tools for activation writes; never use bash, write, or edit to create activation files.",
+            "After an approved apply, if the helper says reload or new session is required, report that instruction and stop.",
+            "Do not call reload or validation record tools until the user has started or resumed a session and asked to validate or skip.",
           ].join("\n")
           output.messages.unshift({
             info: {

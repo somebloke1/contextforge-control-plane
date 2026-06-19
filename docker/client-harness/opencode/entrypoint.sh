@@ -13,9 +13,9 @@ set -euo pipefail
 : "${CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV:=/config/contextforge/contextforge.env}"
 : "${CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL:=http://host.docker.internal:4445}"
 : "${CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE:=/tmp/contextforge-wrapper-token.local.json}"
-: "${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/tmp/contextforge-client-harness-runtime/project-init}"
+: "${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/home/agent/.local/state/contextforge-client-harness-runtime/project-init}"
 : "${CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace}"
-: "${XDG_RUNTIME_DIR:=/tmp/contextforge-client-harness-runtime}"
+: "${XDG_RUNTIME_DIR:=/home/agent/.local/state/contextforge-client-harness-runtime}"
 
 case "${CONTEXTFORGE_OPENCODE_CONFIG_TARGET}" in
   "${OPENCODE_CONFIG_DIR}/opencode.json") ;;
