@@ -32,9 +32,11 @@ def _payload(raw: str | None) -> dict[str, Any]:
     return data
 
 
-def _project_root(data: Mapping[str, Any]) -> str:
+def _project_root(data: Mapping[str, Any], *, default_to_cwd: bool = False) -> str:
     value = data.get("project_root") or data.get("projectRoot")
     if not value:
+        if default_to_cwd:
+            return str(Path.cwd())
         raise ValueError("project_root is required")
     return str(value)
 
@@ -242,7 +244,10 @@ def _build_service_onboarding_plan(project_root: str, data: Mapping[str, Any]) -
 
 
 def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
-    project_root = _project_root(data)
+    project_root = _project_root(
+        data,
+        default_to_cwd=operation in {"reset_current_project", "cf_project_reset_current_project"},
+    )
     client_type = str(data.get("client_type") or data.get("clientType") or "pi")
     if operation == "render_project_init_prompt":
         return _ok(_render_prompt(project_root, client_type=client_type))

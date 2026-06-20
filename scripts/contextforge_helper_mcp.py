@@ -1642,7 +1642,7 @@ def cf_project_state_readback(project_root: str, client_type: str = DEFAULT_CLIE
 
 @server.tool()
 def cf_project_reset_current_project(
-    project_root: str,
+    project_root: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
     profile: str = "project_init_base",
     preserve_evidence: bool = True,
@@ -1653,7 +1653,7 @@ def cf_project_reset_current_project(
         result = {
             "ok": True,
             **helper.reset_current_project(
-                project_root=project_root,
+                project_root=project_root or os.getcwd(),
                 client_type=client_type,
                 profile=profile,
                 preserve_evidence=preserve_evidence,
@@ -1661,9 +1661,10 @@ def cf_project_reset_current_project(
             ),
         }
         if not dry_run:
-            _clear_durable_cache(project_root)
-            _clear_durable_recovery_cache(project_root)
-            _clear_pending_project_init_input(project_root)
+            cache_root = str(result.get("project_root") or project_root or os.getcwd())
+            _clear_durable_cache(cache_root)
+            _clear_durable_recovery_cache(cache_root)
+            _clear_pending_project_init_input(cache_root)
         return client_visible_project_init_payload(result)
     except Exception as exc:
         return _error(exc)
@@ -1671,7 +1672,7 @@ def cf_project_reset_current_project(
 
 @server.tool()
 def reset_current_project(
-    project_root: str,
+    project_root: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
     profile: str = "project_init_base",
     preserve_evidence: bool = True,

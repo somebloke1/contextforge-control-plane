@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import secrets
 import shutil
 from argparse import Namespace
@@ -288,12 +289,27 @@ def reset_current_project(
             "does not remove unmanaged project-local MCP entries",
         ],
     }
+    manifest["postcondition"] = _project_reset_postcondition(root)
+    manifest["status"] = "reset" if manifest["postcondition"] else "needs_attention"
+    action_count = len(actions)
+    refusal_count = len(refusals)
+    if dry_run:
+        visible_status = "Project reset dry run complete"
+    elif manifest["postcondition"]:
+        visible_status = "Project reset complete"
+    else:
+        visible_status = "Project reset needs attention"
+    evidence_note = f" Evidence preserved at {evidence_dir}." if preserve_evidence else ""
+    manifest["assistant_visible_response"] = (
+        f"{visible_status} for {root}. "
+        f"Helper-owned project-init state and client bindings reset with {action_count} action(s) "
+        f"and {refusal_count} refusal(s).{evidence_note} "
+        "No Docker, user-global client config, authentication, token cache, ContextForge registry, backend service, or git state was reset."
+    )
+    manifest["evidence_dir"] = str(evidence_dir) if preserve_evidence else None
     if preserve_evidence and not dry_run:
         evidence_dir.mkdir(parents=True, exist_ok=True)
         (evidence_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    manifest["evidence_dir"] = str(evidence_dir) if preserve_evidence else None
-    manifest["postcondition"] = _project_reset_postcondition(root, services)
-    manifest["status"] = "reset" if manifest["postcondition"] else "needs_attention"
     return manifest
 
 
@@ -369,6 +385,7 @@ def _reset_codex_project_config(
     actions: list[dict[str, Any]] = []
     refusals: list[dict[str, Any]] = []
     aliases = sorted({normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or "")) for service in services if service.get("codex_alias") or service.get("service_family")})
+    removed_aliases: set[str] = set()
     for alias in aliases:
         section_re = binding._codex_section_re(alias)
         match = section_re.search(output)
@@ -379,7 +396,25 @@ def _reset_codex_project_config(
             refusals.append({"surface": str(config_path), "alias": alias, "reason": "unmanaged_codex_mcp_block_preserved"})
             continue
         output = output[: match.start()] + output[match.end() :]
+        removed_aliases.add(alias)
         actions.append({"surface": str(config_path), "alias": alias, "operation": "remove_owned_codex_mcp_block", "dry_run": dry_run})
+    section_re = re.compile(r"(?ms)^(?:# contextforge-project-init-[^\n]*\n)*\[mcp_servers\.([^\]]+)\]\n.*?(?=^(?:# contextforge-project-init-[^\n]*\n)*\[|\Z)")
+    while True:
+        orphan = None
+        for match in section_re.finditer(output):
+            block = match.group(0)
+            alias = normalize_codex_alias(match.group(1))
+            if alias in removed_aliases:
+                continue
+            if binding.PROJECT_INIT_OWNER_MARKER in block:
+                orphan = match
+                break
+        if orphan is None:
+            break
+        alias = normalize_codex_alias(orphan.group(1))
+        output = output[: orphan.start()] + output[orphan.end() :]
+        removed_aliases.add(alias)
+        actions.append({"surface": str(config_path), "alias": alias, "operation": "remove_orphaned_owned_codex_mcp_block", "dry_run": dry_run})
     if output != text:
         preserve(config_path, "before/codex/config.toml")
         if not dry_run:
@@ -418,6 +453,7 @@ def _reset_json_mcp_project_config(
     assert isinstance(output_servers, dict)
     actions: list[dict[str, Any]] = []
     refusals: list[dict[str, Any]] = []
+    removed_aliases: set[str] = set()
     for service in services:
         alias = normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
         if not alias or alias not in output_servers:
@@ -426,9 +462,24 @@ def _reset_json_mcp_project_config(
         expected = entry_builder(service) if service.get("virtual_server") else None
         if (expected is not None and entry_matches(existing, expected)) or _json_mcp_entry_is_contextforge_owned(existing):
             del output_servers[alias]
+            removed_aliases.add(alias)
             actions.append({"surface": str(config_path), "alias": alias, "operation": "remove_owned_json_mcp_entry", "dry_run": dry_run})
         else:
             refusals.append({"surface": str(config_path), "alias": alias, "reason": "unmanaged_or_drifted_json_mcp_entry_preserved"})
+    for alias, existing in list(output_servers.items()):
+        normalized_alias = normalize_codex_alias(str(alias))
+        if normalized_alias in removed_aliases:
+            continue
+        if _json_mcp_entry_is_contextforge_owned(existing):
+            del output_servers[alias]
+            actions.append(
+                {
+                    "surface": str(config_path),
+                    "alias": str(alias),
+                    "operation": "remove_orphaned_contextforge_json_mcp_entry",
+                    "dry_run": dry_run,
+                }
+            )
     if actions:
         preserve(config_path, f"before/{config_path.name}")
         if not output_servers:
@@ -452,15 +503,15 @@ def _json_mcp_entry_is_contextforge_owned(existing: Any) -> bool:
     return False
 
 
-def _project_reset_postcondition(root: Path, services: Sequence[Mapping[str, Any]]) -> bool:
+def _project_reset_postcondition(root: Path) -> bool:
     if project_state.project_state_path(root).exists():
         return False
     codex_path = root / ".codex" / "config.toml"
     if codex_path.exists() and binding.PROJECT_INIT_OWNER_MARKER in codex_path.read_text(encoding="utf-8"):
         return False
-    for config_path, mcp_key, entry_builder, entry_matches in (
-        (root / "opencode.json", "mcp", binding.build_project_init_opencode_binding_entry, binding._opencode_managed_entry_matches),
-        (root / ".gemini" / "settings.json", "mcpServers", binding.build_project_init_gemini_binding_entry, binding._gemini_managed_entry_matches),
+    for config_path, mcp_key in (
+        (root / "opencode.json", "mcp"),
+        (root / ".gemini" / "settings.json", "mcpServers"),
     ):
         if not config_path.exists():
             continue
@@ -471,12 +522,8 @@ def _project_reset_postcondition(root: Path, services: Sequence[Mapping[str, Any
         servers = config.get(mcp_key) if isinstance(config, Mapping) else None
         if not isinstance(servers, Mapping):
             continue
-        for service in services:
-            alias = normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
-            if not alias or alias not in servers:
-                continue
-            expected = entry_builder(service) if service.get("virtual_server") else None
-            if (expected is not None and entry_matches(servers.get(alias), expected)) or _json_mcp_entry_is_contextforge_owned(servers.get(alias)):
+        for entry in servers.values():
+            if _json_mcp_entry_is_contextforge_owned(entry):
                 return False
     return True
 
