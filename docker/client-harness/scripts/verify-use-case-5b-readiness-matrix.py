@@ -118,13 +118,14 @@ def main(argv: list[str] | None = None) -> int:
             "playwright",
             "exa-search",
             "github",
+            "web-search",
         ],
         checks,
         failures,
         "slice_progress_records_accepted_source_slices",
     )
     check(
-        progress.get("active_next_recommended_service") == "web-search",
+        progress.get("active_next_recommended_service") == "serena",
         checks,
         failures,
         "slice_progress_recommends_next_service",

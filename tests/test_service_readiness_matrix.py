@@ -169,11 +169,12 @@ class ServiceReadinessMatrixTests(unittest.TestCase):
                 "playwright",
                 "exa-search",
                 "github",
+                "web-search",
             ],
             progress["accepted_source_lifecycle_slices"],
         )
-        self.assertEqual("web-search", progress["active_next_recommended_service"])
-        self.assertEqual(267, progress["active_next_recommended_issue"])
+        self.assertEqual("serena", progress["active_next_recommended_service"])
+        self.assertEqual(268, progress["active_next_recommended_issue"])
         self.assertIn("not the live controller queue pointer", progress["current_slice_field_note"])
 
 

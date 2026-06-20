@@ -24,11 +24,12 @@
       "ssh-tmux",
       "playwright",
       "exa-search",
-      "github"
+      "github",
+      "web-search"
     ],
-    "active_next_recommended_service": "web-search",
-    "active_next_recommended_issue": 267,
-    "ordering_reason": "After context7, mentality, openzeppelin-solidity-contracts, ssh-tmux, playwright, exa-search, and GitHub, web-search is the remaining credential-scoped provider/request surface. Serena remains later because project-scoped provisioning, language selection, and LSP/index state are more dependent."
+    "active_next_recommended_service": "serena",
+    "active_next_recommended_issue": 268,
+    "ordering_reason": "After context7, mentality, openzeppelin-solidity-contracts, ssh-tmux, playwright, exa-search, GitHub, and web-search, Serena is the remaining per-service readiness slice. It is last because project-scoped provisioning, language selection, and LSP/index state are more dependent than the accepted shared, session, and credential-scoped source lifecycle slices."
   },
   "not_service_options": [
     {

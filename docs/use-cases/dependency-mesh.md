@@ -210,7 +210,10 @@ must be promoted to protect already accepted cases.
            UC5i is `web-search`/#267 because it is the remaining
            credential-scoped provider/request surface; Serena remains later
            because project-scoped provisioning, language selection, and LSP/index
-           state are more dependent.
+           state are more dependent. Current next target after accepted UC5j is
+           `serena`/#268 because it is the remaining per-service readiness slice
+           and requires explicit project-scoped provisioning and language-state
+           boundaries before #269 selection-shape validation.
 10. UC5e - #269 single, curated multi-service, and all-services selection
            shape validation.
 11. UC5  - #247 umbrella acceptance once its decomposed slices are proven.
