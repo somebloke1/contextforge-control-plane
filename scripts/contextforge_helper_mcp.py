@@ -495,6 +495,28 @@ def _normalize_mcp_status(value: Any) -> str:
     return text
 
 
+def _mcp_runtime_error_text(diagnostics: Mapping[str, Any], target_client_state: Mapping[str, Any]) -> str:
+    values: list[str] = []
+    for source in (diagnostics, target_client_state):
+        for key in (
+            "error",
+            "error_class",
+            "error_message",
+            "last_error",
+            "message",
+            "mcp_error",
+            "mcp_error_class",
+            "mcp_error_message",
+            "stderr",
+            "startup_error",
+            "transport_error",
+        ):
+            value = source.get(key)
+            if isinstance(value, str) and value.strip():
+                values.append(value)
+    return " ".join(values).lower().replace("-", "_")
+
+
 def _target_client_mcp_runtime_diagnostic(target_client_state: Mapping[str, Any], session_boundary: Mapping[str, Any]) -> dict[str, Any]:
     raw = target_client_state.get("mcp_runtime_diagnostics")
     diagnostics = dict(raw) if isinstance(raw, Mapping) else {}
@@ -502,16 +524,58 @@ def _target_client_mcp_runtime_diagnostic(target_client_state: Mapping[str, Any]
     auth_status = _normalize_mcp_status(diagnostics.get("auth_status") or target_client_state.get("mcp_auth_status"))
     transport_status = _normalize_mcp_status(diagnostics.get("transport_status") or target_client_state.get("mcp_transport_status"))
     tool_listing_status = _normalize_mcp_status(diagnostics.get("tool_listing_status") or target_client_state.get("mcp_tool_listing_status"))
+    error_text = _mcp_runtime_error_text(diagnostics, target_client_state)
     attempted = bool(
         diagnostics.get("attempted")
         or target_client_state.get("mcp_startup_attempted")
         or any(status != "not_observed" for status in (startup_status, auth_status, transport_status, tool_listing_status))
+        or error_text
     )
-    if startup_status == "failed":
+    auth_error_observed = any(
+        needle in error_text
+        for needle in (
+            "401",
+            "403",
+            "auth_failed",
+            "authentication_failed",
+            "authorization_failed",
+            "forbidden",
+            "invalid_token",
+            "permission_denied",
+            "unauthorized",
+        )
+    )
+    transport_error_observed = any(
+        needle in error_text
+        for needle in (
+            "connection refused",
+            "connection_refused",
+            "connect_econnrefused",
+            "connection reset",
+            "connection_reset",
+            "econnrefused",
+            "socket hang up",
+            "transport_error",
+            "transport_failed",
+        )
+    )
+    startup_error_observed = any(
+        needle in error_text
+        for needle in (
+            "command_not_found",
+            "enoent",
+            "process_exit",
+            "server process exited",
+            "startup_failed",
+        )
+    )
+    if startup_status == "failed" or startup_error_observed:
         classification = "mcp_server_startup_failed"
-    elif auth_status == "failed":
+    elif auth_status == "failed" or auth_error_observed:
+        auth_status = "failed" if auth_status == "not_observed" else auth_status
         classification = "contextforge_auth_failed"
-    elif transport_status == "failed":
+    elif transport_status == "failed" or transport_error_observed:
+        transport_status = "failed" if transport_status == "not_observed" else transport_status
         classification = "contextforge_transport_failed"
     elif tool_listing_status == "failed":
         classification = "tool_listing_failed"

@@ -2386,6 +2386,63 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("do not ask for another reload", readback["assistant_visible_response"])
         self.assertIn("no validation, tool probe, backend mutation, or registry mutation", readback["non_actions"])
 
+    def test_opencode_readback_classifies_auth_and_transport_errors_before_reload_pending(self) -> None:
+        cases = [
+            (
+                {"error_message": "ContextForge returned HTTP 401 unauthorized"},
+                "contextforge_auth_failed",
+                "failed",
+                "not_observed",
+            ),
+            (
+                {"mcp_error_class": "unauthorized"},
+                "contextforge_auth_failed",
+                "failed",
+                "not_observed",
+            ),
+            (
+                {"stderr": "connect ECONNREFUSED 127.0.0.1:4445"},
+                "contextforge_transport_failed",
+                "not_observed",
+                "failed",
+            ),
+            (
+                {"transport_error": "connection_refused"},
+                "contextforge_transport_failed",
+                "not_observed",
+                "failed",
+            ),
+        ]
+        for diagnostics, classification, auth_status, transport_status in cases:
+            with self.subTest(diagnostics=diagnostics):
+                with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+                    root = Path(tmp).resolve()
+                    selected = [service_descriptor("context7")]
+                    config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+                    state = project_state.apply_project_init_activation_to_state(
+                        project_state.default_state(root),
+                        selected,
+                        target_client="opencode",
+                        client_config_plan=config_plan,
+                        validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                        validation_results={},
+                        consent_receipt_refs=CONSENT_REFS,
+                    )
+                    state["services"]["context7:canonical"]["target_clients"]["opencode"]["mcp_runtime_diagnostics"] = diagnostics
+                    project_state.write_state_atomic(root, state)
+
+                    availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="opencode")
+                    readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="opencode")
+
+                diagnostic = availability["mcp_runtime_diagnostics"][0]
+                self.assertEqual(classification, diagnostic["classification"])
+                self.assertTrue(diagnostic["attempted"])
+                self.assertEqual(auth_status, diagnostic["auth_status"])
+                self.assertEqual(transport_status, diagnostic["transport_status"])
+                self.assertIn("do not ask for another reload", availability["assistant_visible_response"])
+                self.assertIn(classification, readback["assistant_visible_response"])
+                self.assertIn("do not ask for another reload", readback["assistant_visible_response"])
+
     def test_contextforge_helper_mcp_reports_missing_target_client_projection_without_available_tools(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
