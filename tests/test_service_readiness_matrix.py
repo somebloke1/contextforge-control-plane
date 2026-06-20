@@ -174,8 +174,16 @@ class ServiceReadinessMatrixTests(unittest.TestCase):
             ],
             progress["accepted_source_lifecycle_slices"],
         )
+        self.assertEqual(
+            [
+                "single_service",
+                "curated_multi_service",
+                "all_services",
+            ],
+            progress["accepted_selection_shape_slices"],
+        )
         self.assertIsNone(progress["active_next_recommended_service"])
-        self.assertEqual(269, progress["active_next_recommended_issue"])
+        self.assertEqual(247, progress["active_next_recommended_issue"])
         self.assertIn("not the live controller queue pointer", progress["current_slice_field_note"])
 
 

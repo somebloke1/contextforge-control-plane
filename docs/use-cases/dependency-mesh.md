@@ -216,8 +216,11 @@ must be promoted to protect already accepted cases.
            boundaries before #269 selection-shape validation. Current next
            target after accepted UC5k is #269 because all current per-service
            source lifecycle slices are accepted and selection-shape behavior is
-           the remaining #247 prerequisite.
-10. UC5e - #269 single, curated multi-service, and all-services selection
+           the remaining #247 prerequisite. Current next target after accepted
+           UC5l is #247 umbrella acceptance, while preserving that #247 still
+           must not overclaim post-refresh target-client visibility or actual
+           tool use before those downstream use cases are exercised.
+10. UC5l - #269 single, curated multi-service, and all-services selection
            shape validation.
 11. UC5  - #247 umbrella acceptance once its decomposed slices are proven.
 12. UC6  - decline/defer service state and active-import suppression.

@@ -28,9 +28,14 @@
       "web-search",
       "serena"
     ],
+    "accepted_selection_shape_slices": [
+      "single_service",
+      "curated_multi_service",
+      "all_services"
+    ],
     "active_next_recommended_service": null,
-    "active_next_recommended_issue": 269,
-    "ordering_reason": "All per-service source lifecycle slices in the current helper-offered service set are accepted. The next target is #269 selection-shape validation for single-service, curated multi-service, and all-services apply/readback behavior before #247 umbrella acceptance."
+    "active_next_recommended_issue": 247,
+    "ordering_reason": "All per-service source lifecycle slices in the current helper-offered service set are accepted, and #269 selection-shape validation for single-service, curated multi-service, and all-services apply/readback behavior is accepted. The next target is #247 umbrella acceptance, which must still preserve post-refresh target-client visibility and actual tool-use boundaries."
   },
   "not_service_options": [
     {
