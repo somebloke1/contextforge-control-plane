@@ -41,6 +41,7 @@ x-opencode-contextforge-baseline: &opencode-contextforge-baseline
     CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV: /config/contextforge/contextforge.env
     CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL: http://host.docker.internal:4445
     CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
+    CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
     CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init
     CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH: /home/agent/.local/state/contextforge-client-harness-runtime/project-init/opencode-latest-user-message.json
     CONTEXTFORGE_SERENA_NO_SYSTEMD: "1"
@@ -74,6 +75,7 @@ x-pi-contextforge-baseline: &pi-contextforge-baseline
     CONTEXTFORGE_BASE_URL: http://host.docker.internal:4445
     CONTEXTFORGE_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
     CONTEXTFORGE_TOKEN_LOCK: /tmp/contextforge-wrapper-token.local.json.lock
+    CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
     CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init
     CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH: /home/agent/.local/state/contextforge-client-harness-runtime/project-init/pi-latest-user-message.json
     CONTEXTFORGE_SERENA_NO_SYSTEMD: "1"
@@ -108,6 +110,7 @@ services:
       CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV: /config/contextforge/contextforge.env
       CONTEXTFORGE_CODEX_WRAPPER_BASE_URL: http://host.docker.internal:4445
       CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
+      CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
       CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init
       CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH: /home/agent/.local/state/contextforge-client-harness-runtime/project-init/codex-latest-user-message.json
       CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
@@ -142,6 +145,7 @@ services:
       CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV: /config/contextforge/contextforge.env
       CONTEXTFORGE_CODEX_WRAPPER_BASE_URL: http://host.docker.internal:4445
       CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
+      CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
       CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init
       CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH: /home/agent/.local/state/contextforge-client-harness-runtime/project-init/codex-latest-user-message.json
       CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace

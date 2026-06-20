@@ -14,6 +14,7 @@
         "CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1",
         "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": "/home/agent/.local/state/contextforge-client-harness-runtime/project-init/opencode-latest-user-message.json",
         "CONTEXTFORGE_OPENCODE_DENY_RAW_WORKSPACE_MUTATION": "1",
+        "CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER": "1",
         "MCP_WRAPPER_LOG_LEVEL": "INFO",
         "XDG_RUNTIME_DIR": "/home/agent/.local/state/contextforge-client-harness-runtime"
       }

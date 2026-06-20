@@ -2549,6 +2549,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Plan ready for context7:canonical", proposal["assistant_visible_response"])
         self.assertIn("opencode.json", proposal["assistant_visible_response"])
         self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
+        self.assertIs(proposal["copy_as_complete_visible_response"], True)
+        self.assertIs(proposal["do_not_summarize"], True)
 
     def test_contextforge_helper_mcp_reports_project_capability_summary_read_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

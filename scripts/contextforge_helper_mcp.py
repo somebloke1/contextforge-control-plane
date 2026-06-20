@@ -259,6 +259,8 @@ def client_visible_project_init_plan_payload(value: dict[str, Any], *, include_n
             "ok": public.get("ok", True),
             "assistant_visible_response": visible_message,
             "message": visible_message,
+            "copy_as_complete_visible_response": True,
+            "do_not_summarize": True,
         }
         for key in (
             "workflow",

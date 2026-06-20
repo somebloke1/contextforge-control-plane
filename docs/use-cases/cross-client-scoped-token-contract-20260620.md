@@ -52,3 +52,29 @@ not ordinary project-init client config.
 - Tests assert token creation/revocation use the catalog API, creation logging
   omits access-token material, and ordinary project-init bindings do not embed
   `CONTEXTFORGE_BEARER_TOKEN`, `MCP_AUTH`, or `Authorization`.
+
+## Ordinary OpenCode Docker Evidence
+
+Fresh OpenCode harness run:
+`docker/client-harness/evidence/issue-294/opencode-ordinary-token-v3/`.
+
+Observed flow:
+
+- `turn1-hello.raw.txt`: ordinary `hello` prompt produced the ContextForge
+  service menu.
+- `turn2-select-mentality.raw.txt`: numeric selection `4` produced the visible
+  approval package for `mentality:static_repo_local`, including planned
+  project-local writes and non-actions.
+- `turn3-approve.raw.txt`: explicit `approve` installed the selected service
+  and instructed that a new OpenCode session is required.
+- `project-files-after-approve.txt`: generated `/workspace/opencode.json`
+  launches `scripts/contextforge_mcp_wrapper.py mentality_dev_docker_server`
+  with wrapper env paths, without bearer-token material in client config.
+- `post-install-opencode-mcp-list.txt`: OpenCode reports both
+  `contextforge-helper` and `mentality` connected.
+- `turn4-new-session-use-mentality.raw.txt`: a new ordinary OpenCode session
+  called `mentality_mentality-dev-docker-governance-list` and returned a
+  governance-ledger summary.
+- `token-cache-redacted-after-tool-call.json`: the wrapper token cache exists
+  after the tool call and the recorded evidence redacts the `access_token`
+  value.

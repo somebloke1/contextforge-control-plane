@@ -137,6 +137,16 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertNotIn("docker system prune", source)
         self.assertNotIn("docker volume prune", source)
 
+    def test_client_harness_project_init_uses_dev_virtual_server_names(self) -> None:
+        compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
+        opencode_config = (ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8")
+        codex_entrypoint = (ROOT / "docker/client-harness/codex-cli/entrypoint.sh").read_text(encoding="utf-8")
+
+        self.assertGreaterEqual(compose.count('CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"'), 4)
+        self.assertIn('"CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER": "1"', opencode_config)
+        self.assertIn("CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER:=1", codex_entrypoint)
+        self.assertIn("CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER", codex_entrypoint)
+
     def test_codex_auth_check_uses_oauth_authenticated_image(self) -> None:
         source = (ROOT / "docker/client-harness/scripts/check-auth-codex.sh").read_text(encoding="utf-8")
         launcher = (ROOT / "docker/client-harness/scripts/run-codex-authenticated.sh").read_text(encoding="utf-8")
