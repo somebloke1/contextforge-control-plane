@@ -26,9 +26,17 @@ dispatch_card := {
 transcript_extraction
 readiness_claim_lint
 issue_pr_topology_audit
+review_disposition_evidence_map
 test_fixture_mapping
 dispatch_card_audit
 evidence_checklist
+acceptance_report_index
+project_update_plan_lint
+comment_body_draft_from_controller_report
+agent_pool_hygiene_snapshot
+link_and_path_check
+temporary_residue_scan
+schema_option_readback_summary
 stale_claim_scan
 patterned_doc_patch
 fixture_patch
@@ -38,6 +46,14 @@ Spark eligibility requires extraction or mechanical transformation. Spark is
 not eligible for new acceptance criteria, validation semantics, runtime policy,
 service-localization judgment, requirement-refinement decisions, or readiness
 claims.
+
+For review-disposition work, Spark may extract facts and apply a
+controller-supplied mechanical checklist, but the controller owns the state
+recommendation and all GitHub/Project mutations. Spark may prepare evidence
+maps, stale-reference scans, mutation-plan lint, link/path checks, issue/PR
+metadata tables, and comment drafts from already accepted controller reports;
+it must not decide final Agent state, issue closure, PR readiness, or review
+acceptance.
 
 Spark eligibility also excludes any semantic oracle over free-form generated
 prose. A dispatch card must not treat matched strings, regexes, keyword

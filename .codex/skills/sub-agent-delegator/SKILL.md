@@ -37,12 +37,22 @@ instruction or live tool availability differs.
 | --- | --- | --- | --- |
 | `gpt-5.5` | Deep audits, architecture choices, cross-slice risk, high-criticality implementation review | high or adaptive | Good for full-context forks when inheriting parent model/settings is desired |
 | `gpt-5.4-mini` | Routine audits, log parsing, config/docs mapping, repetitive verification, shallow fan-out | low or medium | Use explicit context; fork only when same model/settings and rich inherited context are necessary |
-| `gpt-5.3-codex-spark` | Tiny local micro-edits or boilerplate where speed matters and risk is low | low or default | Prefer direct parent work; do not use for independent reasoning-heavy forks |
+| `gpt-5.3-codex-spark` | Fast mechanical evidence sidecars, extraction, link/path checks, stale-reference scans, metadata tables, mutation-plan lint, tiny local micro-edits or boilerplate where speed matters and risk is low | low or default | Use proactively during evaluator waits, rate-limit waits, or controller integration windows; use explicit context and keep acceptance with the parent |
 
 Spark is for code and textual artifacts, not live agent behavior. It may patch
 bounded source, extract transcript facts, lint packages, or map fixtures. It
 must not evaluate Pi/OpenCode dialogue quality, decide whether prompts were
 too coached, judge hidden-instruction leakage, or own target-client readiness.
+Treat Spark as having a high-value, separate token budget: look for purposeful
+bounded Spark work so its speed is not wasted, while still preserving the
+controller's responsibility for judgment and acceptance.
+Use Spark proactively for read-only sidecar work during evaluator waits,
+rate-limit waits, or controller integration windows when the task is bounded,
+mechanical, and independently verifiable. Spark is appropriate for evidence
+maps, stale-reference scans, metadata extraction, link/path checks, Project
+mutation-plan linting, agent-pool hygiene snapshots, and comment drafts from
+accepted controller reports. Spark output is evidence only; the controller
+still owns state transitions, comments, mutations, and acceptance.
 
 For any delegated model-output evaluation, deterministic helpers may check
 structure but not meaning. Do not delegate or accept a test, gate, score
@@ -105,6 +115,11 @@ write set is small, disjoint, and owned by that worker.
   roadmap edits.
 - Hook/continuity work: delegate documentation or config-surface research;
   parent owns implementation because hooks affect agent behavior.
+- Review disposition cleanup: Spark may extract linked PR state,
+  draft/review/check evidence, acceptance-report paths, existing labels,
+  pending Project field changes, and agent-pool status. Spark must not choose
+  final Agent state, apply labels, update Project fields, close issues, or
+  claim review readiness.
 
 ## Integration Loop
 
