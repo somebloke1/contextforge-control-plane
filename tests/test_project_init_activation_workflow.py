@@ -1179,7 +1179,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("client_reload_required", proposal["status"])
         self.assertEqual("pi-project-init-installed", proposal["next_turn"]["question_id"])
 
-    def test_client_reload_fsm_carries_resumed_validation_intent_without_second_choice(self) -> None:
+    def test_client_reload_acknowledgement_rejects_validation_intent(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1200,35 +1200,19 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             job_id = written["project_init"]["current_job_id"]
             pending_job = written["project_init"]["activation_jobs"][job_id]
             pending_client_state = written["project_init"]["client_states"]["opencode"]
-            ack = helper.record_project_init_client_reload(
-                project_root=root,
-                client_type="opencode",
-                validation_mode="validate_now",
-            )
+            with self.assertRaisesRegex(helper.ProjectInitHelperError, "install-only"):
+                helper.record_project_init_client_reload(
+                    project_root=root,
+                    client_type="opencode",
+                    validation_mode="validate_now",
+                )
             after = project_state.load_state(root)
-            assert after is not None
-            ack_job = after["project_init"]["activation_jobs"][job_id]
-            ack_client_state = after["project_init"]["client_states"]["opencode"]
-            premature_validation = helper.record_project_init_validation(
-                project_root=root,
-                client_type="opencode",
-                validation_mode="validate_now",
-                dry_run=True,
-            )
 
         self.assertEqual("pending_reload", pending_job["x_client_reload_fsm"]["state"])
         self.assertEqual("pending_reload", pending_client_state["reload_status"])
-        self.assertEqual("client_reload_recorded_validation_requested", ack["status"])
-        self.assertNotIn("next_turn", ack)
-        self.assertEqual("run-target-client-validation-probes", ack["next_action"]["id"])
-        self.assertIn("context7:canonical", ack["next_action"]["expected_validation_results_shape"])
-        self.assertEqual("reload_acknowledged", ack["current_job"]["client_reload_fsm"]["state"])
-        self.assertEqual("validate_now", ack["current_job"]["client_reload_fsm"]["validation_intent"])
-        self.assertEqual("reload_acknowledged", ack_job["x_client_reload_fsm"]["state"])
-        self.assertEqual("reload_acknowledged", ack_client_state["reload_status"])
-        self.assertEqual("validation_results_required", premature_validation["status"])
+        self.assertEqual(written, after)
 
-    def test_client_reload_fsm_carries_resumed_skip_intent_without_second_choice(self) -> None:
+    def test_client_reload_acknowledgement_rejects_presume_working_intent(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1244,13 +1228,13 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
             )
             project_state.write_state_atomic(root, state)
+            before = project_state.load_state(root)
 
-            ack = record_pi_reload(root, validation_mode="presume_working")
+            with self.assertRaisesRegex(helper.ProjectInitHelperError, "install-only"):
+                record_pi_reload(root, validation_mode="presume_working")
+            after = project_state.load_state(root)
 
-        self.assertEqual("client_reload_recorded_presume_working_requested", ack["status"])
-        self.assertNotIn("next_turn", ack)
-        self.assertEqual("record-presumed-working", ack["next_action"]["id"])
-        self.assertEqual("presume_working", ack["current_job"]["client_reload_fsm"]["validation_intent"])
+        self.assertEqual(before, after)
 
     def test_pi_reload_acknowledgement_changes_normal_readback_contract(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

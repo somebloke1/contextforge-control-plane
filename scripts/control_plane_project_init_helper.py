@@ -929,8 +929,11 @@ def record_project_init_client_reload(
     validation_mode: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    if validation_mode is not None and validation_mode not in {"validate_now", "presume_working"}:
-        raise ProjectInitHelperError("validation_mode must be validate_now, presume_working, or omitted")
+    if validation_mode is not None:
+        raise ProjectInitHelperError(
+            "project-init reload acknowledgement is install-only; "
+            "do not request post-install validation or service probing from reload acknowledgement"
+        )
     root = project_state.validate_project_root(project_root, require_workspace=True)
     state, job, selected = _pending_validation_state_job(root, client_type=client_type)
     selected_bindings = _job_selected_service_bindings(job)
@@ -941,7 +944,6 @@ def record_project_init_client_reload(
             "client_type": client_type,
             "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
         }
-        result.update(_post_reload_validation_continuation(root, state, job, selected, selected_bindings=selected_bindings, client_type=client_type, validation_mode=validation_mode))
         return result
     updated_job = json.loads(json.dumps(job))
     acknowledged_at = now_timestamp()
@@ -963,19 +965,17 @@ def record_project_init_client_reload(
         "acknowledged_at": acknowledged_at,
         "acknowledged_by": "control_plane_project_init_helper",
     }
-    if validation_mode:
-        updated_job["x_client_reload_fsm"]["validation_intent"] = validation_mode
     next_state = json.loads(json.dumps(state))
     next_state["project_init"]["activation_jobs"][str(updated_job["job_id"])] = updated_job
     client_state = dict(project_state.project_init_client_state(next_state, client_type) or {})
     client_state.update(
         {
             "client_type": client_type,
-            "status": "validation_pending" if validation_mode else "installed",
+            "status": "installed",
             "current_job_id": str(updated_job["job_id"]),
             "selected_service_ids": [str(item) for item in updated_job.get("selected_service_ids") or [] if item],
             "selected_service_bindings": [str(item) for item in updated_job.get("selected_service_bindings") or [] if item],
-            "validation_status": "pending" if validation_mode else "installed",
+            "validation_status": "installed",
             "reload_status": "reload_acknowledged",
             "updated_at": acknowledged_at,
             "last_plan_id": updated_job.get("plan_id"),
@@ -1003,21 +1003,6 @@ def record_project_init_client_reload(
             "no ContextForge registry or catalog mutation",
         ],
     }
-    if validation_mode == "validate_now":
-        result["status"] = "client_reload_recorded_validation_requested_dry_run" if dry_run else "client_reload_recorded_validation_requested"
-    elif validation_mode == "presume_working":
-        result["status"] = "client_reload_recorded_presume_working_requested_dry_run" if dry_run else "client_reload_recorded_presume_working_requested"
-    result.update(
-        _post_reload_validation_continuation(
-            root,
-            next_state,
-            updated_job,
-            selected,
-            selected_bindings=_job_selected_service_bindings(updated_job),
-            client_type=client_type,
-            validation_mode=validation_mode,
-        )
-    )
     if not dry_run:
         written = project_state.write_state_atomic(root, next_state, updated_by="control_plane_project_init_helper")
         result["state_revision"] = written["meta"]["revision"]
