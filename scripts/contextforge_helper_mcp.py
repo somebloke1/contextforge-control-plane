@@ -9,7 +9,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from mcp.server.fastmcp import FastMCP
 
@@ -482,6 +482,80 @@ def _target_client_proof_status(target_client_state: Mapping[str, Any]) -> str:
     return "not_claimed_by_readback"
 
 
+def _normalize_mcp_status(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if text in {"ok", "pass", "passed", "success", "started", "running", "available", "listed"}:
+        return "passed"
+    if text in {"fail", "failed", "error", "errored", "unavailable", "not_running", "not_started", "timeout", "timed_out"}:
+        return "failed"
+    if text in {"unknown", "not_checked", "not_observed", "not_claimed", "pending", ""}:
+        return "not_observed"
+    return text
+
+
+def _target_client_mcp_runtime_diagnostic(target_client_state: Mapping[str, Any], session_boundary: Mapping[str, Any]) -> dict[str, Any]:
+    raw = target_client_state.get("mcp_runtime_diagnostics")
+    diagnostics = dict(raw) if isinstance(raw, Mapping) else {}
+    startup_status = _normalize_mcp_status(diagnostics.get("startup_status") or target_client_state.get("mcp_startup_status"))
+    auth_status = _normalize_mcp_status(diagnostics.get("auth_status") or target_client_state.get("mcp_auth_status"))
+    transport_status = _normalize_mcp_status(diagnostics.get("transport_status") or target_client_state.get("mcp_transport_status"))
+    tool_listing_status = _normalize_mcp_status(diagnostics.get("tool_listing_status") or target_client_state.get("mcp_tool_listing_status"))
+    attempted = bool(
+        diagnostics.get("attempted")
+        or target_client_state.get("mcp_startup_attempted")
+        or any(status != "not_observed" for status in (startup_status, auth_status, transport_status, tool_listing_status))
+    )
+    if startup_status == "failed":
+        classification = "mcp_server_startup_failed"
+    elif auth_status == "failed":
+        classification = "contextforge_auth_failed"
+    elif transport_status == "failed":
+        classification = "contextforge_transport_failed"
+    elif tool_listing_status == "failed":
+        classification = "tool_listing_failed"
+    elif attempted and all(status in {"passed", "not_observed"} for status in (startup_status, auth_status, transport_status, tool_listing_status)):
+        classification = "mcp_available_or_partially_observed"
+    elif session_boundary.get("requires_reload"):
+        classification = "reload_pending_before_mcp_startup"
+    elif session_boundary.get("reload_acknowledged"):
+        classification = "reload_acknowledged_no_mcp_observation"
+    else:
+        classification = "no_mcp_startup_observation"
+    evidence_ref = diagnostics.get("evidence_ref") or target_client_state.get("mcp_evidence_ref")
+    error_class = diagnostics.get("error_class") or target_client_state.get("mcp_error_class")
+    result: dict[str, Any] = {
+        "classification": classification,
+        "attempted": attempted,
+        "startup_status": startup_status,
+        "auth_status": auth_status,
+        "transport_status": transport_status,
+        "tool_listing_status": tool_listing_status,
+        "secret_values_redacted": True,
+        "validation_proof": "not_claimed",
+    }
+    if evidence_ref:
+        result["evidence_ref"] = str(evidence_ref)
+    if error_class:
+        result["error_class"] = str(error_class)
+    return result
+
+
+def _mcp_runtime_diagnostic_note(diagnostics: Sequence[Mapping[str, Any]], session_boundary: Mapping[str, Any], client_type: str) -> str:
+    failures = [
+        item
+        for item in diagnostics
+        if str(item.get("classification") or "")
+        in {"mcp_server_startup_failed", "contextforge_auth_failed", "contextforge_transport_failed", "tool_listing_failed"}
+    ]
+    if failures:
+        classes = ", ".join(sorted({str(item.get("classification")) for item in failures}))
+        return (
+            f"{client_type} has already attempted MCP startup; do not ask for another reload before diagnosing "
+            f"the recorded MCP startup/auth/transport status ({classes})."
+        )
+    return str(session_boundary.get("instruction") or "")
+
+
 def _missing_projection_action(service_binding: str, client_type: str) -> dict[str, str]:
     return {
         "action": "align_target_client_to_existing_project_service",
@@ -563,6 +637,8 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
     missing_target_client_projection: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     approved: list[str] = []
+    session_boundary = _client_session_boundary(state, client_type)
+    mcp_runtime_diagnostics: list[dict[str, Any]] = []
     decision_bindings: set[str] = set()
     decisions = state.get("decisions") if isinstance(state.get("decisions"), Mapping) else {}
     for decision_key, decision_value in decisions.items():
@@ -600,6 +676,8 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
         target_client_state = _client_state_for_service(service, client_type)
         projection_status = _target_client_projection_status(target_client_state)
         tool_policy_status = _tool_policy_status_for_service(service, tool_names)
+        mcp_diagnostic = _target_client_mcp_runtime_diagnostic(target_client_state, session_boundary)
+        mcp_runtime_diagnostics.append({"service_binding": service_binding, **mcp_diagnostic})
         availability_item = {
             "service_binding": service_binding,
             "service_family": service_family,
@@ -611,6 +689,7 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
             "tool_policy_names": tool_names,
             "target_client_visibility_status": _target_client_visibility_status(target_client_state),
             "target_client_proof_status": _target_client_proof_status(target_client_state),
+            "mcp_runtime_diagnostic": mcp_diagnostic,
             "available_to_target_client": bool(projection_status == "recorded" and tool_names),
         }
         if projection_status == "missing":
@@ -665,15 +744,22 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
         )
         or "none recorded"
     )
+    mcp_diagnostic_text = (
+        "; ".join(
+            f"{item['service_binding']}: {item['classification']}"
+            for item in mcp_runtime_diagnostics
+        )
+        or "none recorded"
+    )
     revision = project_state.state_revision(state)
-    session_boundary = _client_session_boundary(state, client_type)
-    refresh_boundary = session_boundary["instruction"]
+    refresh_boundary = _mcp_runtime_diagnostic_note(mcp_runtime_diagnostics, session_boundary, client_type)
     visible_response = (
         f"ContextForge state for {str(root)} is initialized at revision {revision}. "
         f"Project services present: {project_service_text}. "
         f"Configured/imported-tool policy for this client: {tool_text}. "
         f"Missing target-client projections: {missing_projection_text}. "
         f"Skipped or unavailable services: {skipped_text}. "
+        f"MCP runtime diagnostics: {mcp_diagnostic_text}. "
         "client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven. "
         "This is a read-only project-state readback; interactive proof is not claimed by this readback. "
         f"Note: {refresh_boundary}"
@@ -692,6 +778,7 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
         "missing_target_client_projection": missing_target_client_projection,
         "skipped_or_unavailable_services": skipped,
         "current_session_boundary": session_boundary,
+        "mcp_runtime_diagnostics": mcp_runtime_diagnostics,
         "assistant_visible_response_policy": {
             "internal_status_terms_suppressed": True,
             "diagnostic_state_retained_in_structured_fields": True,
@@ -798,7 +885,19 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         or "none reported"
     )
     session_boundary = _client_session_boundary(state, client_type)
-    refresh_boundary = session_boundary["instruction"]
+    mcp_runtime_diagnostics = [
+        item
+        for item in tool_report.get("mcp_runtime_diagnostics") or []
+        if isinstance(item, Mapping)
+    ]
+    refresh_boundary = _mcp_runtime_diagnostic_note(mcp_runtime_diagnostics, session_boundary, client_type)
+    mcp_diagnostic_text = (
+        "; ".join(
+            f"{item.get('service_binding')}: {item.get('classification')}"
+            for item in mcp_runtime_diagnostics
+        )
+        or "none recorded"
+    )
     return {
         "ok": True,
         "status": "project_capability_summary",
@@ -812,6 +911,7 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         "onboarding_needed": onboarding_needed,
         "missing_target_client_projection": missing_projection,
         "current_session_boundary": session_boundary,
+        "mcp_runtime_diagnostics": mcp_runtime_diagnostics,
         "assistant_visible_response_policy": {
             "internal_status_terms_suppressed": True,
             "diagnostic_state_retained_in_structured_fields": True,
@@ -824,6 +924,7 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
             f"Configured in current project state for {client_type}: {available_text}. "
             f"Missing target-client projections: {missing_projection_text}. "
             f"Known but unavailable: {unavailable_text}. "
+            f"MCP runtime diagnostics: {mcp_diagnostic_text}. "
             f"Could be onboarded with approval: {onboarding_text}."
         ),
         "non_actions": [
@@ -874,6 +975,14 @@ def _client_state_for_service(service: Mapping[str, Any], client_type: str) -> d
         "safe_probe_id",
         "x_proof_kind",
         "x_safe_probe_result",
+        "mcp_runtime_diagnostics",
+        "mcp_startup_status",
+        "mcp_auth_status",
+        "mcp_transport_status",
+        "mcp_tool_listing_status",
+        "mcp_startup_attempted",
+        "mcp_evidence_ref",
+        "mcp_error_class",
     ]
     return {key: state[key] for key in keep if key in state}
 
@@ -887,6 +996,7 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
     services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
     session_boundary = _client_session_boundary(state, client_type)
     service_readbacks: list[dict[str, Any]] = []
+    mcp_runtime_diagnostics: list[dict[str, Any]] = []
     for binding_id, service_value in services.items():
         if not isinstance(service_value, Mapping):
             continue
@@ -898,6 +1008,8 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
         projection_status = _target_client_projection_status(target_client_state)
         tool_policy_status = _tool_policy_status_for_service(service, tool_names)
         target_client_user_state = _target_client_user_state(target_client_state, session_boundary)
+        mcp_diagnostic = _target_client_mcp_runtime_diagnostic(target_client_state, session_boundary)
+        mcp_runtime_diagnostics.append({"service_binding": service_binding, **mcp_diagnostic})
         readback_item = {
             "service_binding": service_binding,
             "service_family": service_family,
@@ -912,12 +1024,14 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
             "tool_policy_names": tool_names,
             "target_client_visibility_status": _target_client_visibility_status(target_client_state),
             "target_client_proof_status": _target_client_proof_status(target_client_state),
+            "mcp_runtime_diagnostic": mcp_diagnostic,
             "available_to_target_client": bool(projection_status == "recorded" and tool_names),
             "readiness_layers": {
                 "source_ready": "present_in_project_state",
                 "backend_ready": _layer_status(service, "backend", "upstream_backend", "service_backend"),
                 "contextforge_ready": _layer_status(service, "contextforge", "contextforge_route", "registry", "gateway"),
                 "client_visible": _layer_status(service, "target_client"),
+                "mcp_runtime": mcp_diagnostic["classification"],
                 "interactive_proof": "not_claimed_by_readback",
             },
         }
@@ -975,10 +1089,12 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
             if isinstance(item, Mapping)
         )
     )
-    refresh_boundary = session_boundary["instruction"]
+    refresh_boundary = _mcp_runtime_diagnostic_note(mcp_runtime_diagnostics, session_boundary, client_type)
     target_summaries = (
         "; ".join(
-            f"{item['service_binding']} projection {item['target_client_projection_status']}; {item['target_client_user_state']}"
+            f"{item['service_binding']} projection {item['target_client_projection_status']}; "
+            f"{item['target_client_user_state']}; "
+            f"MCP runtime {item['mcp_runtime_diagnostic']['classification']}"
             for item in service_readbacks
         )
         or "none recorded"
@@ -998,6 +1114,7 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
         "bounded_errors": bounded_errors,
         "target_client_services": service_readbacks,
         "current_session_boundary": session_boundary,
+        "mcp_runtime_diagnostics": mcp_runtime_diagnostics,
         "assistant_visible_response_policy": {
             "internal_status_terms_suppressed": True,
             "diagnostic_state_retained_in_structured_fields": True,

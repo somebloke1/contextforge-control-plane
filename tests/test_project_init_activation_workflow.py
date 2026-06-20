@@ -2359,6 +2359,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 "context7-local-resolve-library-id, context7-local-query-docs. "
                 "Missing target-client projections: none recorded. "
                 "Skipped or unavailable services: none reported. "
+                "MCP runtime diagnostics: context7:canonical: reload_pending_before_mcp_startup. "
                 "client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven. "
                 "This is a read-only project-state readback; interactive proof is not claimed by this readback. "
                 "Note: After approved OpenCode project-local MCP config changes, start a new OpenCode session from the project root before relying on the newly installed tools. "
@@ -2367,6 +2368,57 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             result["assistant_visible_response"],
         )
         self.assertIn("no project-init proposal, approval, or apply", result["non_actions"])
+
+    def test_opencode_readback_distinguishes_mcp_startup_failure_from_reload_pending(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            state["services"]["context7:canonical"]["target_clients"]["opencode"]["mcp_runtime_diagnostics"] = {
+                "attempted": True,
+                "startup_status": "failed",
+                "auth_status": "not_checked",
+                "transport_status": "not_checked",
+                "tool_listing_status": "not_checked",
+                "error_class": "process_exit",
+                "evidence_ref": "docker/client-harness/evidence/opencode-redacted-startup.log",
+            }
+            project_state.write_state_atomic(root, state)
+
+            availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="opencode")
+            capabilities = contextforge_helper_mcp.project_capability_summary(str(root), client_type="opencode")
+            readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="opencode")
+
+        diagnostic = availability["mcp_runtime_diagnostics"][0]
+        self.assertEqual("mcp_server_startup_failed", diagnostic["classification"])
+        self.assertTrue(diagnostic["attempted"])
+        self.assertTrue(diagnostic["secret_values_redacted"])
+        self.assertEqual("not_claimed", diagnostic["validation_proof"])
+        self.assertEqual("process_exit", diagnostic["error_class"])
+        self.assertIn("do not ask for another reload", availability["assistant_visible_response"])
+        self.assertNotIn("start a new OpenCode session", availability["assistant_visible_response"])
+        self.assertIn("mcp_server_startup_failed", capabilities["assistant_visible_response"])
+        self.assertIn("do not ask for another reload", capabilities["assistant_visible_response"])
+        self.assertEqual(
+            "mcp_server_startup_failed",
+            readback["target_client_services"][0]["mcp_runtime_diagnostic"]["classification"],
+        )
+        self.assertEqual(
+            "mcp_server_startup_failed",
+            readback["target_client_services"][0]["readiness_layers"]["mcp_runtime"],
+        )
+        self.assertIn("MCP runtime mcp_server_startup_failed", readback["assistant_visible_response"])
+        self.assertIn("do not ask for another reload", readback["assistant_visible_response"])
+        self.assertIn("no validation, tool probe, backend mutation, or registry mutation", readback["non_actions"])
 
     def test_contextforge_helper_mcp_reports_missing_target_client_projection_without_available_tools(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
