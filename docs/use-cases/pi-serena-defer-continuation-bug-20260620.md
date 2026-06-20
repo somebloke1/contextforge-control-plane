@@ -134,3 +134,35 @@ Controller verification:
 - `tests.test_project_init_activation_workflow -v`: 117 tests OK.
 - `tests.test_project_init_scripts -v`: 104 tests OK.
 - `git diff --check` passed.
+
+## Live Pi Verification - 2026-06-20
+
+Focused verifier `codex-agent:019ee6ce-cce1-7982-a098-5ed4ea7483f6`
+reran the failing scenario in a clean, non-ephemeral Pi Docker container after
+commit `5aee2df`.
+
+Evidence:
+
+- report:
+  `docker/client-harness/evidence/issue-290/pi/verification-report.md`
+- session export:
+  `docker/client-harness/evidence/issue-290/pi/session-issue-290-pi-20260620t2055z.html`
+- raw turns:
+  `docker/client-harness/evidence/issue-290/pi/turn1-hello.raw.txt`,
+  `turn2-selection.raw.txt`, `turn3-defer.raw.txt`, and
+  `turn4-approve.raw.txt`
+- project state readback:
+  `docker/client-harness/evidence/issue-290/pi/context_forge_state.json`
+
+Result: PASS, 92/100.
+
+The real Pi session used the same prompt shape as the failure:
+`hello`, `1,2,3,4,6,7,8,9`, `3`, `approve`. The verifier found that `3` was
+consumed as the active Serena defer answer, the service menu was not repeated,
+the remaining non-Serena services were proposed for approval, no apply occurred
+before explicit approval, and the approved apply reported installed services
+plus `/reload` required without validation/probing/reload interrogation.
+
+Residual issue: Pi still emits a visible placeholder `...` before tool calls.
+That is a dialogue-quality problem, not a recurrence of this continuation/apply
+bug.
