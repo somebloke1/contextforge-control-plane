@@ -14,7 +14,10 @@ The method layer is case-independent:
 - run the tested client as a real assistant in a stable command-line session or
   explicit continuation chain;
 - send only minimal natural prompts that a human would plausibly send;
-- preserve raw user, assistant, tool-call, and tool-output evidence;
+- preserve complete user, assistant, tool-call, and tool-output evidence, with
+  any exported package, transcript copy, issue comment, PR comment, or summary
+  redacted for passwords, bearer tokens, API keys, JWTs, private keys, and
+  other credential values;
 - derive separate review surfaces for visible dialogue, hidden/extension
   messages, and tool audit events;
 - report stepwise and total generations for every model-dependent use case,
@@ -33,6 +36,13 @@ The method layer is case-independent:
   environment/setup, or inconclusive;
 - remediate and repeat from a fresh target-client instance until the localized
   use-case story passes.
+
+Harness diagnostics must not print raw ContextForge env files or credential
+values. If secret-file inspection is necessary, report key presence,
+permissions, selected non-secret ids, and redacted values only. Use
+`docker/client-harness/scripts/redact-contextforge-secrets.py` for transcript
+streams or env-like output before writing them to evidence directories or
+copying them into GitHub.
 
 The method layer does not define service ids, prompt text, expected assistant
 copy, tool names, or pass/fail story details. Those belong to the localization

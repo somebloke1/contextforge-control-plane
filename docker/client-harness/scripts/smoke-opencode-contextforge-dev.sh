@@ -34,6 +34,7 @@ OPENCODE_SAFE_PROBE_ALLOWED_TOOLS="${OPENCODE_SAFE_PROBE_ALLOWED_TOOLS:-mentalit
 OPENCODE_SAFE_PROBE_EXPECTED_TOOL="${OPENCODE_SAFE_PROBE_EXPECTED_TOOL:-mentality-governance-list}"
 OPENCODE_REQUIRE_SAFE_CALL="${OPENCODE_REQUIRE_SAFE_CALL:-1}"
 OPENCODE_SAFE_CALL_COMMAND="${OPENCODE_SAFE_CALL_COMMAND:-}"
+REDACTOR="${REPO_ROOT}/docker/client-harness/scripts/redact-contextforge-secrets.py"
 
 TOKEN_ID=""
 
@@ -118,17 +119,7 @@ trap revoke_probe_token EXIT
 MCP_URL="${CONTEXTFORGE_CONTAINER_BASE_URL%/}/servers/${SERVER_ID}/mcp/"
 
 redact_token_stream() {
-  REDACT_TOKEN="${ACCESS_TOKEN:-}" PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" -c '
-import os
-import sys
-
-token = os.environ.get("REDACT_TOKEN", "")
-replacement = "[REDACTED_CONTEXTFORGE_DEV_BEARER_TOKEN]"
-for line in sys.stdin:
-    if token:
-        line = line.replace(token, replacement)
-    sys.stdout.write(line)
-'
+  CONTEXTFORGE_REDACT_VALUES="${ACCESS_TOKEN:-}" PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" "${REDACTOR}"
 }
 
 {

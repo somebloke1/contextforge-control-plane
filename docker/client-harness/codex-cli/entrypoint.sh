@@ -27,8 +27,17 @@ while IFS="=" read -r name value; do
 done < <(env)
 
 config_path="${CODEX_HOME}/config.toml"
+agents_path="${CODEX_HOME}/AGENTS.md"
 mkdir -p "${CODEX_HOME}" "${XDG_RUNTIME_DIR}" "${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT}"
 touch "${config_path}"
+touch "${agents_path}"
+
+if ! grep -q '^# ContextForge Codex Container Harness$' "${agents_path}"; then
+  {
+    printf '# ContextForge Codex Container Harness\n\n'
+    printf 'When diagnosing ContextForge configuration or authentication inside this container, do not print raw env files, bearer headers, passwords, API keys, tokens, JWTs, private keys, or credential values. Report key presence, file existence, permissions, selected non-secret ids, and redacted values only. If a transcript or evidence command must include env-like output, pipe it through `/repo/docker/client-harness/scripts/redact-contextforge-secrets.py` before it is written to `/evidence`, copied out of the container, or summarized.\n'
+  } >> "${agents_path}"
+fi
 
 if ! grep -q '^cli_auth_credentials_store = "file"$' "${config_path}"; then
   printf 'cli_auth_credentials_store = "file"\n' >> "${config_path}"

@@ -28,6 +28,7 @@ CONTEXTFORGE_CONTAINER_BASE_URL="${CONTEXTFORGE_CONTAINER_BASE_URL:-http://host.
 CONTEXTFORGE_DEV_ENV_FILE="${CONTEXTFORGE_DEV_ENV_FILE:-${REPO_ROOT}/docker/contextforge-harness/env/contextforge.env}"
 CONTEXTFORGE_DEV_SERVER_NAME="${CONTEXTFORGE_DEV_SERVER_NAME:-mentality_dev_docker_server}"
 EVIDENCE_FILE="evidence/pi-contextforge-dev-smoke.txt"
+REDACTOR="${REPO_ROOT}/docker/client-harness/scripts/redact-contextforge-secrets.py"
 
 TOKEN_ID=""
 
@@ -182,7 +183,7 @@ PY
       --provider local-llama-qwen \
       --model qwen3.6-a3b \
       -p "Use the cf_contextforge_pi_readback tool for projectRoot /workspace. Return the tool JSON result verbatim."
-  ' | tee -a "${EVIDENCE_FILE}"
+  ' | CONTEXTFORGE_REDACT_VALUES="${ACCESS_TOKEN:-}" PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" "${REDACTOR}" | tee -a "${EVIDENCE_FILE}"
 
 if ! grep -q 'mentality:dev_docker' "${EVIDENCE_FILE}"; then
   printf 'pi_readback_status=missing_mentality_service\n' | tee -a "${EVIDENCE_FILE}"

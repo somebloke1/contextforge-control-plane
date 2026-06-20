@@ -30,6 +30,17 @@ scripts/make-local-llama-env.sh
 The script reads `LOCAL_LLAMA_KEY` from `~/.env` and writes a local env file
 with mode `0600` semantics through `umask 077`.
 
+Do not print raw ContextForge env files, bearer headers, passwords, API keys,
+tokens, JWTs, private keys, or credential values into terminal transcripts or
+evidence packages. For diagnostics, report key presence/status, file
+permissions, selected non-secret ids, and redacted values only. Pipe env-like
+or transcript output through the shared redactor before it is written under
+`evidence/`, exported from a container, or copied into GitHub:
+
+```sh
+docker/client-harness/scripts/redact-contextforge-secrets.py < raw.txt > redacted.txt
+```
+
 ## Build
 
 ```sh

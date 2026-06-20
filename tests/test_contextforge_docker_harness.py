@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -299,12 +300,70 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("before a scoped token or Docker client run is started", source)
         self.assertIn("mentality-governance-list,mentality-governance-read,governance_list,governance_read", source)
         self.assertIn("redact_token_stream", source)
-        self.assertIn("[REDACTED_CONTEXTFORGE_DEV_BEARER_TOKEN]", source)
+        self.assertIn("redact-contextforge-secrets.py", source)
+        self.assertIn("CONTEXTFORGE_REDACT_VALUES", source)
         self.assertIn("chown -R", source)
         self.assertIn("revoke_probe_token", source)
         self.assertIn("CONTEXTFORGE_DEV_BEARER_TOKEN", source)
         self.assertNotIn("127.0.0.1:4444", source)
         self.assertNotIn("/home/dgk/.pi", source)
+
+    def test_client_harness_secret_redactor_redacts_secret_material(self) -> None:
+        redactor = ROOT / "docker/client-harness/scripts/redact-contextforge-secrets.py"
+        raw = "\n".join(
+            [
+                "PLATFORM_ADMIN_EMAIL=operator@example.invalid",
+                "PLATFORM_ADMIN_PASSWORD=super-secret-password",
+                "CONTEXTFORGE_BEARER_TOKEN=cf-secret-token",
+                "Authorization=Bearer abcdefghijklmnop",
+                '{"access_token": "json-secret-token", "token_id": "tok_public_identifier"}',
+                "probe_token_id=tok_public_identifier",
+                "server_id=srv_public_identifier",
+            ]
+        )
+
+        result = subprocess.run(
+            ["python3", str(redactor)],
+            input=raw,
+            text=True,
+            check=True,
+            capture_output=True,
+        )
+
+        output = result.stdout
+        self.assertIn("[REDACTED_CONTEXTFORGE_SECRET]", output)
+        self.assertNotIn("super-secret-password", output)
+        self.assertNotIn("cf-secret-token", output)
+        self.assertNotIn("abcdefghijklmnop", output)
+        self.assertNotIn("json-secret-token", output)
+        self.assertIn("PLATFORM_ADMIN_EMAIL=operator@example.invalid", output)
+        self.assertIn("probe_token_id=tok_public_identifier", output)
+        self.assertIn("server_id=srv_public_identifier", output)
+
+    def test_client_harness_redaction_guidance_covers_all_active_clients(self) -> None:
+        opencode_rules = (ROOT / "docker/client-harness/config/opencode/AGENTS.md").read_text(encoding="utf-8")
+        pi_rules = (ROOT / "docker/client-harness/config/pi/AGENTS.md").read_text(encoding="utf-8")
+        codex_entrypoint = (ROOT / "docker/client-harness/codex-cli/entrypoint.sh").read_text(encoding="utf-8")
+        readme = (ROOT / "docker/client-harness/README.md").read_text(encoding="utf-8")
+        method = (ROOT / "docker/client-harness/DIALOGUE_EVALUATION_METHOD.md").read_text(encoding="utf-8")
+        uc1_gate = (ROOT / "docker/client-harness/USE_CASE_1_E2E_GATE.md").read_text(encoding="utf-8")
+
+        for source in (opencode_rules, pi_rules, codex_entrypoint, readme, method, uc1_gate):
+            normalized = source.lower()
+            self.assertIn("raw", normalized)
+            self.assertIn("env", normalized)
+            self.assertIn("credential", normalized)
+            self.assertIn("redact-contextforge-secrets.py", source)
+
+    def test_contextforge_dev_smokes_route_output_through_shared_redactor(self) -> None:
+        for script_name in [
+            "smoke-opencode-contextforge-dev.sh",
+            "smoke-pi-contextforge-dev.sh",
+            "smoke-codex-contextforge-dev.sh",
+        ]:
+            source = (ROOT / "docker/client-harness/scripts" / script_name).read_text(encoding="utf-8")
+            self.assertIn("redact-contextforge-secrets.py", source)
+            self.assertIn("tee -a", source)
 
     def test_pi_image_provisions_container_local_contextforge_wrapper_runtime(self) -> None:
         dockerfile = (ROOT / "docker/client-harness/pi/Dockerfile").read_text(encoding="utf-8")

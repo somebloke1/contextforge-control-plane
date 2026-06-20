@@ -131,6 +131,14 @@ story must remain reconstructable from preserved evidence. Targeted readbacks
 are an evidence-indexing method, not permission to truncate the story or guess
 values from patterns.
 
+Exported transcripts, evaluation packages, issue comments, PR comments, and
+handoff summaries must be redacted for ContextForge passwords, bearer tokens,
+API keys, JWTs, private keys, and credential values. If a diagnostic requires
+inspecting `contextforge.env` or env-like output, the evidence may report
+presence, permissions, selected non-secret ids, and redacted values only. Use
+`docker/client-harness/scripts/redact-contextforge-secrets.py` before copying
+such output into `/evidence` or GitHub.
+
 Do not invert deterministic and semantic responsibilities. Evidence
 preservation, target-client reset, workspace fixture creation, minimal prompt
 issuance, postcondition readback, verifier invocation, and package assembly

@@ -2,14 +2,26 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "${ROOT}/../.." && pwd)"
 cd "${ROOT}"
 
 mkdir -p evidence workspace/.codex
+
+if [[ -z "${PYTHON:-}" ]]; then
+  if [[ -x "${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python" ]]; then
+    PYTHON="${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python"
+  elif [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+    PYTHON="${REPO_ROOT}/.venv/bin/python"
+  else
+    PYTHON="python3"
+  fi
+fi
 
 CONTEXTFORGE_CONTAINER_BASE_URL="${CONTEXTFORGE_CONTAINER_BASE_URL:-http://host.docker.internal:4445}"
 CONTEXTFORGE_DEV_SERVER_NAME="${CONTEXTFORGE_DEV_SERVER_NAME:-mentality_dev_docker_server}"
 CODEX_DEV_MCP_NAME="${CODEX_DEV_MCP_NAME:-contextforge-mentality-dev}"
 EVIDENCE_FILE="evidence/codex-contextforge-dev-smoke.txt"
+REDACTOR="${REPO_ROOT}/docker/client-harness/scripts/redact-contextforge-secrets.py"
 
 cat > workspace/.codex/config.toml <<EOF
 cli_auth_credentials_store = "file"
@@ -59,6 +71,6 @@ print("codex_mcp_list_json_type=" + type(data).__name__)
 print("codex_mcp_list_json=" + json.dumps(data, sort_keys=True))
 PY
   printf "codex_mcp_list_status=passed\n"
-' | tee -a "${EVIDENCE_FILE}"
+' | PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" "${REDACTOR}" | tee -a "${EVIDENCE_FILE}"
 
 printf 'codex_smoke_result=config_list_readback_without_safe_call\n' | tee -a "${EVIDENCE_FILE}"
