@@ -187,7 +187,10 @@ must be promoted to protect already accepted cases.
 7.  UC5b - #259 helper-offered service readiness matrix.
 8.  UC5c - #260 Context7 single-service lifecycle.
 9.  UC5d - #261-#268 remaining per-service readiness slices, ordered by
-           least credential/runtime risk before higher-risk services.
+           least credential/runtime risk before higher-risk services. Current
+           next target after accepted UC5c is `mentality`/#263 because it is
+           repo-local/static, known-safe, credential-free, and continuous with
+           accepted UC4 governance-route evidence.
 10. UC5e - #269 single, curated multi-service, and all-services selection
            shape validation.
 11. UC5  - #247 umbrella acceptance once its decomposed slices are proven.
