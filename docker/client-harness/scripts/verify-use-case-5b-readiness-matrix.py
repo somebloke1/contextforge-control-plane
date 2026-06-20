@@ -74,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
             "safe_probe_status": "probe_policy_or_probe_shape_only_not_service_readiness",
             "current_slice": "current_branch_readiness_focus_only_not_umbrella_acceptance",
             "active_service_readiness": "requires owner_issue evidence or explicit blocked/non-action result",
+            "slice_progress": "controller progress ledger; does not replace per-issue evidence or accepted package reports",
         },
         checks,
         failures,
@@ -107,6 +108,19 @@ def main(argv: list[str] | None = None) -> int:
         "per_service_fields_present",
     )
     check(current_slice == ["context7"], checks, failures, "current_slice_only_context7")
+    progress = matrix.get("slice_progress", {})
+    check(
+        progress.get("accepted_source_lifecycle_slices") == ["context7", "mentality"],
+        checks,
+        failures,
+        "slice_progress_records_accepted_source_slices",
+    )
+    check(
+        progress.get("active_next_recommended_service") == "openzeppelin-solidity-contracts",
+        checks,
+        failures,
+        "slice_progress_recommends_next_service",
+    )
     check(metadata.get("test_command", {}).get("returncode") == 0, checks, failures, "focused_test_passed")
 
     result = {

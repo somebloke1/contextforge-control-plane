@@ -87,6 +87,7 @@ class ServiceReadinessMatrixTests(unittest.TestCase):
                 "safe_probe_status": "probe_policy_or_probe_shape_only_not_service_readiness",
                 "current_slice": "current_branch_readiness_focus_only_not_umbrella_acceptance",
                 "active_service_readiness": "requires owner_issue evidence or explicit blocked/non-action result",
+                "slice_progress": "controller progress ledger; does not replace per-issue evidence or accepted package reports",
             },
             matrix["matrix_semantics"],
         )
@@ -155,6 +156,20 @@ class ServiceReadinessMatrixTests(unittest.TestCase):
             },
             context7["safe_probe"]["arguments"],
         )
+
+    def test_slice_progress_distinguishes_first_slice_from_live_queue(self) -> None:
+        matrix = self.load_matrix()
+        progress = matrix["slice_progress"]
+        self.assertEqual(
+            [
+                "context7",
+                "mentality",
+            ],
+            progress["accepted_source_lifecycle_slices"],
+        )
+        self.assertEqual("openzeppelin-solidity-contracts", progress["active_next_recommended_service"])
+        self.assertEqual(264, progress["active_next_recommended_issue"])
+        self.assertIn("not the live controller queue pointer", progress["current_slice_field_note"])
 
 
 if __name__ == "__main__":

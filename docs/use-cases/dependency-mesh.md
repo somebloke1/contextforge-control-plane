@@ -188,9 +188,12 @@ must be promoted to protect already accepted cases.
 8.  UC5c - #260 Context7 single-service lifecycle.
 9.  UC5d - #261-#268 remaining per-service readiness slices, ordered by
            least credential/runtime risk before higher-risk services. Current
-           next target after accepted UC5c is `mentality`/#263 because it is
+           `mentality`/#263 was selected after accepted UC5c because it is
            repo-local/static, known-safe, credential-free, and continuous with
-           accepted UC4 governance-route evidence.
+           accepted UC4 governance-route evidence. Current next target after
+           accepted UC5d is `openzeppelin-solidity-contracts`/#264 because it
+           is shared canonical, known-safe, credential-free, and avoids browser,
+           session, or project-provisioning prerequisites.
 10. UC5e - #269 single, curated multi-service, and all-services selection
            shape validation.
 11. UC5  - #247 umbrella acceptance once its decomposed slices are proven.

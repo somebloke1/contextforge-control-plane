@@ -12,7 +12,18 @@
   "matrix_semantics": {
     "safe_probe_status": "probe_policy_or_probe_shape_only_not_service_readiness",
     "current_slice": "current_branch_readiness_focus_only_not_umbrella_acceptance",
-    "active_service_readiness": "requires owner_issue evidence or explicit blocked/non-action result"
+    "active_service_readiness": "requires owner_issue evidence or explicit blocked/non-action result",
+    "slice_progress": "controller progress ledger; does not replace per-issue evidence or accepted package reports"
+  },
+  "slice_progress": {
+    "current_slice_field_note": "current_slice identifies the initial Context7 single-service slice used to open #247 decomposition; it is not the live controller queue pointer after later slices are accepted.",
+    "accepted_source_lifecycle_slices": [
+      "context7",
+      "mentality"
+    ],
+    "active_next_recommended_service": "openzeppelin-solidity-contracts",
+    "active_next_recommended_issue": 264,
+    "ordering_reason": "After context7 and mentality, openzeppelin-solidity-contracts is the lowest-dependency remaining shared canonical service with known safe probe policy and no credential, browser, session, or project-provisioning prerequisite."
   },
   "not_service_options": [
     {
