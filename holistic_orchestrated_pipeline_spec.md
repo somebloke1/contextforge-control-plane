@@ -215,6 +215,17 @@ Reflection is not permission to churn. Make the smallest coherent improvement
 that advances the actual ordinary user behavior. Preserve the distinction
 between learned requirement refinement and opportunistic refactoring.
 
+#287 is the current cross-client projection example of this rule. Treat it as
+an architectural invariant and queue-shaping constraint, not as a dialogue use
+case. It binds claims about project service graph, project-scoped service
+instances, target-client projection, target-client visibility, reload state,
+and target-client proof. It does not interrupt a per-client use case such as
+UC11 when that use case uses explicitly pre-aligned target-client fixtures and
+makes only target-client-scoped claims. If #286 or #285 later changes
+cross-client disparity/readback or alignment behavior, rerun targeted UC9/UC10
+regressions with disparity/alignment fixtures before using those behaviors in
+UC12, UC14, or readiness handoff claims.
+
 ## Deterministic Responsibilities
 
 The deterministic layer must be handled by scripts or direct commands, not by

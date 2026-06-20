@@ -27,6 +27,10 @@ Authoritative issue bodies inspected:
 - #255: Use Case 13, run development evidence in controlled containers.
 - #256: Use Case 14, produce a readiness report the user can trust.
 - #257: Use Case 15, hand off the project with clear next actions.
+- #285: Align new clients to the project service set.
+- #286: Represent cross-client service disparity without overstating
+  availability.
+- #287: Project service graph and client projection alignment model.
 
 ## Legend
 
@@ -81,6 +85,31 @@ UC5's internal mesh is:
 #270 taxonomy -> #259 readiness matrix -> #260-#268 per-service readiness -> #269 selection-shape validation -> UC5/#247 umbrella
 ```
 
+Cross-client projection mesh:
+
+```text
+#287 model invariant -> #286 disparity/readback vocabulary -> #285 client alignment/import implementation
+#287 -> UC9 [claim boundary], UC10 [claim boundary], UC12 [identity/projection gate], UC14 [readiness gate]
+```
+
+#287 is not a dialogue use case and does not replace the current queue owner.
+It is a container issue for the architecture invariant:
+
+```text
+project service graph is global;
+project-scoped service instances are project-owned;
+client projection/readiness/proof is per target client;
+alignment is explicit and approval-gated;
+readback must not collapse those layers.
+```
+
+#286 should run before or in parallel with #285 because the readback vocabulary
+must distinguish project service presence from target-client import,
+visibility, reload state, and proof before an alignment helper can be safely
+implemented. #285 then owns the user-facing helper operation that aligns a new
+client to the project service set. #287 remains the architectural container and
+coordination issue for that model.
+
 ## Layered Queue
 
 ### Layer 0: Product Bootstrap
@@ -122,6 +151,13 @@ the Context7/#260 cumulative slice is accepted.
 UC8 can be satisfied through different tool substrates: the governance route
 after UC4, or a newly added/refresh-visible service after UC5 and UC10.
 
+UC9 and UC10 evidence before #287/#286/#285 is accepted only within its
+documented pre-aligned-fixture boundary. It proves same-project readback and
+refresh behavior for prepared Pi/OpenCode projections; it does not prove that a
+new client automatically imports another client's services. After #286 or #285
+changes land, rerun targeted UC9/UC10 disparity/alignment regressions rather
+than blanket historical reruns.
+
 ### Layer 5: Expansion, Evidence, Readiness, Handoff
 
 - `UC12`: onboard an uncataloged MCP service.
@@ -132,6 +168,11 @@ after UC4, or a newly added/refresh-visible service after UC5 and UC10.
 `UC13` is numbered late but cross-cutting. The harness principles are already
 part of the reusable method layer; the issue itself can be accepted later as a
 user-facing development command/documentation use case.
+
+UC12 and UC14 are gated by the #287 model. UC12 must not onboard services using
+client-specific service identities or duplicate project-scoped service
+instances. UC14 must not report readiness by collapsing project service
+presence into target-client import, visibility, reload state, or proof.
 
 ## Current Next-Target Judgment
 
@@ -165,6 +206,11 @@ service-route dependency.
   pretending activation success.
 - `UC11` may be runnable before UC10 if guidance registration is already stable,
   but it still depends on capability and tool visibility.
+- `UC11` is not blocked by #287 when it uses explicitly pre-aligned,
+  per-target-client fixtures and makes only target-client guidance-surface
+  claims. If a UC11 runner or package starts claiming automatic cross-client
+  alignment, shared readiness, or project-global service presence as
+  target-client proof, pause UC11 and route through #286/#285 instead.
 - `UC13` should influence every client-evidence attempt through reset and
   capture discipline, without dragging the user-facing ordinary queue into a
   late-numbered harness-first order.
@@ -228,11 +274,18 @@ must be promoted to protect already accepted cases.
 14. UC10 - refresh tools after project-state changes.
 15. UC8  - use a tool and ask a follow-up in the same session.
 16. UC11 - project tool guidance while using a capability.
-17. UC12 - uncataloged MCP service onboarding dialogue.
-18. UC13 - controlled development validation as a formal user-facing/dev use
+17. #286 - cross-client disparity/readback vocabulary, if not already resolved
+           before the next cross-client alignment or readiness claim.
+18. #285 - explicit client alignment/import helper, after or alongside #286
+           when a later use case requires new-client alignment.
+19. #287 - remains Candidate/container throughout #286/#285; do not promote it
+           to the current queue owner unless the active task is architecture
+           reconciliation itself.
+20. UC12 - uncataloged MCP service onboarding dialogue.
+21. UC13 - controlled development validation as a formal user-facing/dev use
            case; its reset/evidence principles remain active throughout.
-19. UC14 - readiness report with claim-layer honesty.
-20. UC15 - final handoff with current evidence and next actions.
+22. UC14 - readiness report with claim-layer honesty.
+23. UC15 - final handoff with current evidence and next actions.
 ```
 
 ## Flexibility Rules
@@ -248,6 +301,10 @@ must be promoted to protect already accepted cases.
 - State/readback, route-map, or prompt-guidance changes require rerunning the
   minimum affected accepted cases, usually `UC2`, `UC3`, `UC7`, and the nearest
   service-route case.
+- Cross-client projection/readback or alignment changes from #286/#285 require
+  targeted UC9/UC10 regressions with disparity or alignment fixtures. They do
+  not require blanket reruns of earlier accepted cases unless their accepted
+  boundary relied on the changed claim.
 - UC5 remains decomposed until the service readiness and selection-shape slices
   have their own evidence; do not treat the umbrella as one monolithic pass.
 - `UC13` may be worked in parallel as harness/productization work, but it does

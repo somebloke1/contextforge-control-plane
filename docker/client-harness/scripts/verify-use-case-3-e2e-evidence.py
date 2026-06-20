@@ -10,7 +10,7 @@ from dialogue_structural_verifier import verify_dialogue_structure
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify Use Case 3 evidence structure.")
-    parser.add_argument("--client", choices=["pi", "opencode"], required=True)
+    parser.add_argument("--client", choices=["pi", "opencode", "codex"], required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--metadata", type=Path, required=True)
     parser.add_argument("--session-id", default="")

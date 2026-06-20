@@ -25,6 +25,10 @@ The method layer is case-independent:
   support, not semantic acceptance;
 - require a delegated validator narrative and score sheet for semantic
   judgment;
+- require the evaluator narrative to identify visible dialogue quality risks
+  that do not necessarily fail the use case, including placeholder-only visible
+  prefaces before substantive answers, excessive internal terminology, or
+  awkward hesitation that a user would experience as low-quality interaction;
 - classify failures as runner/package, tested-client behavior,
   environment/setup, or inconclusive;
 - remediate and repeat from a fresh target-client instance until the localized
@@ -90,3 +94,9 @@ For every model-dependent use case, the agent evaluator must receive and score:
 - raw transcript and normalized review surfaces;
 - structured verifier output;
 - the localized scorecard and fatal-failure criteria.
+
+Quality risks such as placeholder-only visible prefaces are semantic evaluator
+judgments. Scripts may preserve and segment the visible assistant text for
+review, but they must not decide that a free-form reply is or is not a
+placeholder by matching strings, regexes, ellipses, token fragments, or other
+text patterns.

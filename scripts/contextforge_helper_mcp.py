@@ -142,8 +142,20 @@ def client_visible_project_init_apply_payload(value: dict[str, Any]) -> dict[str
         "error",
     ]
     public = {key: cleaned[key] for key in keep_keys if key in cleaned}
-    if "message" not in public and cleaned.get("installation_status") == "installed":
-        public["message"] = "ContextForge tools are installed for this project. A new session or reload is required before the tools register in the client."
+    if cleaned.get("installation_status") == "installed":
+        installed = [str(binding) for binding in cleaned.get("installed_service_bindings") or [] if str(binding)]
+        installed_text = ", ".join(installed)
+        next_turn_value = cleaned.get("next_turn") if isinstance(cleaned.get("next_turn"), Mapping) else {}
+        reload_prompt = str(next_turn_value.get("prompt") or "").strip()
+        if reload_prompt.startswith("ContextForge tools are installed for this project. "):
+            reload_prompt = reload_prompt.removeprefix("ContextForge tools are installed for this project. ")
+        if installed_text:
+            public["message"] = (
+                f"ContextForge tools are installed for this project: {installed_text}. "
+                f"{reload_prompt or 'A new session or reload is required before the tools register in the client.'}"
+            )
+        elif "message" not in public:
+            public["message"] = "ContextForge tools are installed for this project. A new session or reload is required before the tools register in the client."
     return public
 
 
@@ -151,7 +163,11 @@ def client_visible_project_init_list_payload(value: dict[str, Any]) -> dict[str,
     """Return only the service menu needed for client-facing selection."""
 
     cleaned = client_visible_project_init_payload(value)
-    public: dict[str, Any] = {key: cleaned[key] for key in ("ok", "client_type", "root_attestation", "next_turn", "non_actions", "error") if key in cleaned}
+    public: dict[str, Any] = {
+        key: cleaned[key]
+        for key in ("ok", "client_type", "root_attestation", "status", "assistant_visible_response", "alignment_import_offer", "next_turn", "non_actions", "error")
+        if key in cleaned
+    }
     services = []
     for service in cleaned.get("available_services") or []:
         if not isinstance(service, dict):
@@ -165,6 +181,11 @@ def client_visible_project_init_list_payload(value: dict[str, Any]) -> dict[str,
                     "activation_class",
                     "scope_label",
                     "user_visible_effect",
+                    "project_service_state",
+                    "target_client_projection_status",
+                    "target_client_state",
+                    "available_to_target_client",
+                    "recommended_action",
                 )
                 if key in service
             }
@@ -174,7 +195,7 @@ def client_visible_project_init_list_payload(value: dict[str, Any]) -> dict[str,
     return public
 
 
-def client_visible_project_init_plan_payload(value: dict[str, Any]) -> dict[str, Any]:
+def client_visible_project_init_plan_payload(value: dict[str, Any], *, include_next_turn: bool = True) -> dict[str, Any]:
     """Return the narrow approval package needed for client-facing consent."""
 
     cleaned = client_visible_project_init_payload(value)
@@ -209,11 +230,29 @@ def client_visible_project_init_plan_payload(value: dict[str, Any]) -> dict[str,
         ) or ", ".join(public.get("selected_service_bindings") or [])
         writes = summary.get("project_local_writes") if isinstance(summary.get("project_local_writes"), list) else []
         writes_text = ", ".join(str(path) for path in writes) or "project-local ContextForge state"
+        required_inputs = _visible_required_input_summary(cleaned.get("required_inputs"))
+        input_text = f" Required inputs: {required_inputs}." if required_inputs else ""
         public["message"] = (
             f"Plan ready for {service_names}. It will write {writes_text}; "
-            "it will not mutate user-global config, secrets, backend services, or the ContextForge registry. "
+            "it will not mutate user-global config, secrets, backend services, or the ContextForge registry."
+            f"{input_text} "
             "Approve or decline?"
         )
+    if "message" not in public and isinstance(cleaned.get("next_turn"), dict):
+        next_turn_value = cleaned["next_turn"]
+        prompt = str(next_turn_value.get("prompt") or "").strip()
+        choices = next_turn_value.get("choices") if isinstance(next_turn_value.get("choices"), list) else []
+        rendered_choices = []
+        for choice in choices:
+            if not isinstance(choice, Mapping):
+                continue
+            number = choice.get("number")
+            label = str(choice.get("label") or choice.get("id") or "").strip()
+            effect = str(choice.get("effect") or "").strip()
+            if isinstance(number, int) and label:
+                rendered_choices.append(f"{number}. {label}" + (f" - {effect}" if effect else ""))
+        if prompt:
+            public["message"] = "\n".join([prompt, *rendered_choices]) if rendered_choices else prompt
     if public.get("message"):
         visible_message = str(public["message"])
         reordered: dict[str, Any] = {
@@ -238,6 +277,52 @@ def client_visible_project_init_plan_payload(value: dict[str, Any]) -> dict[str,
                 if key not in reordered:
                     reordered[key] = item
         public = reordered
+    if not include_next_turn:
+        public.pop("next_turn", None)
+    return public
+
+
+def _visible_required_input_summary(value: Any) -> str:
+    if not isinstance(value, Mapping):
+        return ""
+    parts: list[str] = []
+    for service_binding, service_inputs in value.items():
+        if not isinstance(service_inputs, Mapping):
+            continue
+        rendered = ", ".join(
+            f"{key}={service_inputs[key]}"
+            for key in sorted(service_inputs)
+            if service_inputs.get(key)
+        )
+        if rendered:
+            parts.append(f"{service_binding} {rendered}")
+    return "; ".join(parts)
+
+
+def client_visible_project_init_decision_payload(value: dict[str, Any]) -> dict[str, Any]:
+    """Return the narrow public DTO for decline/defer decisions."""
+
+    cleaned = client_visible_project_init_payload(value)
+    keep_keys = [
+        "ok",
+        "assistant_visible_response",
+        "message",
+        "copy_as_complete_visible_response",
+        "do_not_summarize",
+        "project_root",
+        "client_type",
+        "decision_state",
+        "selected_service_bindings",
+        "state_revision",
+        "non_actions",
+        "status",
+        "error",
+    ]
+    public = {key: cleaned[key] for key in keep_keys if key in cleaned}
+    if "assistant_visible_response" in public:
+        public["message"] = public["assistant_visible_response"]
+        public["copy_as_complete_visible_response"] = True
+        public["do_not_summarize"] = True
     return public
 
 
@@ -363,6 +448,52 @@ def _state_skipped_or_unavailable(service: Mapping[str, Any]) -> dict[str, Any] 
     return None
 
 
+def _tool_policy_status_for_service(service: Mapping[str, Any], tool_names: list[str]) -> str:
+    layers = service.get("verification_layers")
+    if isinstance(layers, Mapping):
+        tool_policy = layers.get("tool_policy")
+        if isinstance(tool_policy, Mapping) and tool_policy.get("status"):
+            return str(tool_policy.get("status"))
+    return "known" if tool_names else "not_recorded"
+
+
+def _target_client_projection_status(target_client_state: Mapping[str, Any]) -> str:
+    status = str(target_client_state.get("status") or "not_recorded")
+    if status == "not_recorded":
+        return "missing"
+    if status == "blocked":
+        return "blocked"
+    return "recorded"
+
+
+def _target_client_visibility_status(target_client_state: Mapping[str, Any]) -> str:
+    if _target_client_projection_status(target_client_state) == "missing":
+        return "not_claimed"
+    if target_client_state.get("target_client_visible") is True:
+        return "visible_proof_recorded"
+    return "not_proven_by_readback"
+
+
+def _target_client_proof_status(target_client_state: Mapping[str, Any]) -> str:
+    if _target_client_projection_status(target_client_state) == "missing":
+        return "not_recorded"
+    if target_client_state.get("proof_ref"):
+        return "proof_ref_recorded"
+    return "not_claimed_by_readback"
+
+
+def _missing_projection_action(service_binding: str, client_type: str) -> dict[str, str]:
+    return {
+        "action": "align_target_client_to_existing_project_service",
+        "target_client": client_type,
+        "service_binding": service_binding,
+        "boundary": (
+            f"Align/import {client_type} to the existing project service instance; "
+            "do not create a new project service instance unless explicitly approved."
+        ),
+    }
+
+
 def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
     """Read initialized project state and summarize client-visible ContextForge tools."""
 
@@ -370,14 +501,38 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
     state = project_state.load_state(root)
     services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
     available_tools: list[dict[str, Any]] = []
+    project_services: list[dict[str, Any]] = []
+    project_tool_policies: list[dict[str, Any]] = []
+    missing_target_client_projection: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     approved: list[str] = []
+    decision_bindings: set[str] = set()
+    decisions = state.get("decisions") if isinstance(state.get("decisions"), Mapping) else {}
+    for decision_key, decision_value in decisions.items():
+        if not isinstance(decision_value, Mapping):
+            continue
+        decision_state = str(decision_value.get("state") or "")
+        if decision_state not in {"declined", "deferred", "disabled"}:
+            continue
+        binding = str(decision_value.get("service_binding") or decision_key)
+        if not binding:
+            continue
+        decision_bindings.add(binding)
+        skipped.append(
+            {
+                "service_binding": binding,
+                "status": decision_state,
+                "reason": str(decision_value.get("notes") or f"service was {decision_state} by project-local user decision"),
+            }
+        )
     for binding_id, service_value in services.items():
         if not isinstance(service_value, Mapping):
             continue
         service = dict(service_value)
         service.setdefault("service_binding", str(binding_id))
         service_binding = str(service.get("service_binding") or binding_id)
+        if service_binding in decision_bindings:
+            continue
         approved.append(service_binding)
         service_family = _service_family_from_state(service_binding, service)
         skipped_item = _state_skipped_or_unavailable(service)
@@ -385,14 +540,51 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
             skipped.append(skipped_item)
             continue
         tool_names = _tool_names_for_service(service_family)
+        target_client_state = _client_state_for_service(service, client_type)
+        projection_status = _target_client_projection_status(target_client_state)
+        tool_policy_status = _tool_policy_status_for_service(service, tool_names)
+        availability_item = {
+            "service_binding": service_binding,
+            "service_family": service_family,
+            "project_service_state": "present",
+            "provision_status": str(service.get("provision_status") or "unknown"),
+            "target_client_state": target_client_state,
+            "target_client_projection_status": projection_status,
+            "tool_policy_status": tool_policy_status,
+            "tool_policy_names": tool_names,
+            "target_client_visibility_status": _target_client_visibility_status(target_client_state),
+            "target_client_proof_status": _target_client_proof_status(target_client_state),
+            "available_to_target_client": bool(projection_status == "recorded" and tool_names),
+        }
+        if projection_status == "missing":
+            action = _missing_projection_action(service_binding, client_type)
+            availability_item["recommended_action"] = action
+            missing_target_client_projection.append(action)
+        project_services.append(availability_item)
+        project_tool_policies.append(
+            {
+                "service_binding": service_binding,
+                "service_family": service_family,
+                "project_service_state": "present",
+                "tool_policy_status": tool_policy_status,
+                "tool_policy_names": tool_names,
+            }
+        )
         if tool_names:
-            available_tools.append(
-                {
-                    "service_binding": service_binding,
-                    "service_family": service_family,
-                    "tool_names": tool_names,
-                }
-            )
+            if projection_status == "recorded":
+                available_tools.append(
+                    {
+                        "service_binding": service_binding,
+                        "service_family": service_family,
+                        "tool_names": tool_names,
+                        "project_service_state": "present",
+                        "target_client_state": target_client_state,
+                        "target_client_projection_status": projection_status,
+                        "tool_policy_status": tool_policy_status,
+                        "tool_policy_names": tool_names,
+                        "available_to_target_client": True,
+                    }
+                )
     skipped_text = (
         "none reported"
         if not skipped
@@ -403,13 +595,35 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
             f"{item['service_binding']} exposes {', '.join(item['tool_names'])}"
             for item in available_tools
         )
-        or "no ContextForge-backed tools were reported for the approved services"
+        or "no target-client projection/import recorded for the approved project services"
+    )
+    project_service_text = (
+        ", ".join(item["service_binding"] for item in project_services)
+        or "none recorded"
+    )
+    missing_projection_text = (
+        "; ".join(
+            f"{item['service_binding']}: align/import existing project service instance for {client_type}; do not create a new project service instance without explicit approval"
+            for item in missing_target_client_projection
+        )
+        or "none recorded"
     )
     revision = project_state.state_revision(state)
+    reload_requirement = common.client_reload_requirement(client_type, event="project_activation_apply")
+    refresh_boundary = (
+        str(reload_requirement.get("instruction") or "")
+        if isinstance(reload_requirement, Mapping)
+        else "This client can use the current project-state readback without a separate reload requirement recorded for project activation."
+    )
     visible_response = (
-        f"ContextForge is initialized for {str(root)} at state revision {revision}; "
-        f"skipped or unavailable ContextForge services: {skipped_text}; "
-        f"available ContextForge tools: {tool_text}."
+        f"ContextForge state for {str(root)} is initialized at revision {revision}. "
+        f"Project services present: {project_service_text}. "
+        f"Configured/imported-tool policy for this client: {tool_text}. "
+        f"Missing target-client projections: {missing_projection_text}. "
+        f"Skipped or unavailable services: {skipped_text}. "
+        "client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven. "
+        "This is a read-only project-state readback; interactive proof is not claimed by this readback. "
+        f"Note: {refresh_boundary}"
     )
     return {
         "ok": True,
@@ -420,6 +634,9 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
         "state_revision": revision,
         "approved_service_bindings": approved,
         "available_tools": available_tools,
+        "project_services": project_services,
+        "project_tool_policies": project_tool_policies,
+        "missing_target_client_projection": missing_target_client_projection,
         "skipped_or_unavailable_services": skipped,
         "assistant_visible_response": visible_response,
         "non_actions": [
@@ -438,12 +655,27 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
     state = project_state.load_state(root)
     tool_report = project_tool_availability(project_root=str(root), client_type=client_type)
     approved = set(str(item) for item in tool_report.get("approved_service_bindings") or [])
+    project_services = [
+        item
+        for item in tool_report.get("project_services") or []
+        if isinstance(item, Mapping)
+    ]
+    missing_projection = [
+        item
+        for item in tool_report.get("missing_target_client_projection") or []
+        if isinstance(item, Mapping)
+    ]
+    unavailable_bindings = {
+        str(item.get("service_binding") or "")
+        for item in tool_report.get("skipped_or_unavailable_services") or []
+        if isinstance(item, Mapping)
+    }
     available_now = [
         {
             "service_binding": str(item.get("service_binding")),
             "capability": _capability_label(str(item.get("service_family") or item.get("service_binding"))),
             "tool_names": [str(name) for name in item.get("tool_names") or []],
-            "provenance": "approved project state plus ContextForge tool policy",
+            "provenance": "approved project state plus recorded target-client projection and ContextForge tool policy",
         }
         for item in tool_report.get("available_tools") or []
         if isinstance(item, Mapping)
@@ -464,7 +696,7 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         if not isinstance(candidate, Mapping):
             continue
         binding = str(candidate.get("service_binding") or "")
-        if not binding or binding in approved:
+        if not binding or binding in approved or binding in unavailable_bindings:
             continue
         onboarding_needed.append(
             {
@@ -482,6 +714,17 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         )
         or "none reported"
     )
+    project_service_text = (
+        ", ".join(str(item.get("service_binding") or "") for item in project_services if item.get("service_binding"))
+        or "none recorded"
+    )
+    missing_projection_text = (
+        "; ".join(
+            f"{item.get('service_binding')}: align/import existing project service instance for {client_type}; no new project service instance without explicit approval"
+            for item in missing_projection
+        )
+        or "none recorded"
+    )
     unavailable_text = (
         "; ".join(
             f"{item['service_binding']} ({item['status']}: {item['reason']})"
@@ -496,6 +739,12 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         )
         or "none reported"
     )
+    reload_requirement = common.client_reload_requirement(client_type, event="project_activation_apply")
+    refresh_boundary = (
+        str(reload_requirement.get("instruction") or "")
+        if isinstance(reload_requirement, Mapping)
+        else "This client can use the current project-state readback without a separate reload requirement recorded for project activation."
+    )
     return {
         "ok": True,
         "status": "project_capability_summary",
@@ -503,13 +752,19 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         "project_root": str(root),
         "state_status": state.get("status"),
         "state_revision": revision,
+        "project_services": project_services,
         "available_now": available_now,
         "known_unavailable": known_unavailable,
         "onboarding_needed": onboarding_needed,
+        "missing_target_client_projection": missing_projection,
+        "current_session_boundary": refresh_boundary,
         "assistant_visible_response": (
             "Source: project state plus ContextForge catalog; no changes were made. "
             f"In this project, ContextForge is initialized for {str(root)} at state revision {revision}. "
-            f"Available now: {available_text}. "
+            f"Important client/session boundary for {client_type}: {refresh_boundary} "
+            f"Project services present: {project_service_text}. "
+            f"Configured in current project state for {client_type}: {available_text}. "
+            f"Missing target-client projections: {missing_projection_text}. "
             f"Known but unavailable: {unavailable_text}. "
             f"Could be onboarded with approval: {onboarding_text}."
         ),
@@ -551,8 +806,16 @@ def _client_state_for_service(service: Mapping[str, Any], client_type: str) -> d
         "shim",
         "virtual_server",
         "service_identity_id",
+        "contextforge_server_id",
+        "alias",
         "tool_prefix",
+        "pi_tool_prefix",
         "global_trigger_surface",
+        "target_client_visible",
+        "proof_ref",
+        "safe_probe_id",
+        "x_proof_kind",
+        "x_safe_probe_result",
     ]
     return {key: state[key] for key in keep if key in state}
 
@@ -571,25 +834,41 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
         service = dict(service_value)
         service_binding = str(service.get("service_binding") or binding_id)
         service_family = _service_family_from_state(service_binding, service)
+        tool_names = _tool_names_for_service(service_family)
+        target_client_state = _client_state_for_service(service, client_type)
+        projection_status = _target_client_projection_status(target_client_state)
+        tool_policy_status = _tool_policy_status_for_service(service, tool_names)
+        readback_item = {
+            "service_binding": service_binding,
+            "service_family": service_family,
+            "project_service_state": "present",
+            "provision_status": str(service.get("provision_status") or "unknown"),
+            "backend_instance": service.get("backend_instance"),
+            "virtual_server": service.get("virtual_server"),
+            "target_client_state": target_client_state,
+            "target_client_projection_status": projection_status,
+            "tool_policy_status": tool_policy_status,
+            "tool_policy_names": tool_names,
+            "target_client_visibility_status": _target_client_visibility_status(target_client_state),
+            "target_client_proof_status": _target_client_proof_status(target_client_state),
+            "available_to_target_client": bool(projection_status == "recorded" and tool_names),
+            "readiness_layers": {
+                "source_ready": "present_in_project_state",
+                "backend_ready": _layer_status(service, "backend", "upstream_backend", "service_backend"),
+                "contextforge_ready": _layer_status(service, "contextforge", "contextforge_route", "registry", "gateway"),
+                "client_visible": _layer_status(service, "target_client"),
+                "interactive_proof": "not_claimed_by_readback",
+            },
+        }
+        if projection_status == "missing":
+            readback_item["recommended_action"] = _missing_projection_action(service_binding, client_type)
         service_readbacks.append(
-            {
-                "service_binding": service_binding,
-                "service_family": service_family,
-                "provision_status": str(service.get("provision_status") or "unknown"),
-                "backend_instance": service.get("backend_instance"),
-                "virtual_server": service.get("virtual_server"),
-                "target_client_state": _client_state_for_service(service, client_type),
-                "readiness_layers": {
-                    "source_ready": "present_in_project_state",
-                    "backend_ready": _layer_status(service, "backend", "upstream_backend", "service_backend"),
-                    "contextforge_ready": _layer_status(service, "contextforge", "contextforge_route", "registry", "gateway"),
-                    "client_visible": _layer_status(service, "target_client"),
-                    "interactive_proof": "not_claimed_by_readback",
-                },
-            }
+            readback_item
         )
     revision = project_state.state_revision(state)
     selected = [item["service_binding"] for item in service_readbacks]
+    project_tool_policies = tool_report.get("project_tool_policies") if isinstance(tool_report.get("project_tool_policies"), list) else []
+    missing_projection = tool_report.get("missing_target_client_projection") if isinstance(tool_report.get("missing_target_client_projection"), list) else []
     imported_tools = tool_report.get("available_tools") if isinstance(tool_report.get("available_tools"), list) else []
     skipped = tool_report.get("skipped_or_unavailable_services") if isinstance(tool_report.get("skipped_or_unavailable_services"), list) else []
     bounded_errors = [
@@ -610,6 +889,22 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
         )
         or "none reported"
     )
+    policy_text = (
+        "; ".join(
+            f"{item.get('service_binding')}: {', '.join(str(name) for name in item.get('tool_policy_names') or [])}"
+            for item in project_tool_policies
+            if isinstance(item, Mapping)
+        )
+        or "none recorded"
+    )
+    missing_projection_text = (
+        "; ".join(
+            f"{item.get('service_binding')}: align/import existing project service instance for {client_type}; no new project service instance without explicit approval"
+            for item in missing_projection
+            if isinstance(item, Mapping)
+        )
+        or "none recorded"
+    )
     skipped_text = (
         "none reported"
         if not skipped
@@ -619,9 +914,21 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
             if isinstance(item, Mapping)
         )
     )
+    reload_requirement = common.client_reload_requirement(client_type, event="project_activation_apply")
+    refresh_boundary = (
+        str(reload_requirement.get("instruction") or "")
+        if isinstance(reload_requirement, Mapping)
+        else "This client can use the current project-state readback without a separate reload requirement recorded for project activation."
+    )
+    if client_type == "opencode":
+        boundary_short = "new OpenCode session required before relying on newly installed tools"
+    elif client_type == "pi":
+        boundary_short = "Pi reload required before relying on newly installed tools"
+    else:
+        boundary_short = "client reload or new session boundary applies before relying on newly installed tools"
     target_summaries = (
         "; ".join(
-            f"{item['service_binding']} client state {item['target_client_state'].get('status', 'recorded')}"
+            f"{item['service_binding']} projection {item['target_client_projection_status']}; client state {item['target_client_state'].get('status', 'recorded')} ({boundary_short})"
             for item in service_readbacks
         )
         or "none recorded"
@@ -634,7 +941,9 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
         "state_status": state.get("status"),
         "state_revision": revision,
         "selected_service_bindings": selected,
+        "project_tool_policies": project_tool_policies,
         "imported_tools": imported_tools,
+        "missing_target_client_projection": missing_projection,
         "skipped_or_unavailable_services": skipped,
         "bounded_errors": bounded_errors,
         "target_client_services": service_readbacks,
@@ -642,17 +951,20 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
             "source_ready": "project-state file loaded and schema revision read",
             "backend_ready": "reported only from recorded service readiness fields when present",
             "contextforge_ready": "reported only from recorded ContextForge route/readiness fields when present",
-            "client_visible": "reported from target-client binding state and imported-tool policy",
+            "client_visible": "reported only from recorded target-client projection state; project tool policy alone is not target-client availability",
             "interactive_proof": "not claimed by this readback; requires a separate ordinary tool-use transcript",
         },
         "assistant_visible_response": (
-            f"ContextForge state for {str(root)}: {state.get('status')} at revision {revision}. "
+            f"ContextForge state for {str(root)} is {state.get('status')} at revision {revision}. "
             f"Target client: {client_type}. Selected services: {service_text}. "
+            f"Project tool policy: {policy_text}. "
             f"Configured/imported-tool policy for this client: {tools_text}. "
+            f"Missing target-client projections: {missing_projection_text}. "
             f"Skipped or unavailable services: {skipped_text}. "
             f"Target-client binding state: {target_summaries}. "
-            "Readiness layers: source-ready is the loaded project-state file; backend-ready and ContextForge-ready are only reported where recorded; client-visible is expected from target-client binding state and imported-tool policy where reported, not proven by this readback; reload-pending or target-client-visible=false states remain unproven until a separate ordinary target-client tool-use transcript; interactive proof is not claimed by this readback. "
-            f"Bounded errors: {skipped_text}."
+            "client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven. "
+            "This is a read-only project-state readback; interactive proof is not claimed by this readback. "
+            f"Note: {refresh_boundary}"
         ),
         "non_actions": [
             "read-only project-state readback",
@@ -755,6 +1067,16 @@ def _latest_text_is_approval(text: str) -> bool:
     return lowered in {"approve", "approved", "yes approve", "i approve"} or re.search(r"\bapprove\b", lowered) is not None
 
 
+def _latest_text_is_decline(text: str) -> bool:
+    lowered = text.strip().lower()
+    return lowered in {"decline", "declined", "no", "no thanks", "do not install"} or re.search(r"\bdecline\b", lowered) is not None
+
+
+def _latest_text_is_defer(text: str) -> bool:
+    lowered = text.strip().lower()
+    return lowered in {"defer", "deferred", "later", "not now"} or re.search(r"\bdefer\b", lowered) is not None
+
+
 def _selected_service_ids_from_text(text: str, capabilities: Mapping[str, Any]) -> list[str]:
     stripped = text.strip()
     if not stripped:
@@ -762,6 +1084,13 @@ def _selected_service_ids_from_text(text: str, capabilities: Mapping[str, Any]) 
     lowered = stripped.lower()
     next_turn_value = capabilities.get("next_turn") if isinstance(capabilities.get("next_turn"), Mapping) else {}
     choices = next_turn_value.get("choices") if isinstance(next_turn_value.get("choices"), list) else []
+    numeric_selection_text = re.fullmatch(r"[\d,\s]+", stripped) is not None
+    if "all" in lowered and re.search(r"\bservices?\b", lowered):
+        return [
+            str(choice.get("id") or "")
+            for choice in choices
+            if isinstance(choice, Mapping) and choice.get("id") and str(choice.get("id")) != "none"
+        ]
     selected: list[str] = []
     for choice in choices:
         if not isinstance(choice, Mapping):
@@ -772,12 +1101,19 @@ def _selected_service_ids_from_text(text: str, capabilities: Mapping[str, Any]) 
         label = str(choice.get("label") or "").lower()
         number = choice.get("number")
         if (
-            (isinstance(number, int) and _contains_selection_number(stripped, number))
+            (numeric_selection_text and isinstance(number, int) and _contains_selection_number(stripped, number))
             or choice_id.lower() in lowered
             or (label and re.search(rf"\b{re.escape(label)}\b", lowered))
         ):
             selected.append(choice_id)
     return selected
+
+
+def _language_input_from_text(text: str) -> str | None:
+    lowered = text.strip().lower()
+    if lowered in {"python", "typescript", "defer"}:
+        return lowered
+    return None
 
 
 def _require_user_approval_text(project_root: str, challenge_id: str | None, plan_digest: str | None) -> None:
@@ -801,8 +1137,37 @@ def _require_user_approval_text(project_root: str, challenge_id: str | None, pla
 def _remember_plan(project_root: str, plan: dict[str, Any]) -> dict[str, Any]:
     _CACHED_PLANS[_cache_key(project_root)] = dict(plan)
     current = _read_durable_cache(project_root)
+    current.pop("pending_input", None)
     _write_durable_cache(project_root, {**current, "plan": dict(plan)})
     return plan
+
+
+def _remember_pending_project_init_input(project_root: str, selected_services: list[Any]) -> None:
+    normalized: list[Any] = []
+    for item in selected_services:
+        if isinstance(item, Mapping):
+            normalized.append(dict(item))
+            continue
+        else:
+            ref = str(item)
+        if ref:
+            normalized.append(ref)
+    current = _read_durable_cache(project_root)
+    _write_durable_cache(
+        project_root,
+        {
+            **current,
+            "pending_input": {
+                "selected_services": normalized,
+                "input_name": "language",
+            },
+        },
+    )
+
+
+def _pending_project_init_input(project_root: str) -> dict[str, Any] | None:
+    pending = _read_durable_cache(project_root).get("pending_input")
+    return dict(pending) if isinstance(pending, dict) else None
 
 
 def _remember_receipts(project_root: str, receipts: list[dict[str, Any]]) -> None:
@@ -898,6 +1263,13 @@ def _matching_cached_plan(project_root: str, challenge_id: str | None, plan_dige
     if plan_digest and plan.get("plan_digest") != plan_digest:
         raise ValueError("cached project-init plan digest does not match")
     return plan
+
+
+def _cached_project_init_plan_or_none(project_root: str) -> dict[str, Any] | None:
+    try:
+        return _matching_cached_plan(project_root, None, None)
+    except Exception:
+        return None
 
 
 def _matching_cached_recovery_plan(project_root: str, challenge_id: str | None, plan_digest: str | None) -> dict[str, Any]:
@@ -1057,6 +1429,8 @@ def propose_project_init(
                 server_instances_root=server_instances_root,
             ),
         }
+        if result.get("status") == "needs_input":
+            _remember_pending_project_init_input(project_root, selected_services)
         _remember_project_init_result(project_root, result)
         return result
     except Exception as exc:
@@ -1083,6 +1457,48 @@ def cf_project_init_propose(
 
 
 @server.tool()
+def cf_project_init_record_service_decision(
+    project_root: str,
+    selected_services: list[dict[str, Any] | str] | None = None,
+    decision_state: str = "declined",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Record a project-local decline/defer decision without active import."""
+    try:
+        project_root = _continuation_project_root(project_root, client_type)
+        selected = selected_services
+        source_plan_id = None
+        if not selected:
+            plan = _cached_project_init_plan_or_none(project_root)
+            if isinstance(plan, dict):
+                selected = [
+                    dict(service)
+                    for service in plan.get("selected_services") or []
+                    if isinstance(service, dict)
+                ]
+                source_plan_id = str(plan.get("plan_id") or "") or None
+        if not selected:
+            pending = _pending_project_init_input(project_root)
+            selected = [
+                str(item)
+                for item in (pending or {}).get("selected_services") or []
+                if str(item)
+            ]
+        result = helper.record_project_init_service_decision(
+            project_root=project_root,
+            selected_services=selected or [],
+            decision_state=decision_state,
+            client_type=client_type,
+            source_plan_id=source_plan_id,
+            dry_run=dry_run,
+        )
+        return client_visible_project_init_decision_payload(result)
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
 def cf_project_init_continue(
     project_root: str,
     client_type: str = DEFAULT_CLIENT_TYPE,
@@ -1097,12 +1513,57 @@ def cf_project_init_continue(
     try:
         project_root = _continuation_project_root(project_root, client_type)
         latest = _read_latest_user_message_text(project_root)
+        if _latest_text_is_decline(latest):
+            return cf_project_init_record_service_decision(
+                project_root=project_root,
+                decision_state="declined",
+                client_type=client_type,
+                dry_run=dry_run,
+            )
+        if _latest_text_is_defer(latest):
+            pending = _pending_project_init_input(project_root)
+            pending_services = [
+                item
+                for item in (pending or {}).get("selected_services") or []
+                if item
+            ]
+            serena_services = [
+                item
+                for item in pending_services
+                if (
+                    (isinstance(item, Mapping) and str(item.get("service_binding") or item.get("service_family") or "").startswith("serena"))
+                    or (not isinstance(item, Mapping) and (str(item).startswith("serena:") or str(item) == "serena"))
+                )
+            ]
+            return cf_project_init_record_service_decision(
+                project_root=project_root,
+                selected_services=serena_services or None,
+                decision_state="deferred",
+                client_type=client_type,
+                dry_run=dry_run,
+            )
         if _latest_text_is_approval(latest):
             result = cf_project_init_apply(
                 project_root=project_root,
                 dry_run=dry_run,
             )
             return client_visible_project_init_apply_payload(result)
+        pending_input = _pending_project_init_input(project_root)
+        language = _language_input_from_text(latest)
+        if pending_input and language:
+            pending_services = [
+                str(item)
+                for item in pending_input.get("selected_services") or []
+                if str(item)
+            ]
+            if pending_services:
+                result = propose_project_init(
+                    project_root=project_root,
+                    selected_services=pending_services,
+                    client_type=client_type,
+                    inputs={"language": language},
+                )
+                return client_visible_project_init_plan_payload(result, include_next_turn=client_type != "codex")
         capabilities = helper.list_available_capabilities(
             project_root=project_root,
             client_type=client_type,
@@ -1114,7 +1575,9 @@ def cf_project_init_continue(
                 selected_services=selected,
                 client_type=client_type,
             )
-            return client_visible_project_init_plan_payload(result)
+            if result.get("status") == "needs_input":
+                _remember_pending_project_init_input(project_root, selected)
+            return client_visible_project_init_plan_payload(result, include_next_turn=client_type != "codex")
         return client_visible_project_init_list_payload({"ok": True, **capabilities})
     except Exception as exc:
         return _error(exc)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -2127,6 +2128,323 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertFalse((root / "opencode.json").exists())
             self.assertFalse((root / ".opencode").exists())
 
+    def test_codex_fresh_project_hook_includes_helper_discovered_menu(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            run_root = Path(run_tmp)
+            payload = {
+                "hook_event_name": "SessionStart",
+                "session_id": "codex-fresh-project",
+                "cwd": str(root),
+            }
+            stdin = io.StringIO(json.dumps(payload))
+            stdout = io.StringIO()
+            menu = (
+                "Codex first-prompt service menu:\n"
+                'Ask exactly: "Which ContextForge services should I activate for this project?"\n'
+                "1. context7:canonical - context7"
+            )
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.object(init_hook, "render_helper_service_menu", return_value=menu),
+                mock.patch.object(init_hook.gateway, "_read_env", side_effect=AssertionError("gateway env must not be read")),
+                mock.patch.object(sys, "stdin", stdin),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = init_hook.main_for_events({"SessionStart"}, target_client="codex")
+
+            self.assertEqual(0, code)
+            context = json.loads(stdout.getvalue())["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("Codex first-prompt service menu:", context)
+            self.assertIn("1. context7:canonical - context7", context)
+            self.assertIn("Target client: codex", context)
+            self.assertFalse(project_state.project_state_path(root).exists())
+
+    def test_codex_user_prompt_submit_records_latest_user_message_and_emits_continuation_context(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            run_root = Path(run_tmp)
+            latest_message = run_root / "codex-latest-user-message.json"
+            state_path = run_root / "project-init-hook-state.local.json"
+            session_id = "codex-selection-session"
+            key = init_hook.idempotency_key(
+                session_id,
+                common.project_identity(root).root_hash,
+                target_client="codex",
+            )
+            state_path.write_text(
+                json.dumps({"injected": {key: {"session_id": session_id}}}) + "\n",
+                encoding="utf-8",
+            )
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": session_id,
+                "turn_id": "turn-selection",
+                "cwd": str(root),
+                "prompt": "1",
+            }
+            stdin = io.StringIO(json.dumps(payload))
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", state_path),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(latest_message)}),
+                mock.patch.object(sys, "stdin", stdin),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = init_hook.main_for_events({"UserPromptSubmit"}, target_client="codex")
+
+            self.assertEqual(0, code)
+            emitted = json.loads(stdout.getvalue())
+            self.assertEqual("UserPromptSubmit", emitted["hookSpecificOutput"]["hookEventName"])
+            context = emitted["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("contextforge-project-init-continuation", context)
+            self.assertIn("cf_project_init_continue", context)
+            self.assertIn('"dry_run":true', context)
+            self.assertIn("Do not send any visible message before the helper call", context)
+            self.assertIn("copy that value as the complete visible reply and stop", context)
+            self.assertIn("prefer `assistant_visible_response`", context)
+            self.assertIn("do not replace a plan-bearing response", context)
+            self.assertIn("first and only visible reply for this turn", context)
+            self.assertIn("Do not narrate helper/tool/cache/payload mechanics", context)
+            recorded = json.loads(latest_message.read_text(encoding="utf-8"))
+            self.assertEqual(str(root), recorded["cwd"])
+            self.assertEqual("1", recorded["text"])
+            self.assertEqual(session_id, recorded["session_id"])
+            self.assertEqual("turn-selection", recorded["turn_id"])
+
+    def test_codex_project_init_approval_continuation_context_uses_apply_mode(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            context = init_hook.project_init_continuation_context_for_prompt(root, "approve", target_client="codex")
+
+        self.assertIn("final-choice", context)
+        self.assertIn('"dry_run":false', context)
+        self.assertIn("cf_project_init_continue", context)
+        self.assertIn("approve, decline, and defer", context)
+        self.assertIn("Do not validate, probe, use the installed service", context)
+
+    def test_codex_project_init_negative_choice_continuation_context_records_decision(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            decline_context = init_hook.project_init_continuation_context_for_prompt(root, "decline", target_client="codex")
+            defer_context = init_hook.project_init_continuation_context_for_prompt(root, "defer", target_client="codex")
+
+        for context in (decline_context, defer_context):
+            self.assertIn("final-choice", context)
+            self.assertIn('"dry_run":false', context)
+            self.assertIn("approve, decline, and defer", context)
+
+    def test_codex_state_readback_prompt_uses_readonly_helper_guidance(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            state = project_state.apply_project_init_decisions_to_state(
+                project_state.default_state(root),
+                [service_descriptor("context7")],
+                decision_state="declined",
+                target_client="codex",
+                source_plan_id="plan-state-readback",
+            )
+            project_state.write_state_atomic(root, state)
+
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "codex-state-readback",
+                "turn_id": "turn-state-readback",
+                "cwd": str(root),
+                "prompt": "what ContextForge state are you using right now?",
+            }
+            run_root = Path(run_tmp)
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.object(init_hook, "read_payload", return_value=payload),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = init_hook.main_for_events({"UserPromptSubmit"}, target_client="codex")
+
+            self.assertEqual(0, code)
+            emitted = json.loads(stdout.getvalue())
+            self.assertEqual("UserPromptSubmit", emitted["hookSpecificOutput"]["hookEventName"])
+            context = emitted["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("<contextforge-project-state-readback>", context)
+            self.assertIn("get_project_state_readback", context)
+            self.assertIn('"client_type":"codex"', context)
+            self.assertIn("assistant_visible_response", context)
+            self.assertIn("Your first action for this turn must be the MCP tool call", context)
+            self.assertIn("Do not send any visible message before the helper call", context)
+            self.assertIn("Do not narrate helper/tool/cache/payload mechanics", context)
+            self.assertIn("Do not validate, probe, use installed services", context)
+            self.assertNotIn("cf_project_init_continue", context)
+            self.assertNotIn("<contextforge-project-init-continuation>", context)
+
+    def test_codex_normal_docs_prompt_uses_context7_guidance(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(
+                    [service],
+                    validation_mode="installed",
+                    target_client="codex",
+                ),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "codex-context7-docs",
+                "turn_id": "turn-context7-docs",
+                "cwd": str(root),
+                "prompt": "look up the docs entry for opencode and tell me which result is best",
+            }
+            run_root = Path(run_tmp)
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.object(init_hook, "read_payload", return_value=payload),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = init_hook.main_for_events({"UserPromptSubmit"}, target_client="codex")
+
+            self.assertEqual(0, code)
+            emitted = json.loads(stdout.getvalue())
+            context = emitted["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("<contextforge-context7-normal-use>", context)
+            self.assertIn("Context7 MCP service tools directly", context)
+            self.assertIn("Your first action for this turn must be a Context7 MCP tool call", context)
+            self.assertIn("not a text reply, shell command, web search, OpenAI-docs/manual lookup", context)
+            self.assertIn("resolve-library-id", context)
+            self.assertIn("query-docs", context)
+            self.assertIn("do not switch to generic docs lookup", context)
+            self.assertIn("Do not call contextforge-helper project-init continuation", context)
+            self.assertNotIn("cf_project_init_continue", context)
+            self.assertNotIn("<contextforge-project-state-readback>", context)
+
+    def test_codex_uncataloged_service_onboarding_prompt_uses_source_only_guidance(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(
+                    [service],
+                    validation_mode="installed",
+                    target_client="codex",
+                ),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "codex-uc12-onboarding",
+                "turn_id": "turn-uc12-onboarding",
+                "cwd": str(root),
+                "prompt": (
+                    "I want to add a new MCP service called calendar-notes. It would read project notes "
+                    "and expose search over meeting summaries. Help me onboard it."
+                ),
+            }
+            run_root = Path(run_tmp)
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.object(init_hook, "read_payload", return_value=payload),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = init_hook.main_for_events({"UserPromptSubmit"}, target_client="codex")
+
+            self.assertEqual(0, code)
+            emitted = json.loads(stdout.getvalue())
+            context = emitted["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("<contextforge-uncataloged-service-onboarding>", context)
+            self.assertIn("source-only intake and planning conversation", context)
+            self.assertIn("Do not implement code", context)
+            self.assertIn("edit `.codex/config.toml`", context)
+            self.assertIn("run an MCP handshake", context)
+            self.assertIn("no service has been installed, exposed, registered, started, imported", context)
+            self.assertIn("candidate is outside the project service graph", context)
+            self.assertIn("Do not call contextforge-helper project-init activation", context)
+            self.assertNotIn("<contextforge-context7-normal-use>", context)
+            self.assertNotIn("cf_project_init_continue", context)
+
+    def test_codex_uncataloged_service_plan_prompt_stays_source_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(
+                    [service],
+                    validation_mode="installed",
+                    target_client="codex",
+                ),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "codex-uc12-onboarding",
+                "turn_id": "turn-uc12-plan",
+                "cwd": str(root),
+                "prompt": "It is a local stdio server in ./tools/calendar-notes, project-scoped, no credentials yet, and I only want a plan.",
+            }
+            run_root = Path(run_tmp)
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.object(init_hook, "read_payload", return_value=payload),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = init_hook.main_for_events({"UserPromptSubmit"}, target_client="codex")
+
+            self.assertEqual(0, code)
+            emitted = json.loads(stdout.getvalue())
+            context = emitted["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("<contextforge-uncataloged-service-onboarding>", context)
+            self.assertIn("If the user says the service is local stdio", context)
+            self.assertIn("produce a source-only handoff plan", context)
+            self.assertIn("Do not implement code", context)
+            self.assertIn("Do not use shell commands or local file writes", context)
+            self.assertNotIn("<contextforge-context7-normal-use>", context)
+            self.assertNotIn("cf_project_init_continue", context)
+
     def test_pending_validation_hook_uses_local_prompt_when_gateway_prompt_unavailable(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
             root = Path(tmp).resolve()
@@ -2238,6 +2556,56 @@ class SerenaManagerTests(unittest.TestCase):
             project_state.write_state_atomic(root, gemini_state)
             self.assertFalse(init_hook.should_inject(root, {}, target_client="gemini"))
             self.assertTrue(init_hook.should_inject(root, {}, target_client="opencode"))
+
+    def test_codex_hook_emits_governance_guidance_when_project_init_is_suppressed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("mentality")
+            service["service_binding"] = "mentality:static_repo_local"
+            service["instantiation_class"] = "static_repo_local"
+            service["virtual_server"] = "mentality_dev_docker_server"
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(
+                    [service],
+                    validation_mode="installed",
+                    target_client="codex",
+                ),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+            self.assertFalse(init_hook.should_inject(root, {}, target_client="codex"))
+
+            run_root = Path(run_tmp)
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "session-governance",
+                "cwd": str(root),
+                "prompt": "what decisions are recorded for this project?",
+            }
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.object(init_hook, "read_payload", return_value=payload),
+                contextlib.redirect_stdout(io.StringIO()) as stdout,
+            ):
+                self.assertEqual(0, init_hook.main_for_events(init_hook.CODEX_HOOK_EVENTS, target_client="codex"))
+
+            output = json.loads(stdout.getvalue())
+            context = output["hookSpecificOutput"]["additionalContext"]
+            self.assertEqual("UserPromptSubmit", output["hookSpecificOutput"]["hookEventName"])
+            self.assertIn("<contextforge-project-governance>", context)
+            self.assertIn("mentality", context)
+            self.assertIn('"ledger":"decisions"', context)
+            self.assertIn("Do not ask which services to activate", context)
+            self.assertIn("Do not use shell commands", context)
 
     def test_hook_decision_repairs_invalid_current_shape_without_fresh_init_classification(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

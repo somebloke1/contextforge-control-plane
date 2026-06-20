@@ -111,6 +111,12 @@ const projectInitCache = globalState.projectInitCache;
 const firstPromptInitOffered = globalState.firstPromptInitOffered;
 const initializedPromptOffered = globalState.initializedPromptOffered;
 const readback = globalState.readback;
+const PROJECT_DOCS_LOOKUP_FALLBACK_GUIDANCE = [
+  "Use the ContextForge project docs lookup capability as a project-bounded two-step workflow:",
+  "1. Resolve or select the relevant docs/library entry when the target is ambiguous.",
+  "2. Ask a concrete docs query through the project-scoped ContextForge docs lookup tool, then answer from that result.",
+  "For OpenCode or other client configuration questions, keep the request on this ContextForge docs route; do not switch to generic docs lookup or answer the underlying configuration question before the docs query is made.",
+].join("\n");
 
 function shimGlobalState(): ShimGlobalState {
   const holder = globalThis as typeof globalThis & { [GLOBAL_STATE_KEY]?: ShimGlobalState };
@@ -535,17 +541,21 @@ async function firstPromptProjectInitMessage(projectRoot: string): Promise<JsonO
   return {
     customType: "contextforge-project-init-first-prompt",
     content: [
-      "ContextForge project-init trigger: this hidden extension message was injected because this project has no completed ContextForge initialization evidence.",
+      "ContextForge project setup note: this hidden extension message was injected because this project has no completed ContextForge initialization evidence.",
       "Use the current Pi session transcript to decide whether this is the first project-init turn or a continuation. Do not restart service selection if the transcript already shows a service list, proposal, or approval request.",
-      `If no prior project-init service list is visible in the current transcript, use the project-init capability-list helper for project root "${projectRoot}".`,
-      "Use only the service ids and labels returned by helper next_turn.choices. Do not invent, rename, summarize, or substitute service names from memory.",
-      "If the latest user reply is a service-selection number such as `1`, use the project-init proposal helper for the selected service only. A numeric service selection is never approval.",
-      "After a proposal is shown, stop and wait for explicit approval or decline. Do not approve or apply until the latest user reply contains explicit approval text such as `approve`.",
-      "After explicit approval, approve and apply the helper-owned plan. When apply succeeds, say only that the selected ContextForge tools are installed and that a reload or new Pi session is required before the tools register, then stop.",
-      "Do not narrate helper/tool calls, mention helper/tool names, or describe internal retry strategies in user-visible text. Present only the service menu, installation package or approval request, and final installed/reload-required message.",
+      `If no prior service list is visible in the current transcript, silently call cf_project_init_list_capabilities for project root "${projectRoot}".`,
+      "Use only the returned service ids and labels. Do not invent, rename, summarize, or substitute service names from memory.",
+      "When calling a project setup tool, do not emit visible text before the call. The assistant message for that step must be only the tool call.",
+      "For service-selection replies, Serena language replies such as `python`, decline/defer replies, and approval replies, call only `cf_project_init_continue` with the current project root exactly once.",
+      "Do not call direct propose, approve, or apply tools in those continuation turns; do not call state-edit tools either. The continuation route owns pending input, decline/defer, approval, apply, and the exact visible response.",
+      "If the latest user reply is a service-selection number such as `1`, treat it as service selection only. A numeric service selection is never approval.",
+      "After a proposal is shown, stop and wait for explicit approval or decline. If the user replies `decline` or `defer`, use the continuation route once and copy its returned visible response.",
+      "After explicit approval, the continuation route approves and applies the current plan. When apply succeeds, say only that the selected ContextForge tools are installed and that a reload or new Pi session is required before the tools register, then stop.",
+      "Do not narrate helper/tool calls, mention helper/tool names, restate what the user said, write `I need to`, or describe internal retry strategies in user-visible text. Present only the service menu, installation package or approval request, and final installed/reload-required message.",
+      "Visible answer banlist during project init: helper, tool, tool call, cf_project, continuation, propose, approve tool, apply tool, payload, challenge, digest, the user said, I need to call.",
       "Do not answer, resume, or return to the user's original ordinary prompt after project init reaches the installed/reload-required boundary.",
-      "If the capability-list helper is unavailable or fails, say that the service list cannot be produced from live helper output; do not invent a service list.",
-      "Helper-rendered fallback menu for comparison only; prefer the live tool result:",
+      "If the service list cannot be produced from live output, say that the service list is unavailable; do not invent a service list.",
+      "Fallback menu for comparison only; prefer the live result:",
       selectionTurn,
       "Do not write project state, client config, trust state, registry entries, service state, secrets, or backend state before the helper approval/apply flow explicitly allows it.",
     ].join("\n\n"),
@@ -573,14 +583,20 @@ function initializedProjectContextMessage(projectRoot: string): JsonObject | und
       "No visible preface is allowed before the required tool call. If you need one of the routes below, your next assistant message must be only that tool call.",
       "Do not add a preface such as \"I'll check\" and do not paraphrase, bulletize, shorten, or reclassify readback responses.",
       "Do not restart first-run service selection. Do not propose, approve, apply, repair, validate, probe, onboard services, or mutate project-init state during ordinary normal-use questions.",
+      `For explicit user requests to onboard or add an uncataloged/new MCP service, do not restart service selection. If the user has not supplied source, transport, scope, credentials, and expected-tool information, ask concise practical intake questions. If the user supplies enough details for a source-only plan, call cf_project_service_onboarding_plan {"projectRoot":"${root}", ...} using only the user's supplied facts, then copy its assistant_visible_response/message exactly as the complete visible answer and stop. Do not reformat it into tables, expose enum names, add helper fields, or claim credentials are not required when the user only said there are no credentials yet.`,
       "For ordinary normal-use readback questions, do not call cf_project_init_list_capabilities.",
+      `For questions asking how to use the project docs lookup capability, docs lookup capability, ContextForge docs lookup guidance, or similar, call cf_contextforge_guidance_lookup {"projectRoot":"${root}","serviceBinding":"context7:canonical","mcpToolName":"project docs lookup capability"} and answer from its message or fallback_guidance. Do not call the Context7 docs query tools directly for this guidance-question class, and do not answer the underlying configuration question yet.`,
+      "For ordinary docs, library, package, API, or configuration lookup questions, use the relevant ContextForge service tool directly. For Context7 documentation requests, call the Context7 resolve-library-id tool first when a library id is needed, then call the Context7 query-docs tool as needed. Do not call cf_project_init_get_context, cf_project_init_continue, cf_project_init_list_capabilities, availability, capability-summary, or state-readback routes before ordinary Context7 tool use.",
       `Route decisions question -> cf_mentality_governance_list {"repo":"${root}","ledger":"decisions"}.`,
       `Route open-questions question -> cf_mentality_governance_list {"repo":"${root}","ledger":"open-questions"}.`,
       `Route abeyant-intentions question -> cf_mentality_governance_list {"repo":"${root}","ledger":"abeyant-intentions"}.`,
       `Route available-tools question -> cf_project_tool_availability {"projectRoot":"${root}"}.`,
+      `Route refresh questions or questions that combine current ContextForge state with tools/capabilities -> cf_project_state_readback {"projectRoot":"${root}"}. Do not call availability or capability-summary routes afterward.`,
       `Route capabilities/what-can-you-do question, including "what you can do in this project" -> cf_project_capability_summary {"projectRoot":"${root}"}.`,
       `Route current-state/readback question -> cf_project_state_readback {"projectRoot":"${root}"}.`,
       "After a route tool succeeds, copy its assistant_visible_response/message as the entire answer and stop.",
+      "After calling one ordinary readback route, stop. Do not combine multiple readback tool outputs into a new answer.",
+      "If a readback response contains `client/session boundary`, include that boundary in the visible reply. Never replace it with `available now` language.",
       "If the governance route fails, stop and tell the user the ContextForge governance tool route is unavailable. Do not reconstruct an answer from project state, bash, read, grep, or local ledger files.",
       "Visible answer banlist: hidden, instructions, route, tool call, silently call, assistant_visible_response, cf_project, cf_mentality, according to ContextForge.",
     ].join("\n\n"),
@@ -762,7 +778,8 @@ async function lookupGuidance(params: JsonObject): Promise<JsonObject> {
   const resourceUri = String(params.resourceUri || params.resource_uri || "");
   const promptName = String(params.promptName || params.prompt_name || "");
   const promptArguments = asObject(params.promptArguments || params.prompt_arguments);
-  const service = selectGuidanceService(serviceBinding, mcpToolName, resourceUri, promptName);
+  const projectDocsLookupRequest = isProjectDocsLookupGuidanceRequest(serviceBinding, mcpToolName, resourceUri, promptName);
+  const service = selectGuidanceService(serviceBinding, mcpToolName, resourceUri, promptName) || (projectDocsLookupRequest ? selectContext7GuidanceService(serviceBinding) : undefined);
   if (!service) {
     return {
       ok: false,
@@ -801,6 +818,13 @@ async function lookupGuidance(params: JsonObject): Promise<JsonObject> {
     response.prompt_get = await client.getPrompt(prompt.name, promptArguments);
   }
   if (!resource && !prompt) {
+    if (projectDocsLookupRequest) {
+      response.ok = true;
+      response.fallback_guidance = true;
+      response.source = "contextforge-global-shim static fallback guidance; no registered prompt/resource matched the project docs lookup capability request.";
+      response.message = PROJECT_DOCS_LOOKUP_FALLBACK_GUIDANCE;
+      return response;
+    }
     response.ok = false;
     response.error = {
       type: "GuidanceObjectNotFound",
@@ -829,6 +853,19 @@ function selectGuidanceService(serviceBinding: string, mcpToolName: string, reso
   return undefined;
 }
 
+function selectContext7GuidanceService(serviceBinding: string): ProjectService | undefined {
+  const normalizedBinding = guidanceKey(serviceBinding);
+  if (normalizedBinding) {
+    return readback.services.find((service) => guidanceKey(service.serviceBinding) === normalizedBinding);
+  }
+  return readback.services.find((service) => {
+    const binding = guidanceKey(service.serviceBinding);
+    const family = guidanceKey(service.serviceFamily);
+    const identity = guidanceKey(service.serviceIdentityId);
+    return binding.includes("context7") || family.includes("context7") || identity.includes("context7");
+  });
+}
+
 function selectGuidanceResource(serviceBinding: string, resourceUri: string, mcpToolName: string): RegisteredResource | undefined {
   const resources = readback.resources.filter((item) => item.serviceBinding === serviceBinding);
   if (resourceUri) return resources.find((item) => item.uri === resourceUri);
@@ -850,6 +887,18 @@ function selectGuidancePrompt(serviceBinding: string, promptName: string, mcpToo
 
 function guidanceKey(value: string): string {
   return slug(value).replace(/-/g, "");
+}
+
+function isProjectDocsLookupGuidanceRequest(serviceBinding: string, mcpToolName: string, resourceUri: string, promptName: string): boolean {
+  const combined = guidanceKey([serviceBinding, mcpToolName, resourceUri, promptName].filter(Boolean).join(" "));
+  if (!combined) return false;
+  const namesDocsLookup =
+    combined.includes("projectdocslookup") ||
+    combined.includes("projectdocumentationlookup") ||
+    combined.includes("docslookupcapability") ||
+    combined.includes("contextforgedocslookup") ||
+    combined.includes("context7guidance");
+  return namesDocsLookup && (combined.includes("capability") || combined.includes("guidance") || combined.includes("workflow") || combined.includes("lookup"));
 }
 
 function guidanceLookupKeys(mcpToolName: string): string[] {
@@ -897,15 +946,41 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
       parameters: projectRootOnlySchema(),
     },
     {
+      name: "cf_project_service_onboarding_plan",
+      operation: "build_service_onboarding_plan",
+      description: "Build a source-only no-mutation onboarding plan for an explicit user request to add or onboard an uncataloged MCP service. Use only user-supplied facts; do not install, register, expose, validate, probe, or mutate client/project/runtime state. After the call, copy assistant_visible_response/message exactly; do not reformat it, expose enum names, or strengthen 'no credentials yet' into 'credentials are not required'.",
+      parameters: helperSchema({
+        candidateService: { type: "string", description: "Candidate service name supplied by the user, such as calendar-notes." },
+        operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
+        sourcePath: { type: "string", description: "User-supplied source path, package, repository, or documentation reference." },
+        transportType: { type: "string", description: "User-supplied transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required." },
+        localizationType: { type: "string", description: "User-supplied scope/locality such as project_scoped, shared_canonical, credential_scoped, user_scoped, or dev_only." },
+        functionalType: { type: "string", description: "User-supplied functional class such as search_retrieval, filesystem_content, code_intelligence, or remote_api_tool." },
+        stateType: { type: "string", description: "User-supplied state footprint such as local_filesystem_state, project_metadata, cache_index_state, credential_state, or stateless." },
+        approvalType: { type: "string", description: "Approval boundary; use source_only unless the user explicitly approves a stronger surface." },
+        credentialRequired: { type: "boolean", description: "Whether the user indicated credentials are required." },
+        credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
+        expectedTools: { type: "array", items: { type: "string" }, description: "User-supplied expected tool names or capabilities." },
+        validationProbePlan: { type: "array", items: { type: "object" }, description: "Planned proof layers only; do not run probes." },
+        issue: { type: "string", description: "Optional tracking issue id." },
+      }),
+    },
+    {
       name: "cf_project_init_list_capabilities",
       operation: "list_available_capabilities",
       description: "List ContextForge services available for Pi activation and return the service-selection next turn.",
       parameters: helperSchema({ contextforgeServers: { type: "array", items: { type: "object" } } }),
     },
     {
+      name: "cf_project_init_continue",
+      operation: "cf_project_init_continue",
+      description: "Primary Pi project setup continuation. Silently call this exactly once for normal service-selection replies, Serena language replies, and approval replies. Do not emit visible text before calling. After the call, copy assistant_visible_response without mentioning helper, continuation, propose, approve, apply, payload, or challenge mechanics.",
+      parameters: helperSchema({ dryRun: { type: "boolean" } }),
+    },
+    {
       name: "cf_project_init_propose",
       operation: "propose_project_init",
-      description: "Build a non-mutating ContextForge Pi project-init activation plan or return the next required input turn.",
+      description: "Internal fallback only when cf_project_init_continue is unavailable. Do not use for ordinary visible Pi service-selection or Serena language replies.",
       parameters: helperSchema({
         selectedServices: {
           type: "array",
@@ -921,13 +996,13 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
     {
       name: "cf_project_init_approve",
       operation: "cf_project_init_approve",
-      description: "Approve the latest cached ContextForge Pi project-init plan after the user explicitly approves.",
+      description: "Internal fallback only when cf_project_init_continue is unavailable. Do not use for ordinary visible Pi approval replies.",
       parameters: helperSchema({}),
     },
     {
       name: "cf_project_init_apply",
       operation: "cf_project_init_apply",
-      description: "Apply the latest helper-approved ContextForge Pi project-init plan using helper-owned cached scoped consent receipts.",
+      description: "Internal fallback only when cf_project_init_continue is unavailable. Do not use directly in ordinary Pi approval replies.",
       parameters: helperSchema({
         contextforgeServers: { type: "array", items: { type: "object" } },
         dryRun: { type: "boolean" },
@@ -968,6 +1043,18 @@ async function runProjectInitHelperOperation(operation: string, projectRoot: str
 }
 
 function clientVisibleProjectInitResult(operation: string, result: JsonObject): JsonObject {
+  if (operation === "build_service_onboarding_plan") {
+    const visible = String(result.assistant_visible_response || result.message || "").trim();
+    return {
+      ok: result.ok ?? true,
+      status: result.status || "source_only_onboarding_plan",
+      project_root: result.project_root,
+      mutation_allowed: false,
+      assistant_visible_response: visible,
+      message: visible,
+      non_actions: result.non_actions || [],
+    };
+  }
   if (operation === "cf_project_init_list_capabilities" || operation === "list_available_capabilities") {
     return clientVisibleProjectInitListPayload(result);
   }

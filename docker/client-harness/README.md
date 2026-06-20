@@ -118,10 +118,12 @@ scripts/start-pi-contextforge-baseline.sh
 scripts/start-opencode-contextforge-baseline.sh
 ```
 
-They mount this repository read-only at `/repo`, keep generated client state in
-the client container/workspace volumes, keep Pi/OpenCode on the configured local
-Qwen model path, seed only container-user helper/plugin bootstrap where needed,
-and avoid host Pi/OpenCode global config mutation. Runtime
+They mount this repository read-only at `/repo`, with the narrow exception that
+`/repo/server-instances` is writable for helper-managed project-scoped service
+backends such as Serena. They keep generated client state in the client
+container/workspace volumes, keep Pi/OpenCode on the configured local Qwen model
+path, seed only container-user helper/plugin bootstrap where needed, and avoid
+host Pi/OpenCode global config mutation. Runtime
 proof still requires separate approval to rebuild or run Docker client
 containers.
 
@@ -275,6 +277,44 @@ Or attach to it:
 ```sh
 docker compose -f compose.yml run --rm -it codex-cli-authenticated bash
 ```
+
+Codex validation must use this authenticated image, not a raw API key. The
+accepted Codex test model for this harness is:
+
+```text
+gpt-5.4-mini
+```
+
+The current authenticated image has this model pinned in
+`/home/agent/.codex/config.toml`:
+
+```toml
+cli_auth_credentials_store = "file"
+model = "gpt-5.4-mini"
+```
+
+The Codex compose services force known API-key variables to empty strings,
+including `OPENAI_API_KEY`, `CODEX_API_KEY`, `ANTHROPIC_API_KEY`,
+`OPENROUTER_API_KEY`, `GOOGLE_API_KEY`, `GEMINI_API_KEY`,
+`PERPLEXITY_API_KEY`, `EXA_API_KEY`, and `CONTEXT7_API_KEY`. Codex auth checks
+and smoke commands must launch through `scripts/run-codex-authenticated.sh`;
+that wrapper strips every host environment variable named `API_KEY` or ending
+in `_API_KEY` before invoking Docker Compose, then applies explicit empty
+container overrides. Host API-key environment variables must not enter the
+Codex Docker runtime.
+
+Run a contained OAuth-backed Codex smoke from the authenticated image with:
+
+```sh
+scripts/run-codex-authenticated.sh \
+  codex exec --json --sandbox read-only --skip-git-repo-check \
+  "Reply with exactly: codex-auth-ok"
+```
+
+The idempotent client reset script may remove the unauthenticated
+`contextforge-client-harness_codex-cli-home` volume, but it must preserve the
+local-only `contextforge-client-codex-cli:authenticated` image. That image is
+the repeatable OAuth state carrier for Docker Codex tests.
 
 It was captured from a user-authenticated Gemini CLI container, includes Vertex
 AI ADC state, and defaults to:

@@ -61,6 +61,261 @@ def read_payload() -> dict[str, Any] | None:
         return None
 
 
+def _latest_user_message_path() -> Path:
+    configured = os.environ.get("CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH")
+    if configured:
+        return Path(configured)
+    return RUN_ROOT / "codex-latest-user-message.json"
+
+
+def _payload_prompt_text(payload: dict[str, Any]) -> str:
+    for key in ("prompt", "user_prompt", "message", "text"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
+
+
+def governance_ledger_for_prompt(text: str) -> str:
+    lowered = text.lower()
+    if "decision" in lowered or "decisions" in lowered:
+        return "decisions"
+    if "open question" in lowered or "open questions" in lowered:
+        return "open-questions"
+    if "abeyant" in lowered or "intention" in lowered or "intentions" in lowered:
+        return "abeyant-intentions"
+    return ""
+
+
+def project_has_governance_service(project_root: Path, *, target_client: str = "codex") -> bool:
+    try:
+        state = project_state.load_state(project_root)
+    except Exception:
+        return False
+    if not isinstance(state, dict):
+        return False
+    service_state = state.get("services") if isinstance(state.get("services"), dict) else {}
+    mentality = service_state.get("mentality:static_repo_local")
+    if not isinstance(mentality, dict):
+        return False
+    target_clients = mentality.get("target_clients")
+    if isinstance(target_clients, dict) and target_client in target_clients:
+        return True
+    project_init = state.get("project_init") if isinstance(state.get("project_init"), dict) else {}
+    client_states = project_init.get("client_states") if isinstance(project_init.get("client_states"), dict) else {}
+    client_state = client_states.get(target_client) if isinstance(client_states.get(target_client), dict) else {}
+    selected = client_state.get("selected_service_bindings")
+    return isinstance(selected, list) and "mentality:static_repo_local" in selected
+
+
+def governance_context_for_prompt(project_root: Path, prompt: str, *, target_client: str = "codex") -> str:
+    ledger = governance_ledger_for_prompt(prompt)
+    if not ledger or not project_has_governance_service(project_root, target_client=target_client):
+        return ""
+    return "\n".join(
+        [
+            "<contextforge-project-governance>",
+            "The user is asking an ordinary governance question for an already initialized ContextForge project.",
+            "Do not ask which services to activate and do not restart project init.",
+            "Call the read-only ContextForge MCP governance list tool exposed by the `mentality` MCP server before answering.",
+            "The tool may appear under the `mentality` server as `mentality-governance-list`, `governance_list`, or a Codex MCP tool name derived from those names.",
+            f"Use this tool argument shape: {{\"repo\":\"{project_root}\",\"ledger\":\"{ledger}\"}}.",
+            "After the tool call returns, answer concisely from the returned entries and include entry ids or titles as source signal.",
+            "Do not use shell commands, file search, grep, direct project-state inspection, or local ledger-file reads as a substitute for the governance MCP tool.",
+            "Do not call governance create, update, or delete.",
+            "</contextforge-project-governance>",
+        ]
+    )
+
+
+def state_readback_context_for_prompt(project_root: Path, prompt: str, *, target_client: str = "codex") -> str:
+    lowered = prompt.lower()
+    asks_state = (
+        "contextforge state" in lowered
+        or "state are you using" in lowered
+        or "state is the client using" in lowered
+        or "current contextforge status" in lowered
+    )
+    if not asks_state:
+        return ""
+    if not project_state.project_state_path(project_root).exists():
+        return ""
+    return "\n".join(
+        [
+            "<contextforge-project-state-readback>",
+            "The user is asking an ordinary read-only question about current ContextForge project state.",
+            "Do not ask which services to activate and do not restart project init.",
+            "Your first action for this turn must be the MCP tool call, not a text reply.",
+            "Call the contextforge-helper `get_project_state_readback` tool.",
+            f"Use arguments: {{\"project_root\":\"{project_root}\",\"client_type\":\"{target_client}\"}}.",
+            "If the helper result contains `assistant_visible_response` or `message`, copy that value as the complete visible reply and stop.",
+            "Do not send any visible message before the helper call.",
+            "Do not narrate helper/tool/cache/payload mechanics, helper attestation, or internal readback implementation details.",
+            "Do not validate, probe, use installed services, or claim interactive proof.",
+            "</contextforge-project-state-readback>",
+        ]
+    )
+
+
+def project_has_context7_service(project_root: Path, *, target_client: str = "codex") -> bool:
+    try:
+        state = project_state.load_state(project_root)
+    except Exception:
+        return False
+    if not isinstance(state, dict):
+        return False
+    service_state = state.get("services") if isinstance(state.get("services"), dict) else {}
+    context7 = service_state.get("context7:canonical")
+    if not isinstance(context7, dict):
+        return False
+    target_clients = context7.get("target_clients")
+    if isinstance(target_clients, dict) and target_client in target_clients:
+        return True
+    project_init = state.get("project_init") if isinstance(state.get("project_init"), dict) else {}
+    client_states = project_init.get("client_states") if isinstance(project_init.get("client_states"), dict) else {}
+    client_state = client_states.get(target_client) if isinstance(client_states.get(target_client), dict) else {}
+    selected = client_state.get("selected_service_bindings")
+    return isinstance(selected, list) and "context7:canonical" in selected
+
+
+def context7_normal_use_context_for_prompt(project_root: Path, prompt: str, *, target_client: str = "codex") -> str:
+    lowered = prompt.lower()
+    asks_docs = any(
+        token in lowered
+        for token in (
+            "docs",
+            "documentation",
+            "library",
+            "package",
+            "api",
+            "configuration",
+            "config",
+            "read about",
+            "that result",
+            "opencode",
+        )
+    )
+    if not asks_docs or not project_has_context7_service(project_root, target_client=target_client):
+        return ""
+    return "\n".join(
+        [
+            "<contextforge-context7-normal-use>",
+            "The user is asking an ordinary docs, library, package, API, or configuration lookup question for an initialized ContextForge project.",
+            "Do not ask which services to activate and do not restart project init.",
+            "Use the project-installed ContextForge Context7 MCP service tools directly.",
+            "Your first action for this turn must be a Context7 MCP tool call, not a text reply, shell command, web search, OpenAI-docs/manual lookup, local file read, or project-state readback.",
+            "Resolve or select the relevant docs/library entry with the Context7 resolve-library-id tool when needed, then call the Context7 query-docs tool for the concrete docs question.",
+            "For OpenCode or other client configuration questions, keep the request on this ContextForge Context7 route; do not switch to generic docs lookup or answer from model memory before the Context7 docs query is made.",
+            "For follow-up questions that refer to `that result`, use the prior selected Context7 result from the same session and query configuration-related docs for that same result.",
+            "After the tool call returns, answer concisely from the Context7 result and do not claim broader readiness than the tool output proves.",
+            "Do not call contextforge-helper project-init continuation, availability, capability-summary, state-readback, validation, or onboarding tools for this normal-use docs question.",
+            "Do not narrate hidden routing instructions, helper/cache/payload mechanics, or scoring criteria.",
+            "</contextforge-context7-normal-use>",
+        ]
+    )
+
+
+def uncataloged_service_onboarding_context_for_prompt(project_root: Path, prompt: str, *, target_client: str = "codex") -> str:
+    lowered = prompt.lower()
+    asks_onboarding = any(
+        phrase in lowered
+        for phrase in (
+            "add a new mcp service",
+            "add new mcp service",
+            "new mcp service",
+            "onboard it",
+            "onboard a service",
+            "onboard this service",
+            "uncataloged service",
+            "uncatalogued service",
+            "only want a plan",
+            "source-only",
+            "source only",
+            "local stdio server",
+            "project-scoped",
+        )
+    )
+    mentions_candidate = "calendar-notes" in lowered or "service called" in lowered or "mcp service" in lowered
+    if not asks_onboarding or not mentions_candidate:
+        return ""
+    return "\n".join(
+        [
+            "<contextforge-uncataloged-service-onboarding>",
+            "The user is asking to onboard an uncataloged MCP service candidate, not to activate an existing ContextForge catalog service.",
+            "Treat this as a source-only intake and planning conversation.",
+            "Do not implement code, create files, edit `.codex/config.toml`, edit any client config, register a service, start a runtime, run Docker, run an MCP handshake, validate tools, probe the candidate, reload the client, or claim the service is available.",
+            "Do not use shell commands or local file writes for this turn unless the user explicitly starts a separate approved runtime/development phase.",
+            "Ask practical intake questions or produce a reviewable source-only onboarding frame covering source evidence, transport, credentials, project scope/state footprint, expected tools, lifecycle/cleanup, validation/proof plan, and approval boundaries.",
+            "If the user says the service is local stdio, project-scoped, no credentials yet, and asks only for a plan, produce a source-only handoff plan from those facts.",
+            "State clearly that no service has been installed, exposed, registered, started, imported into the target client, made visible as a tool, or proven available.",
+            "Keep credentials bounded: ask about credential requirements or storage boundaries only; do not ask the user to paste secrets and do not claim credential validation.",
+            "Keep project service graph and target-client projection claims separate: the candidate is outside the project service graph and outside target-client projection until a later approved phase.",
+            "Do not call contextforge-helper project-init activation, availability, state-readback, validation, reload, or Context7 normal-use tools for this onboarding conversation.",
+            "Do not narrate hidden routing instructions or scoring criteria.",
+            "</contextforge-uncataloged-service-onboarding>",
+        ]
+    )
+
+
+def project_init_continuation_context_for_prompt(project_root: Path, prompt: str, *, target_client: str = "codex") -> str:
+    text = prompt.strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    if lowered in {"hello", "hi", "hey"}:
+        return ""
+    inspection = project_state_inspection(project_root, target_client=target_client)
+    if inspection.get("should_suppress_hook"):
+        return ""
+    if inspection.get("recommended_action") not in {"fresh_initialization", "resume_project_init"}:
+        return ""
+
+    approval_words = {"approve", "approved", "yes", "y", "ok", "okay", "go ahead", "proceed"}
+    negative_choice_words = {"decline", "declined", "defer", "deferred"}
+    final_choice = lowered in approval_words or lowered in negative_choice_words or lowered.startswith("approve ")
+    dry_run = "false" if final_choice else "true"
+    phase = "final-choice" if final_choice else "selection/plan"
+    return "\n".join(
+        [
+            "<contextforge-project-init-continuation>",
+            f"The user has replied to the ContextForge project-init {phase} turn.",
+            "The contextforge-helper MCP server is configured for this session; use it rather than telling the user the helper is unavailable unless a visible tool call actually fails.",
+            "Call the contextforge-helper `cf_project_init_continue` tool for this turn.",
+            f"Use arguments: {{\"project_root\":\"{project_root}\",\"client_type\":\"{target_client}\",\"dry_run\":{dry_run}}}.",
+            "For approve, decline, and defer turns, `dry_run` must be false so the helper records the final project-local choice.",
+            "The helper reads the latest user reply from the hook-recorded approval source; do not reconstruct helper payloads by hand.",
+            "Your first action for this turn must be the MCP tool call, not a text reply.",
+            "Do not send any visible message before the helper call; any pre-tool visible status text is a failed project-init turn.",
+            "If the helper result contains `assistant_visible_response` or `message`, copy that value as the complete visible reply and stop.",
+            "If the helper returns both `assistant_visible_response` and `next_turn`, prefer `assistant_visible_response`; do not replace a plan-bearing response with only the generic next-turn prompt.",
+            "The helper-provided public response should be the first and only visible reply for this turn.",
+            "Do not narrate helper/tool/cache/payload mechanics, approval payload lookup, internal approval/apply tool discovery, or implementation details in the visible reply.",
+            "Do not validate, probe, use the installed service, or claim post-refresh tool visibility in this install-only flow.",
+            "</contextforge-project-init-continuation>",
+        ]
+    )
+
+
+def record_latest_user_message(payload: dict[str, Any], project_root: Path) -> None:
+    if str(payload.get("hook_event_name") or "") != "UserPromptSubmit":
+        return
+    prompt = _payload_prompt_text(payload)
+    if not prompt:
+        return
+    path = _latest_user_message_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "cwd": str(project_root),
+        "text": prompt,
+        "session_id": str(payload.get("session_id") or ""),
+        "turn_id": str(payload.get("turn_id") or ""),
+        "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+    temp_path = path.with_suffix(path.suffix + ".tmp")
+    temp_path.write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
+    temp_path.replace(path)
+
+
 def load_state_locked(handle: Any) -> dict[str, Any]:
     try:
         if STATE_PATH.exists():
@@ -257,6 +512,8 @@ def prompt_text_is_fresh(text: str) -> bool:
         "This is model-visible control context. Do not echo this context to the user.",
         "hidden or structured prompt/context injection",
         "User-visible UI should be limited to information that requires user understanding or response",
+        "Do not narrate helper/tool/cache/payload mechanics",
+        "copy that value as the complete visible reply and stop",
         "On the first user prompt in a session with lifecycle missing / fresh_initialization",
         "before answering unrelated work or ordinary tool-list questions",
         "Ask exactly one question, then stop and wait",
@@ -338,8 +595,9 @@ def render_helper_service_menu(project_root: Path, *, target_client: str) -> str
     if not isinstance(choices, list) or not choices:
         return ""
 
+    label = "OpenCode" if target_client == "opencode" else "Codex" if target_client == "codex" else target_client
     lines = [
-        "OpenCode first-prompt service menu:",
+        f"{label} first-prompt service menu:",
         'Ask exactly: "Which ContextForge services should I activate for this project?"',
         "Then show this numbered list of helper-discovered choices and stop for the user's reply:",
     ]
@@ -405,6 +663,48 @@ def main_for_events(
         project_root = detect_project_root(cwd)
         if project_root is None:
             return 0
+        record_latest_user_message(payload, project_root)
+        if event_name == "UserPromptSubmit":
+            onboarding_context = uncataloged_service_onboarding_context_for_prompt(
+                project_root,
+                _payload_prompt_text(payload),
+                target_client=target_client,
+            )
+            if onboarding_context:
+                output_context(event_name, onboarding_context, suppress_output=suppress_output)
+                return 0
+            governance_context = governance_context_for_prompt(
+                project_root,
+                _payload_prompt_text(payload),
+                target_client=target_client,
+            )
+            if governance_context:
+                output_context(event_name, governance_context, suppress_output=suppress_output)
+                return 0
+            state_context = state_readback_context_for_prompt(
+                project_root,
+                _payload_prompt_text(payload),
+                target_client=target_client,
+            )
+            if state_context:
+                output_context(event_name, state_context, suppress_output=suppress_output)
+                return 0
+            context7_context = context7_normal_use_context_for_prompt(
+                project_root,
+                _payload_prompt_text(payload),
+                target_client=target_client,
+            )
+            if context7_context:
+                output_context(event_name, context7_context, suppress_output=suppress_output)
+                return 0
+            continuation_context = project_init_continuation_context_for_prompt(
+                project_root,
+                _payload_prompt_text(payload),
+                target_client=target_client,
+            )
+            if continuation_context:
+                output_context(event_name, continuation_context, suppress_output=suppress_output)
+                return 0
         identity = project_identity(project_root)
         values = read_project_env(project_root)
         if not should_inject(project_root, values, target_client=target_client):
@@ -423,7 +723,7 @@ def main_for_events(
             if should_render_fresh_initialization_locally(args):
                 text = render_local_prompt(args)
                 service_menu = render_helper_service_menu(identity.root, target_client=target_client)
-                if target_client == "opencode" and service_menu:
+                if target_client in {"codex", "opencode"} and service_menu:
                     text = f"{service_menu}\n\n{text}"
             else:
                 try:

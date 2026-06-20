@@ -37,7 +37,7 @@ METHODOLOGY: dict[str, Any] = {
 USE_CASE_LOCALIZATION: dict[str, Any] = {
     "id": "use-case-1",
     "name": "project-local ContextForge service installation",
-    "target_clients": ["pi", "opencode"],
+    "target_clients": ["pi", "opencode", "codex"],
     "selected_service": "context7:canonical",
     "prompt_sequence": PROMPTS,
     "expected_visible_story": [
@@ -183,7 +183,7 @@ STEP_CRITERIA: list[dict[str, Any]] = [
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run and package Use Case 1 client dialogue evidence.")
-    parser.add_argument("--client", choices=["pi", "opencode"], required=True)
+    parser.add_argument("--client", choices=["pi", "opencode", "codex"], required=True)
     parser.add_argument("--session-id", default="")
     parser.add_argument("--timeout", type=int, default=180, help="Seconds to wait for each client response; must be >= 90 for gate runs.")
     parser.add_argument("--no-build", action="store_true")
@@ -206,7 +206,13 @@ def main(argv: list[str] | None = None) -> int:
     commands: list[dict[str, Any]] = []
 
     reset = run(
-        [sys.executable, str(harness_root / "scripts" / "reset-client-harness-state.py"), "--client", args.client, "--reset-home-volume"],
+        [
+            sys.executable,
+            str(harness_root / "scripts" / "reset-client-harness-state.py"),
+            "--client",
+            reset_client_name(args.client),
+            "--reset-home-volume",
+        ],
         cwd=repo_root,
         timeout=120,
         commands=commands,
@@ -214,29 +220,31 @@ def main(argv: list[str] | None = None) -> int:
     reset_json = parse_json_or_text(reset["stdout"])
 
     local_env = harness_root / "env" / "local-llama.env"
-    if not local_env.exists():
+    if args.client != "codex" and not local_env.exists():
         run([str(harness_root / "scripts" / "make-local-llama-env.sh")], cwd=harness_root, timeout=60, commands=commands)
 
     build_result = None
     if not args.no_build:
         build_result = run(
-            ["docker", "compose", "-f", str(harness_root / "compose.yml"), "build", "base", args.client],
+            ["docker", "compose", "-f", str(harness_root / "compose.yml"), "build", "base", build_service_name(args.client)],
             cwd=repo_root,
             timeout=600,
             commands=commands,
         )
 
+    launch_env_args = codex_empty_api_key_env_args() if args.client == "codex" else []
     launch_cmd = [
         "docker",
         "compose",
         "-f",
         str(harness_root / "compose.yml"),
         "run",
+        *launch_env_args,
         "--name",
         container,
         "--no-deps",
         "-d",
-        args.client,
+        compose_service_name(args.client),
         "sleep",
         "infinity",
     ]
@@ -275,6 +283,10 @@ def main(argv: list[str] | None = None) -> int:
         turn_results.append({"turn": index, "prompt": prompt, "path": str(turn_path), **result})
         if args.client == "opencode" and index == 1 and not args.session_id:
             discovered_session_id = extract_opencode_session_id(str(result.get("stdout") or ""))
+            if discovered_session_id:
+                session_id = discovered_session_id
+        if args.client == "codex" and index == 1 and not args.session_id:
+            discovered_session_id = extract_codex_session_id(str(result.get("stdout") or ""))
             if discovered_session_id:
                 session_id = discovered_session_id
 
@@ -327,7 +339,7 @@ def main(argv: list[str] | None = None) -> int:
         "--metadata",
         str(metadata_path),
     ]
-    if args.client == "pi" or session_id:
+    if args.client in {"pi", "codex"} or session_id:
         verifier_cmd.extend(["--session-id", session_id])
     verifier = run(verifier_cmd, cwd=repo_root, timeout=120, commands=commands)
     verifier_json = parse_json_or_text(verifier["stdout"])
@@ -390,11 +402,48 @@ def default_session_id(client: str, timestamp: str) -> str:
     compact = timestamp.lower().replace("t", "").replace("z", "")
     if client == "opencode":
         return f"ses_uc1{compact}"
+    if client == "codex":
+        return ""
     return f"uc1-pi-{timestamp}"
 
 
+def reset_client_name(client: str) -> str:
+    return "codex-cli" if client == "codex" else client
+
+
+def build_service_name(client: str) -> str:
+    return "codex-cli" if client == "codex" else client
+
+
+def compose_service_name(client: str) -> str:
+    return "codex-cli-authenticated" if client == "codex" else client
+
+
+def codex_empty_api_key_env_args() -> list[str]:
+    names = [
+        "OPENAI_API_KEY",
+        "CODEX_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+        "PERPLEXITY_API_KEY",
+        "EXA_API_KEY",
+        "CONTEXT7_API_KEY",
+    ]
+    args: list[str] = []
+    for name in names:
+        args.extend(["-e", f"{name}="])
+    return args
+
+
 def runtime_readback_command(client: str) -> str:
-    version_cmd = "pi --version || true" if client == "pi" else "opencode --version || true"
+    if client == "pi":
+        version_cmd = "pi --version || true"
+    elif client == "codex":
+        version_cmd = "codex --version; codex login status; codex mcp list --json || true"
+    else:
+        version_cmd = "opencode --version || true"
     return f"pwd; whoami; hostname; {version_cmd}; ls -la /workspace"
 
 
@@ -406,6 +455,11 @@ def target_client_command(client: str, session_id: str, prompt: str, *, create_s
             f"pi --provider local-llama-qwen --model qwen3.6-a3b --session-id {shlex.quote(session_id)} "
             f"--mode json -p {quoted_prompt}"
         )
+    if client == "codex":
+        codex_flags = "--json --dangerously-bypass-hook-trust --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check"
+        if session_id:
+            return f"cd /workspace && codex exec resume {codex_flags} {shlex.quote(session_id)} {quoted_prompt} </dev/null"
+        return f"cd /workspace && codex exec {codex_flags} {quoted_prompt} </dev/null"
     session_arg = "" if create_session else f"--session {shlex.quote(session_id)} "
     return (
         "cd /workspace && "
@@ -413,6 +467,21 @@ def target_client_command(client: str, session_id: str, prompt: str, *, create_s
         '--model "llama.cpp/${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}" --agent build --format json '
         f"{quoted_prompt}"
     )
+
+
+def extract_codex_session_id(text: str) -> str:
+    for line in text.splitlines():
+        if not line.strip().startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "thread.started":
+            thread_id = event.get("thread_id")
+            if isinstance(thread_id, str):
+                return thread_id
+    return ""
 
 
 def extract_opencode_session_id(text: str) -> str:
@@ -706,6 +775,8 @@ def build_structural_metadata(
             "reset_home_volume_requested": True,
             "virgin_workspace_reset_requested": True,
             "deterministic_checks_are_structural_only": True,
+            "reset_client": reset_client_name(client),
+            "compose_service": compose_service_name(client),
         },
         "reset_json": reset_json,
         "generation_report": generation_report,
@@ -829,6 +900,19 @@ def token_usage_events(stdout: str) -> list[dict[str, Any]]:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if event.get("type") == "event_msg" and isinstance(event.get("payload"), dict):
+            payload = event["payload"]
+            if payload.get("type") == "token_count" and isinstance(payload.get("info"), dict):
+                usage = payload["info"].get("last_token_usage")
+                if isinstance(usage, dict):
+                    usages.append(
+                        {
+                            "total": int(usage.get("total_tokens") or 0),
+                            "input": int(usage.get("input_tokens") or 0),
+                            "output": int(usage.get("output_tokens") or 0),
+                            "reasoning": int(usage.get("reasoning_output_tokens") or 0),
+                        }
+                    )
         if event.get("type") == "step_finish" and isinstance(event.get("part"), dict):
             tokens = event["part"].get("tokens")
             if isinstance(tokens, dict):
@@ -994,6 +1078,21 @@ def summarize_dialogue(turns: list[dict[str, Any]]) -> dict[str, Any]:
                 event = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if event.get("type") == "item.completed" and isinstance(event.get("item"), dict):
+                item = event["item"]
+                item_type = item.get("type")
+                if item_type == "agent_message":
+                    add_visible(turn_no, "assistant", str(item.get("text") or ""))
+                elif item_type == "mcp_tool_call":
+                    summary["tool_audit_index"].append(
+                        {
+                            "turn": turn_no,
+                            "tool": f"{item.get('server')}/{item.get('tool')}",
+                            "event": "mcp_tool_call",
+                            "status": item.get("status"),
+                            "is_error": bool(item.get("error")),
+                        }
+                    )
             if event.get("type") == "text" and isinstance(event.get("part"), dict):
                 text = str(event["part"].get("text") or "")
                 add_visible(turn_no, "assistant", text)

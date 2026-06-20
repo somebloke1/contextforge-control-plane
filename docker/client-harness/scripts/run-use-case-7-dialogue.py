@@ -27,7 +27,7 @@ def load_uc3_module() -> Any:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--client", choices=["pi", "opencode"], required=True)
+    parser.add_argument("--client", choices=["pi", "opencode", "codex"], required=True)
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--no-build", action="store_true")
     args = parser.parse_args(argv)
@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     setup_container = f"cf-uc7-{args.client}-setup-{timestamp.lower().replace('z', '')}"
     container = f"cf-uc7-{args.client}-runner-{timestamp.lower().replace('z', '')}"
-    session_id = f"uc7-{args.client}-{timestamp}" if args.client == "pi" else ""
+    session_id = f"uc7-pi-{timestamp}" if args.client == "pi" else ""
     commands: list[dict[str, Any]] = []
 
     reset = uc3.run(
@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
             sys.executable,
             str(harness_root / "scripts" / "reset-client-harness-state.py"),
             "--client",
-            args.client,
+            uc3.reset_client_name(args.client),
             "--reset-home-volume",
             "--evidence-dir",
             "docker/client-harness/evidence/use-case-7/prior",
@@ -62,22 +62,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     reset_json = uc3.parse_json_or_text(reset["stdout"])
 
-    if not (harness_root / "env" / "local-llama.env").exists():
+    if args.client != "codex" and not (harness_root / "env" / "local-llama.env").exists():
         uc3.run([str(harness_root / "scripts" / "make-local-llama-env.sh")], cwd=harness_root, timeout=60, commands=commands)
     if not args.no_build:
-        uc3.run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "build", "base", args.client], cwd=repo_root, timeout=600, commands=commands)
+        uc3.run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "build", "base", uc3.build_service_name(args.client)], cwd=repo_root, timeout=600, commands=commands)
 
-    uc3.run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "run", "--name", setup_container, "--no-deps", "-d", args.client, "sleep", "infinity"], cwd=repo_root, timeout=120, commands=commands)
+    launch_env_args = uc3.codex_empty_api_key_env_args() if args.client == "codex" else []
+    uc3.run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "run", *launch_env_args, "--name", setup_container, "--no-deps", "-d", uc3.compose_service_name(args.client), "sleep", "infinity"], cwd=repo_root, timeout=120, commands=commands)
     setup = uc3.run(["docker", "exec", setup_container, "bash", "-lc", uc3.initialized_fixture_command(args.client)], cwd=repo_root, timeout=180, commands=commands)
     uc3.run(["docker", "rm", "-f", setup_container], cwd=repo_root, timeout=60, commands=commands)
     uc3.reset_home_only(args.client, repo_root, commands)
 
-    launch = uc3.run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "run", "--name", container, "--no-deps", "-d", args.client, "sleep", "infinity"], cwd=repo_root, timeout=120, commands=commands)
+    launch = uc3.run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "run", *launch_env_args, "--name", container, "--no-deps", "-d", uc3.compose_service_name(args.client), "sleep", "infinity"], cwd=repo_root, timeout=120, commands=commands)
     runtime = uc3.run(["docker", "exec", container, "bash", "-lc", uc3.runtime_readback_command(args.client)], cwd=repo_root, timeout=120, commands=commands)
     fixture = uc3.run(["docker", "exec", container, "bash", "-lc", uc3.fixture_readback_command(args.client)], cwd=repo_root, timeout=120, commands=commands)
     turn = uc3.run(["docker", "exec", container, "bash", "-lc", uc3.target_client_command(args.client, session_id, PROMPT)], cwd=repo_root, timeout=args.timeout, commands=commands)
     if args.client == "opencode":
         session_id = uc3.extract_opencode_session_id(turn.get("stdout") or "")
+    if args.client == "codex":
+        session_id = uc3.extract_codex_session_id(turn.get("stdout") or "")
     generation_report = uc3.build_generation_report(client=args.client, session_id=session_id, prompt=PROMPT, turn=turn)
 
     combined_path = output_root / f"{args.client}-use-case-7-evidence-{timestamp}.md"
@@ -239,6 +242,8 @@ def build_structural_metadata(
             "reset_home_volume_requested": True,
             "virgin_workspace_reset_requested": True,
             "deterministic_checks_are_structural_only": True,
+            "reset_client": "codex-cli" if client == "codex" else client,
+            "compose_service": "codex-cli-authenticated" if client == "codex" else client,
         },
         "reset_json": reset_json,
         "generation_report": generation_report,

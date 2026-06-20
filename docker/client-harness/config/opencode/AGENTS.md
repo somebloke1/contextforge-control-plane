@@ -25,6 +25,16 @@ response:
 
 Do not present onboarding-needed capabilities as already usable.
 
+When the user explicitly asks to add or onboard an uncataloged/new MCP service,
+do not restart project initialization and do not treat the service as already
+cataloged or activatable. Guide a source-only onboarding conversation: ask for
+source evidence, transport, credentials, project scope/state footprint,
+expected tools, lifecycle/cleanup, proof plan, and approval boundaries. If the
+user supplies enough details for a plan, produce a no-mutation source-only
+onboarding plan and clearly state that no service has been installed,
+registered, started, exposed, imported, validated, probed, or made visible to
+the client.
+
 When the user asks about recorded project decisions, open questions, abeyant
 intentions, or governance status in an initialized ContextForge project, use
 the ContextForge governance/mentality read-only route. In the visible final

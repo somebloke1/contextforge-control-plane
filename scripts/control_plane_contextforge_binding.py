@@ -85,6 +85,11 @@ OPENCODE_WRAPPER_SCRIPT_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT"
 OPENCODE_WRAPPER_CONFIG_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV"
 OPENCODE_WRAPPER_BASE_URL_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL"
 OPENCODE_WRAPPER_TOKEN_CACHE_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE"
+CODEX_WRAPPER_PYTHON_ENV = "CONTEXTFORGE_CODEX_WRAPPER_PYTHON"
+CODEX_WRAPPER_SCRIPT_ENV = "CONTEXTFORGE_CODEX_WRAPPER_SCRIPT"
+CODEX_WRAPPER_CONFIG_ENV = "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV"
+CODEX_WRAPPER_BASE_URL_ENV = "CONTEXTFORGE_CODEX_WRAPPER_BASE_URL"
+CODEX_WRAPPER_TOKEN_CACHE_ENV = "CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE"
 PROJECT_INIT_CLIENT_ADAPTERS: dict[str, dict[str, Any]] = {
     "codex": {
         "client_type": "codex",
@@ -209,15 +214,32 @@ def build_project_init_codex_binding_block(service: Mapping[str, Any]) -> str:
     service_binding = str(service.get("service_binding") or service.get("service_family") or alias)
     _require("codex_alias", alias)
     _require("virtual_server", virtual_server)
+    wrapper_python = os.environ.get(CODEX_WRAPPER_PYTHON_ENV) or str(PYTHON_PATH)
+    wrapper_script = os.environ.get(CODEX_WRAPPER_SCRIPT_ENV) or str(WRAPPER_PATH)
+    environment = {
+        "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
+        "MCP_WRAPPER_LOG_LEVEL": "INFO",
+    }
+    config_env = os.environ.get(CODEX_WRAPPER_CONFIG_ENV)
+    if config_env:
+        environment["CONTEXTFORGE_CONFIG_ENV"] = config_env
+    base_url = os.environ.get(CODEX_WRAPPER_BASE_URL_ENV)
+    if base_url:
+        environment["CONTEXTFORGE_BASE_URL"] = base_url
+    token_cache = os.environ.get(CODEX_WRAPPER_TOKEN_CACHE_ENV)
+    if token_cache:
+        environment["CONTEXTFORGE_TOKEN_CACHE"] = token_cache
+        environment["CONTEXTFORGE_TOKEN_LOCK"] = f"{token_cache}.lock"
+    env_parts = ", ".join(f'{key} = "{value}"' for key, value in environment.items())
     return (
         f"{PROJECT_INIT_OWNER_MARKER}\n"
         f"{PROJECT_INIT_BINDING_MARKER.format(service_binding=service_binding)}\n"
         f"{PROJECT_INIT_SERVER_MARKER.format(virtual_server=virtual_server)}\n"
         f"[mcp_servers.{alias}]\n"
-        f"command = \"{PYTHON_PATH}\"\n"
-        f"args = [\"{WRAPPER_PATH}\", \"{virtual_server}\"]\n"
+        f"command = \"{wrapper_python}\"\n"
+        f"args = [\"{wrapper_script}\", \"{virtual_server}\"]\n"
         f"cwd = \"{REPO_ROOT}\"\n"
-        "env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = \"300\", MCP_WRAPPER_LOG_LEVEL = \"INFO\" }\n"
+        f"env = {{ {env_parts} }}\n"
         "startup_timeout_ms = 60000\n"
         "tool_timeout_ms = 120000\n"
     )

@@ -1,7 +1,8 @@
 # Use Case 1 End-to-End Agent Gate
 
 This gate applies to PR #271 and the first cumulative #247 service slice:
-`context7:canonical` through Pi client Docker and OpenCode client Docker.
+`context7:canonical` through Pi client Docker, OpenCode client Docker, and
+Codex client Docker.
 
 Use Case 1 is a localization of the reusable dialogue-evaluation method in
 `docker/client-harness/DIALOGUE_EVALUATION_METHOD.md`. That method owns the
@@ -12,7 +13,7 @@ localization: target clients, prompt sequence, expected project-init story,
 forbidden shortcuts, scoring criteria, and handoff requirements.
 
 Human acceptance must not be requested until this gate has passed with full
-delegated code-assistant dialogue evidence for both clients. Use the project
+code-assistant dialogue evidence for every target client in scope. Use the project
 skill `.codex/skills/code-assistant-dialogue-validation/SKILL.md` for that
 lease. Source tests, direct helper calls, backend probes, smoke scripts,
 evidence verifiers, and hand-shaped payloads are useful diagnostics,
@@ -24,6 +25,7 @@ The preferred Use Case 1 runner is:
 ```sh
 python3 docker/client-harness/scripts/run-use-case-1-dialogue.py --client pi
 python3 docker/client-harness/scripts/run-use-case-1-dialogue.py --client opencode
+python3 docker/client-harness/scripts/run-use-case-1-dialogue.py --client codex
 ```
 
 The runner owns deterministic setup, minimal CLI prompt issuance, raw evidence
@@ -36,7 +38,8 @@ the use-case story.
 
 Use Case 1 unique requirements:
 
-- target clients: Pi client Docker and OpenCode client Docker;
+- target clients: Pi client Docker, OpenCode client Docker, and Codex client
+  Docker;
 - selected service: `context7:canonical`;
 - prompt sequence: `hello`, `1`, `approve`;
 - expected user-facing story: service list, context7 selection, installation
@@ -63,17 +66,24 @@ Use Case 1 unique requirements:
    `docker/client-harness/scripts/run-use-case-1-dialogue.py --client opencode`
    unless the controller names a newer runner. The agent must evaluate the
    returned package, not invent a different prompt story.
-5. Verify that both runner packages include raw transcripts, verifier JSON,
+5. Delegate a Codex dialogue-evaluation lease to a dev agent, or when subagent
+   auth is unavailable, run a contained OAuth-backed Codex Docker evaluator
+   against the generated package and record that fallback explicitly. The
+   runner command is
+   `docker/client-harness/scripts/run-use-case-1-dialogue.py --client codex`.
+   Codex evaluation must use the authenticated Docker image, OAuth/ChatGPT
+   subscription auth, no API-key env vars, and model `gpt-5.4-mini`.
+6. Verify that all runner packages include raw transcripts, verifier JSON,
    per-step criteria, scoring weights, fatal failure criteria, and a validator
    narrative.
-6. If any required outcome fails, remediate the source/harness/prompt defect,
+7. If any required outcome fails, remediate the source/harness/prompt defect,
    rerun the affected source checks, rebuild changed images, rerun the full
    affected agent session from the command line, and rerun the verifier.
-7. Repeat testing -> remediation -> testing until both clients pass every
+8. Repeat testing -> remediation -> testing until all target clients pass every
    expected outcome in observed agent interaction evidence.
-8. Only after all prior steps pass, ask for human acceptance.
+9. Only after all prior steps pass, ask for human acceptance.
 
-If either client fails, the branch remains in agent repair. Do not ask the
+If any target client fails, the branch remains in agent repair. Do not ask the
 operator to discover the next failure by hand.
 
 This is a loop, not a one-shot checklist. A partial pass followed by a later
@@ -132,7 +142,7 @@ The validator must not use pattern matching or residue-delta inference as a
 substitute for either deterministic reset or semantic interaction judgment.
 
 For Docker client harness evaluation, the preferred reset primitive is
-`python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode> --reset-home-volume`.
+`python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode|codex-cli> --reset-home-volume`.
 The script preserves prior workspace artifacts under
 `docker/client-harness/evidence/use-case-1/prior/`, resets only the selected
 client's container/home state, recreates the allowlisted `.gitkeep` workspace

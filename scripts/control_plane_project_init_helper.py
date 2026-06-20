@@ -6,7 +6,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import secrets
+import shutil
 from argparse import Namespace
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import redirect_stdout
@@ -43,6 +45,16 @@ HELPER_READY_STATES = frozenset(
 )
 MUTATING_CONSENT_CLASSES = ("project_local_config_write", "project_state_write", "service_provision")
 PROJECT_LOCAL_CONSENT_CLASSES = ("project_local_config_write", "project_state_write")
+
+
+def _env_truthy(name: str) -> bool:
+    return str(os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _serena_no_systemd_requested_or_required() -> bool:
+    return _env_truthy("CONTEXTFORGE_SERENA_NO_SYSTEMD") or shutil.which("systemctl") is None
+
+
 PI_PROJECT_LOCAL_CONSENT_CLASSES = ("project_state_write",)
 SUPPORTED_CLIENTS = frozenset({"codex", "gemini", "opencode", "pi"})
 _PENDING_CHALLENGES: dict[str, dict[str, Any]] = {}
@@ -347,6 +359,7 @@ def list_available_capabilities(
     contextforge_servers: Iterable[dict[str, Any]] | None = None,
     server_instances_root: str | Path | None = None,
 ) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
     readiness = helper_readiness(project_root=project_root, client_type=client_type)
     inspection = project_state.inspect_project_init_state(project_root, require_workspace=True)
     if inspection.get("lifecycle_status") == "invalid_repairable":
@@ -370,6 +383,19 @@ def list_available_capabilities(
             "root_attestation": readiness["root_attestation"],
             **resume,
         }
+    existing_state: dict[str, Any] | None = None
+    try:
+        existing_state = project_state.load_state(root)
+    except Exception:
+        existing_state = None
+    if isinstance(existing_state, Mapping):
+        alignment_offer = _alignment_import_offer(root, existing_state, client_type=client_type)
+        if alignment_offer is not None:
+            return {
+                "client_type": client_type,
+                "root_attestation": readiness["root_attestation"],
+                **alignment_offer,
+            }
     services = discover_contextforge_hosted_services(
         project_root=project_root,
         contextforge_servers=contextforge_servers,
@@ -401,6 +427,116 @@ def list_available_capabilities(
             "client configs are not service identity",
             "no backend installation, registry mutation, or global trust change",
         ],
+    }
+
+
+def _alignment_import_offer(
+    root: Path,
+    state: Mapping[str, Any],
+    *,
+    client_type: str,
+) -> dict[str, Any] | None:
+    services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
+    alignment_services: list[dict[str, Any]] = []
+    missing_actions: list[dict[str, Any]] = []
+    for binding_id, service_value in services.items():
+        if not isinstance(service_value, Mapping):
+            continue
+        service = dict(service_value)
+        service.setdefault("service_binding", str(binding_id))
+        service_binding = str(service.get("service_binding") or binding_id)
+        if _service_skipped_or_unavailable(service):
+            continue
+        target_clients = service.get("target_clients") if isinstance(service.get("target_clients"), Mapping) else {}
+        target_client_state = target_clients.get(client_type) if isinstance(target_clients, Mapping) else None
+        if isinstance(target_client_state, Mapping):
+            continue
+        candidate = _candidate(service, client_type=client_type)
+        candidate["project_service_state"] = "present"
+        candidate["target_client_projection_status"] = "missing"
+        candidate["target_client_state"] = {"status": "not_recorded"}
+        candidate["available_to_target_client"] = False
+        candidate["user_visible_effect"] = (
+            f"Import this project's existing {candidate['display_name']} binding for {client_type} "
+            "without provisioning a new project service instance."
+        )
+        candidate["recommended_action"] = _missing_projection_action(service_binding, client_type)
+        alignment_services.append(candidate)
+        missing_actions.append(candidate["recommended_action"])
+
+    if not alignment_services:
+        return None
+    project_service_bindings = [str(service["service_binding"]) for service in alignment_services]
+    project_service_text = ", ".join(project_service_bindings)
+    prompt_client = {
+        "codex": "Codex",
+        "gemini": "Gemini",
+        "opencode": "OpenCode",
+        "pi": "Pi",
+    }.get(client_type, client_type)
+    return {
+        "status": "alignment_import_offer",
+        "alignment_import_offer": {
+            "mode": "alignment_import",
+            "source": "project_state",
+            "target_client": client_type,
+            "project_root": str(root),
+            "project_service_bindings": project_service_bindings,
+            "missing_target_client_projection": missing_actions,
+            "service_count": len(alignment_services),
+        },
+        "available_services": alignment_services,
+        "assistant_visible_response": (
+            f"ContextForge state for {str(root)} already contains project services: {project_service_text}. "
+            f"Missing target-client projections for {prompt_client}: {project_service_text}. "
+            "This is a read-only alignment/import offer; no project service instance is duplicated or provisioned here. "
+            f"Import this project's existing ContextForge services for {prompt_client}?"
+        ),
+        "next_turn": next_turn(
+            question_id="align-existing-project-services",
+            prompt=(
+                f"Project services are already present. Import this project's existing ContextForge services for {prompt_client}?"
+            ),
+            choices=[
+                {
+                    "id": service["service_binding"],
+                    "label": service["display_name"],
+                    "activation_class": service["activation_class"],
+                    "effect": service["user_visible_effect"],
+                }
+                for service in alignment_services
+            ]
+            + [{"id": "none", "label": "None", "effect": "Record no service alignment."}],
+            allowed_response_shape="list service ids, selection numbers, or choose none",
+            selection_mode="multi",
+        ),
+        "non_actions": [
+            "discovery is read-only",
+            "project service identities are not duplicated for client aliases",
+            "no backend installation, registry mutation, or global trust change",
+        ],
+    }
+
+
+def _service_skipped_or_unavailable(service: Mapping[str, Any]) -> bool:
+    status = str(service.get("status") or "")
+    if status in {"declined", "deferred", "disabled", "blocked", "unavailable"}:
+        return True
+    lifecycle = service.get("lifecycle") if isinstance(service.get("lifecycle"), Mapping) else {}
+    if str(lifecycle.get("status") or "") in {"declined", "deferred", "disabled", "blocked", "unavailable"}:
+        return True
+    return False
+
+
+def _missing_projection_action(service_binding: str, client_type: str) -> dict[str, str]:
+    return {
+        "action": "align_target_client_to_existing_project_service",
+        "target_client": client_type,
+        "service_binding": service_binding,
+        "boundary": (
+            f"Align/import {client_type} to the existing project service instance; "
+            "do not create a new project service instance unless explicitly approved."
+        ),
     }
 
 
@@ -535,6 +671,7 @@ def propose_project_init(
         client_type=client_type,
         state_snapshot=state_snapshot,
     )
+    required_inputs = _normalized_required_inputs(inputs or {}, services)
     plan_seed = {
         "schema_uri": HELPER_PLAN_SCHEMA_URI,
         "workflow": "project_init",
@@ -542,7 +679,7 @@ def propose_project_init(
         "project_root": str(root),
         "project_root_hash": project_state.project_root_hash(root),
         "selected_services": services,
-        "required_inputs": dict(inputs or {}),
+        "required_inputs": required_inputs,
         "required_consent_classes": _required_consent_classes(services, client_type=client_type),
         "skipped_services": skipped_services,
         "stale_plan_inputs": _stale_plan_inputs(
@@ -770,6 +907,8 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
                 "do not mutate user-global config or trust",
             ],
         }
+    if job.get("status") == "installed" and _job_reload_acknowledged(job, reload_requirement or {}):
+        return None
     return {
         "status": "installed_reload_required",
         "resume_reason": "project init already wrote project-local config and state; selected tools are installed",
@@ -832,11 +971,11 @@ def record_project_init_client_reload(
     client_state.update(
         {
             "client_type": client_type,
-            "status": "validation_pending",
+            "status": "validation_pending" if validation_mode else "installed",
             "current_job_id": str(updated_job["job_id"]),
             "selected_service_ids": [str(item) for item in updated_job.get("selected_service_ids") or [] if item],
             "selected_service_bindings": [str(item) for item in updated_job.get("selected_service_bindings") or [] if item],
-            "validation_status": "pending",
+            "validation_status": "pending" if validation_mode else "installed",
             "reload_status": "reload_acknowledged",
             "updated_at": acknowledged_at,
             "last_plan_id": updated_job.get("plan_id"),
@@ -896,7 +1035,7 @@ def _post_reload_validation_continuation(
     validation_mode: str | None,
 ) -> dict[str, Any]:
     if validation_mode is None:
-        return {"next_turn": validation_choice_turn()}
+        return {}
     if validation_mode == "presume_working":
         return {
             "next_action": {
@@ -2010,6 +2149,67 @@ def apply_approved_project_init(
     return result
 
 
+def record_project_init_service_decision(
+    *,
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any] | str],
+    decision_state: str,
+    client_type: str = "codex",
+    source_plan_id: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
+    if decision_state not in {"declined", "deferred"}:
+        raise ProjectInitHelperError(f"unsupported project-init decision state: {decision_state}")
+    current_state = project_state.read_or_default(root)
+    services = _resolve_selected_services(
+        root,
+        selected_services,
+        client_type=client_type,
+    )
+    next_state = project_state.apply_project_init_decisions_to_state(
+        current_state,
+        [dict(service) for service in services],
+        decision_state=decision_state,
+        target_client=client_type,
+        source_plan_id=source_plan_id,
+        updated_by="control_plane_project_init_helper",
+    )
+    written_state = next_state
+    if not dry_run:
+        written_state = project_state.write_state_atomic(
+            root,
+            next_state,
+            updated_by="control_plane_project_init_helper",
+        )
+    bindings = [str(service.get("service_binding") or "") for service in services]
+    state_word = "declined" if decision_state == "declined" else "deferred"
+    service_text = ", ".join(bindings)
+    return {
+        "ok": True,
+        "status": f"service_{state_word}",
+        "project_root": str(root),
+        "client_type": client_type,
+        "decision_state": decision_state,
+        "selected_service_bindings": bindings,
+        "state_revision": written_state["meta"]["revision"],
+        "dry_run": dry_run,
+        "assistant_visible_response": (
+            f"Recorded {state_word} for {service_text} in this project's ContextForge state. "
+            "It was not installed or imported as an active client tool. "
+            "You can continue with any already available ContextForge capabilities or choose other services later."
+        ),
+        "non_actions": [
+            "no active service import",
+            _no_user_global_mutation_label(client_type),
+            "no project-local client config write",
+            "no ContextForge registry or catalog mutation",
+            "no backend install or restart",
+            "no secret or token material write",
+        ],
+    }
+
+
 def _services_with_project_scoped_provisioning_results(
     services: Sequence[Mapping[str, Any]],
     provisioning_results: Sequence[Mapping[str, Any]],
@@ -2092,6 +2292,7 @@ def _run_serena_project_provisioning(
         require_workspace=True,
         replace_existing_serena_config=False,
         language=language,
+        no_systemd=_serena_no_systemd_requested_or_required(),
         verify=False,
         app_server=False,
         write_codex_config=False,
@@ -2130,7 +2331,15 @@ def _compact_json_stdout(text: str) -> dict[str, Any] | str:
     if isinstance(parsed, dict):
         return {
             key: parsed.get(key)
-            for key in ("project_root", "instance_slug", "server_name", "port", "selected_language", "language_source")
+            for key in (
+                "project_root",
+                "instance_slug",
+                "server_name",
+                "port",
+                "selected_language",
+                "language_source",
+                "provisioning_mode",
+            )
             if key in parsed
         }
     return stripped[-4000:]
@@ -2889,15 +3098,35 @@ def _service_input_value(inputs: Mapping[str, Any], service: Mapping[str, Any], 
     if binding and ":" in binding:
         candidates.append(binding.split(":", 1)[0])
 
-    dotted_keys = [f"{candidate}.{input_name}" for candidate in candidates if candidate]
-    for key in dotted_keys:
+    input_keys = [
+        key
+        for candidate in candidates
+        if candidate
+        for key in (f"{candidate}.{input_name}", f"{candidate}-{input_name}", f"{candidate}_{input_name}")
+    ]
+    for key in input_keys:
         if inputs.get(key):
             return inputs.get(key)
     for key in candidates:
         nested = inputs.get(key)
         if isinstance(nested, Mapping) and nested.get(input_name):
             return nested.get(input_name)
+        if nested and input_name == "language":
+            return nested
     return inputs.get(input_name)
+
+
+def _normalized_required_inputs(inputs: Mapping[str, Any], services: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    normalized = dict(inputs or {})
+    for service in services:
+        if service["activation_class"] != "client_local_project_scoped":
+            continue
+        if not str(service["service_family"]).startswith("serena"):
+            continue
+        language = _service_input_value(inputs, service, "language")
+        if language:
+            normalized[str(service["service_binding"])] = {"language": str(language)}
+    return normalized
 
 
 def _required_consent_classes(services: Sequence[Mapping[str, Any]], *, client_type: str) -> list[str]:

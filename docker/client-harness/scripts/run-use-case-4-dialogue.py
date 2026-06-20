@@ -21,7 +21,7 @@ PROMPT = "what decisions are recorded for this project?"
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--client", choices=["pi", "opencode"], required=True)
+    parser.add_argument("--client", choices=["pi", "opencode", "codex"], required=True)
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--no-build", action="store_true")
     args = parser.parse_args(argv)
@@ -36,34 +36,45 @@ def main(argv: list[str] | None = None) -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     setup_container = f"cf-uc4-{args.client}-setup-{timestamp.lower().replace('z', '')}"
     container = f"cf-uc4-{args.client}-runner-{timestamp.lower().replace('z', '')}"
-    session_id = f"uc4-{args.client}-{timestamp}" if args.client == "pi" else ""
+    session_id = default_session_id(args.client, timestamp)
     commands: list[dict[str, Any]] = []
 
     reset = run(
-        [sys.executable, str(harness_root / "scripts" / "reset-client-harness-state.py"), "--client", args.client, "--reset-home-volume", "--evidence-dir", "docker/client-harness/evidence/use-case-4/prior"],
+        [
+            sys.executable,
+            str(harness_root / "scripts" / "reset-client-harness-state.py"),
+            "--client",
+            reset_client_name(args.client),
+            "--reset-home-volume",
+            "--evidence-dir",
+            "docker/client-harness/evidence/use-case-4/prior",
+        ],
         cwd=repo_root,
         timeout=120,
         commands=commands,
     )
     reset_json = parse_json_or_text(reset["stdout"])
 
-    if not (harness_root / "env" / "local-llama.env").exists():
+    if args.client != "codex" and not (harness_root / "env" / "local-llama.env").exists():
         run([str(harness_root / "scripts" / "make-local-llama-env.sh")], cwd=harness_root, timeout=60, commands=commands)
     if not args.no_build:
-        run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "build", "base", args.client], cwd=repo_root, timeout=600, commands=commands)
+        run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "build", "base", build_service_name(args.client)], cwd=repo_root, timeout=600, commands=commands)
 
-    run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "run", "--name", setup_container, "--no-deps", "-d", args.client, "sleep", "infinity"], cwd=repo_root, timeout=120, commands=commands)
+    launch_env_args = codex_empty_api_key_env_args() if args.client == "codex" else []
+    run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "run", *launch_env_args, "--name", setup_container, "--no-deps", "-d", compose_service_name(args.client), "sleep", "infinity"], cwd=repo_root, timeout=120, commands=commands)
     setup = run(["docker", "exec", setup_container, "bash", "-lc", initialized_fixture_command(args.client)], cwd=repo_root, timeout=180, commands=commands)
     run(["docker", "rm", "-f", setup_container], cwd=repo_root, timeout=60, commands=commands)
     reset_home_only(args.client, repo_root, commands)
 
-    launch = run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "run", "--name", container, "--no-deps", "-d", args.client, "sleep", "infinity"], cwd=repo_root, timeout=120, commands=commands)
+    launch = run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "run", *launch_env_args, "--name", container, "--no-deps", "-d", compose_service_name(args.client), "sleep", "infinity"], cwd=repo_root, timeout=120, commands=commands)
     runtime = run(["docker", "exec", container, "bash", "-lc", runtime_readback_command(args.client)], cwd=repo_root, timeout=120, commands=commands)
     fixture = run(["docker", "exec", container, "bash", "-lc", fixture_readback_command(args.client)], cwd=repo_root, timeout=120, commands=commands)
     prompt_cmd = target_client_command(args.client, session_id, PROMPT)
     turn = run(["docker", "exec", container, "bash", "-lc", prompt_cmd], cwd=repo_root, timeout=args.timeout, commands=commands)
     if args.client == "opencode":
         session_id = extract_opencode_session_id(turn.get("stdout") or "")
+    if args.client == "codex":
+        session_id = extract_codex_session_id(turn.get("stdout") or "")
     generation_report = build_generation_report(
         client=args.client,
         session_id=session_id,
@@ -190,7 +201,45 @@ def helper_python_path(client: str) -> str:
     return "/opt/contextforge-helper-venv/bin/python"
 
 
+def default_session_id(client: str, timestamp: str) -> str:
+    if client == "pi":
+        return f"uc4-pi-{timestamp}"
+    return ""
+
+
+def reset_client_name(client: str) -> str:
+    return "codex-cli" if client == "codex" else client
+
+
+def build_service_name(client: str) -> str:
+    return "codex-cli" if client == "codex" else client
+
+
+def compose_service_name(client: str) -> str:
+    return "codex-cli-authenticated" if client == "codex" else client
+
+
+def codex_empty_api_key_env_args() -> list[str]:
+    names = [
+        "OPENAI_API_KEY",
+        "CODEX_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+        "PERPLEXITY_API_KEY",
+        "EXA_API_KEY",
+        "CONTEXT7_API_KEY",
+    ]
+    args: list[str] = []
+    for name in names:
+        args.extend(["-e", f"{name}="])
+    return args
+
+
 def reset_home_only(client: str, repo_root: Path, commands: list[dict[str, Any]]) -> None:
+    if client == "codex":
+        return
     volume = f"contextforge-client-harness_{client}-home"
     ids_result = run(["docker", "ps", "-aq", "--filter", f"volume={volume}"], cwd=repo_root, timeout=60, commands=commands)
     ids = [line.strip() for line in str(ids_result.get("stdout") or "").splitlines() if line.strip()]
@@ -200,13 +249,20 @@ def reset_home_only(client: str, repo_root: Path, commands: list[dict[str, Any]]
 
 
 def runtime_readback_command(client: str) -> str:
-    version = "pi --version || true" if client == "pi" else "opencode --version || true"
+    if client == "pi":
+        version = "pi --version || true"
+    elif client == "codex":
+        version = "codex --version; codex login status; codex mcp list --json || true"
+    else:
+        version = "opencode --version || true"
     return f"pwd; whoami; hostname; {version}; ls -la /workspace"
 
 
 def fixture_readback_command(client: str) -> str:
     if client == "opencode":
         return "pwd; sed -n '1,220p' /workspace/.project/context_forge_state.json; sed -n '1,120p' /workspace/opencode.json"
+    if client == "codex":
+        return "pwd; sed -n '1,220p' /workspace/.project/context_forge_state.json; sed -n '1,180p' /workspace/.codex/config.toml"
     return "pwd; sed -n '1,220p' /workspace/.project/context_forge_state.json"
 
 
@@ -214,6 +270,11 @@ def target_client_command(client: str, session_id: str, prompt: str) -> str:
     quoted = shlex.quote(prompt)
     if client == "pi":
         return f"cd /workspace && pi --provider local-llama-qwen --model qwen3.6-a3b --session-id {shlex.quote(session_id)} --mode json -p {quoted}"
+    if client == "codex":
+        codex_flags = "--json --dangerously-bypass-hook-trust --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check"
+        if session_id:
+            return f"cd /workspace && codex exec resume {codex_flags} {shlex.quote(session_id)} {quoted} </dev/null"
+        return f"cd /workspace && codex exec {codex_flags} {quoted} </dev/null"
     return 'cd /workspace && opencode run --dangerously-skip-permissions --model "llama.cpp/${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}" --agent build --format json ' + quoted
 
 
@@ -248,6 +309,21 @@ def extract_opencode_session_id(text: str) -> str:
     return match.group(1) if match else ""
 
 
+def extract_codex_session_id(text: str) -> str:
+    for line in text.splitlines():
+        if not line.strip().startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "thread.started":
+            thread_id = event.get("thread_id")
+            if isinstance(thread_id, str):
+                return thread_id
+    return ""
+
+
 def command_block(result: dict[str, Any]) -> str:
     return "\n".join([f"COMMAND: {result['command_text']}", f"CWD: {result['cwd']}", f"RETURNCODE: {result['returncode']}", f"TIMEOUT: {str(result['timeout']).lower()}", "", "STDOUT:", str(result.get("stdout") or ""), "", "STDERR:", str(result.get("stderr") or ""), ""])
 
@@ -256,47 +332,11 @@ def build_generation_report(*, client: str, session_id: str, prompt: str, turn: 
     stdout = str(turn.get("stdout") or "")
     stderr = str(turn.get("stderr") or "")
     event_count = sum(1 for line in stdout.splitlines() if line.strip().startswith("{"))
-    tool_event_count = sum(
-        1
-        for line in stdout.splitlines()
-        if '"tool' in line.lower() or '"type":"tool_' in line.replace(" ", "").lower()
-    )
-    assistant_text_chars = 0
-    assistant_generation_count = 0
-    token_usages: list[dict[str, Any]] = []
-    seen_assistant_messages: set[str] = set()
-    for line in stdout.splitlines():
-        if not line.strip().startswith("{"):
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if event.get("type") == "text" and isinstance(event.get("part"), dict):
-            text = str(event["part"].get("text") or "")
-            if text:
-                assistant_generation_count += 1
-                assistant_text_chars += len(text)
-        if event.get("type") in {"message_end", "turn_end"} and isinstance(event.get("message"), dict):
-            message = event["message"]
-            if message.get("role") == "assistant":
-                marker = assistant_message_marker(message)
-                if marker not in seen_assistant_messages:
-                    seen_assistant_messages.add(marker)
-                    texts = assistant_message_texts(message)
-                    text_len = sum(len(text) for text in texts)
-                    if text_len:
-                        assistant_generation_count += len(texts)
-                        assistant_text_chars += text_len
-                    usage = normalize_token_usage(message.get("usage"))
-                    if usage:
-                        token_usages.append(usage)
-        if event.get("type") == "step_finish" and isinstance(event.get("part"), dict):
-            tokens = event["part"].get("tokens")
-            if isinstance(tokens, dict):
-                usage = normalize_token_usage(tokens)
-                if usage:
-                    token_usages.append(usage)
+    surfaces = extract_generation_surfaces(stdout)
+    assistant_text_chars = surfaces["assistant_text_chars"]
+    assistant_generation_count = surfaces["assistant_generation_count"]
+    token_usages = surfaces["token_usages"]
+    tool_event_count = surfaces["tool_event_count"]
     token_totals = sum_token_usages(token_usages)
     step = {
         "turn": 1,
@@ -336,6 +376,80 @@ def build_generation_report(*, client: str, session_id: str, prompt: str, turn: 
             "Agent evaluator must score the step generation and total session. "
             "These counts are reported evidence, not semantic pass/fail."
         ),
+    }
+
+
+def extract_generation_surfaces(stdout: str) -> dict[str, Any]:
+    assistant_text_chars = 0
+    assistant_generation_count = 0
+    tool_event_count = 0
+    token_usages: list[dict[str, int]] = []
+    seen_assistant_messages: set[str] = set()
+    for line in stdout.splitlines():
+        if not line.strip().startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        event_type = event.get("type")
+        if event_type == "item.completed" and isinstance(event.get("item"), dict):
+            item = event["item"]
+            item_type = item.get("type")
+            if item_type == "agent_message":
+                text = str(item.get("text") or "")
+                if text:
+                    assistant_generation_count += 1
+                    assistant_text_chars += len(text)
+            elif item_type == "mcp_tool_call":
+                tool_event_count += 1
+        if event_type == "text" and isinstance(event.get("part"), dict):
+            text = str(event["part"].get("text") or "")
+            if text:
+                assistant_generation_count += 1
+                assistant_text_chars += len(text)
+        if event_type == "tool_use":
+            tool_event_count += 1
+        if event_type in {"tool_execution_start", "tool_execution_end"}:
+            tool_event_count += 1
+        if event_type in {"message_end", "turn_end"} and isinstance(event.get("message"), dict):
+            message = event["message"]
+            if message.get("role") == "assistant":
+                marker = assistant_message_marker(message)
+                if marker not in seen_assistant_messages:
+                    seen_assistant_messages.add(marker)
+                    texts = assistant_message_texts(message)
+                    text_len = sum(len(text) for text in texts)
+                    if text_len:
+                        assistant_generation_count += len(texts)
+                        assistant_text_chars += text_len
+                    usage = normalize_token_usage(message.get("usage"))
+                    if usage:
+                        token_usages.append(usage)
+        if event_type == "event_msg" and isinstance(event.get("payload"), dict):
+            payload = event["payload"]
+            if payload.get("type") == "token_count" and isinstance(payload.get("info"), dict):
+                usage = payload["info"].get("last_token_usage")
+                if isinstance(usage, dict):
+                    token_usages.append(
+                        {
+                            "total": int(usage.get("total_tokens") or 0),
+                            "input": int(usage.get("input_tokens") or 0),
+                            "output": int(usage.get("output_tokens") or 0),
+                            "reasoning": int(usage.get("reasoning_output_tokens") or 0),
+                        }
+                    )
+        if event_type == "step_finish" and isinstance(event.get("part"), dict):
+            tokens = event["part"].get("tokens")
+            if isinstance(tokens, dict):
+                usage = normalize_token_usage(tokens)
+                if usage:
+                    token_usages.append(usage)
+    return {
+        "assistant_text_chars": assistant_text_chars,
+        "assistant_generation_count": assistant_generation_count,
+        "tool_event_count": tool_event_count,
+        "token_usages": token_usages,
     }
 
 
@@ -462,6 +576,8 @@ def build_structural_metadata(
             "reset_home_volume_requested": True,
             "virgin_workspace_reset_requested": True,
             "deterministic_checks_are_structural_only": True,
+            "reset_client": reset_client_name(client),
+            "compose_service": compose_service_name(client),
         },
         "reset_json": reset_json,
         "generation_report": generation_report,

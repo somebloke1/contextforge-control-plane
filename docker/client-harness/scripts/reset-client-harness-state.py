@@ -12,6 +12,11 @@ from pathlib import Path
 
 
 CLIENTS = {
+    "codex-cli": {
+        "services": ["codex-cli", "codex-cli-authenticated"],
+        "home_volume": "contextforge-client-harness_codex-cli-home",
+        "authenticated_image": "contextforge-client-codex-cli:authenticated",
+    },
     "pi": {
         "services": ["pi", "pi-ephemeral"],
         "home_volume": "contextforge-client-harness_pi-home",
@@ -76,6 +81,59 @@ def reset_workspace(workspace: Path, evidence_dir: Path, *, dry_run: bool) -> di
     }
 
 
+def reset_project_scoped_service_state(repo_root: Path, workspace: Path, evidence_dir: Path, *, dry_run: bool) -> dict[str, object]:
+    """Reset harness-owned project-scoped backend state for the virgin workspace.
+
+    The client containers mount the active repo at /repo and use /workspace as
+    the project root. Serena project instances are legitimate helper-managed
+    state, but a clean dialogue run must not inherit a prior /workspace
+    instance.
+    """
+
+    server_instances = repo_root / "server-instances"
+    roots = {"/workspace", str(workspace)}
+    targets: list[Path] = []
+    for manifest in server_instances.glob("serena-*/instance.json"):
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if str(data.get("canonical_project_root") or "") in roots:
+            targets.append(manifest.parent)
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    preserved_root = evidence_dir / f"server-instances-preserved-{stamp}"
+    preserved: list[str] = []
+    if not dry_run:
+        for target in targets:
+            if not target.exists():
+                continue
+            preserved_root.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(target), str(preserved_root / target.name))
+            preserved.append(target.name)
+    else:
+        preserved = [target.name for target in targets]
+
+    remaining: list[str] = []
+    for manifest in server_instances.glob("serena-*/instance.json"):
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if str(data.get("canonical_project_root") or "") in roots:
+            remaining.append(str(manifest.parent))
+
+    return {
+        "roots": sorted(roots),
+        "matched": [str(target) for target in targets],
+        "preserved": bool(preserved),
+        "preservation_target": str(preserved_root) if preserved else None,
+        "preserved_entries": preserved,
+        "remaining": remaining,
+        "postcondition": not remaining,
+    }
+
+
 def reset_client(client: str, compose_file: Path, repo_root: Path, *, reset_home_volume: bool, dry_run: bool) -> dict[str, object]:
     spec = CLIENTS[client]
     commands: list[dict[str, object]] = []
@@ -92,6 +150,8 @@ def reset_client(client: str, compose_file: Path, repo_root: Path, *, reset_home
         "client": client,
         "commands": commands,
         "home_volume": volume,
+        "authenticated_image": spec.get("authenticated_image"),
+        "authenticated_image_preserved": bool(spec.get("authenticated_image")),
         "home_volume_reset_requested": reset_home_volume,
         "remaining_target_volume_containers": remaining,
         "postcondition": not remaining,
@@ -121,8 +181,13 @@ def main() -> int:
         "evidence_dir": str(evidence_dir),
         "client_reset": reset_client(args.client, compose_file, repo_root, reset_home_volume=args.reset_home_volume, dry_run=args.dry_run),
         "workspace_reset": reset_workspace(workspace, evidence_dir, dry_run=args.dry_run),
+        "project_scoped_service_reset": reset_project_scoped_service_state(repo_root, workspace, evidence_dir, dry_run=args.dry_run),
     }
-    result["ok"] = bool(result["client_reset"]["postcondition"] and result["workspace_reset"]["postcondition"])
+    result["ok"] = bool(
+        result["client_reset"]["postcondition"]
+        and result["workspace_reset"]["postcondition"]
+        and result["project_scoped_service_reset"]["postcondition"]
+    )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["ok"] else 1
 

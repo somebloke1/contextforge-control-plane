@@ -43,6 +43,10 @@ def verify_dialogue_structure(
 
     if metadata is not None:
         checks.update(check_metadata(metadata, use_case, client, session_id, expected_prompt_count, failures))
+        if use_case == "use-case-11":
+            checks.update(check_use_case_11_projection_fields(metadata, client, failures))
+        if use_case == "use-case-12":
+            checks.update(check_use_case_12_onboarding_fields(metadata, failures))
 
     return {
         "ok": not failures,
@@ -118,8 +122,11 @@ def check_metadata(
     if not isinstance(reset_json, dict):
         failures.append(failure("missing_reset_json", "metadata must include reset_json object"))
     else:
+        expected_reset_client = client
+        if isinstance(runner_contract, dict) and isinstance(runner_contract.get("reset_client"), str):
+            expected_reset_client = str(runner_contract["reset_client"])
         checks["reset_ok_true"] = reset_json.get("ok") is True
-        checks["reset_client_matches"] = reset_json.get("client") == client
+        checks["reset_client_matches"] = reset_json.get("client") == expected_reset_client
         client_reset = reset_json.get("client_reset")
         workspace_reset = reset_json.get("workspace_reset")
         checks["client_reset_postcondition_true"] = isinstance(client_reset, dict) and client_reset.get("postcondition") is True
@@ -264,11 +271,117 @@ def semantic_criteria_for(use_case: str) -> list[dict[str, str]]:
                 "question": "Did the assistant answer the governance question through the ContextForge-exposed mentality service without direct ledger-file substitutes or mutations?",
             }
         ],
+        "use-case-5": [
+            {
+                "id": "service_selection_plan_apply_readback",
+                "question": "Did the assistant complete the selected service-selection shape through plan review, approval, apply, and post-apply readback?",
+            },
+            {
+                "id": "shape_coverage",
+                "question": "Did the dialogue satisfy the requested single, curated multi-service, or all-services selection shape without silently omitting selected services?",
+            },
+            {
+                "id": "reload_or_new_session_boundary",
+                "question": "Did the assistant clearly state the reload or new-session requirement after project-local apply?",
+            },
+        ],
+        "use-case-6": [
+            {
+                "id": "decline_or_defer_recorded_without_import",
+                "question": "Did the assistant let the user decline or defer the offered service, record that decision locally, and avoid importing it as an active tool?",
+            },
+            {
+                "id": "continued_available_capabilities",
+                "question": "Did the assistant confirm the choice and keep the project usable with available or later-selectable capabilities?",
+            },
+        ],
         "use-case-7": [
             {
                 "id": "project_state_readback_honesty",
                 "question": "Did the assistant describe current ContextForge state and readiness layers without claiming interactive proof?",
             }
+        ],
+        "use-case-8": [
+            {
+                "id": "first_turn_uses_contextforge_tool",
+                "question": "Did the first assistant turn use a ContextForge docs capability for the OpenCode docs lookup rather than answering from memory or readback only?",
+            },
+            {
+                "id": "same_session_followup_uses_prior_result",
+                "question": "Did the follow-up remain in the same target-client session and use the previous docs/library result to answer the configuration question?",
+            },
+            {
+                "id": "coherent_multi_turn_workflow",
+                "question": "Did the visible replies form a concise two-turn workflow without reinitialization, context loss, or readiness overclaim?",
+            },
+        ],
+        "use-case-9": [
+            {
+                "id": "cross_client_state_consistency",
+                "question": "Did the target clients describe the same project root, initialized state, revision, and enabled service set at a semantic level?",
+            },
+            {
+                "id": "client_specific_tool_name_honesty",
+                "question": "Did the replies allow client-specific tool names while preserving aligned capability meaning?",
+            },
+            {
+                "id": "same_project_no_onboarding_restart",
+                "question": "Did all target clients avoid restarting first-run onboarding or mutating project-init state while answering the same-project readback question?",
+            },
+        ],
+        "use-case-10": [
+            {
+                "id": "state_change_refresh_detected",
+                "question": "Did the clients answer from the post-change project-state authority rather than stale baseline memory?",
+            },
+            {
+                "id": "updated_capabilities_visible_or_bounded",
+                "question": "Did the clients report updated capabilities honestly, including any client-specific new-session boundary for actual MCP tool registration?",
+            },
+            {
+                "id": "stale_tools_not_presented_as_current",
+                "question": "Did the refresh replies avoid presenting stale pre-change tools as the full current state?",
+            },
+        ],
+        "use-case-11": [
+            {
+                "id": "project_graph_projection_separation",
+                "question": "Did the evidence and visible answer keep project service presence separate from target-client projection, visibility, reload state, and proof?",
+            },
+            {
+                "id": "practical_project_specific_guidance",
+                "question": "Did the assistant surface practical project-specific guidance for the selected docs lookup capability rather than generic documentation advice?",
+            },
+            {
+                "id": "current_client_scope",
+                "question": "Did the assistant bound claims to the current project/client session and avoid all-client readiness or automatic alignment claims?",
+            },
+            {
+                "id": "optional_followup_applies_guidance",
+                "question": "If the follow-up ran, did it remain in the same session and apply the surfaced guidance to the OpenCode config docs lookup task?",
+            },
+        ],
+        "use-case-12": [
+            {
+                "id": "structured_uncataloged_onboarding",
+                "question": "Did the assistant treat the request as an uncataloged service onboarding conversation rather than existing-service activation?",
+            },
+            {
+                "id": "source_only_plan_or_handoff",
+                "question": "Did the assistant produce or faithfully summarize a source-only onboarding plan or handoff without runtime mutation?",
+            },
+            {
+                "id": "project_graph_projection_boundary",
+                "question": "Did the assistant keep the candidate outside project service graph, target-client projection, visibility, and proof claims?",
+            },
+            {
+                "id": "credential_secret_boundary",
+                "question": "Did the assistant discuss credential boundaries without requesting, storing, or validating secret values?",
+            },
+            {
+                "id": "non_actions_and_approval_gate",
+                "question": "Did the assistant clearly name non-actions and the approval boundary before any runtime work?",
+            },
         ],
     }
     return shared + localized.get(use_case, [])
@@ -276,3 +389,103 @@ def semantic_criteria_for(use_case: str) -> list[dict[str, str]]:
 
 def failure(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
+
+
+def check_use_case_11_projection_fields(
+    metadata: dict[str, Any],
+    client: str,
+    failures: list[dict[str, str]],
+) -> dict[str, bool]:
+    checks: dict[str, bool] = {}
+    for key in (
+        "project_service_graph",
+        "target_client_projection",
+        "target_client_visibility",
+        "target_client_proof",
+    ):
+        value = metadata.get(key)
+        checks[f"{key}_object"] = isinstance(value, dict)
+        if not checks[f"{key}_object"]:
+            failures.append(failure(f"missing_{key}", f"metadata must include {key} object"))
+
+    graph = metadata.get("project_service_graph")
+    if isinstance(graph, dict):
+        checks["project_service_graph_present"] = graph.get("present") is True
+        checks["project_service_graph_binding"] = graph.get("service_binding") == "context7:canonical"
+        if not checks["project_service_graph_present"]:
+            failures.append(failure("project_service_not_present", "project_service_graph.present must be true"))
+        if not checks["project_service_graph_binding"]:
+            failures.append(failure("project_service_binding_mismatch", "project_service_graph.service_binding must be context7:canonical"))
+
+    projection = metadata.get("target_client_projection")
+    if isinstance(projection, dict):
+        checks["target_client_projection_client"] = projection.get("client") == client
+        checks["target_client_projection_present"] = projection.get("present") is True
+        if not checks["target_client_projection_client"]:
+            failures.append(failure("target_client_projection_client_mismatch", "target_client_projection.client must match verifier client"))
+        if not checks["target_client_projection_present"]:
+            failures.append(failure("target_client_projection_missing", "target_client_projection.present must be true"))
+
+    visibility = metadata.get("target_client_visibility")
+    if isinstance(visibility, dict):
+        checks["target_client_visibility_client"] = visibility.get("client") == client
+        checks["target_client_visibility_status"] = visibility.get("status") in {"attempted", "visible", "requires_semantic_evaluation"}
+        if not checks["target_client_visibility_client"]:
+            failures.append(failure("target_client_visibility_client_mismatch", "target_client_visibility.client must match verifier client"))
+        if not checks["target_client_visibility_status"]:
+            failures.append(failure("target_client_visibility_status_invalid", "target_client_visibility.status must be a declared structural status"))
+
+    proof = metadata.get("target_client_proof")
+    if isinstance(proof, dict):
+        checks["target_client_proof_client"] = proof.get("client") == client
+        checks["target_client_proof_status"] = proof.get("status") == "requires_semantic_evaluation"
+        checks["target_client_proof_no_cross_client_substitution"] = proof.get("proof_scope") == "single_target_client"
+        if not checks["target_client_proof_client"]:
+            failures.append(failure("target_client_proof_client_mismatch", "target_client_proof.client must match verifier client"))
+        if not checks["target_client_proof_status"]:
+            failures.append(failure("target_client_proof_status_invalid", "target_client_proof.status must require semantic evaluation"))
+        if not checks["target_client_proof_no_cross_client_substitution"]:
+            failures.append(failure("target_client_proof_scope_invalid", "target_client_proof.proof_scope must be single_target_client"))
+
+    return checks
+
+
+def check_use_case_12_onboarding_fields(
+    metadata: dict[str, Any],
+    failures: list[dict[str, str]],
+) -> dict[str, bool]:
+    checks: dict[str, bool] = {}
+    record = metadata.get("source_onboarding_record")
+    checks["source_onboarding_record_object"] = isinstance(record, dict)
+    if not checks["source_onboarding_record_object"]:
+        failures.append(failure("missing_source_onboarding_record", "metadata must include source_onboarding_record object"))
+        return checks
+
+    checks["source_onboarding_mutation_false"] = record.get("mutation_allowed") is False
+    checks["source_onboarding_candidate_calendar_notes"] = record.get("candidate_service") == "calendar-notes"
+    checks["source_onboarding_status_string"] = isinstance(record.get("status"), str) and bool(record.get("status"))
+    for key in (
+        "source_onboarding_mutation_false",
+        "source_onboarding_candidate_calendar_notes",
+        "source_onboarding_status_string",
+    ):
+        if not checks[key]:
+            failures.append(failure(key, f"source_onboarding_record failed structural check {key}"))
+
+    boundary = metadata.get("candidate_service_boundary")
+    checks["candidate_service_boundary_object"] = isinstance(boundary, dict)
+    if not isinstance(boundary, dict):
+        failures.append(failure("missing_candidate_service_boundary", "metadata must include candidate_service_boundary object"))
+    else:
+        expected_false = [
+            "project_service_registered",
+            "target_client_projection_created",
+            "runtime_service_started",
+            "client_tool_visibility_claimed",
+        ]
+        for key in expected_false:
+            check_key = f"candidate_boundary_{key}_false"
+            checks[check_key] = boundary.get(key) is False
+            if not checks[check_key]:
+                failures.append(failure(check_key, f"candidate_service_boundary.{key} must be false"))
+    return checks

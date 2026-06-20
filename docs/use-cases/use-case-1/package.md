@@ -4,12 +4,15 @@
 
 Queue state: controller-accepted for the current branch evidence set after the
 structure-not-meaning verifier rule was applied and fresh Pi/OpenCode evidence
-was generated.
+was generated. Codex parity has now been added for the same UC1 story with a
+fresh authenticated Docker runner package.
 
-Controller state: accepted for UC1 only. Both required target clients passed
-from virgin client starts with structural verifier metadata and delegated
-semantic evaluator narratives. The broader SuperLoop remains active for
-UC2..UCn.
+Controller state: accepted for UC1 only. Pi and OpenCode passed from virgin
+client starts with structural verifier metadata and delegated semantic
+evaluator narratives. Codex passed from a virgin Docker client start with
+structural verifier metadata and a contained OAuth-backed Codex semantic
+fallback evaluator because the subagent evaluator path hit an external
+refresh-token boundary. The broader SuperLoop remains active for UC2..UCn.
 
 ## Method Binding
 
@@ -30,6 +33,7 @@ Current target clients:
 
 - Pi client harness.
 - OpenCode client harness.
+- Codex client harness.
 
 ## Full Story
 
@@ -71,9 +75,9 @@ keys, or internal ordering.
 Required setup for each client attempt:
 
 ```text
-python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode> --reset-home-volume
-docker compose -f docker/client-harness/compose.yml build base <client>
-docker compose -f docker/client-harness/compose.yml run --name <fresh-name> --no-deps -d <client> sleep infinity
+python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode|codex-cli> --reset-home-volume
+docker compose -f docker/client-harness/compose.yml build base <client-service>
+docker compose -f docker/client-harness/compose.yml run --name <fresh-name> --no-deps -d <client-service> sleep infinity
 ```
 
 The runner may wrap these commands, but it must preserve the same guarantees:
@@ -84,6 +88,17 @@ The runner may wrap these commands, but it must preserve the same guarantees:
 - fresh non-ephemeral target-client container;
 - stable session or explicit continuation chain;
 - at least 90 seconds allowed for local-model responses when needed.
+
+Codex-specific setup:
+
+- use runner client `codex`, reset client `codex-cli`, build service
+  `codex-cli`, and runtime service `codex-cli-authenticated`;
+- use OAuth/ChatGPT subscription auth only through
+  `contextforge-client-codex-cli:authenticated`;
+- keep the default model pinned to `gpt-5.4-mini`;
+- keep host API-key environment variables out of the container runtime;
+- run noninteractive Codex turns with hook trust and approval bypass only inside
+  the externally sandboxed Docker harness.
 
 ## Venv Contract
 
@@ -127,10 +142,16 @@ Dialogue runner evidence:
 - OpenCode verifier: `docker/client-harness/evidence/use-case-1/opencode/opencode-verifier-20260620T010301Z.json`
 - OpenCode metadata: `docker/client-harness/evidence/use-case-1/opencode/opencode-metadata-20260620T010301Z.json`
 - OpenCode combined evidence: `docker/client-harness/evidence/use-case-1/opencode/opencode-use-case-1-evidence-20260620T010301Z.md`
+- Codex: `docker/client-harness/evidence/use-case-1/codex/codex-evaluation-package-20260620T101210Z.md`
+- Codex verifier: `docker/client-harness/evidence/use-case-1/codex/codex-verifier-20260620T101210Z.json`
+- Codex metadata: `docker/client-harness/evidence/use-case-1/codex/codex-metadata-20260620T101210Z.json`
+- Codex combined evidence: `docker/client-harness/evidence/use-case-1/codex/codex-use-case-1-evidence-20260620T101210Z.md`
+- Codex fallback semantic evaluator:
+  `docker/client-harness/evidence/use-case-1/codex/codex-semantic-evaluator-fallback-20260620T101501Z.md`
 
-Both runner outputs reported harness/package success, empty `turn_failures`,
-and empty `verifier_failures`. That status is evidence only; semantic
-acceptance came from the delegated evaluator reports below.
+All three runner outputs reported harness/package success, empty
+`turn_failures`, and empty `verifier_failures`. That status is evidence only;
+semantic acceptance came from the evaluator reports below.
 
 Semantic evaluator evidence:
 
@@ -138,8 +159,16 @@ Semantic evaluator evidence:
   `pi-evaluation-package-20260620T010227Z.md`.
 - OpenCode evaluator verdict: pass, 100/100, no fatal failures, using
   `opencode-evaluation-package-20260620T010301Z.md`.
+- Codex fallback evaluator verdict: pass, 100/100, no fatal failures, using
+  `codex-evaluation-package-20260620T101210Z.md`. The ordinary subagent
+  evaluator path was unavailable because the subagent refresh token had been
+  revoked; this fallback was run in the authenticated Codex Docker image and is
+  recorded as fallback semantic evidence rather than a delegated subagent
+  report.
 - Controller integration report:
   `run/holistic-orchestrator/reports/uc1-controller-acceptance-20260620T010301Z.md`.
+- Codex parity controller supplement:
+  `run/holistic-orchestrator/reports/uc1-codex-parity-acceptance-20260620T121626Z.md`.
 
 Residual risk:
 
@@ -149,6 +178,8 @@ Residual risk:
   and did not continue into reload acknowledgement, probing, or validation.
 - Pi generation token usage remains zero in the captured report. This is a
   telemetry limitation, not a UC1 semantic failure.
+- Live ContextForge service-menu sourcing is not claimed by UC1 acceptance.
+  Deferred owner: https://github.com/somebloke1/contextforge-control-plane/issues/288.
 
 Generation reporting requirement for future reruns:
 
@@ -201,6 +232,7 @@ target client:
 ```text
 python3 docker/client-harness/scripts/run-use-case-1-dialogue.py --client pi
 python3 docker/client-harness/scripts/run-use-case-1-dialogue.py --client opencode
+python3 docker/client-harness/scripts/run-use-case-1-dialogue.py --client codex
 ```
 
 The runner output and verifier output are evidence only. Controller acceptance

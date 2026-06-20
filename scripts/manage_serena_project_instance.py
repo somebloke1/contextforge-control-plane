@@ -2025,6 +2025,7 @@ def verify(args: argparse.Namespace) -> int:
 def create(args: argparse.Namespace) -> int:
     language = validate_language(getattr(args, "language", None))
     identity = project_identity(validate_project_root(args.project_root, require_workspace=args.require_workspace))
+    no_systemd = bool(getattr(args, "no_systemd", False))
     RUN_ROOT.mkdir(parents=True, exist_ok=True)
     with LOCK_PATH.open("a+", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
@@ -2040,19 +2041,24 @@ def create(args: argparse.Namespace) -> int:
         scaffold = ensure_lsp_scaffold(instance_dir, language)
         write_executable(instance_dir / "run-server.sh", run_server_text(identity, port, instance_dir))
         write_manifest(instance_dir, identity, port, lsp_metadata=lsp_manifest_metadata(language, scaffold))
-        SYSTEMD_USER_DIR.mkdir(parents=True, exist_ok=True)
-        unit_path(identity.instance_slug).write_text(service_text(identity, instance_dir), encoding="utf-8")
+        if not no_systemd:
+            SYSTEMD_USER_DIR.mkdir(parents=True, exist_ok=True)
+            unit_path(identity.instance_slug).write_text(service_text(identity, instance_dir), encoding="utf-8")
 
-    verify_systemd_service(identity.instance_slug)
-    wait_for_port(port)
     if language:
         write_language_override(identity.root, language)
-        restart_project_service(unit_name(identity.instance_slug))
-        wait_for_port(port)
 
-    env = gateway._read_env(gateway.CONFIG_ENV)
-    token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
-    registration = register_gateway_and_server(token, identity, port)
+    registration: dict[str, Any] = {}
+    if not no_systemd:
+        verify_systemd_service(identity.instance_slug)
+        wait_for_port(port)
+        if language:
+            restart_project_service(unit_name(identity.instance_slug))
+            wait_for_port(port)
+
+        env = gateway._read_env(gateway.CONFIG_ENV)
+        token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
+        registration = register_gateway_and_server(token, identity, port)
     scaffold = ensure_lsp_scaffold(instance_dir, language)
     write_manifest(instance_dir, identity, port, registration, lsp_metadata=lsp_manifest_metadata(language, scaffold))
     if getattr(args, "write_codex_config", True):
@@ -2073,6 +2079,7 @@ def create(args: argparse.Namespace) -> int:
         "server_name": identity.server_name,
         "port": port,
         "registration": registration,
+        "provisioning_mode": "manifest_only_no_systemd" if no_systemd else "systemd_registered",
         **base_lsp_advisory(language_state(identity.root, language, require_workspace=args.require_workspace).get("selected_language"), instance_dir),
         **language_state(identity.root, language, require_workspace=args.require_workspace),
     }
@@ -2236,6 +2243,11 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.add_argument("--require-workspace", action="store_true", help="Require a safe /home/dgk/workspace child root.")
     create_parser.add_argument("--replace-existing-serena-config", action="store_true")
     create_parser.add_argument("--language", help="Explicit Serena language for empty-project LSP verification.")
+    create_parser.add_argument(
+        "--no-systemd",
+        action="store_true",
+        help="Create project-local instance material without starting systemd or registering a live ContextForge gateway.",
+    )
     create_parser.add_argument("--verify", action="store_true", help="Run manager verification after create.")
     create_parser.add_argument("--app-server", action="store_true", help="With --verify, include Codex app-server MCP calls.")
     create_parser.set_defaults(write_codex_config=True)

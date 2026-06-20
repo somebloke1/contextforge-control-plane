@@ -8,6 +8,9 @@ Controller state: accepted for the current branch evidence set. Pi and OpenCode
 structural runners passed, non-Spark semantic evaluators passed, and the
 controller recorded acceptance in
 `run/holistic-orchestrator/reports/uc2-controller-acceptance-20260620T012346Z.md`.
+Codex parity was added later with structural runner evidence and a contained
+OAuth-backed Codex semantic fallback evaluator, recorded in
+`run/holistic-orchestrator/reports/uc2-codex-parity-acceptance-20260620T172259Z.md`.
 
 Accepted evidence:
 
@@ -23,6 +26,14 @@ Accepted evidence:
   `docker/client-harness/evidence/use-case-2/opencode/opencode-evaluation-package-20260620T012106Z.md`
 - OpenCode verifier:
   `docker/client-harness/evidence/use-case-2/opencode/opencode-verifier-20260620T012106Z.json`
+- Codex combined evidence:
+  `docker/client-harness/evidence/use-case-2/codex/codex-use-case-2-evidence-20260620T172259Z.md`
+- Codex evaluator package:
+  `docker/client-harness/evidence/use-case-2/codex/codex-evaluation-package-20260620T172259Z.md`
+- Codex verifier:
+  `docker/client-harness/evidence/use-case-2/codex/codex-verifier-20260620T172259Z.json`
+- Codex fallback semantic evaluator:
+  `docker/client-harness/evidence/use-case-2/codex/codex-semantic-evaluator-fallback-20260620T172259Z.md`
 
 Deterministic acceptance remains structural only. UC2 semantic acceptance came
 from evaluator narratives over the final visible assistant answers, not from
@@ -101,7 +112,7 @@ JSON keys, expected tool names, evaluator criteria, or internal readback APIs.
 Required setup for each client attempt:
 
 ```text
-python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode> --reset-home-volume
+python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode|codex-cli> --reset-home-volume
 prepare initialized /workspace fixture for <client>
 docker compose -f docker/client-harness/compose.yml build base <client>
 docker compose -f docker/client-harness/compose.yml run --name <fresh-name> --no-deps -d <client> sleep infinity
@@ -210,6 +221,7 @@ Current structural runner commands:
 ```text
 python3 docker/client-harness/scripts/run-use-case-2-dialogue.py --client pi
 python3 docker/client-harness/scripts/run-use-case-2-dialogue.py --client opencode
+python3 docker/client-harness/scripts/run-use-case-2-dialogue.py --client codex
 ```
 
 The runner must produce raw turn output, combined evidence, verifier JSON,

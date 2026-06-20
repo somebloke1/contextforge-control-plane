@@ -15,7 +15,9 @@ if [[ ! -f env/local-llama.env ]]; then
 fi
 
 if [[ -z "${PYTHON:-}" ]]; then
-  if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+  if [[ -x "${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python" ]]; then
+    PYTHON="${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python"
+  elif [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
     PYTHON="${REPO_ROOT}/.venv/bin/python"
   else
     PYTHON="python3"

@@ -1053,6 +1053,85 @@ def apply_project_init_activation_to_state(
     return next_state
 
 
+def apply_project_init_decisions_to_state(
+    state: dict[str, Any],
+    selected_services: list[dict[str, Any]],
+    *,
+    decision_state: str,
+    target_client: str,
+    source_plan_id: str | None = None,
+    updated_by: str = DEFAULT_UPDATED_BY,
+) -> dict[str, Any]:
+    """Return updated project-init state for a local decline/defer decision.
+
+    The decision path intentionally records only project-local choice metadata.
+    It does not create service records, target-client bindings, activation jobs,
+    consent receipts, backend instances, registry entries, or client config.
+    """
+
+    if decision_state not in {"declined", "deferred"}:
+        raise StateValidationError(f"unsupported project-init decision state: {decision_state}")
+    if not selected_services:
+        raise StateValidationError("project-init decision state requires selected services")
+
+    next_state = json.loads(json.dumps(state))
+    validate_supported_schema_version(next_state)
+    now = now_timestamp()
+    next_state["meta"]["updated_at"] = now
+    next_state["meta"]["updated_by"] = updated_by
+    next_state["meta"]["last_plan_id"] = source_plan_id
+    next_state.setdefault("decisions", {})
+    next_state.setdefault("services", {})
+    next_state.setdefault("client_trust", {})
+    next_state.setdefault("open_items", [])
+    next_state.setdefault("artifact_refs", empty_artifact_refs())
+    next_state.setdefault("project_init", default_project_init())
+    next_state["project_init"].setdefault("x_hook_prompt_state", HOOK_PROMPT_COMPLETED_UNVERIFIED)
+    next_state["project_init"].setdefault("client_states", {})
+    next_state["project_init"].setdefault("activation_jobs", {})
+
+    for service in selected_services:
+        binding = str(service.get("service_binding") or service.get("service_family") or "")
+        if not binding:
+            raise StateValidationError("selected service missing service_binding")
+        service_key = _state_map_key(binding)
+        service_identity = _service_identity_for(dict(service))
+        next_state["decisions"][service_key] = {
+            "decision_kind": "service",
+            "state": decision_state,
+            "x_service_identity_id": service_identity["id"],
+            "service_binding": binding,
+            "contract_card_ref": _service_ref("service-bindings", binding),
+            "decided_at": now,
+            "decided_by": updated_by,
+            "source_plan_id": source_plan_id,
+            "reopened_at": None,
+            "notes": f"project-local ContextForge service {decision_state} by user choice",
+            "x_target_client": target_client,
+            "x_non_actions": [
+                "no active service import",
+                "no target-client binding",
+                "no project-local client config write",
+                "no ContextForge registry or catalog mutation",
+                "no backend install or restart",
+                "no secret or token material write",
+            ],
+        }
+
+    if next_state["status"] in {"uninitialized", "in_progress"}:
+        next_state["status"] = "initialized"
+    next_state["client_trust"][target_client] = {
+        "state": "not_required" if target_client == "pi" else "unknown",
+        "root": next_state["project"]["root"],
+        "trust_surface": _trust_surface_for(target_client),
+        "approval_record": None,
+        "verified_at": None,
+        "last_probe": None,
+    }
+    validate_state(next_state)
+    return next_state
+
+
 def read_json_file(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))

@@ -4,9 +4,11 @@
 
 Queue state: controller-accepted after accepted Use Case 3.
 
-Controller state: Pi and OpenCode dialogue evidence accepted for the current
-branch evidence set. Pi required one remediation loop for governance tool-name
-fallback before semantic acceptance.
+Controller state: Pi, OpenCode, and Codex dialogue evidence accepted for the
+current branch evidence set. Pi required one remediation loop for governance
+tool-name fallback before semantic acceptance. Codex required one remediation
+loop so an initialized-project governance prompt receives MCP-route guidance
+even when ordinary project-init hook injection is suppressed after install.
 
 GitHub source: issue #246, "Ordinary use case 04: Read project governance
 through a ContextForge tool."
@@ -14,12 +16,19 @@ through a ContextForge tool."
 Acceptance report:
 `run/holistic-orchestrator/reports/uc4-controller-acceptance-20260620T014500Z.md`
 
+Codex parity acceptance report:
+`run/holistic-orchestrator/reports/uc4-codex-parity-acceptance-20260620T174702Z.md`
+
 Accepted evidence:
 
 - Pi:
   `docker/client-harness/evidence/use-case-4/pi/pi-use-case-4-evidence-20260620T013931Z.md`
 - OpenCode:
   `docker/client-harness/evidence/use-case-4/opencode/opencode-use-case-4-evidence-20260620T013351Z.md`
+- Codex:
+  `docker/client-harness/evidence/use-case-4/codex/codex-use-case-4-evidence-20260620T174702Z.md`
+  with fallback semantic evaluator:
+  `docker/client-harness/evidence/use-case-4/codex/codex-semantic-evaluator-fallback-20260620T174702Z.md`
 
 ## Method Binding
 
@@ -41,7 +50,8 @@ ledger files directly or mutating them.
    - `.project/context_forge_state.json` exists and identifies the project root;
    - state revision is visible in evidence;
    - target client config exists when the client requires one, such as
-     `/workspace/opencode.json` for OpenCode;
+     `/workspace/opencode.json` for OpenCode or
+     `/workspace/.codex/config.toml` for Codex;
    - `mentality:static_repo_local` is approved/installed for the target client
      as a read-only governance capability;
    - checked-in governance ledgers are present under `/workspace`
@@ -102,11 +112,11 @@ readback APIs.
 Required setup for each client attempt:
 
 ```text
-python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode> --reset-home-volume
+python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode|codex-cli> --reset-home-volume
 prepare initialized /workspace fixture for <client> with mentality:static_repo_local installed
 copy checked-in governance ledgers into /workspace
-docker compose -f docker/client-harness/compose.yml build base <client>
-docker compose -f docker/client-harness/compose.yml run --name <fresh-name> --no-deps -d <client> sleep infinity
+docker compose -f docker/client-harness/compose.yml build base <client-or-build-service>
+docker compose -f docker/client-harness/compose.yml run --name <fresh-name> --no-deps -d <client-or-compose-service> sleep infinity
 ```
 
 The initialized fixture preparation must be deterministic and idempotent. It may
@@ -222,6 +232,7 @@ Fail if: any first-run project-init or service-onboarding action appears.
 ```text
 python3 docker/client-harness/scripts/run-use-case-4-dialogue.py --client pi
 python3 docker/client-harness/scripts/run-use-case-4-dialogue.py --client opencode
+python3 docker/client-harness/scripts/run-use-case-4-dialogue.py --client codex
 ```
 
 The runner must produce raw turn output, combined evidence, verifier JSON,

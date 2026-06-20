@@ -14,7 +14,15 @@ if [[ ! -f env/local-llama.env ]]; then
   scripts/make-local-llama-env.sh
 fi
 
-PYTHON="${PYTHON:-${REPO_ROOT}/.venv/bin/python}"
+if [[ -z "${PYTHON:-}" ]]; then
+  if [[ -x "${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python" ]]; then
+    PYTHON="${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python"
+  elif [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+    PYTHON="${REPO_ROOT}/.venv/bin/python"
+  else
+    PYTHON="python3"
+  fi
+fi
 CONTEXTFORGE_HOST_BASE_URL="${CONTEXTFORGE_HOST_BASE_URL:-http://127.0.0.1:4445}"
 CONTEXTFORGE_CONTAINER_BASE_URL="${CONTEXTFORGE_CONTAINER_BASE_URL:-http://host.docker.internal:4445}"
 CONTEXTFORGE_DEV_ENV_FILE="${CONTEXTFORGE_DEV_ENV_FILE:-${REPO_ROOT}/docker/contextforge-harness/env/contextforge.env}"
@@ -139,6 +147,13 @@ for line in sys.stdin:
 docker compose -f compose.yml run --rm --no-deps \
   -e HOME=/tmp/opencode-home \
   -e OPENCODE_CONFIG_DIR=/tmp/opencode-home/.config/opencode \
+  -e OPENCODE_CONFIG=/tmp/opencode-home/.config/opencode/opencode.json \
+  -e CONTEXTFORGE_OPENCODE_CONFIG_TARGET=/tmp/opencode-home/.config/opencode/opencode.json \
+  -e CONTEXTFORGE_OPENCODE_PLUGIN_TARGET=/tmp/opencode-home/.config/opencode/plugins/contextforge-project-init.js \
+  -e CONTEXTFORGE_OPENCODE_RULES_TARGET=/tmp/opencode-home/.config/opencode/AGENTS.md \
+  -e XDG_RUNTIME_DIR=/tmp/opencode-home/.local/state/contextforge-client-harness-runtime \
+  -e CONTEXTFORGE_PROJECT_INIT_RUN_ROOT=/tmp/opencode-home/.local/state/contextforge-client-harness-runtime/project-init \
+  -e CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH=/tmp/opencode-home/.local/state/contextforge-client-harness-runtime/project-init/opencode-latest-user-message.json \
   -e CONTEXTFORGE_DEV_MCP_NAME="${OPENCODE_DEV_MCP_NAME}" \
   -e CONTEXTFORGE_DEV_MCP_URL="${MCP_URL}" \
   -e CONTEXTFORGE_DEV_BEARER_TOKEN="${ACCESS_TOKEN}" \

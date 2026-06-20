@@ -6,10 +6,14 @@ Queue state: selected next after accepted UC1-UC4. UC4 was deliberately
 promoted before UC7 to diagnose and remediate an active governance service-route
 defect.
 
-Controller state: accepted for the current branch evidence set.
+Controller state: accepted for the current branch evidence set. Codex parity
+was added later with structural runner evidence and a contained OAuth-backed
+Codex semantic fallback evaluator.
 
 Acceptance report:
 `run/holistic-orchestrator/reports/uc7-controller-acceptance-20260620T015423Z.md`.
+Codex parity supplement:
+`run/holistic-orchestrator/reports/uc7-codex-parity-acceptance-20260620T173428Z.md`.
 
 Accepted evidence:
 
@@ -20,6 +24,11 @@ Accepted evidence:
 - OpenCode:
   `docker/client-harness/evidence/use-case-7/opencode/opencode-use-case-7-evidence-20260620T015120Z.md`;
   evaluator Boole `019ee2ba-748f-7072-8cf8-d5359c0d4d33`,
+  PASS 96/100.
+- Codex:
+  `docker/client-harness/evidence/use-case-7/codex/codex-use-case-7-evidence-20260620T173428Z.md`;
+  fallback semantic evaluator:
+  `docker/client-harness/evidence/use-case-7/codex/codex-semantic-evaluator-fallback-20260620T173428Z.md`,
   PASS 96/100.
 
 GitHub source: issue #249, "Ordinary use case 07: Ask what ContextForge state
@@ -107,7 +116,7 @@ criteria.
 Required setup for each client attempt:
 
 ```text
-python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode> --reset-home-volume
+python3 docker/client-harness/scripts/reset-client-harness-state.py --client <pi|opencode|codex-cli> --reset-home-volume
 prepare initialized /workspace fixture for <client>
 docker compose -f docker/client-harness/compose.yml build base <client>
 docker compose -f docker/client-harness/compose.yml run --name <fresh-name> --no-deps -d <client> sleep infinity
@@ -215,6 +224,7 @@ Fail if: any hidden routing text or mutation path appears.
 ```text
 python3 docker/client-harness/scripts/run-use-case-7-dialogue.py --client pi
 python3 docker/client-harness/scripts/run-use-case-7-dialogue.py --client opencode
+python3 docker/client-harness/scripts/run-use-case-7-dialogue.py --client codex
 ```
 
 Each runner produces raw turn output, combined evidence, verifier JSON,
