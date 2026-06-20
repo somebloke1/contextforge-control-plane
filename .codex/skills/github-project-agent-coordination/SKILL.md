@@ -33,6 +33,14 @@ body, PR body, evidence ledger, or goal store.
 - Preserve the board-use directive in successor formal goals.
 - Keep mutations idempotent: read the item and field IDs first, then update
   only the intended project item field.
+- Record dependency-aware queue changes and reflective-learning outcomes only
+  when they become durable coordination state. A transient idea from a run does
+  not need a board mutation; an incorporated requirement, promoted regression,
+  deferred owner, or selected next target does.
+- Do not encode semantic pass/fail or readiness in Project fields from matched
+  strings, regexes, keyword searches, or string parsing over free-form model
+  output. The board may summarize accepted evaluator results or structural
+  evidence, but it is not an oracle for generated prose.
 
 ## Field Semantics
 
@@ -79,6 +87,11 @@ it a ContextForge-specific meaning.
 - `Done`: merged, closed, or otherwise completed with durable evidence.
 - `Deferred`: intentionally later-phase work that should not attract ordinary
   cleanup pressure.
+
+Agent state should reflect evidence-backed coordination, not optimism. When a
+use case is reordered by dependency analysis, mark or comment only the durable
+selection rationale; do not make the numeric order look authoritative if the
+dependency mesh says otherwise.
 
 `Lane` values identify the dominant roadmap surface:
 

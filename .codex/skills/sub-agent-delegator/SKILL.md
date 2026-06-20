@@ -39,6 +39,19 @@ instruction or live tool availability differs.
 | `gpt-5.4-mini` | Routine audits, log parsing, config/docs mapping, repetitive verification, shallow fan-out | low or medium | Use explicit context; fork only when same model/settings and rich inherited context are necessary |
 | `gpt-5.3-codex-spark` | Tiny local micro-edits or boilerplate where speed matters and risk is low | low or default | Prefer direct parent work; do not use for independent reasoning-heavy forks |
 
+Spark is for code and textual artifacts, not live agent behavior. It may patch
+bounded source, extract transcript facts, lint packages, or map fixtures. It
+must not evaluate Pi/OpenCode dialogue quality, decide whether prompts were
+too coached, judge hidden-instruction leakage, or own target-client readiness.
+
+For any delegated model-output evaluation, deterministic helpers may check
+structure but not meaning. Do not delegate or accept a test, gate, score
+criterion, or readiness claim that uses matched strings, regexes, keyword
+searches, or string parsing as the oracle for free-form generated prose. The
+only exception is declared structured model output such as JSON, where scripts
+may check parseability, schema shape, required fields, and enum/value
+structure, and only when paired with non-deterministic evaluator review.
+
 When using `fork_context=true`, do not set a different `model`,
 `agent_type`, or `reasoning_effort`. Full-context forks inherit the parent
 agent type, model, and reasoning settings. If a different model is useful,
@@ -68,6 +81,8 @@ Every subagent prompt must include:
 - forbidden edits and forbidden decisions;
 - expected artifact or output format;
 - required evidence commands or probes;
+- required reflective-learning section when the work may reveal better
+  requirements, prompts, reset invariants, score criteria, or skill guidance;
 - stop conditions;
 - integration criteria for the parent.
 
@@ -102,8 +117,11 @@ After a subagent completes:
 3. Resolve overlap with active branches and PRs.
 4. Update the roadmap, PR body, issue comment, or governance ledger only when
    durable state changed.
-5. Record residual risk with owner, impact, trigger, and retirement condition.
-6. Run goal maintenance/refinement before selecting the next subgoal.
+5. Classify useful improvement ideas as `incorporate_now`,
+   `promote_regression`, `defer_with_owner`, or `reject_with_rationale`; treat
+   them as evidence for the parent, not as subagent-owned roadmap mutation.
+6. Record residual risk with owner, impact, trigger, and retirement condition.
+7. Run goal maintenance/refinement before selecting the next subgoal.
 
 ## Goal Loop Coupling
 

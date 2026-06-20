@@ -1,14 +1,20 @@
 ---
 name: contextforge-project-init
-description: Project-local ContextForge activation and validation workflow for this repository. Use when Codex needs to initialize, repair, approve, apply, validate, or explain project activation for ContextForge services, including Codex/Pi client bindings, Serena project instances, helper-mediated service selection, reload requirements, config conflicts, and .project/context_forge_state.json state.
+description: Project-local ContextForge activation workflow for this repository. Use when Codex needs to initialize, repair, approve, apply, or explain project activation for ContextForge services, including Codex/Pi client bindings, Serena project instances, helper-mediated service selection, reload requirements, config conflicts, and .project/context_forge_state.json state.
 ---
 
 # ContextForge Project Init
 
 Use the visible `contextforge-helper` tools as the authority for project init.
 Do not bypass them with direct file writes or shell-invoked helper scripts when
-the task is project activation, approval, apply, reload acknowledgement, or
-validation.
+the task is project activation, approval, or apply.
+
+Separate ordinary project init from normal-use readback. Project init installs
+the selected project-local activation package and stops at the reload/new-session
+boundary. Later questions such as available tools, capabilities, or current
+ContextForge state are read-only normal-use flows; they must not trigger
+validation, service probing, reload acknowledgement, project-init apply, or
+service onboarding unless the user explicitly asks for that separate workflow.
 
 ## Required Sequence
 
@@ -22,18 +28,19 @@ validation.
    descriptors by hand.
 5. If the helper asks for one input, ask exactly that input. Serena language is
    currently a single-select helper input.
-6. If the helper returns a plan, present the exact digest/challenge/effects and
-   ask for scoped approval only.
-7. After approval, use `cf_project_init_approve` with the exact challenge id and
-   plan digest, then `cf_project_init_apply`.
+6. If the helper returns a plan, present the user-meaningful effects and ask for
+   plain scoped approval or decline. Do not ask the user to restate low-level
+   challenge ids, digests, or keys that the helper already returned.
+7. After explicit approval, use `cf_project_init_approve` with the helper-returned
+   challenge id and plan digest internally, then `cf_project_init_apply`.
 8. If `cf_project_init_propose` returns `status=config_conflict` with an embedded
    `recovery_plan`, treat that embedded plan as the current helper-owned plan.
-   Present its exact digest/challenge/effects, ask for scoped recovery approval,
-   then call `cf_project_init_recovery_approve` followed by
+   Present its user-meaningful effects, ask for scoped recovery approval, then
+   call `cf_project_init_recovery_approve` with helper-returned ids followed by
    `cf_project_init_recovery_apply`.
-9. If the helper reports reload is required, ask for explicit reload and stop.
-10. After reload, record it with `cf_project_init_record_client_reload`, then
-   validate or record skip only from the user's validation choice.
+9. If the helper reports reload or a new session is required, tell the user the
+   selected ContextForge tools are installed and that reload/new session is
+   required for them to register, then stop.
 
 ## Hard Boundaries
 
@@ -49,8 +56,10 @@ validation.
 - Do not mutate user-global trust, global client configs, secrets, live
   ContextForge registry/catalog state, backend installs, or backend restarts in
   ordinary project init.
-- Do not use backend health or tool availability alone as validation proof.
-  Validation must be target-client-visible and non-destructive.
+- Installing the project-local activation package is the project-init endpoint.
+- Readback is not proof of interactive tool use. When reporting current state,
+  distinguish source-ready, backend-ready, ContextForge-ready, client-visible,
+  and interactive proof; do not claim the last layer from local state alone.
 - If helper tools are missing, stale, unsupported, or cannot complete the
   approval/apply path, stop at that readiness boundary.
 
@@ -73,5 +82,5 @@ tools, report that project activation remains blocked and avoid hidden writes.
 
 ## Reference
 
-Read [helper-flow.md](references/helper-flow.md) when you need exact local files,
-approved service classes, or validation expectations.
+Read [helper-flow.md](references/helper-flow.md) when you need exact local files
+or approved service classes.

@@ -757,6 +757,16 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
         self.assertIn('base.query = "standard library documentation lookup"', text)
         self.assertIn("for (const operation of service.safeOperations)", text)
 
+    def test_pi_shim_governance_route_falls_back_after_missing_tool_result(self) -> None:
+        text = PI_SHIM.read_text(encoding="utf-8")
+
+        self.assertIn('return callFirstGovernanceTool(["governance_list", "mentality-governance-list"]', text)
+        self.assertIn('return callFirstGovernanceTool(["governance_read", "mentality-governance-read"]', text)
+        self.assertIn("toolResultIndicatesMissingTool(result)", text)
+        self.assertIn("continue;", text)
+        self.assertIn("function toolResultText", text)
+        self.assertIn("return [...new Set([...discovered, ...candidates])]", text)
+
     def test_catalog_classifies_conditional_and_skipped_probes(self) -> None:
         for service in [
             "OpenZeppelin Solidity Contracts",

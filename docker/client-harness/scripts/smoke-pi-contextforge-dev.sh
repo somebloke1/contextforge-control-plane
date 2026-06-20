@@ -133,7 +133,7 @@ PY
   printf 'server_id=%s\n' "${SERVER_ID}"
   printf 'probe_token_id=%s\n' "${TOKEN_ID}"
   printf 'project_root=/workspace\n'
-  printf 'pi_tool=cf_contextforge_pi_validate\n'
+  printf 'pi_tool=cf_contextforge_pi_readback\n'
 } | tee "${EVIDENCE_FILE}"
 
 docker compose -f compose.yml run --rm --no-deps \
@@ -170,19 +170,19 @@ PY
       --no-session \
       --no-builtin-tools \
       --no-context-files \
-      --tools cf_contextforge_pi_validate \
+      --tools cf_contextforge_pi_readback \
       --provider local-llama-qwen \
       --model qwen3.6-a3b \
-      -p "Use the cf_contextforge_pi_validate tool for projectRoot /workspace. Return the tool JSON result verbatim."
+      -p "Use the cf_contextforge_pi_readback tool for projectRoot /workspace. Return the tool JSON result verbatim."
   ' | tee -a "${EVIDENCE_FILE}"
 
-if ! grep -q 'pi_validation_complete' "${EVIDENCE_FILE}"; then
-  printf 'pi_validation_status=missing_pi_validation_complete\n' | tee -a "${EVIDENCE_FILE}"
+if ! grep -q 'mentality:dev_docker' "${EVIDENCE_FILE}"; then
+  printf 'pi_readback_status=missing_mentality_service\n' | tee -a "${EVIDENCE_FILE}"
   exit 1
 fi
-if ! grep -q '"passed"' "${EVIDENCE_FILE}"; then
-  printf 'pi_validation_status=missing_passed_probe\n' | tee -a "${EVIDENCE_FILE}"
+if ! grep -q 'cf_mentality' "${EVIDENCE_FILE}"; then
+  printf 'pi_readback_status=missing_mentality_pi_tool\n' | tee -a "${EVIDENCE_FILE}"
   exit 1
 fi
 
-printf 'pi_validation_status=passed\n' | tee -a "${EVIDENCE_FILE}"
+printf 'pi_readback_status=passed\n' | tee -a "${EVIDENCE_FILE}"

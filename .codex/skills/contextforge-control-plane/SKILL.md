@@ -21,6 +21,13 @@ for control-plane code and tests, not live service registration.
   contracts, consent receipts, verification traces, conformance packs,
   requirement scenarios, evaluator verdicts, and evidence ledgers are part of
   the design.
+- Deterministic control-plane checks may validate structure, state, files,
+  command status, schemas, and declared structured model output such as JSON.
+  They must not use matched strings, regexes, keyword searches, or string
+  parsing as the oracle for the meaning of free-form generated prose. Semantic
+  dialogue quality, naturalness, overclaiming, hidden-instruction leakage, and
+  pass/fail acceptance for agent behavior require non-deterministic evaluator
+  review.
 
 ## Work Pattern
 

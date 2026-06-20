@@ -86,7 +86,7 @@ def should_inject(project_root: Path, values: dict[str, str], *, target_client: 
     inspection = project_state_inspection(project_root, target_client=target_client)
     if inspection.get("should_suppress_hook"):
         return False
-    if inspection.get("recommended_action") in {"repair_project_init_state", "blocked_repair", "resume_validation"}:
+    if inspection.get("recommended_action") in {"repair_project_init_state", "blocked_repair", "resume_project_init"}:
         return True
     status = values.get(ENV_PROJECT_INIT_STATUS)
     if safe_workspace_project_root(project_root):
@@ -261,7 +261,7 @@ def prompt_text_is_fresh(text: str) -> bool:
         "before answering unrelated work or ordinary tool-list questions",
         "Ask exactly one question, then stop and wait",
         "Whenever presenting choices, use the helper-provided response_form or render a numbered option list",
-        "Never choose service selections, approval, reload acknowledgement, validation, or skipped-service follow-up actions on behalf of the user",
+        "Never choose service selections or approval on behalf of the user",
         "If the user echoes your question, asks you to provide the selection numbers",
         "Prefer the contextforge-helper workflow tools when visible",
         "Do not invoke project-init helper scripts or Python modules through shell as a substitute for visible helper tools",
@@ -278,8 +278,8 @@ def prompt_text_is_fresh(text: str) -> bool:
         "input-triggered hidden message",
         "cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only",
         "do not print or summarize raw cf_contextforge_pi_readback JSON",
-        "client_reload_requirement that blocks validation",
-        "explicit client reload or new-session action first and stop",
+        "selected ContextForge tools are installed for this project",
+        "start a new session or reload the client before the tools register",
         "Codex launches configured MCP servers and exposes their tools when a session starts",
         "Gemini CLI launches configured MCP servers and exposes their tools when a session starts",
         "Gemini's user-global ContextForge hook injects this project-init guidance through SessionStart/BeforeAgent additionalContext",
@@ -287,21 +287,12 @@ def prompt_text_is_fresh(text: str) -> bool:
         "OpenCode's user-home ContextForge plugin uses the messages transform hook as the first-prompt trigger",
         "does not rely on experimental.chat.system.transform as the primary init mechanism",
         "/mcp is a status view, not an in-place MCP tool reload",
-        "start a new Codex session from the project root before target-client-visible validation",
-        "start a new Gemini CLI session from the project root before target-client-visible validation",
-        "start a new OpenCode session from the project root before target-client-visible validation",
-        'choose 1 or reply "validate" to run validation',
-        "first call cf_project_init_record_client_reload",
-        "with client_type=",
-        "prefer that tool with client_type=opencode",
-        "pass validation mode validate_now or presume_working to the reload call",
-        "honor that choice instead of asking again",
-        "the Pi agent must issue /reload before validation",
-        "Choose 1 to validate now",
-        "cf_contextforge_pi_validate for validate-now",
-        "Do not call unlisted or unavailable validation tool names",
-        "If a validation tool call is missing, not found, unavailable, or returns an error, validation did not pass",
-        "Backend-only ContextForge health and \"tool exists\" availability are not enough",
+        "start a new Codex session from the project root after installation",
+        "start a new Gemini CLI session from the project root after installation",
+        "start a new OpenCode session from the project root after installation",
+        "the Pi agent must issue /reload after an approved global extension install or upgrade",
+        "After approved apply",
+        "Stop there",
         "Serena is one project-scoped option in this menu, not the whole flow",
         "pass the selected service ids/bindings back to contextforge-helper",
         "Do not invent or pass local_approval_event_ref strings",

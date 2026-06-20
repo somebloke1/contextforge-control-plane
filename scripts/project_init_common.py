@@ -37,6 +37,7 @@ ENV_SERENA_DECISION = "CONTEXTFORGE_SERENA_DECISION"
 ENV_SERENA_PROVISION_STATUS = "CONTEXTFORGE_SERENA_PROVISION_STATUS"
 ENV_SERENA_INSTANCE_SLUG = "CONTEXTFORGE_SERENA_INSTANCE_SLUG"
 ENV_SERENA_SERVER_NAME = "CONTEXTFORGE_SERENA_SERVER_NAME"
+ENV_USE_DEV_DOCKER_VIRTUAL_SERVER = "CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER"
 
 PROJECT_ENV_KEYS = {
     ENV_PROJECT_INIT_STATUS,
@@ -160,7 +161,7 @@ CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "command": "start_new_session",
         "actor": "user",
         "instruction": (
-            "Before validating after approved Codex project-local MCP config changes, start a new Codex session from the project root. "
+            "After approved Codex project-local MCP config changes, start a new Codex session from the project root before relying on the newly installed tools. "
             "Codex launches configured MCP servers and exposes their tools when a session starts; /mcp is a status view and does not reload MCP tools in-place."
         ),
         "blocks_validation_until_done": True,
@@ -170,7 +171,7 @@ CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "required_after": ["global_extension_install_or_upgrade", "project_activation_apply"],
         "command": "/reload",
         "actor": "pi_agent",
-        "instruction": "Before validating after an approved user-global Pi extension install or upgrade, issue /reload in Pi so the new or changed extension tools are active.",
+        "instruction": "After an approved user-global Pi extension install or upgrade, issue /reload in Pi so the new or changed extension tools are active.",
         "blocks_validation_until_done": True,
     },
     "gemini": {
@@ -179,7 +180,7 @@ CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "command": "start_new_session",
         "actor": "user",
         "instruction": (
-            "Before validating after approved Gemini project-local MCP settings changes, start a new Gemini CLI session from the project root. "
+            "After approved Gemini project-local MCP settings changes, start a new Gemini CLI session from the project root before relying on the newly installed tools. "
             "Gemini CLI discovers configured MCP servers when a session starts."
         ),
         "blocks_validation_until_done": True,
@@ -190,7 +191,7 @@ CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "command": "start_new_session",
         "actor": "user",
         "instruction": (
-            "Before validating after approved OpenCode project-local MCP config changes, start a new OpenCode session from the project root. "
+            "After approved OpenCode project-local MCP config changes, start a new OpenCode session from the project root before relying on the newly installed tools. "
             "OpenCode discovers project-local MCP servers and loads the user-home ContextForge plugin when a session starts."
         ),
         "blocks_validation_until_done": True,
@@ -831,6 +832,12 @@ def read_project_env(project_root: str | Path) -> dict[str, str]:
 
 
 def _manifest_virtual_server(manifest: dict[str, Any]) -> dict[str, Any]:
+    if os.environ.get(ENV_USE_DEV_DOCKER_VIRTUAL_SERVER) in {"1", "true", "yes"}:
+        dev_docker = manifest.get("dev_docker") if isinstance(manifest.get("dev_docker"), dict) else {}
+        dev_contextforge = dev_docker.get("contextforge") if isinstance(dev_docker.get("contextforge"), dict) else {}
+        dev_name = str(dev_contextforge.get("virtual_server_name") or "")
+        if dev_name:
+            return {"name": dev_name}
     contextforge = manifest.get("contextforge") if isinstance(manifest.get("contextforge"), dict) else {}
     virtual = contextforge.get("virtual_server") if isinstance(contextforge.get("virtual_server"), dict) else {}
     return virtual

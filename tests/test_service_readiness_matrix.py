@@ -5,25 +5,95 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX_PATH = ROOT / "docs" / "contextforge-service-readiness-matrix.json"
-TAXONOMY_PATH = ROOT / "docs" / "contextforge-service-localization-taxonomy.md"
+TAXONOMY_CONTRACT_PATH = ROOT / "docs" / "contextforge-service-localization-taxonomy.json"
 
 
 class ServiceReadinessMatrixTests(unittest.TestCase):
     def load_matrix(self) -> dict:
         return json.loads(MATRIX_PATH.read_text(encoding="utf-8"))
 
-    def test_taxonomy_doc_defines_required_types(self) -> None:
-        text = TAXONOMY_PATH.read_text(encoding="utf-8")
-        for taxonomy_type in [
-            "shared_canonical",
-            "credential_scoped",
-            "project_scoped",
-            "session_scoped",
-            "repo_local_static",
-            "client_global_bootstrap",
-            "not_a_service",
-        ]:
-            self.assertIn(taxonomy_type, text)
+    def load_taxonomy(self) -> dict:
+        return json.loads(TAXONOMY_CONTRACT_PATH.read_text(encoding="utf-8"))
+
+    def test_taxonomy_contract_defines_required_types(self) -> None:
+        taxonomy = self.load_taxonomy()
+        type_ids = {item["id"] for item in taxonomy["types"]}
+        self.assertEqual(
+            {
+                "shared_canonical",
+                "credential_scoped",
+                "project_scoped",
+                "session_scoped",
+                "repo_local_static",
+                "client_global_bootstrap",
+                "not_a_service",
+            },
+            type_ids,
+        )
+        for item in taxonomy["types"]:
+            with self.subTest(taxonomy_type=item["id"]):
+                self.assertTrue(item["meaning"])
+                self.assertTrue(item["instantiation_rule"])
+                self.assertTrue(item["readiness_evidence"])
+
+    def test_taxonomy_contract_maps_current_menu_examples(self) -> None:
+        taxonomy = self.load_taxonomy()
+        examples = {item["menu_item"]: item for item in taxonomy["menu_examples"]}
+        self.assertEqual(
+            {
+                "context7",
+                "exa-search",
+                "github",
+                "mentality",
+                "openzeppelin-solidity-contracts",
+                "playwright",
+                "ssh-tmux",
+                "web-search",
+                "serena",
+                "None",
+            },
+            set(examples),
+        )
+        expected_types = {
+            "context7": "shared_canonical",
+            "exa-search": "credential_scoped",
+            "github": "credential_scoped",
+            "mentality": "repo_local_static",
+            "openzeppelin-solidity-contracts": "shared_canonical",
+            "playwright": "session_scoped",
+            "ssh-tmux": "session_scoped",
+            "web-search": "credential_scoped",
+            "serena": "project_scoped",
+            "None": "not_a_service",
+        }
+        self.assertEqual(expected_types, {key: value["taxonomy_type"] for key, value in examples.items()})
+
+    def test_taxonomy_contract_makes_lifecycle_authority_explicit(self) -> None:
+        taxonomy = self.load_taxonomy()
+        self.assertEqual(
+            {
+                "service_binding_suffix_authority": "identifier_only",
+                "lifecycle_authority": "taxonomy_type",
+            },
+            taxonomy["interpretation_rules"],
+        )
+
+    def test_matrix_uses_structured_taxonomy_contract(self) -> None:
+        matrix = self.load_matrix()
+        taxonomy = self.load_taxonomy()
+        self.assertEqual("docs/contextforge-service-localization-taxonomy.json", matrix["taxonomy_contract"])
+        self.assertEqual(
+            {
+                "safe_probe_status": "probe_policy_or_probe_shape_only_not_service_readiness",
+                "current_slice": "current_branch_readiness_focus_only_not_umbrella_acceptance",
+                "active_service_readiness": "requires owner_issue evidence or explicit blocked/non-action result",
+            },
+            matrix["matrix_semantics"],
+        )
+        service_types = {item["taxonomy_type"] for item in matrix["services"]}
+        service_types.update(item["taxonomy_type"] for item in matrix["not_service_options"])
+        taxonomy_types = {item["id"] for item in taxonomy["types"]}
+        self.assertTrue(service_types <= taxonomy_types)
 
     def test_matrix_covers_helper_offered_services_and_excludes_none(self) -> None:
         matrix = self.load_matrix()
@@ -59,6 +129,7 @@ class ServiceReadinessMatrixTests(unittest.TestCase):
         for service in matrix["services"]:
             with self.subTest(service=service["service"]):
                 self.assertIn(service["taxonomy_type"], allowed_types)
+                self.assertTrue(service["display_name"])
                 self.assertIsInstance(service["owner_issue"], int)
                 self.assertTrue(service["source_paths"])
                 self.assertTrue(service["instantiation_path"])

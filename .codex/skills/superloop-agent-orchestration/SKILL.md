@@ -53,6 +53,14 @@ Own these surfaces:
 Do not let worker-local success become a global readiness claim. Worker and
 child output is evidence for the controller to integrate, not authority to ship.
 
+For model-dependent output, deterministic checks may verify structure but not
+meaning. No test, gate, score criterion, readiness claim, or acceptance claim
+may use matched strings, regexes, keyword searches, or string parsing as the
+oracle for free-form generated prose. The only exception is declared structured
+model output such as JSON, where scripts may check parseability, schema shape,
+required fields, and enum/value structure, and only when paired with
+non-deterministic evaluator review.
+
 ## Controller SuperLoop
 
 At re-entry:
@@ -63,6 +71,12 @@ At re-entry:
 4. Reconcile active leases, Agent owner values, worker reports, and open PRs.
 5. Choose the next best global move.
 
+Use dependency-aware sequencing, not issue-number dogma. Maintain a complete
+tentative queue, but reorder within hard dependency constraints when evidence
+shows that a lower-layer substrate, regression, or shared blocker is the better
+next target. Record the rationale in the package, dependency mesh, issue/PR
+comment, or goal checkpoint.
+
 During execution:
 
 1. Decompose roadmap intent into bounded work units.
@@ -70,7 +84,10 @@ During execution:
 3. Create or refresh leases before workers begin.
 4. Monitor worker progress without taking over local execution.
 5. Integrate returned evidence with current repo/GitHub/runtime evidence.
-6. Make final acceptance, merge, closure, or deferral decisions.
+6. Run reflective learning: classify surfaced improvements as
+   `incorporate_now`, `promote_regression`, `defer_with_owner`, or
+   `reject_with_rationale`.
+7. Make final acceptance, merge, closure, or deferral decisions.
 
 ## Worker Pool Cadence
 
@@ -107,6 +124,12 @@ Trust the pipeline when evidence is clean. If a worker and verifier provide
 bounded evidence and GitHub/Project automation reflects the expected state, do
 not redo the whole task locally. Rerun only the acceptance commands needed for
 controller confidence, then package, merge, defer, or lease the next fix.
+
+Do not ignore emergent improvement ideas just because the current package did
+not predict them. Study them at loop boundaries and either incorporate the
+smallest coherent improvement, promote a regression, defer with an owner, or
+reject with rationale. Reflection improves the queue; it must not become
+unbounded churn inside a leased work unit.
 
 Worker-local commits are acceptable when the lease permits them and the worker
 owns an isolated branch/worktree. Treat the commit as a reviewable artifact, not

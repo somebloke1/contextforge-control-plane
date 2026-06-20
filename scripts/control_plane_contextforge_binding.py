@@ -75,7 +75,7 @@ REQUIRED_CLIENT_BINDING_TRACE_LAYERS = (
 PROJECT_INIT_OWNER_MARKER = "# contextforge-project-init-owner = \"ContextForge\""
 PROJECT_INIT_BINDING_MARKER = "# contextforge-project-init-service-binding = \"{service_binding}\""
 PROJECT_INIT_SERVER_MARKER = "# contextforge-project-init-virtual-server = \"{virtual_server}\""
-VALIDATION_MODES = frozenset({"pending_choice", "validate_now", "presume_working"})
+VALIDATION_MODES = frozenset({"installed", "pending_choice", "validate_now", "presume_working"})
 PROJECT_INIT_APPROVAL_SCOPE = "project-local-client-config-and-state"
 PI_SHIM_SURFACE = "global Pi extension + .project/context_forge_state.json"
 OPENCODE_CONFIG_SURFACE = "opencode.json"
@@ -953,14 +953,16 @@ def build_project_init_validation_plan(
                 "service_family": service.get("service_family"),
                 "target_client": target_client,
                 "mode": validation_mode,
-                "required_proof": (
+                "required_proof": "not_required" if validation_mode == "installed" else (
                     "target_client_visible_mcp"
                     if validation_mode == "validate_now"
                     else ("user_validation_choice" if validation_mode == "pending_choice" else "deferred")
                 ),
                 "safe_default": _json_copy(policy),
                 "status": (
-                    "pending_target_client_probe"
+                    "installed_reload_required"
+                    if validation_mode == "installed"
+                    else "pending_target_client_probe"
                     if validation_mode == "validate_now"
                     else ("pending_user_validation_choice" if validation_mode == "pending_choice" else "presumed_working_without_probe")
                 ),
@@ -973,10 +975,10 @@ def build_project_init_validation_plan(
         "service_plans": service_plans,
         "asks_user_choice": True,
         "non_actions": [
-            "does not use backend health alone as target-client proof",
-            "does not call mutating tools during default validation",
-            "does not mark target-client verification passed when validation is presumed",
-            "does not mark target-client verification passed before validation choice",
+            "does not run post-install target-client validation",
+            "does not call mutating tools during project initialization",
+            "does not mark target-client verification passed during installation",
+            "requires a new client session or reload before newly installed tools are visible",
         ],
     }
 

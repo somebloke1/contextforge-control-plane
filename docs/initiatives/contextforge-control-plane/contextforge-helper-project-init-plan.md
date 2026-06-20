@@ -8,7 +8,7 @@ client config, project state, server runtime files, registry entries, catalog
 records, trust settings, or secrets directly. Agents call workflow tools exposed
 by the helper. The helper presents services, records decisions, mints approval
 challenges, consumes immutable consent receipts, applies approved project-local
-changes, records state, and coordinates validation.
+changes, records state, and returns the installed/reload-required completion.
 
 The helper is the **client-side activation authority** for a project's selected
 service set. ContextForge remains the canonical authority for service identity,
@@ -91,7 +91,7 @@ user input includes:
 - `next_turn.must_stop = true`
 
 The agent renders that one question, then stops. Selection, missing inputs,
-approval, conflicts, and validation choice are separate turns.
+approval, and conflicts are separate turns. Project init ends after apply.
 
 ## Dialogue States
 
@@ -102,11 +102,8 @@ approval, conflicts, and validation choice are separate turns.
 3. `present_plan`: helper returns exact effects, non-actions, stale inputs, and
    consent classes, then asks for scoped approval.
 4. `apply`: helper applies only a previously approved matching plan.
-5. `validation_choice`: helper asks whether to validate now or record presumed
-   working.
-6. `validate_or_record`: helper runs target-client-visible validation or records
-   presumed status without marking verification passed.
-7. `done_or_open_items`: helper reports verified services and open items.
+5. `installed`: helper reports selected tools installed and tells the user to
+   reload or start a new session so the tools register.
 
 Config conflicts are their own one-question turn. For an unmanaged
 `[mcp_servers.<alias>]` collision, the choices are: skip that service, keep the
@@ -146,8 +143,6 @@ Initial operation types:
 - `run_helper_operation`
 - `write_managed_client_config`
 - `write_project_state`
-- `validate_target_client_mcp`
-- `record_presumed_validation`
 - `rollback_or_reconcile`
 
 Every operation declares expected inputs and outputs, effect class, stale input
@@ -156,7 +151,7 @@ digests, idempotency key, rollback/reconcile behavior, and redaction status.
 ## Client Adapter Contract
 
 The controller owns workflow semantics, approval checks, apply jobs, project
-state, and validation sequencing. Client adapters own client-specific behavior.
+state, and install completion. Client adapters own client-specific behavior.
 
 Project-init client support is modeled as a registry of local-client adapters,
 not as scattered branch-specific file writers. Each adapter declares:
@@ -170,9 +165,8 @@ not as scattered branch-specific file writers. Each adapter declares:
 - required reload/new-session semantics
 - non-actions for global config, trust, restarts, ContextForge registry/catalog,
   and secret material
-- target-client-visible list-tools proof capability
-- target-client-visible safe call proof capability when available
-- unsupported behavior and skipped-proof reasons
+- post-install reload/new-session instruction
+- unsupported behavior and diagnostic-readback limits
 
 The v1 registry covers:
 
@@ -184,8 +178,7 @@ The v1 registry covers:
 | Pi | global Pi extension plus `.project/context_forge_state.json` | project state | Project-init records shim metadata only; global shim install/reload is a separate approved workflow. |
 
 Adapter capability flags include `supports_project_local_config`,
-`requires_restart`, `supports_target_visible_probe`, `trust_scope_model`, and
-`managed_config_surface`.
+`requires_restart`, `trust_scope_model`, and `managed_config_surface`.
 
 ## Activation Classes
 
@@ -254,10 +247,9 @@ config, catalog revision, descriptor digests, and helper operation versions.
 Digest mismatches fail closed or enter `fresh_approval_required`.
 
 Recovery states include `server_ready_local_pending`,
-`local_written_validation_pending`, `validation_pending`,
-`forward_record_required`, `rollback_by_approved_workflow`,
-`manual_recovery`, and `fresh_approval_required`. Duplicate backend instances
-and duplicate config blocks are forbidden.
+`forward_record_required`, `rollback_by_approved_workflow`, `manual_recovery`,
+and `fresh_approval_required`. Duplicate backend instances and duplicate config
+blocks are forbidden.
 
 ## Project State Contract
 
@@ -271,39 +263,18 @@ with:
 - selected service bindings and activation class
 - consent receipt refs by effect class
 - client adapter status and local config digest
-- validation mode, status, proof refs, skipped reasons, and safe probe id
+- installation status and reload/new-session requirement
 - non-actions and open items
 
-Validation tool contract:
+Installation completion contract:
 
-- `record_project_init_validation` / `cf_project_init_record_validation`
-  require `validation_results` to be a top-level object keyed by selected
-  service binding, normalized binding key, or service identity id.
-- Correct shape:
-
-  ```json
-  {
-    "context7:canonical": {
-      "status": "passed",
-      "target_client_visible": true,
-      "proof_kind": "target_client_safe_probe_result",
-      "safe_probe_result": "passed",
-      "safe_probe_id": "resolve-library-id",
-      "verification_trace_refs": [
-        "contextforge://control-plane/traces/context7:canonical-target-client"
-      ]
-    }
-  }
-  ```
-
-- For services with a safe-probe contract, the expected shape should include
-  the contract's proof fields. For Context7 this means the helper guidance
-  prefers the result shape produced by `build_safe_probe_validation_result()`,
-  not a generic backend-health or boolean-only substitute.
-- Nested payloads such as `{"services": {"context7:canonical": ...}}` are not
-  treated as useful validation. If a validate-now payload contains results but
-  none match selected service keys, the helper must return a non-recording
-  diagnostic such as `validation_results_unmatched`.
+- `cf_project_init_apply` is the terminal project-init action after approval.
+- The helper returns selected service bindings, installed status, and any
+  reload/new-session requirement.
+- The assistant reports that the selected ContextForge tools are installed and
+  that a new session or reload is required before the tools register.
+- The assistant stops after reporting the installed/reload-required result.
+  Stop there.
 
 Authority precedence:
 
@@ -316,30 +287,14 @@ Reconcile classifies `state_missing_config`, `config_without_state`,
 `descriptor_stale`, `unmanaged_conflict`, and `catalog_identity_missing` with
 deterministic next turns.
 
-## Validation
+## Completion Boundary
 
-Validation is controller-owned and adapter-executed. Backend health,
-ContextForge registry readback, and config presence are useful evidence, but
-they are insufficient to mark target-client verification passed.
-
-Acceptable Codex proof is an adapter-owned trace that includes:
-
-- target-client MCP list/readback evidence
-- safe target-client tool call when the service profile allows it
-- negative-policy evidence where applicable
-- timestamp, project root hash, client config digest, and redaction status
-- skipped reason when credentials or safe semantics are unavailable
-
-Default probes are non-destructive:
-
-- context7: list tools and call a safe docs/library lookup.
-- mentality: read/list only.
-- ssh-tmux: list/session visibility only.
-- github, web-search, exa, playwright, openzeppelin: read/search/list-like
-  probes only where credentials and semantics allow.
-
-If the user chooses presumed working, state records `presumed_working` and must
-not mark target-client verification passed or project status `initialized`.
+Project init ends after approved apply. The helper does not ask for a
+validate-now/presume-working choice, does not require a low-level reload
+acknowledgement key from the user, and does not record target-client probe
+results as part of the normal interaction. Runtime smoke tests may still be run
+by the development harness as project evidence, but they are not user-facing
+project-init turns and must not be exposed as a required post-install phase.
 
 ## Acceptance Gates
 
@@ -354,17 +309,17 @@ before the workflow is considered complete.
 | approval-provenance | stale/replayed/fabricated approval refs are rejected |
 | consent-split | approval receipts are per effect class; forbidden global classes fail |
 | catalog-realism | unsigned/stale descriptors and executable command text are rejected |
-| state-job-schema | activation jobs, step statuses, digests, validation records validate |
-| target-client-proof | backend-only success cannot mark validation passed |
-| presumed-working | presumed mode records deferred status, not verified status |
+| state-job-schema | activation jobs, step statuses, digests, and installed status are schema-checked |
+| installed-endpoint | project init ends after the installation package is applied |
+| no-post-install-validation | agents do not ask for or run validation after apply |
 | Serena-locality | missing local root/language blocks Serena before approval |
 | read-only-review | review/assessment agents are audited as no file/git/service mutation |
 
 Inference-inclusive tests must evaluate dialogue semantics, not string matches
 alone: available services are offered, questions are stepwise, selected services
 lead to project-local bindings only, agents do not install/restart/register
-unnecessarily, validation choice is asked after apply, validation defaults are
-non-destructive, and client config is not treated as service identity.
+unnecessarily, the assistant reports installed tools and the reload/new-session
+requirement after apply, and client config is not treated as service identity.
 
 ## Implementation Defaults
 

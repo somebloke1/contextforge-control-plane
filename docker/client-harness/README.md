@@ -102,9 +102,9 @@ that closes the gap between specialized ContextForge smoke scripts and ordinary
 ad hoc client sessions.
 
 See `USE_CASE_1_E2E_GATE.md` for the required PR #271 / Use Case 1 gate before
-human validation. Human validation must be preceded by passing Pi and OpenCode
-full command-line agent-session transcripts, with stable session ids and
-observed tool outputs, verified by
+human review. Human review must be preceded by passing Pi and OpenCode full
+command-line agent-session transcripts, with stable session ids and observed
+tool outputs, verified by
 `scripts/verify-use-case-1-e2e-evidence.py`.
 
 See `../../docs/client-visible-activation-matrix.md` for the client-specific
@@ -132,18 +132,18 @@ repeatable during staging.
 Pi, OpenCode, Gemini, Codex, and similar tools are representative
 code-assistant consumers in this harness. ContextForge production
 responsibility reaches the helper service and the services that the helper
-facilitates; code-assistant runtimes are validated as consumers, not as runtime
+facilitates; code-assistant runtimes are exercised as consumers, not as runtime
 surfaces owned by this control plane. Pi and OpenCode are the currently
-configured local-Qwen validation sample because they are thin consumers,
+configured local-Qwen install/readback samples because they are thin consumers,
 especially Pi, and expose less-mediated model behavior during development
-validation.
+checks.
 
 Use the ordinary `pi` and `opencode` Compose services when a dev-time test
-needs multi-session persistence in `/workspace`, such as resuming a partially
-applied project-init flow at validation time. Persistent tests must also prove
-idempotency: rerunning the same activation/resume flow should converge on the
-same project-local state and should not leave duplicate, stale, or orphaned
-library/config artifacts behind.
+needs multi-session persistence in `/workspace`, such as exercising project
+init through install plus reload/new-session-required. Persistent tests must
+also prove idempotency: rerunning the same activation/resume flow should
+converge on the same project-local state and should not leave duplicate, stale,
+or orphaned library/config artifacts behind.
 
 The Pi service also wraps bare `pi` commands inside the container. A developer
 who enters the persistent container with `docker compose -f
@@ -205,11 +205,11 @@ diagnostics that must not be cited as target-client safe-call proof, set
 
 ## Pi ContextForge Dev Gateway Path
 
-Pi remains shim-first. The real Pi validation target is
-`cf_contextforge_pi_validate` from `pi-extensions/contextforge-global-shim`,
-not direct `/mcp` consumption. Container-local Pi validation needs the shim to
-run against the development gateway with explicit wrapper overrides. The Debian
-Pi image includes a container-local wrapper runtime under
+Pi remains shim-first. The Pi client Docker smoke uses
+`cf_contextforge_pi_readback` from `pi-extensions/contextforge-global-shim`,
+not direct `/mcp` consumption. Container-local Pi readback needs the shim to run
+against the development gateway with explicit wrapper overrides. The Debian Pi
+image includes a container-local wrapper runtime under
 `/opt/contextforge-wrapper-venv`, so it does not depend on the host repo
 `.venv`:
 
@@ -219,7 +219,7 @@ Pi image includes a container-local wrapper runtime under
 - `CONTEXTFORGE_BEARER_TOKEN` set to a scoped dev token
 - `CONTEXTFORGE_TOKEN_CACHE` pointing at client-container local/ignored state
 
-Run the Pi validation smoke with:
+Run the Pi readback smoke with:
 
 ```sh
 scripts/smoke-pi-contextforge-dev.sh
@@ -227,10 +227,11 @@ scripts/smoke-pi-contextforge-dev.sh
 
 The script creates a disposable ignored `.project/context_forge_state.json`
 inside the client-harness workspace, loads the shim through Pi's explicit
-`--extension` flag, calls `cf_contextforge_pi_validate` against
+`--extension` flag, calls `cf_contextforge_pi_readback` against
 `mentality_dev_docker_server`, writes evidence under ignored `evidence/`, and
 revokes the scoped token before exit. It prints only the token id, never the raw
-token value.
+token value. Project init itself stops after install plus reload/new-session
+required; service-specific tool use is a separate client exercise.
 
 Do not install or reload the host user-global Pi extension for this harness
 without separate approval.

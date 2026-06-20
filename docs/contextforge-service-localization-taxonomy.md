@@ -2,6 +2,9 @@
 
 Issues: #270, #259, #247
 
+Structured contract:
+`docs/contextforge-service-localization-taxonomy.json`.
+
 This taxonomy defines how ContextForge control-plane work distinguishes a
 service's real lifecycle boundary before claiming project activation readiness.
 It is a source/docs/tests contract. It does not authorize runtime, registry,
@@ -27,6 +30,9 @@ session-scoped, or only a client bootstrap surface.
 ## Mapping Rules
 
 - Client configs are consumption surfaces, not service identity.
+- Service binding suffixes such as `canonical` or `credential_scoped` are
+  stable identifiers. `taxonomy_type` is the authoritative lifecycle and
+  localization class.
 - Project-local activation may bind to a shared service without creating a
   per-project backend.
 - User-global Pi/OpenCode/Codex/Gemini hooks and helper bootstraps trigger or
@@ -65,4 +71,3 @@ selection, plan, approval, apply, and readback. This taxonomy prevents #247
 from treating all menu choices as equivalent. #259 uses the taxonomy to build
 the readiness matrix, #260 proves the first `context7` path, and #269 later
 validates single, curated multi-service, and all-services selection shapes.
-

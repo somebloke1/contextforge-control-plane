@@ -43,3 +43,16 @@ Fixture discipline:
 - Keep malicious metadata, redaction, disabled/no-service, sticky-decline,
   trust, remote-exposure, and service-management handoff cases intact unless the
   acceptance criteria explicitly change.
+
+Evaluation boundary:
+
+- Deterministic tests may check machine facts: command status, file existence,
+  schema validity, JSON parseability, required fields, enum/value structure,
+  reset postconditions, and evidence artifact presence.
+- Deterministic tests must not decide semantic meaning in free-form model
+  output with matched strings, regexes, keyword searches, or string parsing.
+  They may capture, segment, index, and cite text for an evaluator, but not
+  score its meaning.
+- For declared structured model output such as JSON, deterministic structure
+  checks are allowed only when paired with non-deterministic evaluator review
+  for any semantic acceptance claim.

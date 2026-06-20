@@ -32,6 +32,8 @@ x-opencode-contextforge-baseline: &opencode-contextforge-baseline
     CONTEXTFORGE_OPENCODE_CONFIG_TARGET: /home/agent/.config/opencode/opencode.json
     CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE: /config/opencode/plugins/contextforge-project-init.js
     CONTEXTFORGE_OPENCODE_PLUGIN_TARGET: /home/agent/.config/opencode/plugins/contextforge-project-init.js
+    CONTEXTFORGE_OPENCODE_RULES_SOURCE: /config/opencode/AGENTS.md
+    CONTEXTFORGE_OPENCODE_RULES_TARGET: /home/agent/.config/opencode/AGENTS.md
     CONTEXTFORGE_OPENCODE_HOOK: /repo/scripts/opencode_project_init_hook.py
     CONTEXTFORGE_OPENCODE_HOOK_PYTHON: /opt/contextforge-helper-venv/bin/python
     CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON: /opt/contextforge-helper-venv/bin/python

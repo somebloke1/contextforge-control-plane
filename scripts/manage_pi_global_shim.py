@@ -102,14 +102,14 @@ def install_plan(source_dir: Path = SOURCE_DIR, target_dir: Path = TARGET_DIR) -
         ],
         "client_reload": reload_requirement,
         "next_turn": {
-            "question_id": "pi-client-reload-before-validation",
-            "prompt": 'Issue /reload in Pi before validating ContextForge service functionality with the new or changed extension tools. After the reload, resume project init and choose 1 or reply "validate" to run validation; choose 2 or reply "skip validation" to record presumed working without verification.',
+            "question_id": "pi-client-reload-after-install",
+            "prompt": "Issue /reload in Pi so the newly installed ContextForge tools register.",
             "choices": [
                 {
                     "number": 1,
                     "id": "issue_reload",
                     "label": "Issue /reload",
-                    "effect": "Reload Pi extension code so validation uses the newly installed or changed ContextForge shim.",
+                    "effect": "Reload Pi extension code so the newly installed or changed ContextForge shim is available.",
                 }
             ],
             "response_form": {
@@ -119,12 +119,12 @@ def install_plan(source_dir: Path = SOURCE_DIR, target_dir: Path = TARGET_DIR) -
                         "number": 1,
                         "id": "issue_reload",
                         "label": "Issue /reload",
-                        "effect": "Reload Pi extension code so validation uses the newly installed or changed ContextForge shim.",
+                        "effect": "Reload Pi extension code so the newly installed or changed ContextForge shim is available.",
                     }
                 ],
                 "respond_with": "selection number or option id",
             },
-            "allowed_response_shape": 'issue /reload in Pi, then resume project init and choose 1 or reply "validate"; choose 2 or reply "skip validation"',
+            "allowed_response_shape": "issue /reload in Pi, then resume project init from the reloaded Pi session",
             "must_stop": True,
         },
     }

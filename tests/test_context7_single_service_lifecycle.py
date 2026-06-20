@@ -62,7 +62,7 @@ class Context7SingleServiceLifecycleTests(unittest.TestCase):
 
         self.assertFalse(result["dry_run"])
         self.assertEqual([str(project_state.project_state_path(root))], result["writes"])
-        self.assertEqual("pi-client-reload-before-validation", result["next_turn"]["question_id"])
+        self.assertEqual("pi-project-init-installed", result["next_turn"]["question_id"])
         self.assertEqual("/reload", result["client_reload_requirement"]["command"])
         self.assertFalse((root / "opencode.json").exists())
         self.assertIsNotNone(state)
@@ -73,7 +73,7 @@ class Context7SingleServiceLifecycleTests(unittest.TestCase):
             state["services"]["context7:canonical"]["lifecycle"]["activation"],
         )
         self.assertEqual(
-            "pending",
+            "installed",
             state["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"],
         )
 
@@ -91,7 +91,7 @@ class Context7SingleServiceLifecycleTests(unittest.TestCase):
             ],
             result["writes"],
         )
-        self.assertEqual("opencode-client-reload-before-validation", result["next_turn"]["question_id"])
+        self.assertEqual("opencode-project-init-installed", result["next_turn"]["question_id"])
         self.assertEqual("start_new_session", result["client_reload_requirement"]["command"])
         self.assertIn("context7", opencode_config["mcp"])
         self.assertIsNotNone(state)
@@ -104,7 +104,7 @@ class Context7SingleServiceLifecycleTests(unittest.TestCase):
             service["target_clients"]["opencode"]["status"],
         )
         self.assertEqual(
-            "pending",
+            "installed",
             service["verification_layers"]["target_client"]["status"],
         )
 

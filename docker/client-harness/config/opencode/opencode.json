@@ -12,9 +12,6 @@
       "environment": {
         "CONTEXTFORGE_HELPER_DEFAULT_CLIENT_TYPE": "opencode",
         "CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1",
-        "CONTEXTFORGE_HELPER_REQUIRE_USER_RELOAD_TEXT": "1",
-        "CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT": "1",
-        "CONTEXTFORGE_HELPER_RECORD_RELOAD_ON_VALIDATION_REQUEST": "1",
         "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": "/home/agent/.local/state/contextforge-client-harness-runtime/project-init/opencode-latest-user-message.json",
         "CONTEXTFORGE_OPENCODE_DENY_RAW_WORKSPACE_MUTATION": "1",
         "MCP_WRAPPER_LOG_LEVEL": "INFO",

@@ -7,7 +7,13 @@
     "first_single_service": 260
   },
   "taxonomy_doc": "docs/contextforge-service-localization-taxonomy.md",
+  "taxonomy_contract": "docs/contextforge-service-localization-taxonomy.json",
   "safe_probe_catalog": "docs/safe-client-visible-validation-probes.md",
+  "matrix_semantics": {
+    "safe_probe_status": "probe_policy_or_probe_shape_only_not_service_readiness",
+    "current_slice": "current_branch_readiness_focus_only_not_umbrella_acceptance",
+    "active_service_readiness": "requires owner_issue evidence or explicit blocked/non-action result"
+  },
   "not_service_options": [
     {
       "id": "none",
@@ -20,6 +26,7 @@
   "services": [
     {
       "service": "context7",
+      "display_name": "context7",
       "service_binding": "context7:canonical",
       "taxonomy_type": "shared_canonical",
       "owner_issue": 260,
@@ -54,6 +61,7 @@
     },
     {
       "service": "exa-search",
+      "display_name": "exa-search",
       "service_binding": "exa-search:credential_scoped",
       "taxonomy_type": "credential_scoped",
       "owner_issue": 261,
@@ -79,6 +87,7 @@
     },
     {
       "service": "github",
+      "display_name": "github",
       "service_binding": "github:canonical",
       "taxonomy_type": "credential_scoped",
       "owner_issue": 262,
@@ -104,6 +113,7 @@
     },
     {
       "service": "mentality",
+      "display_name": "mentality",
       "service_binding": "mentality:static_repo_local",
       "taxonomy_type": "repo_local_static",
       "owner_issue": 263,
@@ -131,6 +141,7 @@
     },
     {
       "service": "openzeppelin-solidity-contracts",
+      "display_name": "openzeppelin-solidity-contracts",
       "service_binding": "openzeppelin-solidity-contracts:canonical",
       "taxonomy_type": "shared_canonical",
       "owner_issue": 264,
@@ -155,6 +166,7 @@
     },
     {
       "service": "playwright",
+      "display_name": "playwright",
       "service_binding": "playwright:session_scoped",
       "taxonomy_type": "session_scoped",
       "owner_issue": 265,
@@ -181,6 +193,7 @@
     },
     {
       "service": "ssh-tmux",
+      "display_name": "ssh-tmux",
       "service_binding": "ssh-tmux:session_scoped",
       "taxonomy_type": "session_scoped",
       "owner_issue": 266,
@@ -207,6 +220,7 @@
     },
     {
       "service": "web-search",
+      "display_name": "web-search",
       "service_binding": "web-search:credential_scoped",
       "taxonomy_type": "credential_scoped",
       "owner_issue": 267,
@@ -232,6 +246,7 @@
     },
     {
       "service": "serena",
+      "display_name": "serena",
       "service_binding_pattern": "serena:<project-root-hash-prefix>",
       "taxonomy_type": "project_scoped",
       "owner_issue": 268,

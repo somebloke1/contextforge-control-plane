@@ -97,15 +97,30 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
     if operation == "render_project_init_prompt":
         return _ok(_render_prompt(project_root, client_type=client_type))
     if operation == "get_project_context":
-        return _ok(helper.helper_readiness(project_root=project_root, client_type=client_type))
+        return _mcp_helper().client_visible_project_init_payload(
+            _ok(helper.helper_readiness(project_root=project_root, client_type=client_type))
+        )
+    if operation == "get_project_tool_availability":
+        return _mcp_helper().client_visible_project_tool_availability_payload(
+            _mcp_helper().project_tool_availability(project_root=project_root, client_type=client_type)
+        )
+    if operation == "get_project_capability_summary":
+        return _mcp_helper().client_visible_project_capability_summary_payload(
+            _mcp_helper().project_capability_summary(project_root=project_root, client_type=client_type)
+        )
+    if operation == "get_project_state_readback":
+        return _mcp_helper().client_visible_project_state_readback_payload(
+            _mcp_helper().project_state_readback(project_root=project_root, client_type=client_type)
+        )
     if operation == "list_available_capabilities":
-        return _ok(
+        result = _ok(
             helper.list_available_capabilities(
                 project_root=project_root,
                 client_type=client_type,
                 contextforge_servers=data.get("contextforge_servers") or data.get("contextforgeServers"),
             )
         )
+        return _mcp_helper().client_visible_project_init_payload(result)
     if operation == "propose_project_init":
         return _mcp_helper().propose_project_init(
             project_root,
@@ -145,7 +160,7 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
             dry_run=bool(data.get("dry_run") or data.get("dryRun")),
         )
     if operation == "repair_pending_project_init_config":
-        return _ok(
+        result = _ok(
             helper.repair_pending_project_init_config(
                 project_root=project_root,
                 client_type=client_type,
@@ -154,25 +169,7 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
                 dry_run=bool(data.get("dry_run") or data.get("dryRun")),
             )
         )
-    if operation == "record_project_init_validation":
-        return _ok(
-            helper.record_project_init_validation(
-                project_root=project_root,
-                validation_mode=str(data.get("validation_mode") or data.get("validationMode") or ""),
-                validation_results=data.get("validation_results") or data.get("validationResults"),
-                client_type=client_type,
-                dry_run=bool(data.get("dry_run") or data.get("dryRun")),
-            )
-        )
-    if operation == "record_project_init_client_reload":
-        return _ok(
-            helper.record_project_init_client_reload(
-                project_root=project_root,
-                client_type=client_type,
-                validation_mode=data.get("validation_mode") or data.get("validationMode"),
-                dry_run=bool(data.get("dry_run") or data.get("dryRun")),
-            )
-        )
+        return _mcp_helper().client_visible_project_init_payload(result)
     raise ValueError(f"unsupported operation: {operation}")
 
 

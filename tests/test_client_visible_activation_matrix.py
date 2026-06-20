@@ -50,7 +50,7 @@ class ClientVisibleActivationMatrixTests(unittest.TestCase):
             "cf_project_init_*",
             "cf_contextforge_pi_readback",
             "guidance lookup",
-            "cf_contextforge_pi_validate",
+            "approved service tools through the Pi shim after reload/new session",
             "opencode mcp list",
             "scripts/opencode_project_init_hook.py",
         ]
@@ -70,9 +70,8 @@ class ClientVisibleActivationMatrixTests(unittest.TestCase):
             "Claim `OpenCode active` only from OpenCode-visible plugin/helper/MCP readback",
             "state that the source path is prepared and runtime validation remains unproven",
             "Do not generalize that evidence to host Pi global install/reload or Codex hook behavior",
-            "docs/safe-client-visible-validation-probes.md",
-            "known safe target-client-visible probe",
-            "skipped or presumed-working",
+            "Service-specific tool checks are separate from project init",
+            "Project init stops after install plus reload/new-session-required",
         ]
 
         for phrase in required_phrases:

@@ -864,7 +864,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("replace_after_scoped_project_init_approval", planned_state["recovery"])
         self.assertIn("project_state_recovery", proposal["plan_summary"])
         self.assertEqual("invalid", proposal["plan_summary"]["project_state_recovery"]["artifact_status"])
-        self.assertEqual("in_progress", result["state_status"])
+        self.assertEqual("initialized", result["state_status"])
         assert written is not None
         self.assertIn("context7:canonical", written["services"])
         self.assertNotIn("x_stale_fixture", written)
@@ -890,7 +890,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         self.assertEqual("available", readiness["helper"]["status"])
         self.assertEqual("/reload", readiness["client_reload_requirement"]["command"])
-        self.assertIn("Before validating", readiness["client_reload_requirement"]["instruction"])
+        self.assertIn("issue /reload in Pi", readiness["client_reload_requirement"]["instruction"])
         self.assertEqual(["project_state_write"], proposal["required_consent_classes"])
         self.assertEqual(binding.PI_SHIM_SURFACE, proposal["config_plan"]["surface"])
         self.assertIsNone(proposal["config_plan"]["config_path"])
@@ -1018,8 +1018,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         assert codex_resume is not None
         assert gemini_resume is not None
-        self.assertIn(codex_resume["status"], {"config_repair_required", "client_reload_required", "resume_validation"})
-        self.assertIn(gemini_resume["status"], {"config_repair_required", "client_reload_required", "resume_validation"})
+        self.assertIn(codex_resume["status"], {"config_repair_required", "client_reload_required", "installed_reload_required"})
+        self.assertIn(gemini_resume["status"], {"config_repair_required", "client_reload_required", "installed_reload_required"})
         self.assertEqual(
             codex_state["project_init"]["client_states"]["codex"]["current_job_id"],
             codex_resume["current_job"]["job_id"],
@@ -1054,10 +1054,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual({"project_state_write"}, {receipt["consent_class"] for receipt in approval["receipts"]})
         self.assertEqual({"pi"}, {receipt["source_client"] for receipt in approval["receipts"]})
         self.assertTrue(result["dry_run"])
-        self.assertEqual("pi-client-reload-before-validation", result["next_turn"]["question_id"])
+        self.assertEqual("pi-project-init-installed", result["next_turn"]["question_id"])
         self.assertEqual("/reload", result["client_reload_requirement"]["command"])
-        self.assertIn("After the reload", result["next_turn"]["prompt"])
-        self.assertIn('choose 1 or reply "validate"', result["next_turn"]["allowed_response_shape"])
+        self.assertIn("tools are installed", result["next_turn"]["prompt"])
+        self.assertIn("/reload", result["next_turn"]["prompt"])
+        self.assertNotIn("validate", result["next_turn"]["allowed_response_shape"])
+        self.assertNotIn("skip validation", result["next_turn"]["allowed_response_shape"])
         self.assertEqual("single_select", result["next_turn"]["response_form"]["type"])
         self.assertFalse((root / ".codex/config.toml").exists())
         service = result["planned_state"]["services"]["context7:canonical"]
@@ -1124,12 +1126,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("skipped", result["validation_signals"][0]["status"])
         self.assertEqual("no_matching_safe_pi_tool", result["validation_signals"][0]["skipped_reason"])
 
-    def test_pi_helper_resumes_pending_validation_when_shim_metadata_is_current(self) -> None:
+    def test_pi_helper_reports_installed_when_shim_metadata_is_current(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
-            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi")
             state = project_state.apply_project_init_activation_to_state(
                 project_state.default_state(root),
                 selected,
@@ -1141,20 +1143,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             project_state.write_state_atomic(root, state)
 
-            reload_required = helper.list_available_capabilities(project_root=root, client_type="pi")
-            ack = record_pi_reload(root)
             capabilities = helper.list_available_capabilities(project_root=root, client_type="pi")
             proposal = helper.propose_project_init(project_root=root, selected_services=[service_descriptor("github")], client_type="pi")
 
-        self.assertEqual("client_reload_required", reload_required["status"])
-        self.assertEqual("pi-client-reload-before-validation", reload_required["next_turn"]["question_id"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertTrue(ack["current_job"]["client_reload_acknowledged"])
-        self.assertEqual("resume_validation", capabilities["status"])
-        self.assertEqual("validation-choice", capabilities["next_turn"]["question_id"])
+        self.assertEqual("client_reload_required", capabilities["status"])
+        self.assertEqual("pi-project-init-installed", capabilities["next_turn"]["question_id"])
         self.assertEqual(["context7:canonical"], capabilities["current_job"]["selected_service_bindings"])
-        self.assertEqual("resume_validation", proposal["status"])
-        self.assertEqual("validation-choice", proposal["next_turn"]["question_id"])
+        self.assertEqual("client_reload_required", proposal["status"])
+        self.assertEqual("pi-project-init-installed", proposal["next_turn"]["question_id"])
 
     def test_client_reload_fsm_carries_resumed_validation_intent_without_second_choice(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1229,12 +1225,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("record-presumed-working", ack["next_action"]["id"])
         self.assertEqual("presume_working", ack["current_job"]["client_reload_fsm"]["validation_intent"])
 
-    def test_pi_helper_detects_and_repairs_pending_shim_metadata_drift(self) -> None:
+    def test_pi_helper_detects_and_repairs_installed_shim_metadata_drift(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
-            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi")
             state = project_state.apply_project_init_activation_to_state(
                 project_state.default_state(root),
                 selected,
@@ -1248,38 +1244,26 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             project_state.write_state_atomic(root, state)
 
             capabilities = helper.list_available_capabilities(project_root=root, client_type="pi")
-            blocked_validation = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": True}},
-                dry_run=True,
-            )
             repair = helper.repair_pending_project_init_config(project_root=root, client_type="pi")
             repaired_state = project_state.load_state(root)
             after = helper.list_available_capabilities(project_root=root, client_type="pi")
-            ack = record_pi_reload(root)
-            after_ack = helper.list_available_capabilities(project_root=root, client_type="pi")
 
         self.assertEqual("config_repair_required", capabilities["status"])
         self.assertEqual("repair-pi-shim-activation-metadata", capabilities["next_turn"]["question_id"])
         self.assertEqual(["github:canonical"], capabilities["config_repair"]["changed_service_bindings"])
-        self.assertEqual("config_repair_required", blocked_validation["status"])
         self.assertEqual("config_repaired", repair["status"])
         self.assertFalse((root / ".codex/config.toml").exists())
         assert repaired_state is not None
         self.assertEqual("contextforge-global-shim", repaired_state["services"]["github:canonical"]["target_clients"]["pi"]["shim"])
         self.assertEqual("client_reload_required", after["status"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("resume_validation", after_ack["status"])
-        self.assertEqual("validation-choice", after_ack["next_turn"]["question_id"])
+        self.assertEqual("pi-project-init-installed", after["next_turn"]["question_id"])
 
-    def test_pi_helper_records_validation_only_with_pi_visible_proof(self) -> None:
+    def test_pi_helper_records_installation_without_post_install_validation(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
-            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi")
             state = project_state.apply_project_init_activation_to_state(
                 project_state.default_state(root),
                 selected,
@@ -1290,57 +1274,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
             )
             project_state.write_state_atomic(root, state)
-
-            blocked_before_reload = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": pi_safe_probe_validation()},
-                dry_run=True,
-            )
-            ack = record_pi_reload(root)
-            backend_only = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": False}},
-                dry_run=True,
-            )
-            weak_visible = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={
-                    "context7:canonical": {
-                        "status": "passed",
-                        "target_client_visible": True,
-                        "verification_trace_refs": ["pi://contextforge-global-shim/tools/cf_context7_s123__resolve"],
-                    }
-                },
-                dry_run=True,
-            )
-            visible = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": pi_safe_probe_validation()},
-            )
             written = project_state.load_state(root)
 
-        self.assertEqual("client_reload_required", blocked_before_reload["status"])
-        self.assertEqual("pi-client-reload-before-validation", blocked_before_reload["next_turn"]["question_id"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("validation_results_insufficient", backend_only["status"])
-        self.assertEqual(["context7:canonical"], backend_only["validation_proof_diagnostic"]["insufficient_keys"])
-        self.assertEqual("validation_results_insufficient", weak_visible["status"])
-        self.assertEqual(["context7:canonical"], weak_visible["validation_proof_diagnostic"]["insufficient_keys"])
-        self.assertEqual("validation_recorded", visible["status"])
-        self.assertEqual("initialized", visible["project_status"])
         self.assertFalse((root / ".codex/config.toml").exists())
         assert written is not None
+        self.assertEqual("initialized", written["status"])
         service = written["services"]["context7:canonical"]
-        self.assertEqual("passed", service["target_clients"]["pi"]["validation_status"])
-        self.assertEqual("passed", service["verification_layers"]["target_client"]["status"])
+        self.assertEqual("installed", service["target_clients"]["pi"]["validation_status"])
+        self.assertEqual("installed", service["verification_layers"]["target_client"]["status"])
 
     def test_pi_helper_restores_safe_policy_from_state_with_null_policy(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1375,91 +1316,6 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(common.safe_validation_policy("context7"), policy)
         self.assertEqual("passed", written["services"]["context7:canonical"]["target_clients"]["pi"]["validation_status"])
 
-    def test_pi_validation_result_keyed_by_service_identity_is_recordable(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
-            root = Path(tmp).resolve()
-            selected = [service_descriptor("context7")]
-            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
-            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
-            state = project_state.apply_project_init_activation_to_state(
-                project_state.default_state(root),
-                selected,
-                target_client="pi",
-                client_config_plan=config_plan,
-                validation_plan=validation_plan,
-                validation_results={},
-                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
-            )
-            written_state = project_state.write_state_atomic(root, state)
-            service_identity_id = written_state["services"]["context7:canonical"]["x_service_identity_id"]
-
-            record_pi_reload(root)
-            result = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={service_identity_id: pi_safe_probe_validation()},
-            )
-            written = project_state.load_state(root)
-
-        self.assertEqual("validation_recorded", result["status"])
-        self.assertEqual("initialized", result["project_status"])
-        assert written is not None
-        self.assertEqual("passed", written["services"]["context7:canonical"]["target_clients"]["pi"]["validation_status"])
-        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
-
-    def test_pi_helper_can_revalidate_after_stale_skipped_readback(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
-            root = Path(tmp).resolve()
-            selected = [service_descriptor("context7")]
-            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
-            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
-            state = project_state.apply_project_init_activation_to_state(
-                project_state.default_state(root),
-                selected,
-                target_client="pi",
-                client_config_plan=config_plan,
-                validation_plan=validation_plan,
-                validation_results={},
-                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
-            )
-            project_state.write_state_atomic(root, state)
-
-            record_pi_reload(root)
-            first = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={
-                    "context7:canonical": {
-                        "status": "skipped",
-                        "skipped_reason": "project state has no approved target_clients.pi service bindings",
-                    }
-                },
-            )
-            stale = project_state.load_state(root)
-            assert stale is not None
-            job = stale["project_init"]["activation_jobs"][stale["project_init"]["current_job_id"]]
-            job["local_client_config_digest"] = "sha256:" + ("0" * 64)
-            project_state.write_state_atomic(root, stale)
-
-            resume = helper.list_available_capabilities(project_root=root, client_type="pi")
-            result = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": pi_safe_probe_validation()},
-            )
-            written = project_state.load_state(root)
-
-        self.assertEqual("validation_recorded", first["status"])
-        self.assertEqual("resume_validation", resume["status"])
-        self.assertEqual("validation_recorded", result["status"])
-        assert written is not None
-        self.assertEqual("initialized", written["status"])
-        job = written["project_init"]["activation_jobs"][written["project_init"]["current_job_id"]]
-        self.assertNotEqual("sha256:" + ("0" * 64), job["local_client_config_digest"])
-        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
     def test_pi_global_shim_install_plan_is_explicit_and_non_mutating_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1487,20 +1343,22 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn(str(Path.home() / ".pi" / "agent" / "extensions" / "mcp-bridge"), plan["planned_non_writes"])
         self.assertEqual(str(REPO_ROOT), root_config["portalRoot"])
         self.assertEqual("/reload", plan["client_reload"]["command"])
-        self.assertEqual("pi-client-reload-before-validation", plan["next_turn"]["question_id"])
-        self.assertIn("After the reload", plan["next_turn"]["prompt"])
-        self.assertIn('choose 1 or reply "validate"', plan["next_turn"]["allowed_response_shape"])
+        self.assertEqual("pi-client-reload-after-install", plan["next_turn"]["question_id"])
+        self.assertIn("newly installed ContextForge tools register", plan["next_turn"]["prompt"])
+        self.assertIn("/reload", plan["next_turn"]["prompt"])
+        self.assertNotIn("validate", plan["next_turn"]["allowed_response_shape"])
+        self.assertNotIn("skip validation", plan["next_turn"]["allowed_response_shape"])
         self.assertEqual(1, plan["next_turn"]["choices"][0]["number"])
         self.assertEqual("installed_current", installed["status"])
         self.assertEqual("/reload", installed["client_reload"]["command"])
-        self.assertIn("Before validating", installed["next_action"])
+        self.assertIn("issue /reload in Pi", installed["next_action"])
 
     def test_pi_extension_source_registers_bootstrap_helper_tools_without_bridge_reuse(self) -> None:
         text = (REPO_ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
 
         self.assertIn("cf_project_init_list_capabilities", text)
         self.assertIn("cf_project_init_approve", text)
-        self.assertIn("cf_project_init_record_client_reload", text)
+        self.assertNotIn("cf_project_init_record_client_reload", text)
         self.assertIn("pi_project_init_helper_cli.py", text)
         self.assertNotIn('pi.on("input"', text)
         self.assertNotIn('action: "transform"', text)
@@ -1509,26 +1367,26 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("contextforge-project-init-first-prompt", text)
         self.assertIn("firstPromptInitOffered", text)
         self.assertIn("display: false", text)
-        self.assertIn("Your first action must be a tool call to cf_project_init_list_capabilities", text)
+        self.assertIn("Use the current Pi session transcript to decide whether this is the first project-init turn or a continuation", text)
+        self.assertIn("A numeric service selection is never approval", text)
+        self.assertIn("Do not answer, resume, or return to the user's original ordinary prompt", text)
         self.assertIn("Do not invent, rename, summarize, or substitute service names from memory", text)
-        self.assertIn("helper could not be called; do not invent a service list", text)
+        self.assertIn("do not invent a service list", text)
         self.assertIn("Which ContextForge services should I activate for this project?", text)
         self.assertIn('items: { type: "string" }', text)
         self.assertIn("minItems: 1", text)
         self.assertIn("next_turn.choices[].id", text)
         self.assertIn('for example \\"context7:canonical\\"', text)
-        self.assertIn('target_client: "pi"', text)
-        self.assertIn("tool_name: candidate.route.mcpName", text)
+        self.assertIn('client_type: "pi"', text)
         self.assertIn("root === workspaceRoot", text)
         self.assertNotIn("systemPrompt:", text)
         self.assertIn("runHelperOperationJson", text)
         self.assertIn("projectInitCache", text)
         self.assertIn("resolveCachedPlan", text)
-        self.assertIn('runHelperOperationJson("cf_project_init_approve"', text)
-        self.assertIn('runHelperOperationJson("cf_project_init_apply"', text)
+        self.assertIn('operation === "cf_project_init_approve"', text)
+        self.assertIn('operation === "cf_project_init_apply"', text)
         self.assertIn("status: \"already_approved_from_pi_shim_cache\"", text)
         self.assertIn("status: \"already_applied_from_pi_shim_cache\"", text)
-        self.assertIn("Supplying the full plan is optional", text)
         self.assertIn('renderShell: "self"', text)
         self.assertIn("renderNothing", text)
         self.assertIn("new Container()", text)
@@ -1548,14 +1406,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("readback.resources", text)
         self.assertIn("lookupGuidance", text)
         self.assertIn("guidanceLookupKeys", text)
-        self.assertIn("cf_contextforge_pi_validate", text)
-        self.assertIn("cf_project_init_validate", text)
-        self.assertIn("Compatibility alias for cf_contextforge_pi_validate", text)
-        self.assertIn("runPiValidation", text)
-        self.assertIn('proof_kind: "pi_safe_probe_result"', text)
-        self.assertIn("safe_probe_result", text)
-        self.assertIn("safe_probe_available", text)
-        self.assertIn("Call cf_project_init_record_validation", text)
+        self.assertNotIn("cf_contextforge_pi_validate", text)
+        self.assertNotIn("cf_project_init_validate", text)
+        self.assertNotIn("runPiValidation", text)
+        self.assertNotIn("Call cf_project_init_record_validation", text)
         self.assertIn("await activateProject(pi, projectRootFromParams(params, ctx), clients)", text)
         self.assertIn("routeNamesByKey", text)
         self.assertIn("stableRouteToolName", text)
@@ -1569,14 +1423,6 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("completed_unverified", text)
         self.assertIn("serviceIdentityToolSegment", text)
         self.assertIn("shouldRefreshAfterHelperOperation", text)
-        self.assertIn("defaultSafeOperationsFor", text)
-        self.assertIn("safeProbeArgs", text)
-        self.assertIn("fitArgsToSchema", text)
-        self.assertIn('base.libraryName = "python"', text)
-        self.assertIn('base.query = "standard library documentation lookup"', text)
-        self.assertIn('base.query = "modelcontextprotocol"', text)
-        self.assertIn('base.ledger = "decisions"', text)
-        self.assertIn("probeArgsAvailable", text)
         self.assertIn("acceptStderr(chunk)", text)
         self.assertIn("contextforge-root.json", text)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT", text)
@@ -1587,30 +1433,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("mcp-bridge", text)
         self.assertNotIn("registerContext7Tools", text)
 
-    def test_pi_validation_output_is_record_validation_ready_on_first_attempt(self) -> None:
+    def test_pi_project_init_source_has_no_record_validation_payload_template(self) -> None:
         text = (REPO_ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
 
-        required_fields = [
-            "status",
-            "target_client_visible",
-            'target_client: "pi"',
-            'proof_kind: "pi_safe_probe_result"',
-            "safe_probe_result",
-            "safe_probe_id",
-            "tool_name",
-            "result_summary",
-            "verification_trace_refs",
-        ]
-        for field in required_fields:
-            with self.subTest(field=field):
-                self.assertIn(field, text)
-
-        self.assertIn("function recordValidationResult", text)
-        self.assertIn("service.serviceBinding", text)
-        self.assertIn("service.serviceIdentityId", text)
-        self.assertIn("results[key] = result", text)
-        self.assertEqual(4, text.count("recordValidationResult(validationResults, service, result)"))
-        self.assertIn("copy this exact top-level validation_results object", text)
+        self.assertNotIn("function recordValidationResult", text)
+        self.assertNotIn("validation_results", text)
+        self.assertNotIn("copy this exact top-level validation_results object", text)
+        self.assertIn("cf_project_init_apply", text)
+        self.assertIn("ContextForge tools are installed", text)
 
     def test_pi_helper_cli_stdout_is_clean_json(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1677,13 +1507,15 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
     def test_all_project_init_next_turn_choices_are_numbered(self) -> None:
         def assert_numbered(turn: dict[str, Any]) -> None:
             self.assertTrue(turn["choices"])
-            self.assertEqual(list(range(1, len(turn["choices"]) + 1)), [choice["number"] for choice in turn["choices"]])
             self.assertEqual(turn["choices"], turn["response_form"]["options"])
-            self.assertIn("selection number", turn["allowed_response_shape"])
+            if "selection numbers are not accepted" in turn["allowed_response_shape"]:
+                self.assertTrue(all("number" not in choice for choice in turn["choices"]))
+            else:
+                self.assertEqual(list(range(1, len(turn["choices"]) + 1)), [choice["number"] for choice in turn["choices"]])
+                self.assertIn("selection number", turn["allowed_response_shape"])
 
-        assert_numbered(helper.validation_choice_turn())
-        assert_numbered(helper.client_reload_before_validation_turn(common.client_reload_requirement("pi", event="project_activation_apply") or {}))
-        assert_numbered(helper.client_reload_before_validation_turn(common.client_reload_requirement("codex", event="project_activation_apply") or {}))
+        assert_numbered(helper.installation_complete_turn(client_type="pi", reload_requirement=common.client_reload_requirement("pi", event="project_activation_apply")))
+        assert_numbered(helper.installation_complete_turn(client_type="codex", reload_requirement=common.client_reload_requirement("codex", event="project_activation_apply")))
         assert_numbered(helper.config_repair_turn(client_type="pi"))
         assert_numbered(helper.config_repair_turn(client_type="codex"))
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1722,13 +1554,13 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             after_ack = helper.list_available_capabilities(project_root=root)
 
         self.assertEqual("client_reload_required", capabilities["status"])
-        self.assertEqual("codex-client-reload-before-validation", capabilities["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", capabilities["next_turn"]["question_id"])
         self.assertEqual(["context7:canonical"], capabilities["current_job"]["selected_service_bindings"])
         self.assertEqual("client_reload_required", proposal["status"])
-        self.assertEqual("codex-client-reload-before-validation", proposal["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", proposal["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("resume_validation", after_ack["status"])
-        self.assertEqual("validation-choice", after_ack["next_turn"]["question_id"])
+        self.assertEqual("installed_reload_required", after_ack["status"])
+        self.assertEqual("codex-project-init-installed", after_ack["next_turn"]["question_id"])
 
     def test_helper_detects_and_repairs_pending_config_drift_before_validation(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1769,10 +1601,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("config_repaired", repair["status"])
         self.assertIn("[mcp_servers.github]", config_text)
         self.assertEqual("client_reload_required", after["status"])
-        self.assertEqual("codex-client-reload-before-validation", after["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", after["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("resume_validation", after_ack["status"])
-        self.assertEqual("validation-choice", after_ack["next_turn"]["question_id"])
+        self.assertEqual("installed_reload_required", after_ack["status"])
+        self.assertEqual("codex-project-init-installed", after_ack["next_turn"]["question_id"])
 
     def test_helper_repairs_missing_project_init_state_without_overwriting_unmanaged_codex_config(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1810,9 +1642,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("state_repaired", repaired["status"])
         self.assertEqual(unmanaged_config, config_after)
         self.assertEqual("client_reload_required", resume["status"])
-        self.assertEqual("codex-client-reload-before-validation", resume["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", resume["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("resume_validation", after_ack["status"])
+        self.assertEqual("installed_reload_required", after_ack["status"])
         self.assertEqual("validation_recorded", presumed["status"])
         self.assertEqual("in_progress", presumed["project_status"])
         assert written is not None
@@ -1903,13 +1735,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual([], result["validation_diagnostic"]["matched_keys"])
         self.assertIn("context7:canonical", result["expected_validation_results_shape"])
         expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
-        self.assertEqual("target_client_safe_probe_result", expected_shape["proof_kind"])
         self.assertEqual("passed", expected_shape["safe_probe_result"])
         self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
-        self.assertEqual(
-            ["contextforge://control-plane/traces/context7:canonical-target-client"],
-            expected_shape["verification_trace_refs"],
-        )
+        self.assertEqual("context7-local-resolve-library-id", expected_shape["tool_name"])
+        self.assertEqual("codex", expected_shape["target_client"])
+        self.assertIn("result_summary", expected_shape)
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
         job = after["project_init"]["activation_jobs"][after["project_init"]["current_job_id"]]
@@ -1946,7 +1776,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["missing_keys"])
         self.assertIn("context7:canonical", result["expected_validation_results_shape"])
         self.assertIn(
-            "validate_now requires target-client-visible safe probe results before validation can be recorded",
+            "validate_now needs the assistant to try the selected service tool and report the result",
             result["non_actions"],
         )
         assert after is not None
@@ -2026,7 +1856,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
 
-    def test_helper_rejects_asserted_passed_validation_without_observed_probe_artifact(self) -> None:
+    def test_helper_accepts_complete_agent_working_report_without_trace_fields(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -2044,7 +1874,6 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             project_state.write_state_atomic(root, state)
             record_codex_new_session(root)
-            before = project_state.load_state(root)
 
             result = helper.record_project_init_validation(
                 project_root=root,
@@ -2052,25 +1881,26 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 validation_results={
                     "context7:canonical": {
                         "status": "passed",
-                        "target_client_visible": True,
-                        "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
+                        "target_client": "codex",
+                        "safe_probe_result": "passed",
+                        "safe_probe_id": "resolve-library-id",
+                        "tool_name": "context7_context7-local-resolve-library-id",
+                        "result_summary": "resolved the python library id through context7",
                     }
                 },
             )
             after = project_state.load_state(root)
 
-        self.assertEqual("validation_results_insufficient", result["status"])
+        self.assertEqual("validation_recorded", result["status"])
+        self.assertEqual("initialized", result["project_status"])
         self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["matched_keys"])
-        self.assertEqual(["context7:canonical"], result["validation_proof_diagnostic"]["insufficient_keys"])
+        self.assertEqual([], result["validation_report_diagnostic"]["insufficient_keys"])
         expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
-        self.assertEqual("target_client_safe_probe_result", expected_shape["proof_kind"])
         self.assertEqual("passed", expected_shape["safe_probe_result"])
         self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
         self.assertEqual("context7-local-resolve-library-id", expected_shape["tool_name"])
-        assert before is not None
         assert after is not None
-        self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
-        self.assertEqual("pending", after["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertEqual("passed", after["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
     def test_helper_valid_top_level_binding_keyed_validation_marks_service_passed(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2101,7 +1931,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("validation_recorded", result["status"])
         self.assertEqual("initialized", result["project_status"])
         self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["matched_keys"])
-        self.assertEqual([], result["validation_proof_diagnostic"]["insufficient_keys"])
+        self.assertEqual([], result["validation_report_diagnostic"]["insufficient_keys"])
         assert written is not None
         self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
@@ -2159,6 +1989,136 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("available", result["helper"]["status"])
         self.assertEqual("codex", result["root_attestation"]["client_type"])
 
+    def test_contextforge_helper_mcp_reports_initialized_tool_availability_read_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            full_report = contextforge_helper_mcp.project_tool_availability(str(root), client_type="opencode")
+            result = contextforge_helper_mcp.get_project_tool_availability(str(root), client_type="opencode")
+
+        self.assertEqual(["context7-local-resolve-library-id", "context7-local-query-docs"], full_report["available_tools"][0]["tool_names"])
+        self.assertTrue(result["ok"])
+        self.assertEqual("available_tools_report", result["status"])
+        self.assertIn("assistant_visible_response", result)
+        self.assertEqual(result["assistant_visible_response"], result["message"])
+        self.assertTrue(result["copy_as_complete_visible_response"])
+        self.assertTrue(result["do_not_summarize"])
+        self.assertNotIn("available_tools", result)
+        self.assertNotIn("state_revision", result)
+        self.assertEqual(
+            (
+                f"ContextForge is initialized for {root} at state revision 1; "
+                "skipped or unavailable ContextForge services: none reported; "
+                "available ContextForge tools: context7:canonical exposes "
+                "context7-local-resolve-library-id, context7-local-query-docs."
+            ),
+            result["assistant_visible_response"],
+        )
+        self.assertIn("no project-init proposal, approval, or apply", result["non_actions"])
+
+    def test_contextforge_helper_mcp_reports_project_capability_summary_read_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            skipped = json.loads(json.dumps(state["services"]["context7:canonical"]))
+            skipped["service_family"] = "web-search"
+            skipped["service_binding"] = "web-search:credential_scoped"
+            skipped["provision_status"] = "failed"
+            skipped["x_reason"] = "credential not configured"
+            skipped["x_service_identity_id"] = "contextforge-service-web-search-unavailable"
+            skipped["x_service_identity"]["id"] = "contextforge-service-web-search-unavailable"
+            state["services"]["web-search:credential_scoped"] = skipped
+            project_state.write_state_atomic(root, state)
+
+            full_report = contextforge_helper_mcp.project_capability_summary(str(root), client_type="opencode")
+            result = contextforge_helper_mcp.get_project_capability_summary(str(root), client_type="opencode")
+
+        self.assertTrue(full_report["available_now"])
+        self.assertTrue(full_report["known_unavailable"])
+        self.assertTrue(full_report["onboarding_needed"])
+        self.assertTrue(result["ok"])
+        self.assertEqual("project_capability_summary", result["status"])
+        self.assertIn("assistant_visible_response", result)
+        self.assertEqual(result["assistant_visible_response"], result["message"])
+        self.assertTrue(result["copy_as_complete_visible_response"])
+        self.assertTrue(result["do_not_summarize"])
+        self.assertNotIn("available_now", result)
+        self.assertNotIn("onboarding_needed", result)
+        visible = result["assistant_visible_response"]
+        self.assertIn("Available now:", visible)
+        self.assertIn("Known but unavailable:", visible)
+        self.assertIn("Could be onboarded with approval:", visible)
+        self.assertIn("context7:canonical", visible)
+        self.assertIn("web-search:credential_scoped", visible)
+        self.assertIn("no service onboarding", result["non_actions"])
+
+    def test_contextforge_helper_mcp_reports_project_state_readback_read_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            full_report = contextforge_helper_mcp.project_state_readback(str(root), client_type="opencode")
+            result = contextforge_helper_mcp.get_project_state_readback(str(root), client_type="opencode")
+
+        self.assertTrue(full_report["ok"])
+        self.assertEqual("project_state_readback", full_report["status"])
+        self.assertEqual("initialized", full_report["state_status"])
+        self.assertEqual(["context7:canonical"], full_report["selected_service_bindings"])
+        self.assertEqual(["context7-local-resolve-library-id", "context7-local-query-docs"], full_report["imported_tools"][0]["tool_names"])
+        self.assertEqual("not_claimed_by_readback", full_report["target_client_services"][0]["readiness_layers"]["interactive_proof"])
+        self.assertIn("interactive proof is not claimed", full_report["assistant_visible_response"])
+        self.assertTrue(result["ok"])
+        self.assertEqual("project_state_readback", result["status"])
+        self.assertIn("assistant_visible_response", result)
+        self.assertEqual(result["assistant_visible_response"], result["message"])
+        self.assertTrue(result["copy_as_complete_visible_response"])
+        self.assertTrue(result["do_not_summarize"])
+        self.assertNotIn("target_client_services", result)
+        self.assertNotIn("state_revision", result)
+        visible = result["assistant_visible_response"]
+        self.assertIn(str(root), visible)
+        self.assertIn("revision", visible)
+        self.assertIn("context7:canonical", visible)
+        self.assertIn("Configured/imported-tool policy", visible)
+        self.assertIn("client-visible", visible)
+        self.assertIn("not proven by this readback", visible)
+        self.assertIn("target-client-visible=false states remain unproven", visible)
+        self.assertIn("interactive proof is not claimed", visible)
+        self.assertIn("no claim of interactive proof", result["non_actions"])
+
     def test_contextforge_helper_mcp_default_client_type_can_be_set_by_env(self) -> None:
         self.assertEqual(
             "codex",
@@ -2201,9 +2161,6 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             challenge = proposal["approval_challenge"]
             guarded_env = {
                 "CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1",
-                "CONTEXTFORGE_HELPER_REQUIRE_USER_RELOAD_TEXT": "1",
-                "CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT": "1",
-                "CONTEXTFORGE_HELPER_RECORD_RELOAD_ON_VALIDATION_REQUEST": "1",
                 "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source),
             }
 
@@ -2221,6 +2178,38 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertFalse(denied["ok"])
             self.assertEqual("PermissionError", denied["error"]["type"])
 
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": "1"}) + "\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, guarded_env):
+                numeric_denied = contextforge_helper_mcp.cf_project_init_approve(
+                    str(root),
+                    challenge["challenge_id"],
+                    challenge["plan_digest"],
+                )
+
+            self.assertFalse(numeric_denied["ok"])
+            self.assertEqual("PermissionError", numeric_denied["error"]["type"])
+
+    def test_contextforge_helper_mcp_approval_guard_accepts_approval_text(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            challenge = proposal["approval_challenge"]
+            guarded_env = {
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1",
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_RELOAD_TEXT": "1",
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT": "1",
+                "CONTEXTFORGE_HELPER_RECORD_RELOAD_ON_VALIDATION_REQUEST": "1",
+                "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source),
+            }
+
             approval_source.write_text(
                 json.dumps({"cwd": str(root), "text": "Approve this exact ContextForge activation plan."}) + "\n",
                 encoding="utf-8",
@@ -2236,61 +2225,43 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             applied = contextforge_helper_mcp.cf_project_init_apply(str(root))
             self.assertTrue(applied["ok"])
 
-            with mock.patch.dict(os.environ, guarded_env):
-                blocked_reload = contextforge_helper_mcp.cf_project_init_record_client_reload(
-                    str(root),
+            self.assertEqual("opencode-project-init-installed", applied["next_turn"]["question_id"])
+            self.assertIn("new session", applied["next_turn"]["prompt"].lower())
+
+    def test_opencode_continue_recovers_recorded_cwd_when_model_supplies_root_slash(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "1"}) + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                proposal = contextforge_helper_mcp.cf_project_init_continue(
+                    "/",
                     client_type="opencode",
                 )
-            self.assertFalse(blocked_reload["ok"])
-            self.assertEqual("PermissionError", blocked_reload["error"]["type"])
 
-            with mock.patch.dict(os.environ, guarded_env):
-                blocked_validation = contextforge_helper_mcp.cf_project_init_record_validation(
-                    str(root),
-                    validation_mode="validate_now",
-                    validation_results={
-                        "context7:canonical": {
-                            "status": "passed",
-                            "target_client_visible": True,
-                            "target_client": "opencode",
-                            "proof_kind": "target_client_safe_probe_result",
-                            "safe_probe_result": "passed",
-                            "safe_probe_id": "resolve-library-id",
-                            "tool_name": "context7_context7-local-resolve-library-id",
-                            "result_summary": "test",
-                            "verification_trace_refs": ["contextforge://control-plane/traces/context7:canonical-target-client"],
-                        }
-                    },
-                    client_type="opencode",
-                )
-            self.assertFalse(blocked_validation["ok"])
-            self.assertEqual("PermissionError", blocked_validation["error"]["type"])
+            self.assertTrue(proposal["ok"], proposal)
+            self.assertEqual(str(root), proposal["project_root"])
+            self.assertIn("assistant_visible_response", proposal)
+            self.assertIn("context7:canonical", proposal["assistant_visible_response"])
+            self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
 
-            approval_source.write_text(json.dumps({"cwd": str(root), "text": "1"}) + "\n", encoding="utf-8")
-            with mock.patch.dict(os.environ, guarded_env):
-                reload_recorded = contextforge_helper_mcp.cf_project_init_record_validation(
-                    str(root),
-                    validation_mode="validate_now",
-                    client_type="opencode",
-                )
-            self.assertTrue(reload_recorded["ok"])
-            self.assertEqual("client_reload_recorded_validation_requested", reload_recorded["status"])
-
-    def test_contextforge_helper_validation_guidance_exposes_safe_probe_shape(self) -> None:
-        helper_doc = contextforge_helper_mcp.record_project_init_validation.__doc__ or ""
+    def test_contextforge_helper_install_guidance_stops_after_reload_instruction(self) -> None:
         plan_doc = (
             REPO_ROOT / "docs/initiatives/contextforge-control-plane/contextforge-helper-project-init-plan.md"
         ).read_text(encoding="utf-8")
 
-        for text in (helper_doc, plan_doc):
-            with self.subTest(surface=text[:40]):
-                self.assertIn("target_client_safe_probe_result", text)
-                self.assertIn("safe_probe_result", text)
-                self.assertIn("safe_probe_id", text)
-                self.assertIn("target_client", text)
-                self.assertIn("validation_results", text)
-                self.assertIn("resolve-library-id", text)
-                self.assertIn("contextforge://control-plane/traces/context7:canonical-target-client", text)
+        self.assertIn("selected ContextForge tools are installed", plan_doc)
+        self.assertIn("new session or reload", plan_doc)
+        self.assertIn("Stop there", plan_doc)
+        self.assertNotIn("ACTUAL_TARGET_CLIENT_TOOL_NAME", plan_doc)
+        self.assertNotIn("validation_results", plan_doc)
 
     def test_contextforge_helper_mcp_binds_approval_event_without_agent_supplied_ref(self) -> None:
         approval_params = set(inspect.signature(contextforge_helper_mcp.approve_project_init_plan).parameters)
@@ -2360,7 +2331,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             ) as fake_approve, mock.patch.object(
                 helper,
                 "apply_project_init_recovery",
-                return_value={"ok": True, "next_turn": {"question_id": "codex-client-reload-before-validation"}, "client_reload_requirement": {"command": "start_new_session"}},
+                return_value={"ok": True, "next_turn": {"question_id": "codex-project-init-installed"}, "client_reload_requirement": {"command": "start_new_session"}},
                 create=True,
             ) as fake_apply:
 
@@ -2424,7 +2395,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(approval["ok"])
         self.assertEqual("allow", approval["decision"])
         self.assertTrue(applied["ok"])
-        self.assertEqual("codex-client-reload-before-validation", applied["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", applied["next_turn"]["question_id"])
         self.assertEqual("start_new_session", applied["client_reload_requirement"]["command"])
 
     def test_contextforge_helper_mcp_cached_id_tools_survive_short_lived_processes(self) -> None:
@@ -2458,7 +2429,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(approval["ok"])
         self.assertEqual("allow", approval["decision"])
         self.assertTrue(applied["ok"])
-        self.assertEqual("codex-client-reload-before-validation", applied["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", applied["next_turn"]["question_id"])
         self.assertEqual("start_new_session", applied["client_reload_requirement"]["command"])
 
     def test_pi_project_init_cli_id_digest_tools_survive_separate_processes(self) -> None:
@@ -2529,7 +2500,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(approval["ok"])
         self.assertEqual("allow", approval["decision"])
         self.assertTrue(applied["ok"], applied.get("error"))
-        self.assertEqual("pi-client-reload-before-validation", applied["next_turn"]["question_id"])
+        self.assertEqual("pi-project-init-installed", applied["next_turn"]["question_id"])
         self.assertEqual("/reload", applied["client_reload_requirement"]["command"])
 
     def test_contextforge_helper_mcp_apply_prefers_cached_full_receipts_over_lossy_replay(self) -> None:
@@ -2563,7 +2534,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(approval["ok"])
         self.assertEqual("allow", approval["decision"])
         self.assertTrue(applied["ok"], applied.get("error"))
-        self.assertEqual("opencode-client-reload-before-validation", applied["next_turn"]["question_id"])
+        self.assertEqual("opencode-project-init-installed", applied["next_turn"]["question_id"])
 
     def test_contextforge_helper_mcp_accepts_service_ids_and_expands_descriptors(self) -> None:
         with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
@@ -2745,7 +2716,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("contextforge_mcp_wrapper.py", config_text)
             step_types = [step["operation_type"] for step in applied["job"]["step_statuses"]]
             self.assertLess(step_types.index("provision_project_scoped_serena"), step_types.index("write_managed_client_config"))
-            self.assertEqual("codex-client-reload-before-validation", applied["next_turn"]["question_id"])
+            self.assertEqual("codex-project-init-installed", applied["next_turn"]["question_id"])
 
     def test_helper_serena_repeated_init_converges_without_duplicate_wrapper_or_service_entries(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2793,57 +2764,22 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                     receipts=first_approval["receipts"],
                 )
 
-            self.assertEqual("codex-client-reload-before-validation", first_apply["next_turn"]["question_id"])
-            self.assertEqual("client_reload_recorded", record_codex_new_session(root)["status"])
-            self.assertEqual(
-                "validation_recorded",
-                helper.record_project_init_validation(
-                    project_root=root,
-                    validation_mode="validate_now",
-                    validation_results={
-                        first_binding: {
-                            "status": "passed",
-                            "target_client_visible": True,
-                            "verification_trace_refs": ["contextforge://control-plane/traces/serena-target-client"],
-                        }
-                    },
-                )["status"],
-            )
+            self.assertEqual("codex-project-init-installed", first_apply["next_turn"]["question_id"])
+            first_written = project_state.load_state(root)
+            assert first_written is not None
+            self.assertEqual("initialized", first_written["status"])
 
             second_plan = helper.propose_project_init(
                 project_root=root,
                 selected_services=["serena"],
                 inputs={"language": "python"},
             )
-            second_binding = str(second_plan["selected_services"][0]["service_binding"])
-            second_approval = helper.approve_project_init_plan(
-                project_root=root,
-                plan=second_plan,
-                approval={
-                    "decision": "approve",
-                    "challenge_id": second_plan["approval_challenge"]["challenge_id"],
-                    "plan_digest": second_plan["plan_digest"],
-                },
-                local_approval_event_ref=helper.record_local_approval_event(
-                    project_root=root,
-                    plan=second_plan,
-                    issuer_token=helper._LOCAL_APPROVAL_ISSUER_TOKEN,
-                    channel="interactive_user",
-                )["event_ref"],
-            )
-
-            with mock.patch.object(helper, "_run_serena_project_provisioning", side_effect=fake_provision):
-                second_apply = helper.apply_approved_project_init(
-                    project_root=root,
-                    plan=second_plan,
-                    receipts=second_approval["receipts"],
-                )
-
             config_text = (root / ".codex" / "config.toml").read_text(encoding="utf-8")
             state = project_state.load_state(root)
 
-        self.assertEqual(first_binding, second_binding)
-        self.assertEqual("codex-client-reload-before-validation", second_apply["next_turn"]["question_id"])
+        self.assertIn(second_plan["status"], {"client_reload_required", "installed_reload_required"})
+        self.assertEqual([first_binding], second_plan["current_job"]["selected_service_bindings"])
+        self.assertEqual("codex-project-init-installed", second_plan["next_turn"]["question_id"])
         self.assertEqual(1, config_text.count("[mcp_servers.serena]"))
         self.assertEqual(1, len(state["services"]))
         self.assertEqual("serena", state["services"][next(iter(state["services"]))]["service_family"])
@@ -2944,12 +2880,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 dry_run=True,
             )
             self.assertTrue(result["dry_run"])
-            self.assertEqual("codex-client-reload-before-validation", result["next_turn"]["question_id"])
+            self.assertEqual("codex-project-init-installed", result["next_turn"]["question_id"])
             self.assertEqual("start_new_session", result["client_reload_requirement"]["command"])
-            self.assertIn("Codex launches configured MCP servers", result["next_turn"]["prompt"])
+            self.assertIn("tools are installed", result["next_turn"]["prompt"])
             self.assertFalse((root / ".codex/config.toml").exists())
             job = result["planned_state"]["project_init"]["activation_jobs"][result["planned_state"]["project_init"]["current_job_id"]]
-            self.assertEqual("applied_validation_choice_pending", job["status"])
+            self.assertEqual("installed", job["status"])
             self.assertTrue(job["consent_receipt_refs"])
             project_state.validate_state(result["planned_state"])
 
@@ -3099,6 +3035,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(["mentality:canonical"], [service["service_binding"] for service in proposal["skipped_services"]])
         self.assertEqual("approve-project-init-plan", proposal["next_turn"]["question_id"])
+        self.assertIn("selection numbers are not accepted", proposal["next_turn"]["allowed_response_shape"])
+        self.assertTrue(all("number" not in choice for choice in proposal["next_turn"]["choices"]))
+        self.assertTrue(all("number" not in option for option in proposal["next_turn"]["response_form"]["options"]))
 
     def test_helper_keep_existing_conflict_blocks_without_approval(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -3434,7 +3373,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("project_init_recovery_applied", recovery["status"])
         self.assertEqual("resume-approved-project-init-apply", recovery["next_turn"]["question_id"])
         self.assertTrue(resumed["ok"])
-        self.assertEqual("codex-client-reload-before-validation", resumed["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", resumed["next_turn"]["question_id"])
         self.assertIn("[mcp_servers.serena]", config_text)
         self.assertIn("contextforge_mcp_wrapper.py", config_text)
         self.assertNotIn('command = "serena"', config_text)
@@ -3459,19 +3398,19 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Which ContextForge services should I activate for this project?", text)
         self.assertIn("discovered shared canonical services and project-scoped options", text)
         self.assertIn("Serena is one project-scoped option in this menu, not the whole flow", text)
-        self.assertIn("Choose 1 to validate now", text)
+        self.assertIn("After approved apply, report success clearly and succinctly", text)
         self.assertIn("No user-global config/trust/extension changes", text)
         self.assertIn("for Codex this is project-local .codex/config.toml", text)
         self.assertIn("for Pi this is .project/context_forge_state.json records", text)
         self.assertIn("hidden or structured prompt/context injection", text)
         self.assertIn("input-triggered hidden message", text)
         self.assertIn("cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only", text)
-        self.assertIn("cf_contextforge_pi_validate for validate-now", text)
-        self.assertIn("Do not call unlisted or unavailable validation tool names", text)
-        self.assertIn("validation tool call is missing, not found, unavailable, or returns an error", text)
-        self.assertIn("Skipped-service follow-up", text)
-        self.assertIn("Do not substitute built-in web search, direct shell commands, direct SSH/tmux", text)
-        self.assertIn("tool exists", text)
+        self.assertIn("After approved apply", text)
+        self.assertIn("selected ContextForge tools are installed", text)
+        self.assertIn("must start a new session or reload", text)
+        self.assertIn("Stop there", text)
+        self.assertNotIn("Do not substitute built-in web search, direct shell commands, direct SSH/tmux", text)
+        self.assertNotIn("validate_now", text)
         self.assertIn("call cf_project_init_approve with the exact challenge id and plan digest", text)
         self.assertIn("call cf_project_init_apply using the cached plan and receipts", text)
         self.assertIn("status=config_conflict with an embedded recovery_plan", text)
@@ -3480,18 +3419,17 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Do not call apply_project_init_recovery with only plan_id, plan_digest, or receipt ids", text)
         self.assertIn("complete helper-returned recovery plan object and full receipt objects", text)
         self.assertIn("keep them together in the helper recovery approval/apply path", text)
-        self.assertIn("Never choose service selections, approval, reload acknowledgement, validation", text)
+        self.assertIn("Never choose service selections or approval", text)
         self.assertIn("If the user echoes your question, asks you to provide the selection numbers", text)
         self.assertIn("Do not invoke project-init helper scripts or Python modules through shell", text)
         self.assertIn("helper cache is missing or stale", text)
         self.assertIn("do not silently replace the challenge id", text)
         self.assertIn("prefer those cached id/digest tools over reconstructing a full plan object", text)
-        self.assertIn("first call cf_project_init_record_client_reload", text)
-        self.assertIn("after reload or new session, resume project init", text)
+        self.assertIn("Stop there", text)
         self.assertIn("Codex launches configured MCP servers and exposes their tools when a session starts", text)
         self.assertIn("/mcp is a status view, not an in-place MCP tool reload", text)
-        self.assertIn("start a new Codex session from the project root before target-client-visible validation", text)
-        self.assertIn("the Pi agent must issue /reload before validation", text)
+        self.assertIn("start a new Codex session from the project root after installation", text)
+        self.assertIn("the Pi agent must issue /reload after an approved global extension install or upgrade", text)
         self.assertIn("pi.registerTool()", text)
 
     def test_cli_dry_run_uses_scoped_approval_and_selected_services(self) -> None:

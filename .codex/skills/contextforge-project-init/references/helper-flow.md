@@ -25,9 +25,14 @@ Root authority:
   `.project/context_forge_state.json`, generated prompt resources, or
   server-instance metadata is a blocker to repair, not a usable target.
 
-Validation policy:
+Post-init service-tool checks:
 
-- Use only safe read/list/search probes.
+- Project init does not include service probing, validation recording, or reload
+  acknowledgement recording.
+- The project-init endpoint is: helper-approved install/apply succeeds, then
+  the assistant tells the user reload/new session is required and stops.
+- Separate service-tool checks, when explicitly requested after reload/new
+  session, must use only safe read/list/search operations.
 - `mentality`: list or read governance entries only.
 - `context7`: resolve library id or docs lookup only.
 - `web-search` and `exa-search`: search/fetch-like read probes only.
@@ -39,9 +44,9 @@ Validation policy:
 
 Reload rule:
 
-- If the helper says a target client reload blocks validation, ask the user to
-  reload and stop. On resume, record the reload before validating or recording a
-  validation skip.
+- If the helper says a target client reload or new session is required, tell the
+  user the selected ContextForge tools are installed and that reload/new session
+  is required before the tools register, then stop.
 
 Recovery tool routing:
 

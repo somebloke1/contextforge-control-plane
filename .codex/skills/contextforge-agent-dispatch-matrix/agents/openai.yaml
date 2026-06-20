@@ -1,0 +1,4 @@
+interface:
+  display_name: "ContextForge Agent Dispatch Matrix"
+  short_description: "Choose safe ContextForge agent models."
+  default_prompt: "Use $contextforge-agent-dispatch-matrix to classify this ContextForge work unit, select a safe agent model, and produce an auditable dispatch card."

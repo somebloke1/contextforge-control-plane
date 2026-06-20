@@ -567,10 +567,10 @@ def _normalize_client_state_record(
     selected_ids = _dedupe_strings(record.get("selected_service_ids") or fallback.get("selected_service_ids") or [])
     selected_bindings = _dedupe_strings(record.get("selected_service_bindings") or fallback.get("selected_service_bindings") or [])
     status = str(record.get("status") or fallback.get("status") or ("validation_pending" if selected_ids or selected_bindings else "uninitialized"))
-    if status not in {"uninitialized", "activation_pending", "reload_required", "validation_pending", "presumed_working", "verified", "disabled", "blocked"}:
+    if status not in {"uninitialized", "activation_pending", "reload_required", "validation_pending", "installed", "presumed_working", "verified", "disabled", "blocked"}:
         status = "validation_pending"
     validation_status = str(record.get("validation_status") or fallback.get("validation_status") or "not_started")
-    if validation_status not in {"not_started", "pending", "passed", "presumed_working", "skipped", "mixed", "blocked"}:
+    if validation_status not in {"not_started", "pending", "installed", "passed", "presumed_working", "skipped", "mixed", "blocked"}:
         validation_status = "pending"
     reload_status = str(record.get("reload_status") or fallback.get("reload_status") or "unknown")
     if reload_status not in {"not_required", "required", "acknowledged", "pending_reload", "reload_observed", "reload_acknowledged", "unknown"}:
@@ -601,6 +601,8 @@ def _aggregate_client_validation_status(statuses: list[str]) -> str:
             normalized.append("passed")
         elif status == "presumed_working":
             normalized.append("presumed_working")
+        elif status == "installed":
+            normalized.append("installed")
         elif status == "skipped":
             normalized.append("skipped")
         elif status in {"blocked", "failed"}:
@@ -615,6 +617,8 @@ def _aggregate_client_validation_status(statuses: list[str]) -> str:
         return "passed"
     if all(status == "presumed_working" for status in normalized):
         return "presumed_working"
+    if all(status == "installed" for status in normalized):
+        return "installed"
     if all(status == "skipped" for status in normalized):
         return "skipped"
     if any(status == "blocked" for status in normalized):
@@ -629,6 +633,8 @@ def _client_lifecycle_status_from_validation(validation_status: str) -> str:
         return "verified"
     if validation_status == "presumed_working":
         return "presumed_working"
+    if validation_status == "installed":
+        return "installed"
     if validation_status == "blocked":
         return "blocked"
     return "validation_pending"
@@ -657,6 +663,8 @@ def _client_lifecycle_status_from_job(job: dict[str, Any], *, validation_status:
         return "verified"
     if job_status == "presumed_working" or validation_status == "presumed_working":
         return "presumed_working"
+    if job_status == "installed" or validation_status == "installed":
+        return "installed"
     if job_status in {"failed", "fresh_approval_required", "manual_recovery"} or recovery_state in {"manual_recovery", "fresh_approval_required"}:
         return "blocked"
     if reload_status in {"required", "pending_reload", "reload_observed"}:
@@ -705,6 +713,8 @@ def client_hook_prompt_state_for(state: dict[str, Any], client_type: str) -> str
     if status == "verified":
         return HOOK_PROMPT_COMPLETED_VERIFIED
     if status == "presumed_working":
+        return HOOK_PROMPT_COMPLETED_UNVERIFIED
+    if status == "installed":
         return HOOK_PROMPT_COMPLETED_UNVERIFIED
     return HOOK_PROMPT_ACTIVE
 
@@ -1006,7 +1016,12 @@ def apply_project_init_activation_to_state(
         "verified_at": None,
         "last_probe": None,
     }
-    if all_target_client_verified:
+    installation_only = validation_plan.get("validation_mode") == "installed"
+    if installation_only:
+        next_state["status"] = "initialized"
+        next_state["project_init"]["x_hook_prompt_state"] = HOOK_PROMPT_COMPLETED_UNVERIFIED
+        _resolve_open_item(next_state, "project-init-validation")
+    elif all_target_client_verified:
         next_state["status"] = "initialized"
         next_state["project_init"]["x_hook_prompt_state"] = HOOK_PROMPT_COMPLETED_VERIFIED
         _resolve_open_item(next_state, "project-init-validation")
@@ -1024,7 +1039,7 @@ def apply_project_init_activation_to_state(
                 "type": "verification",
                 "severity": "warning",
                 "blocks_initialized": False,
-                "resource": "target-client-visible MCP proof",
+                "resource": "target-client post-install check",
                 "created_at": now,
                 "resolution_state": "deferred" if validation_plan.get("validation_mode") == "presume_working" else "open",
                 "detail": {
@@ -1193,9 +1208,9 @@ def inspect_project_init_state(
     if should_suppress:
         action = "suppress"
     elif client_state and client_state.get("status") in {"activation_pending", "reload_required", "validation_pending"}:
-        action = "resume_validation"
+        action = "resume_project_init"
     elif status == "in_progress":
-        action = "resume_validation"
+        action = "resume_project_init"
     else:
         action = "fresh_initialization"
     return {
@@ -1458,7 +1473,10 @@ def _activation_job_record(
         )
         for service in selected_services
     }
-    if validation_mode == "pending_choice":
+    if validation_mode == "installed":
+        status = "installed"
+        recovery_state = "none"
+    elif validation_mode == "pending_choice":
         status = "applied_validation_choice_pending"
         recovery_state = "local_written_validation_pending"
     elif validation_mode == "presume_working":
@@ -1697,6 +1715,8 @@ def _validation_result_for(validation_results: dict[str, Any], binding: str, ser
 def _service_validation_status(validation_plan: dict[str, Any], binding: str, result: dict[str, Any]) -> str:
     if validation_plan.get("validation_mode") == "pending_choice":
         return "pending"
+    if validation_plan.get("validation_mode") == "installed":
+        return "installed"
     if validation_plan.get("validation_mode") == "presume_working":
         return "presumed_working"
     if validation_plan.get("target_client") == "pi" and result.get("status") in {"passed", "verified"}:
