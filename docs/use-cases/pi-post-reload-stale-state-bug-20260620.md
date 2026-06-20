@@ -106,3 +106,55 @@ The investigation should distinguish:
   residual quality issue.
 - This bug is separate from service validation. It is about post-install reload
   UX, stale state, and user-visible raw helper/status exposure.
+
+## Remediation Note - 2026-06-20
+
+Bounded remediation changes:
+
+- Pi shim activation now records project-init client reload acknowledgement
+  during `session_start` and diagnostic Pi readback activation when the project
+  state still has Pi reload pending.
+- Helper readback now exposes a structured `current_session_boundary` and
+  derived `target_client_user_state`, so normal user-visible readback can say
+  reload is acknowledged without replaying raw labels such as
+  `shim_activation_planned` or `pending_reload`.
+- Raw diagnostic state remains available in structured fields for debugging;
+  ordinary `assistant_visible_response` is intended to suppress internal status
+  terms unless diagnostics are explicitly requested.
+
+Source verification:
+
+- `ProjectInitActivationWorkflowTests.test_pi_reload_acknowledgement_changes_normal_readback_contract`
+  passed.
+- `tests.test_project_init_activation_workflow -v`: 118 tests OK.
+- `tests.test_project_init_scripts -v`: 104 tests OK.
+- `node --check pi-extensions/contextforge-global-shim/index.ts` passed.
+- `git diff --check` passed.
+
+Live Pi Docker verification:
+
+- Verifier: `codex-agent:019ee6e5-f391-7371-ab0c-78c8ce4efa7e`.
+- Evidence root:
+  `docker/client-harness/evidence/issue-292/pi-fix-verify/20260620T211931Z/`.
+- Isolated run details: container `cf-issue292-pi-20260620t211931z`,
+  home volume `cf-issue292-pi-home-20260620t211931z`, Pi session
+  `issue292-pi-20260620T211931Z`.
+- Prompt sequence: `hello`, `1`, `approve`, `/reload`,
+  `what ContextForge tools are available?`.
+- Result: PASS, 9/10. Before reload, project state still had
+  `pending_reload` / `shim_activation_planned` as expected. `/reload` recorded
+  `reload_acknowledged`. Post-reload text-mode output listed the available
+  ContextForge `context7` tools cleanly without replaying `pending_reload`,
+  `shim_activation_planned`, or a reload-required message.
+- Text-mode output:
+  `docker/client-harness/evidence/issue-292/pi-fix-verify/20260620T211931Z/logs/turn6-post-reload-tools-text.txt`.
+- Final state:
+  `docker/client-harness/evidence/issue-292/pi-fix-verify/20260620T211931Z/logs/state-after-reload-full.json`.
+
+Residual risk:
+
+- JSON-mode `cf_project_tool_availability` output still includes a proof caveat
+  phrase for diagnostic/audit use. The ordinary text-mode Pi UX is clean, so
+  this is not the stale reload defect, but it remains a possible helper-wording
+  polish item if strict ordinary-output suppression is later applied to
+  JSON-mode harness output too.

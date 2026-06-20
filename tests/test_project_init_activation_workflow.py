@@ -1252,6 +1252,47 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("record-presumed-working", ack["next_action"]["id"])
         self.assertEqual("presume_working", ack["current_job"]["client_reload_fsm"]["validation_intent"])
 
+    def test_pi_reload_acknowledgement_changes_normal_readback_contract(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            project_state.write_state_atomic(root, state)
+
+            pending_readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="pi")
+            ack = record_pi_reload(root)
+            acknowledged_readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="pi")
+            acknowledged_availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="pi")
+            acknowledged_summary = contextforge_helper_mcp.project_capability_summary(str(root), client_type="pi")
+
+        self.assertEqual("pending_reload", pending_readback["current_session_boundary"]["reload_status"])
+        self.assertEqual("reload_acknowledged", ack["current_job"]["client_reload_fsm"]["state"])
+        for result in (acknowledged_readback, acknowledged_availability, acknowledged_summary):
+            with self.subTest(status=result["status"]):
+                self.assertEqual("reload_acknowledged", result["current_session_boundary"]["reload_status"])
+                self.assertEqual("reload_acknowledged", result["current_session_boundary"]["user_status"])
+                self.assertFalse(result["current_session_boundary"]["requires_reload"])
+                self.assertTrue(result["current_session_boundary"]["reload_acknowledged"])
+                self.assertTrue(result["assistant_visible_response_policy"]["internal_status_terms_suppressed"])
+        self.assertEqual(
+            "projection recorded; reload acknowledged",
+            acknowledged_readback["target_client_services"][0]["target_client_user_state"],
+        )
+        self.assertEqual(
+            "shim_activation_planned",
+            acknowledged_readback["target_client_services"][0]["target_client_state"]["status"],
+        )
+
     def test_pi_helper_detects_and_repairs_installed_shim_metadata_drift(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -1426,6 +1467,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("renderNothing", text)
         self.assertIn("new Container()", text)
         self.assertIn("cf_project_init_prompt", text)
+        self.assertIn("record_project_init_client_reload", text)
+        self.assertIn("acknowledgeReload: true", text)
+        self.assertIn("piProjectReloadPending", text)
         self.assertIn("Diagnostic only", text)
         self.assertIn("cf_contextforge_pi_readback", text)
         self.assertIn("cf_contextforge_guidance_lookup", text)
@@ -1445,7 +1489,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("cf_project_init_validate", text)
         self.assertNotIn("runPiValidation", text)
         self.assertNotIn("Call cf_project_init_record_validation", text)
-        self.assertIn("await activateProject(pi, projectRootFromParams(params, ctx), clients)", text)
+        self.assertIn("await activateProject(pi, projectRootFromParams(params, ctx), clients, { acknowledgeReload: true })", text)
         self.assertIn("routeNamesByKey", text)
         self.assertIn("stableRouteToolName", text)
         self.assertIn("routeKeyFor(service, mcpTool)", text)

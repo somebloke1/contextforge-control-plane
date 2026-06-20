@@ -337,7 +337,7 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
     renderCall: renderNothing,
     renderResult: renderNothing,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      await activateProject(pi, projectRootFromParams(params, ctx), clients);
+      await activateProject(pi, projectRootFromParams(params, ctx), clients, { acknowledgeReload: true });
       return textResult(JSON.stringify(readback, null, 2));
     },
   });
@@ -403,7 +403,7 @@ export default async function contextForgeGlobalShim(pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx: ExtensionContext) => {
-    await activateProject(pi, ctx.cwd, clients);
+    await activateProject(pi, ctx.cwd, clients, { acknowledgeReload: true });
   });
 
   pi.on("resources_discover", async (event) => {
@@ -647,7 +647,7 @@ function projectInitHookPromptState(state: JsonObject): string {
   return "active";
 }
 
-async function activateProject(pi: ExtensionAPI, cwd: string, clients: JsonRpcStdioClient[]): Promise<void> {
+async function activateProject(pi: ExtensionAPI, cwd: string, clients: JsonRpcStdioClient[], options: { acknowledgeReload?: boolean } = {}): Promise<void> {
   const projectRoot = resolve(cwd);
   const statePath = join(projectRoot, ".project", "context_forge_state.json");
   for (const client of clients.splice(0)) client.stop();
@@ -666,7 +666,18 @@ async function activateProject(pi: ExtensionAPI, cwd: string, clients: JsonRpcSt
     return;
   }
 
-  const state = JSON.parse(readFileSync(statePath, "utf8")) as JsonObject;
+  let state = JSON.parse(readFileSync(statePath, "utf8")) as JsonObject;
+  if (options.acknowledgeReload === true && piProjectReloadPending(state)) {
+    try {
+      await runProjectInitHelperOperationJson("record_project_init_client_reload", projectRoot, {
+        project_root: projectRoot,
+        client_type: "pi",
+      });
+      state = JSON.parse(readFileSync(statePath, "utf8")) as JsonObject;
+    } catch (error) {
+      readback.errors.push(`Pi reload acknowledgement skipped: ${errorMessage(error)}`);
+    }
+  }
   const services = approvedPiServices(state);
   readback.services = services;
   if (services.length === 0) {
@@ -697,6 +708,17 @@ async function activateProject(pi: ExtensionAPI, cwd: string, clients: JsonRpcSt
       client.stop();
     }
   }
+}
+
+function piProjectReloadPending(state: JsonObject): boolean {
+  const projectInit = asObject(state.project_init);
+  const piClientState = asObject(asObject(projectInit.client_states).pi);
+  if (String(piClientState.reload_status || "") === "pending_reload") return true;
+  const currentJobId = String(piClientState.current_job_id || projectInit.current_job_id || "");
+  const jobs = asObject(projectInit.activation_jobs);
+  const job = asObject(currentJobId ? jobs[currentJobId] : undefined);
+  const fsm = asObject(job.x_client_reload_fsm);
+  return String(fsm.client_type || "") === "pi" && String(fsm.state || "") === "pending_reload";
 }
 
 async function importGuidanceMetadata(client: JsonRpcStdioClient, service: ProjectService): Promise<void> {

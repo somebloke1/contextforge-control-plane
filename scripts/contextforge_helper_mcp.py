@@ -494,6 +494,63 @@ def _missing_projection_action(service_binding: str, client_type: str) -> dict[s
     }
 
 
+def _project_client_reload_state(state: Mapping[str, Any], client_type: str) -> dict[str, Any]:
+    project_init = state.get("project_init") if isinstance(state.get("project_init"), Mapping) else {}
+    client_states = project_init.get("client_states") if isinstance(project_init.get("client_states"), Mapping) else {}
+    client_state = client_states.get(client_type) if isinstance(client_states.get(client_type), Mapping) else {}
+    reload_status = str(client_state.get("reload_status") or "unknown")
+    requires_reload = reload_status in {"required", "pending_reload", "reload_observed"}
+    acknowledged = reload_status in {"acknowledged", "reload_acknowledged"}
+    if acknowledged:
+        user_status = "reload_acknowledged"
+    elif requires_reload:
+        user_status = "reload_required"
+    elif reload_status == "not_required":
+        user_status = "reload_not_required"
+    else:
+        user_status = "reload_status_unknown"
+    return {
+        "client_type": client_type,
+        "reload_status": reload_status,
+        "user_status": user_status,
+        "requires_reload": requires_reload,
+        "reload_acknowledged": acknowledged,
+    }
+
+
+def _client_session_boundary(state: Mapping[str, Any], client_type: str) -> dict[str, Any]:
+    reload_state = _project_client_reload_state(state, client_type)
+    reload_requirement = common.client_reload_requirement(client_type, event="project_activation_apply")
+    if reload_state["reload_acknowledged"]:
+        if client_type == "pi":
+            instruction = "Pi reload has been acknowledged for this project state; no additional Pi reload is recorded as pending."
+        elif client_type == "opencode":
+            instruction = "A new OpenCode session has been acknowledged for this project state; no additional OpenCode session restart is recorded as pending."
+        else:
+            instruction = "The required client reload or new session has been acknowledged for this project state; no additional reload is recorded as pending."
+    elif isinstance(reload_requirement, Mapping):
+        instruction = str(reload_requirement.get("instruction") or "")
+    else:
+        instruction = "This client can use the current project-state readback without a separate reload requirement recorded for project activation."
+    return {
+        **reload_state,
+        "instruction": instruction,
+    }
+
+
+def _target_client_user_state(target_client_state: Mapping[str, Any], session_boundary: Mapping[str, Any]) -> str:
+    if session_boundary.get("reload_acknowledged"):
+        return "projection recorded; reload acknowledged"
+    status = str(target_client_state.get("status") or "recorded")
+    if session_boundary.get("requires_reload"):
+        return "projection recorded; client reload required"
+    if status == "not_recorded":
+        return "client state not_recorded"
+    if status == "blocked":
+        return "blocked"
+    return "projection recorded"
+
+
 def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
     """Read initialized project state and summarize client-visible ContextForge tools."""
 
@@ -609,12 +666,8 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
         or "none recorded"
     )
     revision = project_state.state_revision(state)
-    reload_requirement = common.client_reload_requirement(client_type, event="project_activation_apply")
-    refresh_boundary = (
-        str(reload_requirement.get("instruction") or "")
-        if isinstance(reload_requirement, Mapping)
-        else "This client can use the current project-state readback without a separate reload requirement recorded for project activation."
-    )
+    session_boundary = _client_session_boundary(state, client_type)
+    refresh_boundary = session_boundary["instruction"]
     visible_response = (
         f"ContextForge state for {str(root)} is initialized at revision {revision}. "
         f"Project services present: {project_service_text}. "
@@ -638,6 +691,11 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
         "project_tool_policies": project_tool_policies,
         "missing_target_client_projection": missing_target_client_projection,
         "skipped_or_unavailable_services": skipped,
+        "current_session_boundary": session_boundary,
+        "assistant_visible_response_policy": {
+            "internal_status_terms_suppressed": True,
+            "diagnostic_state_retained_in_structured_fields": True,
+        },
         "assistant_visible_response": visible_response,
         "non_actions": [
             "read-only initialized-project availability report",
@@ -739,12 +797,8 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         )
         or "none reported"
     )
-    reload_requirement = common.client_reload_requirement(client_type, event="project_activation_apply")
-    refresh_boundary = (
-        str(reload_requirement.get("instruction") or "")
-        if isinstance(reload_requirement, Mapping)
-        else "This client can use the current project-state readback without a separate reload requirement recorded for project activation."
-    )
+    session_boundary = _client_session_boundary(state, client_type)
+    refresh_boundary = session_boundary["instruction"]
     return {
         "ok": True,
         "status": "project_capability_summary",
@@ -757,7 +811,11 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         "known_unavailable": known_unavailable,
         "onboarding_needed": onboarding_needed,
         "missing_target_client_projection": missing_projection,
-        "current_session_boundary": refresh_boundary,
+        "current_session_boundary": session_boundary,
+        "assistant_visible_response_policy": {
+            "internal_status_terms_suppressed": True,
+            "diagnostic_state_retained_in_structured_fields": True,
+        },
         "assistant_visible_response": (
             "Source: project state plus ContextForge catalog; no changes were made. "
             f"In this project, ContextForge is initialized for {str(root)} at state revision {revision}. "
@@ -827,6 +885,7 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
     state = project_state.load_state(root)
     tool_report = project_tool_availability(project_root=str(root), client_type=client_type)
     services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
+    session_boundary = _client_session_boundary(state, client_type)
     service_readbacks: list[dict[str, Any]] = []
     for binding_id, service_value in services.items():
         if not isinstance(service_value, Mapping):
@@ -838,6 +897,7 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
         target_client_state = _client_state_for_service(service, client_type)
         projection_status = _target_client_projection_status(target_client_state)
         tool_policy_status = _tool_policy_status_for_service(service, tool_names)
+        target_client_user_state = _target_client_user_state(target_client_state, session_boundary)
         readback_item = {
             "service_binding": service_binding,
             "service_family": service_family,
@@ -847,6 +907,7 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
             "virtual_server": service.get("virtual_server"),
             "target_client_state": target_client_state,
             "target_client_projection_status": projection_status,
+            "target_client_user_state": target_client_user_state,
             "tool_policy_status": tool_policy_status,
             "tool_policy_names": tool_names,
             "target_client_visibility_status": _target_client_visibility_status(target_client_state),
@@ -914,21 +975,10 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
             if isinstance(item, Mapping)
         )
     )
-    reload_requirement = common.client_reload_requirement(client_type, event="project_activation_apply")
-    refresh_boundary = (
-        str(reload_requirement.get("instruction") or "")
-        if isinstance(reload_requirement, Mapping)
-        else "This client can use the current project-state readback without a separate reload requirement recorded for project activation."
-    )
-    if client_type == "opencode":
-        boundary_short = "new OpenCode session required before relying on newly installed tools"
-    elif client_type == "pi":
-        boundary_short = "Pi reload required before relying on newly installed tools"
-    else:
-        boundary_short = "client reload or new session boundary applies before relying on newly installed tools"
+    refresh_boundary = session_boundary["instruction"]
     target_summaries = (
         "; ".join(
-            f"{item['service_binding']} projection {item['target_client_projection_status']}; client state {item['target_client_state'].get('status', 'recorded')} ({boundary_short})"
+            f"{item['service_binding']} projection {item['target_client_projection_status']}; {item['target_client_user_state']}"
             for item in service_readbacks
         )
         or "none recorded"
@@ -947,6 +997,11 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
         "skipped_or_unavailable_services": skipped,
         "bounded_errors": bounded_errors,
         "target_client_services": service_readbacks,
+        "current_session_boundary": session_boundary,
+        "assistant_visible_response_policy": {
+            "internal_status_terms_suppressed": True,
+            "diagnostic_state_retained_in_structured_fields": True,
+        },
         "claim_layers": {
             "source_ready": "project-state file loaded and schema revision read",
             "backend_ready": "reported only from recorded service readiness fields when present",
