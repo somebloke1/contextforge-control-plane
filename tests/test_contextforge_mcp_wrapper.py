@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -106,6 +107,25 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
         self.assertIn("servers.use", body["scope"]["permissions"])
         self.assertEqual("DELETE", calls[1]["method"])
         self.assertEqual("/tokens/tok-123", calls[1]["path"])
+
+    def test_scoped_token_creation_event_does_not_log_access_token(self) -> None:
+        with mock.patch("sys.stderr") as stderr:
+            wrapper._log_bootstrap_event(
+                "context7_local_server",
+                "contextforge_wrapper_scoped_token_created",
+                server_id="server-123",
+                token_id="tok-123",
+                permissions=wrapper.SCOPED_SERVER_TOKEN_PERMISSIONS,
+            )
+
+        written = "".join(str(call.args[0]) for call in stderr.write.call_args_list if call.args)
+        payload = json.loads(written.strip())
+        self.assertEqual("contextforge_wrapper_scoped_token_created", payload["event"])
+        self.assertEqual("server-123", payload["server_id"])
+        self.assertEqual("tok-123", payload["token_id"])
+        self.assertIn("servers.use", payload["permissions"])
+        self.assertNotIn("access_token", payload)
+        self.assertNotIn("Bearer", written)
 
     def test_wrapper_can_bootstrap_with_bearer_token_without_env_file(self) -> None:
         env = os.environ.copy()

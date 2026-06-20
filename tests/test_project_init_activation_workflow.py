@@ -365,6 +365,23 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             entry["environment"]["CONTEXTFORGE_TOKEN_LOCK"],
         )
 
+    def test_project_init_bindings_do_not_embed_contextforge_bearer_token_material(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            services = [service_descriptor("context7")]
+
+            codex_plan = binding.plan_project_init_target_client_activation(root, services, target_client="codex")
+            opencode_plan = binding.plan_project_init_target_client_activation(root, services, target_client="opencode")
+            gemini_plan = binding.plan_project_init_target_client_activation(root, services, target_client="gemini")
+
+        self.assertIn("contextforge_mcp_wrapper.py", codex_plan["next_text"])
+        self.assertIn("contextforge_mcp_wrapper.py", opencode_plan["next_text"])
+        self.assertIn("contextforge_mcp_wrapper.py", gemini_plan["next_text"])
+        combined = "\n".join([codex_plan["next_text"], opencode_plan["next_text"], gemini_plan["next_text"]])
+        self.assertNotIn("CONTEXTFORGE_BEARER_TOKEN", combined)
+        self.assertNotIn("MCP_AUTH", combined)
+        self.assertNotIn("Authorization", combined)
+
     def test_opencode_config_plan_blocks_unmanaged_same_name(self) -> None:
         plan = binding.plan_project_init_opencode_config_write(
             "/home/dgk/workspace/legacy-controlplane-archive",

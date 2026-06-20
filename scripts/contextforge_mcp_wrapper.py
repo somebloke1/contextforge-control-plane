@@ -62,6 +62,17 @@ def _log_lifecycle(event: str, lifecycle: WrapperLifecycle, **extra: Any) -> Non
     print(json.dumps(payload, sort_keys=True), file=sys.stderr, flush=True)
 
 
+def _log_bootstrap_event(server_name: str, event: str, **extra: Any) -> None:
+    payload = {
+        "event": event,
+        "pid": os.getpid(),
+        "ppid": os.getppid(),
+        "server_name": server_name,
+    }
+    payload.update(extra)
+    print(json.dumps(payload, sort_keys=True), file=sys.stderr, flush=True)
+
+
 def _log_bootstrap_error(server_name: str, stage: str, exc: Exception | str) -> None:
     payload = {
         "event": "contextforge_wrapper_bootstrap_error",
@@ -496,6 +507,13 @@ def main() -> int:
         try:
             scoped_token_id, mcp_token = _create_scoped_server_token(token, server_id, server_name)
             scoped_token_admin_token = token
+            _log_bootstrap_event(
+                server_name,
+                "contextforge_wrapper_scoped_token_created",
+                server_id=server_id,
+                token_id=scoped_token_id,
+                permissions=SCOPED_SERVER_TOKEN_PERMISSIONS,
+            )
         except Exception as exc:
             _log_bootstrap_error(server_name, "scoped_server_token", exc)
             print(str(exc), file=sys.stderr)
