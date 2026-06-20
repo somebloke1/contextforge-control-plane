@@ -112,3 +112,25 @@ or tool exposure policy. Strong follow-up evidence would be the helper's
 persisted project-init state immediately before and after user reply `3`, plus
 a minimal replay showing whether `cf_project_init_continue` can see the active
 Serena question context.
+
+## Remediation Note - 2026-06-20
+
+Controller-integrated remediation changed the structured helper continuation
+path so a pending Serena language/defer question is consumed before generic
+decline/defer/approval or fresh service-selection interpretation. Numeric
+option `3` now maps to `defer` only when the active pending input is the Serena
+language question, then the helper proposes the non-Serena activation plan and
+clears the pending-input cache. Direct `cf_project_init_apply` no longer
+silently self-approves; apply requires cached approval receipts, while
+`cf_project_init_continue` performs the approval step only after an explicit
+approval reply.
+
+Controller verification:
+
+- `ProjectInitActivationWorkflowTests.test_pi_continue_maps_pending_serena_numeric_defer_to_non_serena_plan`
+  passed.
+- `ProjectInitActivationWorkflowTests.test_contextforge_helper_mcp_apply_requires_cached_approval_receipts`
+  passed.
+- `tests.test_project_init_activation_workflow -v`: 117 tests OK.
+- `tests.test_project_init_scripts -v`: 104 tests OK.
+- `git diff --check` passed.

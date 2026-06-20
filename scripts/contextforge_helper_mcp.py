@@ -1109,8 +1109,29 @@ def _selected_service_ids_from_text(text: str, capabilities: Mapping[str, Any]) 
     return selected
 
 
-def _language_input_from_text(text: str) -> str | None:
+def _is_serena_service_ref(item: Any) -> bool:
+    if isinstance(item, Mapping):
+        binding = str(item.get("service_binding") or "")
+        family = str(item.get("service_family") or item.get("canonical_service") or item.get("codex_alias") or "")
+        return binding.startswith("serena:") or family == "serena" or family.startswith("serena:")
+    ref = str(item)
+    return ref == "serena" or ref.startswith("serena:")
+
+
+def _pending_service_refs(pending_input: Mapping[str, Any] | None) -> list[Any]:
+    return [
+        item
+        for item in (pending_input or {}).get("selected_services") or []
+        if item
+    ]
+
+
+def _language_input_from_text(text: str, pending_input: Mapping[str, Any] | None = None) -> str | None:
     lowered = text.strip().lower()
+    if (pending_input or {}).get("input_name") == "language":
+        numeric_choices = {"1": "python", "2": "typescript", "3": "defer"}
+        if lowered in numeric_choices:
+            return numeric_choices[lowered]
     if lowered in {"python", "typescript", "defer"}:
         return lowered
     return None
@@ -1163,6 +1184,14 @@ def _remember_pending_project_init_input(project_root: str, selected_services: l
             },
         },
     )
+
+
+def _clear_pending_project_init_input(project_root: str) -> None:
+    current = _read_durable_cache(project_root)
+    if "pending_input" not in current:
+        return
+    current.pop("pending_input", None)
+    _write_durable_cache(project_root, current)
 
 
 def _pending_project_init_input(project_root: str) -> dict[str, Any] | None:
@@ -1481,9 +1510,9 @@ def cf_project_init_record_service_decision(
         if not selected:
             pending = _pending_project_init_input(project_root)
             selected = [
-                str(item)
+                item
                 for item in (pending or {}).get("selected_services") or []
-                if str(item)
+                if item
             ]
         result = helper.record_project_init_service_decision(
             project_root=project_root,
@@ -1493,6 +1522,8 @@ def cf_project_init_record_service_decision(
             source_plan_id=source_plan_id,
             dry_run=dry_run,
         )
+        if not dry_run:
+            _clear_pending_project_init_input(project_root)
         return client_visible_project_init_decision_payload(result)
     except Exception as exc:
         return _error(exc)
@@ -1513,6 +1544,47 @@ def cf_project_init_continue(
     try:
         project_root = _continuation_project_root(project_root, client_type)
         latest = _read_latest_user_message_text(project_root)
+        pending_input = _pending_project_init_input(project_root)
+        language = _language_input_from_text(latest, pending_input)
+        if pending_input and language:
+            pending_services = _pending_service_refs(pending_input)
+            if language == "defer":
+                non_serena_services = [
+                    item
+                    for item in pending_services
+                    if not _is_serena_service_ref(item)
+                ]
+                if non_serena_services:
+                    result = propose_project_init(
+                        project_root=project_root,
+                        selected_services=non_serena_services,
+                        client_type=client_type,
+                    )
+                    if result.get("status") != "needs_input":
+                        _clear_pending_project_init_input(project_root)
+                    return client_visible_project_init_plan_payload(result, include_next_turn=client_type != "codex")
+                serena_services = [
+                    item
+                    for item in pending_services
+                    if _is_serena_service_ref(item)
+                ]
+                return cf_project_init_record_service_decision(
+                    project_root=project_root,
+                    selected_services=serena_services or None,
+                    decision_state="deferred",
+                    client_type=client_type,
+                    dry_run=dry_run,
+                )
+            if pending_services:
+                result = propose_project_init(
+                    project_root=project_root,
+                    selected_services=pending_services,
+                    client_type=client_type,
+                    inputs={"language": language},
+                )
+                if result.get("status") != "needs_input":
+                    _clear_pending_project_init_input(project_root)
+                return client_visible_project_init_plan_payload(result, include_next_turn=client_type != "codex")
         if _latest_text_is_decline(latest):
             return cf_project_init_record_service_decision(
                 project_root=project_root,
@@ -1521,19 +1593,11 @@ def cf_project_init_continue(
                 dry_run=dry_run,
             )
         if _latest_text_is_defer(latest):
-            pending = _pending_project_init_input(project_root)
-            pending_services = [
-                item
-                for item in (pending or {}).get("selected_services") or []
-                if item
-            ]
+            pending_services = _pending_service_refs(pending_input)
             serena_services = [
                 item
                 for item in pending_services
-                if (
-                    (isinstance(item, Mapping) and str(item.get("service_binding") or item.get("service_family") or "").startswith("serena"))
-                    or (not isinstance(item, Mapping) and (str(item).startswith("serena:") or str(item) == "serena"))
-                )
+                if _is_serena_service_ref(item)
             ]
             return cf_project_init_record_service_decision(
                 project_root=project_root,
@@ -1543,27 +1607,14 @@ def cf_project_init_continue(
                 dry_run=dry_run,
             )
         if _latest_text_is_approval(latest):
+            approval = cf_project_init_approve(project_root=project_root)
+            if approval.get("ok") is False:
+                return approval
             result = cf_project_init_apply(
                 project_root=project_root,
                 dry_run=dry_run,
             )
             return client_visible_project_init_apply_payload(result)
-        pending_input = _pending_project_init_input(project_root)
-        language = _language_input_from_text(latest)
-        if pending_input and language:
-            pending_services = [
-                str(item)
-                for item in pending_input.get("selected_services") or []
-                if str(item)
-            ]
-            if pending_services:
-                result = propose_project_init(
-                    project_root=project_root,
-                    selected_services=pending_services,
-                    client_type=client_type,
-                    inputs={"language": language},
-                )
-                return client_visible_project_init_plan_payload(result, include_next_turn=client_type != "codex")
         capabilities = helper.list_available_capabilities(
             project_root=project_root,
             client_type=client_type,
@@ -1917,11 +1968,6 @@ def cf_project_init_apply(
         cached_receipts = _matching_cached_receipts(project_root, plan)
         if cached_receipts is None and receipts is not None:
             cached_receipts = receipts
-        if cached_receipts is None:
-            approval_result = cf_project_init_approve(project_root)
-            if approval_result.get("ok") is False:
-                return approval_result
-            cached_receipts = _matching_cached_receipts(project_root, plan)
         if not isinstance(cached_receipts, list):
             raise ValueError("no cached project-init receipts are available; approve the plan before calling cf_project_init_apply")
         helper.restore_process_local_approval_session(project_root=project_root, plan=plan, receipts=cached_receipts)

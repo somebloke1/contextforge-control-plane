@@ -2692,6 +2692,36 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("assistant_visible_response", proposal)
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
 
+    def test_pi_continue_maps_pending_serena_numeric_defer_to_non_serena_plan(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "pi-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                approval_source.write_text(json.dumps({"cwd": str(root), "text": "context7 and serena"}) + "\n", encoding="utf-8")
+                language_turn = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="pi")
+                pending_after_language_turn = contextforge_helper_mcp._pending_project_init_input(str(root))
+                approval_source.write_text(json.dumps({"cwd": str(root), "text": "3"}) + "\n", encoding="utf-8")
+                proposal = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="pi")
+                cached_plan = contextforge_helper_mcp._matching_cached_plan(str(root), None, None)
+                pending_input = contextforge_helper_mcp._pending_project_init_input(str(root))
+
+        self.assertTrue(language_turn["ok"], language_turn)
+        self.assertEqual("needs_input", language_turn["status"])
+        self.assertEqual("language", pending_after_language_turn["input_name"])
+        self.assertIn("context7:canonical", pending_after_language_turn["selected_services"])
+        self.assertTrue(any(str(item).startswith("serena:") for item in pending_after_language_turn["selected_services"]))
+        self.assertTrue(proposal["ok"], proposal)
+        self.assertEqual("project_init", proposal["workflow"])
+        self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
+        self.assertNotIn("serena:", " ".join(proposal["selected_service_bindings"]))
+        self.assertEqual("approve-project-init-plan", cached_plan["next_turn"]["question_id"])
+        self.assertEqual(["context7:canonical"], [service["service_binding"] for service in cached_plan["selected_services"]])
+        self.assertIsNone(pending_input)
+
     def test_opencode_continue_preserves_all_services_selection_through_language_input(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
             root = Path(tmp).resolve()
@@ -3001,6 +3031,25 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(applied["ok"], applied.get("error"))
         self.assertEqual("pi-project-init-installed", applied["next_turn"]["question_id"])
         self.assertEqual("/reload", applied["client_reload_requirement"]["command"])
+
+    def test_contextforge_helper_mcp_apply_requires_cached_approval_receipts(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="pi",
+            )
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root), dry_run=True)
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+
+        self.assertTrue(proposal["ok"])
+        self.assertFalse(applied["ok"])
+        self.assertEqual("ValueError", applied["error"]["type"])
+        self.assertIn("approve the plan before calling cf_project_init_apply", applied["error"]["message"])
 
     def test_contextforge_helper_mcp_apply_prefers_cached_full_receipts_over_lossy_replay(self) -> None:
         with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
