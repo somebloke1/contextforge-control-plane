@@ -25,11 +25,12 @@
       "playwright",
       "exa-search",
       "github",
-      "web-search"
+      "web-search",
+      "serena"
     ],
-    "active_next_recommended_service": "serena",
-    "active_next_recommended_issue": 268,
-    "ordering_reason": "After context7, mentality, openzeppelin-solidity-contracts, ssh-tmux, playwright, exa-search, GitHub, and web-search, Serena is the remaining per-service readiness slice. It is last because project-scoped provisioning, language selection, and LSP/index state are more dependent than the accepted shared, session, and credential-scoped source lifecycle slices."
+    "active_next_recommended_service": null,
+    "active_next_recommended_issue": 269,
+    "ordering_reason": "All per-service source lifecycle slices in the current helper-offered service set are accepted. The next target is #269 selection-shape validation for single-service, curated multi-service, and all-services apply/readback behavior before #247 umbrella acceptance."
   },
   "not_service_options": [
     {

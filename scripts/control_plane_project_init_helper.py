@@ -1951,6 +1951,7 @@ def apply_approved_project_init(
         plan=plan,
         skip_service_bindings=recovery_ensured_bindings,
     )
+    services = _services_with_project_scoped_provisioning_results(services, provisioning_results)
     activation_config_plan = _client_activation_plan(
         root,
         services,
@@ -2007,6 +2008,35 @@ def apply_approved_project_init(
         result["client_reload_requirement"] = reload_requirement
     result["next_turn"] = installation_complete_turn(client_type=client_type, reload_requirement=reload_requirement)
     return result
+
+
+def _services_with_project_scoped_provisioning_results(
+    services: Sequence[Mapping[str, Any]],
+    provisioning_results: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    by_binding = {
+        str(result.get("service_binding") or ""): result
+        for result in provisioning_results
+        if isinstance(result, Mapping) and result.get("service_binding")
+    }
+    enriched: list[dict[str, Any]] = []
+    for service in services:
+        service_copy = dict(service)
+        result = by_binding.get(str(service_copy.get("service_binding") or ""))
+        if result and str(result.get("status") or "") == "completed":
+            service_copy["provision_status"] = "created"
+            provisioning = dict(service_copy.get("provisioning") or {})
+            provisioning["provision_status"] = "created"
+            provisioning["status"] = "completed"
+            provisioning["result"] = {
+                key: result.get(key)
+                for key in ("operation_type", "language", "instance_slug", "server_name", "manifest_path", "contextforge_server_id")
+                if result.get(key) is not None
+            }
+            service_copy["provisioning"] = provisioning
+            service_copy["contextforge_readback_status"] = "provisioned_pending_readback"
+        enriched.append(service_copy)
+    return enriched
 
 
 def _apply_project_scoped_provisioning(

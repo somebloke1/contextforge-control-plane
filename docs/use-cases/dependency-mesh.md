@@ -213,7 +213,10 @@ must be promoted to protect already accepted cases.
            state are more dependent. Current next target after accepted UC5j is
            `serena`/#268 because it is the remaining per-service readiness slice
            and requires explicit project-scoped provisioning and language-state
-           boundaries before #269 selection-shape validation.
+           boundaries before #269 selection-shape validation. Current next
+           target after accepted UC5k is #269 because all current per-service
+           source lifecycle slices are accepted and selection-shape behavior is
+           the remaining #247 prerequisite.
 10. UC5e - #269 single, curated multi-service, and all-services selection
            shape validation.
 11. UC5  - #247 umbrella acceptance once its decomposed slices are proven.

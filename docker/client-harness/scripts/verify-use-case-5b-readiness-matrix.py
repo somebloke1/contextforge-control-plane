@@ -119,16 +119,23 @@ def main(argv: list[str] | None = None) -> int:
             "exa-search",
             "github",
             "web-search",
+            "serena",
         ],
         checks,
         failures,
         "slice_progress_records_accepted_source_slices",
     )
     check(
-        progress.get("active_next_recommended_service") == "serena",
+        progress.get("active_next_recommended_service") is None,
         checks,
         failures,
         "slice_progress_recommends_next_service",
+    )
+    check(
+        progress.get("active_next_recommended_issue") == 269,
+        checks,
+        failures,
+        "slice_progress_recommends_next_issue",
     )
     check(metadata.get("test_command", {}).get("returncode") == 0, checks, failures, "focused_test_passed")
 
