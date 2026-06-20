@@ -20,11 +20,12 @@
     "accepted_source_lifecycle_slices": [
       "context7",
       "mentality",
-      "openzeppelin-solidity-contracts"
+      "openzeppelin-solidity-contracts",
+      "ssh-tmux"
     ],
-    "active_next_recommended_service": "ssh-tmux",
-    "active_next_recommended_issue": 266,
-    "ordering_reason": "After context7, mentality, and openzeppelin-solidity-contracts, ssh-tmux is the lowest-dependency remaining service with known safe probe policy and no credential, browser, or project-provisioning prerequisite; it remains session-scoped and must be bounded to read-only session listing."
+    "active_next_recommended_service": "playwright",
+    "active_next_recommended_issue": 265,
+    "ordering_reason": "After context7, mentality, openzeppelin-solidity-contracts, and ssh-tmux, playwright is the lowest-dependency remaining service without provider credentials; it remains session-scoped and must be bounded to an isolated controlled fixture-page proof."
   },
   "not_service_options": [
     {
