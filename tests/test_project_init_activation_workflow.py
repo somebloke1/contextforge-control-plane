@@ -1236,6 +1236,92 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         self.assertEqual(before, after)
 
+    def test_reset_current_project_removes_helper_owned_project_init_surfaces(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+
+            (root / ".codex").mkdir()
+            (root / ".codex" / "config.toml").write_text('[mcp_servers.keep]\ncommand = "keep"\n', encoding="utf-8")
+            codex_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="codex")
+            (root / ".codex" / "config.toml").write_text(str(codex_plan["next_text"]), encoding="utf-8")
+
+            (root / "opencode.json").write_text(
+                json.dumps({"mcp": {"keep": {"type": "local", "command": ["keep"], "enabled": True}}}) + "\n",
+                encoding="utf-8",
+            )
+            opencode_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            (root / "opencode.json").write_text(str(opencode_plan["next_text"]), encoding="utf-8")
+
+            (root / ".gemini").mkdir()
+            (root / ".gemini" / "settings.json").write_text(
+                json.dumps({"mcpServers": {"keep": {"command": "keep", "args": []}}}) + "\n",
+                encoding="utf-8",
+            )
+            gemini_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="gemini")
+            (root / ".gemini" / "settings.json").write_text(str(gemini_plan["next_text"]), encoding="utf-8")
+
+            state = project_state.default_state(root)
+            for target_client, config_plan in (
+                ("codex", codex_plan),
+                ("opencode", opencode_plan),
+                ("gemini", gemini_plan),
+            ):
+                state = project_state.apply_project_init_activation_to_state(
+                    state,
+                    selected,
+                    target_client=target_client,
+                    client_config_plan=config_plan,
+                    validation_plan=binding.build_project_init_validation_plan(
+                        selected,
+                        validation_mode="installed",
+                        target_client=target_client,
+                    ),
+                    validation_results={},
+                    consent_receipt_refs=CONSENT_REFS,
+                )
+            project_state.write_state_atomic(root, state)
+
+            result = helper.reset_current_project(project_root=root, client_type="codex")
+            repeat = helper.reset_current_project(project_root=root, client_type="codex", preserve_evidence=False)
+
+            self.assertEqual("reset", result["status"])
+            self.assertTrue(result["postcondition"])
+            self.assertFalse(project_state.project_state_path(root).exists())
+            self.assertTrue(Path(str(result["evidence_dir"])).exists())
+            self.assertTrue((Path(str(result["evidence_dir"])) / "manifest.json").exists())
+            codex_text = (root / ".codex" / "config.toml").read_text(encoding="utf-8")
+            self.assertIn("[mcp_servers.keep]", codex_text)
+            self.assertNotIn(binding.PROJECT_INIT_OWNER_MARKER, codex_text)
+            opencode_config = json.loads((root / "opencode.json").read_text(encoding="utf-8"))
+            self.assertEqual(["keep"], sorted(opencode_config["mcp"]))
+            gemini_config = json.loads((root / ".gemini" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(["keep"], sorted(gemini_config["mcpServers"]))
+            self.assertEqual("reset", repeat["status"])
+            self.assertEqual([], repeat["actions"])
+
+    def test_project_reset_is_available_through_mcp_and_pi_cli(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            state = project_state.default_state(root)
+            project_state.write_state_atomic(root, state)
+
+            mcp_result = contextforge_helper_mcp.cf_project_reset_current_project(
+                str(root),
+                client_type="codex",
+                preserve_evidence=False,
+            )
+            project_state.write_state_atomic(root, state)
+            cli_result = pi_project_init_helper_cli.dispatch(
+                "cf_project_reset_current_project",
+                {"project_root": str(root), "client_type": "pi", "preserve_evidence": False},
+            )
+
+            self.assertTrue(mcp_result["ok"])
+            self.assertEqual("reset", mcp_result["status"])
+            self.assertTrue(cli_result["ok"])
+            self.assertEqual("reset", cli_result["status"])
+
     def test_pi_reload_acknowledgement_changes_normal_readback_contract(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()

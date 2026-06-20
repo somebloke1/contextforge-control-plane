@@ -317,6 +317,14 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
             contextforge_servers=data.get("contextforge_servers") or data.get("contextforgeServers"),
             dry_run=bool(data.get("dry_run") or data.get("dryRun")),
         )
+    if operation in {"reset_current_project", "cf_project_reset_current_project"}:
+        return _mcp_helper().cf_project_reset_current_project(
+            project_root,
+            client_type=client_type,
+            profile=str(data.get("profile") or "project_init_base"),
+            preserve_evidence=bool(data.get("preserve_evidence", data.get("preserveEvidence", True))),
+            dry_run=bool(data.get("dry_run") or data.get("dryRun")),
+        )
     if operation == "record_project_init_client_reload":
         return _ok(
             helper.record_project_init_client_reload(

@@ -58,6 +58,34 @@ The helper should expose an agent-callable reset operation that:
 - Use-case runners can invoke the helper reset instead of maintaining bespoke
   project-local cleanup logic where appropriate.
 
+## Initial Implementation
+
+Implemented profile: `project_init_base`.
+
+Public operation:
+
+- MCP helper: `cf_project_reset_current_project`
+- MCP helper alias: `reset_current_project`
+- Pi helper CLI operation: `cf_project_reset_current_project` or
+  `reset_current_project`
+
+The profile removes helper-owned project-init state and project-local managed
+MCP config entries for Codex, OpenCode, and Gemini while preserving unmanaged
+entries. It preserves before-reset evidence under
+`.project/contextforge-reset-evidence/<reset-id>/` when requested and returns a
+structured manifest with actions, refusals, non-actions, and postcondition.
+
+Current scope remains intentionally narrow:
+
+- removes `.project/context_forge_state.json`;
+- removes ContextForge-owned Codex MCP blocks from `.codex/config.toml`;
+- removes ContextForge wrapper-shaped OpenCode entries from `opencode.json`
+  only for aliases selected in project-init state;
+- removes ContextForge wrapper-shaped Gemini entries from
+  `.gemini/settings.json` only for aliases selected in project-init state;
+- clears helper MCP durable project-init caches when invoked through the MCP
+  wrapper.
+
 ## Non-Goals
 
 - Do not reset user-global client authentication.

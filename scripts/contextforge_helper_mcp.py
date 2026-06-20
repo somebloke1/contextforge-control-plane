@@ -1458,6 +1458,53 @@ def cf_project_state_readback(project_root: str, client_type: str = DEFAULT_CLIE
 
 
 @server.tool()
+def cf_project_reset_current_project(
+    project_root: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    profile: str = "project_init_base",
+    preserve_evidence: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reset helper-owned project-init state for this project root only."""
+    try:
+        result = {
+            "ok": True,
+            **helper.reset_current_project(
+                project_root=project_root,
+                client_type=client_type,
+                profile=profile,
+                preserve_evidence=preserve_evidence,
+                dry_run=dry_run,
+            ),
+        }
+        if not dry_run:
+            _clear_durable_cache(project_root)
+            _clear_durable_recovery_cache(project_root)
+            _clear_pending_project_init_input(project_root)
+        return client_visible_project_init_payload(result)
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def reset_current_project(
+    project_root: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    profile: str = "project_init_base",
+    preserve_evidence: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Alias for cf_project_reset_current_project."""
+    return cf_project_reset_current_project(
+        project_root=project_root,
+        client_type=client_type,
+        profile=profile,
+        preserve_evidence=preserve_evidence,
+        dry_run=dry_run,
+    )
+
+
+@server.tool()
 def list_available_capabilities(
     project_root: str,
     client_type: str = DEFAULT_CLIENT_TYPE,
