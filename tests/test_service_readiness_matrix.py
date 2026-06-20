@@ -167,11 +167,12 @@ class ServiceReadinessMatrixTests(unittest.TestCase):
                 "openzeppelin-solidity-contracts",
                 "ssh-tmux",
                 "playwright",
+                "exa-search",
             ],
             progress["accepted_source_lifecycle_slices"],
         )
-        self.assertEqual("exa-search", progress["active_next_recommended_service"])
-        self.assertEqual(261, progress["active_next_recommended_issue"])
+        self.assertEqual("github", progress["active_next_recommended_service"])
+        self.assertEqual(262, progress["active_next_recommended_issue"])
         self.assertIn("not the live controller queue pointer", progress["current_slice_field_note"])
 
 
