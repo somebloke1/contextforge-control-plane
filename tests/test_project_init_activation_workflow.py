@@ -2540,10 +2540,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
             root = Path(tmp).resolve()
             instances = root / "instances"
-            for service, server, scope_type in (
-                ("context7", "context7_local_server", "shared_canonical"),
-                ("mentality", "mentality_server", "caller_supplied_local_repo"),
-                ("playwright", "playwright_server", "isolated_browser_runtime"),
+            for service, server, scope_type, extra in (
+                ("context7", "context7_local_server", "shared_canonical", {}),
+                ("mentality", "mentality_server", "caller_supplied_local_repo", {}),
+                ("playwright", "playwright_server", "isolated_browser_runtime", {}),
+                ("github", "github_server", "github_account_and_request_repo", {"service_binding": "github:canonical"}),
             ):
                 instance = instances / service
                 instance.mkdir(parents=True)
@@ -2554,6 +2555,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                             "name": service,
                             "slug": service,
                             "service": service,
+                            **extra,
                             "contextforge": {"virtual_server": {"name": server}, "gateway": {"name": "contextforge"}},
                             "backend": {"transport": "stdio"},
                             "scope": {"scope_type": scope_type},
@@ -2564,11 +2566,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
             proposal = contextforge_helper_mcp.propose_project_init(
                 str(root),
-                ["context7:canonical", {"id": "mentality:static_repo_local"}, "playwright"],
+                ["context7:canonical", {"id": "mentality:static_repo_local"}, "playwright", "github"],
                 contextforge_servers=[
                     {"name": "context7_local_server", "id": "vs-context7"},
                     {"name": "mentality_server", "id": "vs-mentality"},
                     {"name": "playwright_server", "id": "vs-playwright"},
+                    {"name": "github_server", "id": "vs-github"},
                 ],
                 server_instances_root=str(instances),
                 inputs={},
@@ -2576,9 +2579,13 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         self.assertTrue(proposal["ok"])
         self.assertEqual(
-            {"context7:canonical", "mentality:static_repo_local", "playwright:session_scoped"},
+            {"context7:canonical", "mentality:static_repo_local", "playwright:session_scoped", "github:canonical"},
             {service["service_binding"] for service in proposal["selected_services"]},
         )
+        github = next(service for service in proposal["selected_services"] if service["service_family"] == "github")
+        self.assertEqual("github:canonical", github["service_binding"])
+        self.assertEqual("credential_scoped", github["instantiation_class"])
+        self.assertEqual("credential-scoped hosted binding", github["scope_label"])
         self.assertNotIn("service_provision", proposal["required_consent_classes"])
         self.assertEqual({"shared_canonical"}, {service["activation_class"] for service in proposal["selected_services"]})
 

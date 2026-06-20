@@ -23,11 +23,12 @@
       "openzeppelin-solidity-contracts",
       "ssh-tmux",
       "playwright",
-      "exa-search"
+      "exa-search",
+      "github"
     ],
-    "active_next_recommended_service": "github",
-    "active_next_recommended_issue": 262,
-    "ordering_reason": "After context7, mentality, openzeppelin-solidity-contracts, ssh-tmux, playwright, and exa-search, GitHub is the next narrow credential-scoped surface with a clear read-only metadata boundary. It should be handled before broader multi-provider web-search, while Serena remains later because project-scoped provisioning and language state are more dependent."
+    "active_next_recommended_service": "web-search",
+    "active_next_recommended_issue": 267,
+    "ordering_reason": "After context7, mentality, openzeppelin-solidity-contracts, ssh-tmux, playwright, exa-search, and GitHub, web-search is the remaining credential-scoped provider/request surface. Serena remains later because project-scoped provisioning, language selection, and LSP/index state are more dependent."
   },
   "not_service_options": [
     {

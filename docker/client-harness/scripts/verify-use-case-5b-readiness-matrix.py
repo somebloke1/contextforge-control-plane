@@ -117,13 +117,14 @@ def main(argv: list[str] | None = None) -> int:
             "ssh-tmux",
             "playwright",
             "exa-search",
+            "github",
         ],
         checks,
         failures,
         "slice_progress_records_accepted_source_slices",
     )
     check(
-        progress.get("active_next_recommended_service") == "github",
+        progress.get("active_next_recommended_service") == "web-search",
         checks,
         failures,
         "slice_progress_recommends_next_service",

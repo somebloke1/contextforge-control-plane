@@ -282,7 +282,7 @@ def discover_contextforge_hosted_services(
             {
                 "service_family": service_family,
                 "canonical_service": str(manifest.get("canonical_service") or service_family),
-                "service_binding": _manifest_service_binding(service_family, instantiation_class, canonical_project_root),
+                "service_binding": _manifest_service_binding(manifest, service_family, instantiation_class, canonical_project_root),
                 "codex_alias": alias,
                 "instantiation_class": instantiation_class,
                 "backend_instance": str(manifest_path.parent.relative_to(REPO_ROOT)),
@@ -859,7 +859,7 @@ def _manifest_instantiation_class(manifest: dict[str, Any]) -> str:
         return "static_repo_local"
     if scope_type in {"ssh_target_and_tmux_session", "isolated_browser_runtime"}:
         return "session_scoped"
-    if "credential" in scope_type:
+    if "credential" in scope_type or "account" in scope_type:
         return "credential_scoped"
     if "resource" in scope_type:
         return "resource_scoped"
@@ -868,7 +868,15 @@ def _manifest_instantiation_class(manifest: dict[str, Any]) -> str:
     return "shared_canonical"
 
 
-def _manifest_service_binding(service_family: str, instantiation_class: str, canonical_project_root: Any) -> str:
+def _manifest_service_binding(
+    manifest: dict[str, Any],
+    service_family: str,
+    instantiation_class: str,
+    canonical_project_root: Any,
+) -> str:
+    explicit = str(manifest.get("service_binding") or "").strip()
+    if explicit:
+        return explicit
     if instantiation_class == "instance_per_project" and canonical_project_root:
         return f"{service_family}:{project_root_hash(canonical_path(str(canonical_project_root)))[:12]}"
     if instantiation_class == "shared_canonical":

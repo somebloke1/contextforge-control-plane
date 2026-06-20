@@ -206,8 +206,11 @@ must be promoted to protect already accepted cases.
            surfaces. Current next target after accepted UC5h is `github`/#262
            because it is the next narrow credential-scoped surface with a clear
            read-only metadata boundary; it should be handled before broader
-           multi-provider `web-search`/#267, while Serena remains later because
-           project-scoped provisioning and language state are more dependent.
+           multi-provider `web-search`/#267. Current next target after accepted
+           UC5i is `web-search`/#267 because it is the remaining
+           credential-scoped provider/request surface; Serena remains later
+           because project-scoped provisioning, language selection, and LSP/index
+           state are more dependent.
 10. UC5e - #269 single, curated multi-service, and all-services selection
            shape validation.
 11. UC5  - #247 umbrella acceptance once its decomposed slices are proven.

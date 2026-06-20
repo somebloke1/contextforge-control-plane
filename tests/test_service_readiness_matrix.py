@@ -168,11 +168,12 @@ class ServiceReadinessMatrixTests(unittest.TestCase):
                 "ssh-tmux",
                 "playwright",
                 "exa-search",
+                "github",
             ],
             progress["accepted_source_lifecycle_slices"],
         )
-        self.assertEqual("github", progress["active_next_recommended_service"])
-        self.assertEqual(262, progress["active_next_recommended_issue"])
+        self.assertEqual("web-search", progress["active_next_recommended_service"])
+        self.assertEqual(267, progress["active_next_recommended_issue"])
         self.assertIn("not the live controller queue pointer", progress["current_slice_field_note"])
 
 
