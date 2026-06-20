@@ -312,7 +312,7 @@ class ControlPlaneProjectStateTests(unittest.TestCase):
             state_lib.write_state_atomic(root, pending)
             inspection = state_lib.inspect_project_init_state(root, require_workspace=True)
             self.assertEqual("valid", inspection["lifecycle_status"])
-            self.assertEqual("resume_validation", inspection["recommended_action"])
+            self.assertEqual("resume_project_init", inspection["recommended_action"])
             self.assertFalse(inspection["should_suppress_hook"])
 
             service = service_descriptor("context7")

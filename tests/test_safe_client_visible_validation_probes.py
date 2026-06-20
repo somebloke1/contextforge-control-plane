@@ -28,7 +28,12 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
         self.assertIn("Issue: #97", self.doc)
         self.assertIn("Open question: `oq-20260531-0001`", self.doc)
         self.assertIn("safe default probe payload", OPEN_QUESTIONS.read_text(encoding="utf-8"))
-        self.assertIn("docs/safe-client-visible-validation-probes.md", MATRIX.read_text(encoding="utf-8"))
+        matrix = MATRIX.read_text(encoding="utf-8")
+        self.assertNotIn("docs/safe-client-visible-validation-probes.md", matrix)
+        self.assertIn(
+            "Project init stops after install plus reload/new-session-required.",
+            " ".join(matrix.split()),
+        )
 
     def test_catalog_distinguishes_client_surfaces(self) -> None:
         for phrase in [
@@ -742,7 +747,7 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
                 self.assertIs(result["target_client_visible"], False)
                 self.assertEqual(reason, result["skipped_reason"])
 
-    def test_pi_shim_context7_defaults_align_with_probe_contract(self) -> None:
+    def test_pi_shim_hides_probe_contract_details_from_visible_payload(self) -> None:
         text = PI_SHIM.read_text(encoding="utf-8")
         policy = common.safe_validation_policy("context7")
 
@@ -750,12 +755,12 @@ class SafeClientVisibleValidationProbeCatalogTests(unittest.TestCase):
             with self.subTest(operation=operation):
                 self.assertIn(operation, text)
 
-        self.assertIn('proof_kind: "pi_safe_probe_result"', text)
-        self.assertIn("safe_probe_result", text)
-        self.assertIn("safeProbeId", text)
-        self.assertIn('base.libraryName = "python"', text)
-        self.assertIn('base.query = "standard library documentation lookup"', text)
-        self.assertIn("for (const operation of service.safeOperations)", text)
+        self.assertIn('normalized.startsWith("validation")', text)
+        self.assertIn('normalized.startsWith("x_validation")', text)
+        self.assertIn('normalized.includes("safe_probe")', text)
+        self.assertIn('"proof_kind"', text)
+        self.assertIn('"accepted_proof_kinds"', text)
+        self.assertIn('"safe_operations"', text)
 
     def test_pi_shim_governance_route_falls_back_after_missing_tool_result(self) -> None:
         text = PI_SHIM.read_text(encoding="utf-8")
