@@ -41,6 +41,10 @@ or transcript output through the shared redactor before it is written under
 docker/client-harness/scripts/redact-contextforge-secrets.py < raw.txt > redacted.txt
 ```
 
+This includes local-only files such as `config/direct-clients.local.env` and
+keys such as `MCP_BEARER_TOKEN`; preserve their existence/permission evidence
+without copying credential values.
+
 ## Build
 
 ```sh

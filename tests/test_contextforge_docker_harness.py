@@ -315,6 +315,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
                 "PLATFORM_ADMIN_EMAIL=operator@example.invalid",
                 "PLATFORM_ADMIN_PASSWORD=super-secret-password",
                 "CONTEXTFORGE_BEARER_TOKEN=cf-secret-token",
+                "MCP_BEARER_TOKEN=mcp-secret-token",
                 "Authorization=Bearer abcdefghijklmnop",
                 '{"access_token": "json-secret-token", "token_id": "tok_public_identifier"}',
                 "probe_token_id=tok_public_identifier",
@@ -334,6 +335,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("[REDACTED_CONTEXTFORGE_SECRET]", output)
         self.assertNotIn("super-secret-password", output)
         self.assertNotIn("cf-secret-token", output)
+        self.assertNotIn("mcp-secret-token", output)
         self.assertNotIn("abcdefghijklmnop", output)
         self.assertNotIn("json-secret-token", output)
         self.assertIn("PLATFORM_ADMIN_EMAIL=operator@example.invalid", output)
