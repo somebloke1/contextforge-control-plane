@@ -199,7 +199,12 @@ must be promoted to protect already accepted cases.
            read-only boundaries. Current next target after accepted UC5f is
            `playwright`/#265 because it is the lowest-dependency remaining
            service without provider credentials, while still requiring an
-           isolated controlled fixture-page boundary.
+           isolated controlled fixture-page boundary. Current next target after
+           accepted UC5g is `exa-search`/#261 because it is the narrowest
+           remaining credential-scoped service and should be handled before
+           broader GitHub mutation-capable and multi-provider web-search
+           surfaces; Serena remains later because project-scoped provisioning
+           and language state are more dependent.
 10. UC5e - #269 single, curated multi-service, and all-services selection
            shape validation.
 11. UC5  - #247 umbrella acceptance once its decomposed slices are proven.

@@ -21,11 +21,12 @@
       "context7",
       "mentality",
       "openzeppelin-solidity-contracts",
-      "ssh-tmux"
+      "ssh-tmux",
+      "playwright"
     ],
-    "active_next_recommended_service": "playwright",
-    "active_next_recommended_issue": 265,
-    "ordering_reason": "After context7, mentality, openzeppelin-solidity-contracts, and ssh-tmux, playwright is the lowest-dependency remaining service without provider credentials; it remains session-scoped and must be bounded to an isolated controlled fixture-page proof."
+    "active_next_recommended_service": "exa-search",
+    "active_next_recommended_issue": 261,
+    "ordering_reason": "After context7, mentality, openzeppelin-solidity-contracts, ssh-tmux, and playwright, exa-search is the narrowest remaining credential-scoped service; it should be handled before broader GitHub mutation-capable and multi-provider web-search surfaces, while Serena remains later because project-scoped provisioning and language state are more dependent."
   },
   "not_service_options": [
     {

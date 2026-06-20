@@ -115,13 +115,14 @@ def main(argv: list[str] | None = None) -> int:
             "mentality",
             "openzeppelin-solidity-contracts",
             "ssh-tmux",
+            "playwright",
         ],
         checks,
         failures,
         "slice_progress_records_accepted_source_slices",
     )
     check(
-        progress.get("active_next_recommended_service") == "playwright",
+        progress.get("active_next_recommended_service") == "exa-search",
         checks,
         failures,
         "slice_progress_recommends_next_service",
