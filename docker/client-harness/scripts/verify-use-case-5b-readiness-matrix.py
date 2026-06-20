@@ -110,13 +110,13 @@ def main(argv: list[str] | None = None) -> int:
     check(current_slice == ["context7"], checks, failures, "current_slice_only_context7")
     progress = matrix.get("slice_progress", {})
     check(
-        progress.get("accepted_source_lifecycle_slices") == ["context7", "mentality"],
+        progress.get("accepted_source_lifecycle_slices") == ["context7", "mentality", "openzeppelin-solidity-contracts"],
         checks,
         failures,
         "slice_progress_records_accepted_source_slices",
     )
     check(
-        progress.get("active_next_recommended_service") == "openzeppelin-solidity-contracts",
+        progress.get("active_next_recommended_service") == "ssh-tmux",
         checks,
         failures,
         "slice_progress_recommends_next_service",

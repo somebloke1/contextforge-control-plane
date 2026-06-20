@@ -193,7 +193,10 @@ must be promoted to protect already accepted cases.
            accepted UC4 governance-route evidence. Current next target after
            accepted UC5d is `openzeppelin-solidity-contracts`/#264 because it
            is shared canonical, known-safe, credential-free, and avoids browser,
-           session, or project-provisioning prerequisites.
+           session, or project-provisioning prerequisites. Current next target
+           after accepted UC5e is `ssh-tmux`/#266 because it is credential-free
+           and known-safe, while still requiring strict session-scoped
+           read-only boundaries.
 10. UC5e - #269 single, curated multi-service, and all-services selection
            shape validation.
 11. UC5  - #247 umbrella acceptance once its decomposed slices are proven.

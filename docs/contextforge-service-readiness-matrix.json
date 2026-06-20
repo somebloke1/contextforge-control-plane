@@ -19,11 +19,12 @@
     "current_slice_field_note": "current_slice identifies the initial Context7 single-service slice used to open #247 decomposition; it is not the live controller queue pointer after later slices are accepted.",
     "accepted_source_lifecycle_slices": [
       "context7",
-      "mentality"
+      "mentality",
+      "openzeppelin-solidity-contracts"
     ],
-    "active_next_recommended_service": "openzeppelin-solidity-contracts",
-    "active_next_recommended_issue": 264,
-    "ordering_reason": "After context7 and mentality, openzeppelin-solidity-contracts is the lowest-dependency remaining shared canonical service with known safe probe policy and no credential, browser, session, or project-provisioning prerequisite."
+    "active_next_recommended_service": "ssh-tmux",
+    "active_next_recommended_issue": 266,
+    "ordering_reason": "After context7, mentality, and openzeppelin-solidity-contracts, ssh-tmux is the lowest-dependency remaining service with known safe probe policy and no credential, browser, or project-provisioning prerequisite; it remains session-scoped and must be bounded to read-only session listing."
   },
   "not_service_options": [
     {
