@@ -28,6 +28,7 @@ CONTEXTFORGE_CONTAINER_BASE_URL="${CONTEXTFORGE_CONTAINER_BASE_URL:-http://host.
 CONTEXTFORGE_DEV_ENV_FILE="${CONTEXTFORGE_DEV_ENV_FILE:-${REPO_ROOT}/docker/contextforge-harness/env/contextforge.env}"
 CONTEXTFORGE_DEV_SERVER_NAME="${CONTEXTFORGE_DEV_SERVER_NAME:-context7_local_server}"
 EVIDENCE_FILE="evidence/pi-context7-dev-smoke.txt"
+REDACTOR="${REPO_ROOT}/docker/client-harness/scripts/redact-contextforge-secrets.py"
 
 TOKEN_ID=""
 TOKEN_ENV_FILE=""
@@ -97,7 +98,11 @@ PY
 }
 trap revoke_probe_token EXIT
 
-TOKEN_ENV_FILE="$(mktemp "${ROOT}/evidence/.pi-context7-token-env.XXXXXX")"
+redact_token_stream() {
+  CONTEXTFORGE_REDACT_VALUES="${ACCESS_TOKEN:-}" PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" "${REDACTOR}"
+}
+
+TOKEN_ENV_FILE="$(mktemp "${TMPDIR:-/tmp}/contextforge-pi-context7-token-env.XXXXXX")"
 chmod 600 "${TOKEN_ENV_FILE}"
 {
   printf 'CONTEXTFORGE_BASE_URL=%s\n' "${CONTEXTFORGE_CONTAINER_BASE_URL}"
@@ -195,7 +200,7 @@ PY
       --provider local-llama-qwen \
       --model qwen3.6-a3b \
       -p "Use the cf_contextforge_pi_readback tool for projectRoot /workspace. Return the tool JSON result verbatim."
-  ' | tee -a "${EVIDENCE_FILE}"
+  ' | redact_token_stream | tee -a "${EVIDENCE_FILE}"
 
 if ! grep -q 'context7:canonical' "${EVIDENCE_FILE}"; then
   printf 'pi_readback_status=missing_context7_service\n' | tee -a "${EVIDENCE_FILE}"

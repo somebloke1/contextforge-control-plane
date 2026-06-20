@@ -328,6 +328,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
                 "MCP_BEARER_TOKEN=mcp-secret-token",
                 "Authorization=Bearer abcdefghijklmnop",
                 '{"access_token": "json-secret-token", "token_id": "tok_public_identifier"}',
+                '{"credential_scope": "tenant-a", "credentialBoundary": "provider account", "downstream_credentials": "downstream-secret"}',
+                "credential_required=false",
                 "probe_token_id=tok_public_identifier",
                 "server_id=srv_public_identifier",
             ]
@@ -348,7 +350,11 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertNotIn("mcp-secret-token", output)
         self.assertNotIn("abcdefghijklmnop", output)
         self.assertNotIn("json-secret-token", output)
+        self.assertNotIn("downstream-secret", output)
         self.assertIn("PLATFORM_ADMIN_EMAIL=operator@example.invalid", output)
+        self.assertIn('"credential_scope": "tenant-a"', output)
+        self.assertIn('"credentialBoundary": "provider account"', output)
+        self.assertIn("credential_required=false", output)
         self.assertIn("probe_token_id=tok_public_identifier", output)
         self.assertIn("server_id=srv_public_identifier", output)
 
@@ -494,6 +500,11 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("CONTEXTFORGE_CONFIG_ENV=/tmp/missing-contextforge.env", source)
         self.assertIn("revoke_probe_token", source)
         self.assertIn("probe_token_revoked", source)
+        self.assertIn("redact_token_stream", source)
+        self.assertIn("redact-contextforge-secrets.py", source)
+        self.assertIn("CONTEXTFORGE_REDACT_VALUES", source)
+        self.assertIn("| redact_token_stream | tee -a", source)
+        self.assertNotIn("mktemp \"${ROOT}/evidence", source)
         self.assertIn("workspace/.project/context_forge_state.json", source)
         self.assertNotIn("127.0.0.1:4444", source)
         self.assertNotIn("/home/dgk/.pi", source)

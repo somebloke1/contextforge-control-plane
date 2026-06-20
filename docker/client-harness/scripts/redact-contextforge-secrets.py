@@ -29,6 +29,24 @@ SECRET_KEY_RE = re.compile(
 )
 
 TOKEN_ID_RE = re.compile(r"(?i)(?:^|[_-])token[_-]?id$")
+SAFE_SECRET_METADATA_KEYS = frozenset(
+    {
+        "credential_boundary",
+        "credentialboundary",
+        "credential_required",
+        "credentialrequired",
+        "credential_scope",
+        "credential_scope_id",
+        "credentialscope",
+        "credentialscopeid",
+        "credential_scoped",
+        "credentialscoped",
+        "credential_state",
+        "credentialstate",
+        "credential_status",
+        "credentialstatus",
+    }
+)
 ENV_ASSIGNMENT_RE = re.compile(
     r"(?P<prefix>\b(?P<key>[A-Za-z_][A-Za-z0-9_./-]*)\s*[:=]\s*)"
     r"(?P<quote>['\"]?)"
@@ -47,7 +65,10 @@ BEARER_RE = re.compile(
 
 
 def secret_key(key: str) -> bool:
-    normalized = key.strip().strip("\"'").replace(".", "_")
+    normalized = key.strip().strip("\"'").replace(".", "_").replace("-", "_").lower()
+    compact = re.sub(r"[^a-z0-9]+", "", normalized)
+    if normalized in SAFE_SECRET_METADATA_KEYS or compact in SAFE_SECRET_METADATA_KEYS:
+        return False
     if TOKEN_ID_RE.search(normalized):
         return False
     return bool(SECRET_KEY_RE.search(normalized))
