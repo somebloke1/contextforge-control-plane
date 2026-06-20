@@ -97,6 +97,12 @@ def serena_descriptor() -> dict[str, Any]:
 
 
 class ProjectInitActivationWorkflowTests(unittest.TestCase):
+    def assert_validation_operation_retired(self, result: dict[str, Any]) -> None:
+        self.assertFalse(result["ok"])
+        self.assertEqual("project_init_validation_retired", result["status"])
+        self.assertIn("Project init is install-only.", result["message"])
+        self.assertNotIn("state_revision", result)
+
     def test_client_local_adapters_define_activation_contracts(self) -> None:
         adapters = binding.project_init_client_adapters()
 
@@ -1438,7 +1444,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("installed", service["target_clients"]["pi"]["validation_status"])
         self.assertEqual("installed", service["verification_layers"]["target_client"]["status"])
 
-    def test_pi_helper_restores_safe_policy_from_state_with_null_policy(self) -> None:
+    def test_pi_helper_retired_validation_operation_does_not_restore_safe_policy(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1465,11 +1471,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             written = project_state.load_state(root)
 
-        self.assertEqual("validation_recorded", result["status"])
+        self.assert_validation_operation_retired(result)
         assert written is not None
         policy = written["services"]["context7:canonical"]["verification_layers"]["tool_policy"]["policy"]
-        self.assertEqual(common.safe_validation_policy("context7"), policy)
-        self.assertEqual("passed", written["services"]["context7:canonical"]["target_clients"]["pi"]["validation_status"])
+        self.assertIsNone(policy)
+        self.assertNotEqual("passed", written["services"]["context7:canonical"]["target_clients"]["pi"]["validation_status"])
 
 
     def test_pi_global_shim_install_plan_is_explicit_and_non_mutating_by_default(self) -> None:
@@ -1832,7 +1838,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("deferred", state["decisions"][serena_key]["state"])
         self.assertEqual({}, state["services"])
 
-    def test_helper_resumes_pending_validation_instead_of_restarting_selection(self) -> None:
+    def test_helper_completes_install_only_flow_after_reload_acknowledgment(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             service = service_descriptor("context7")
@@ -1862,8 +1868,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("client_reload_required", proposal["status"])
         self.assertEqual("codex-project-init-installed", proposal["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("installed_reload_required", after_ack["status"])
-        self.assertEqual("codex-project-init-installed", after_ack["next_turn"]["question_id"])
+        self.assertIn("available_services", after_ack)
+        self.assertNotEqual("installed_reload_required", after_ack.get("status"))
 
     def test_helper_allows_new_selection_after_install_only_reload_acknowledgment(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1896,7 +1902,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("approve-project-init-plan", proposal["next_turn"]["question_id"])
         self.assertEqual("github:canonical", proposal["plan_summary"]["bindings"][0]["service_binding"])
 
-    def test_helper_detects_and_repairs_pending_config_drift_before_validation(self) -> None:
+    def test_helper_detects_and_repairs_pending_config_drift_before_install_completion(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github")]
@@ -1931,14 +1937,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         self.assertEqual("config_repair_required", capabilities["status"])
         self.assertEqual("repair-project-local-config", capabilities["next_turn"]["question_id"])
-        self.assertEqual("config_repair_required", blocked_validation["status"])
+        self.assert_validation_operation_retired(blocked_validation)
         self.assertEqual("config_repaired", repair["status"])
         self.assertIn("[mcp_servers.github]", config_text)
         self.assertEqual("client_reload_required", after["status"])
         self.assertEqual("codex-project-init-installed", after["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("installed_reload_required", after_ack["status"])
-        self.assertEqual("codex-project-init-installed", after_ack["next_turn"]["question_id"])
+        self.assertIn("available_services", after_ack)
+        self.assertNotEqual("installed_reload_required", after_ack.get("status"))
 
     def test_helper_repairs_missing_project_init_state_without_overwriting_unmanaged_codex_config(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1978,17 +1984,17 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("client_reload_required", resume["status"])
         self.assertEqual("codex-project-init-installed", resume["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("installed_reload_required", after_ack["status"])
-        self.assertEqual("validation_recorded", presumed["status"])
-        self.assertEqual("in_progress", presumed["project_status"])
+        self.assertIn("available_services", after_ack)
+        self.assertNotEqual("installed_reload_required", after_ack.get("status"))
+        self.assert_validation_operation_retired(presumed)
         assert written is not None
         self.assertEqual("completed_unverified", written["project_init"]["x_hook_prompt_state"])
         migration = written["migration"]["client_config_migrations"]["codex"]
         self.assertEqual("unmanaged_same_name", migration["ownership_class"])
         self.assertEqual("conflict", migration["disposition"])
-        self.assertEqual("presumed_working", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("presumed_working", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
-    def test_helper_records_validation_results_after_config_is_current(self) -> None:
+    def test_retired_validation_operation_ignores_results_after_config_is_current(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github")]
@@ -2021,15 +2027,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             written = project_state.load_state(root)
 
-        self.assertEqual("validation_recorded", result["status"])
-        self.assertEqual("in_progress", result["project_status"])
+        self.assert_validation_operation_retired(result)
         assert written is not None
         job = written["project_init"]["activation_jobs"][written["project_init"]["current_job_id"]]
-        self.assertEqual("validation_pending", job["status"])
-        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
-        self.assertEqual("skipped", written["services"]["github:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("verified", job["status"])
+        self.assertNotEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("skipped", written["services"]["github:canonical"]["verification_layers"]["target_client"]["status"])
 
-    def test_helper_rejects_nested_validation_results_without_recording_state(self) -> None:
+    def test_retired_validation_operation_ignores_nested_results_without_recording_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -2063,23 +2068,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             after = project_state.load_state(root)
 
-        self.assertEqual("validation_results_unmatched", result["status"])
-        self.assertNotIn("state_revision", result)
-        self.assertEqual(["services"], result["validation_diagnostic"]["unmatched_keys"])
-        self.assertEqual([], result["validation_diagnostic"]["matched_keys"])
-        self.assertIn("context7:canonical", result["expected_validation_results_shape"])
-        expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
-        self.assertEqual("passed", expected_shape["safe_probe_result"])
-        self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
-        self.assertEqual("context7-local-resolve-library-id", expected_shape["tool_name"])
-        self.assertEqual("codex", expected_shape["target_client"])
-        self.assertIn("result_summary", expected_shape)
+        self.assert_validation_operation_retired(result)
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
-        job = after["project_init"]["activation_jobs"][after["project_init"]["current_job_id"]]
-        self.assertEqual("pending_user_choice", job["validation_records"][job["selected_service_ids"][0]]["status"])
 
-    def test_helper_requires_validate_now_results_without_recording_state(self) -> None:
+    def test_retired_validation_operation_requires_no_results_and_records_no_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -2105,20 +2098,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             after = project_state.load_state(root)
 
-        self.assertEqual("validation_results_required", result["status"])
-        self.assertNotIn("state_revision", result)
-        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["missing_keys"])
-        self.assertIn("context7:canonical", result["expected_validation_results_shape"])
-        self.assertIn(
-            "validate_now needs the assistant to try the selected service tool and report the result",
-            result["non_actions"],
-        )
+        self.assert_validation_operation_retired(result)
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
-        job = after["project_init"]["activation_jobs"][after["project_init"]["current_job_id"]]
-        self.assertEqual("pending_user_choice", job["validation_records"][job["selected_service_ids"][0]]["status"])
 
-    def test_helper_reports_unmatched_validation_result_keys_without_recording_state(self) -> None:
+    def test_retired_validation_operation_ignores_unmatched_result_keys_without_recording_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -2150,14 +2134,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             after = project_state.load_state(root)
 
-        self.assertEqual("validation_results_unmatched", result["status"])
-        self.assertNotIn("state_revision", result)
-        self.assertEqual(["unselected:canonical"], result["validation_diagnostic"]["unmatched_keys"])
-        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["missing_keys"])
+        self.assert_validation_operation_retired(result)
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
 
-    def test_helper_rejects_validation_result_values_that_are_not_objects(self) -> None:
+    def test_retired_validation_operation_ignores_result_values_that_are_not_objects(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -2184,13 +2165,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             after = project_state.load_state(root)
 
-        self.assertEqual("validation_results_unmatched", result["status"])
-        self.assertEqual([], result["validation_diagnostic"]["matched_keys"])
-        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["invalid_value_keys"])
+        self.assert_validation_operation_retired(result)
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
 
-    def test_helper_accepts_complete_agent_working_report_without_trace_fields(self) -> None:
+    def test_retired_validation_operation_ignores_complete_agent_working_report(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -2225,18 +2204,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             after = project_state.load_state(root)
 
-        self.assertEqual("validation_recorded", result["status"])
-        self.assertEqual("initialized", result["project_status"])
-        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["matched_keys"])
-        self.assertEqual([], result["validation_report_diagnostic"]["insufficient_keys"])
-        expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
-        self.assertEqual("passed", expected_shape["safe_probe_result"])
-        self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
-        self.assertEqual("context7-local-resolve-library-id", expected_shape["tool_name"])
+        self.assert_validation_operation_retired(result)
         assert after is not None
-        self.assertEqual("passed", after["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("passed", after["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
-    def test_helper_valid_top_level_binding_keyed_validation_marks_service_passed(self) -> None:
+    def test_retired_validation_operation_does_not_mark_service_passed(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -2262,14 +2234,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             written = project_state.load_state(root)
 
-        self.assertEqual("validation_recorded", result["status"])
-        self.assertEqual("initialized", result["project_status"])
-        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["matched_keys"])
-        self.assertEqual([], result["validation_report_diagnostic"]["insufficient_keys"])
+        self.assert_validation_operation_retired(result)
         assert written is not None
-        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
-    def test_helper_mixed_validation_results_preserve_partial_pending_behavior(self) -> None:
+    def test_retired_validation_operation_ignores_mixed_results(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github"), service_descriptor("web-search")]
@@ -2305,14 +2274,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             written = project_state.load_state(root)
 
-        self.assertEqual("validation_recorded", result["status"])
-        self.assertEqual("validation_results only matched a subset of selected services", result["warning"])
-        self.assertEqual(["unselected:canonical"], result["validation_diagnostic"]["unmatched_keys"])
-        self.assertEqual(["web-search:canonical"], result["validation_diagnostic"]["missing_keys"])
+        self.assert_validation_operation_retired(result)
         assert written is not None
         self.assertEqual("in_progress", written["status"])
-        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
-        self.assertEqual("skipped", written["services"]["github:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("skipped", written["services"]["github:canonical"]["verification_layers"]["target_client"]["status"])
         self.assertEqual("pending", written["services"]["web-search:canonical"]["verification_layers"]["target_client"]["status"])
 
     def test_contextforge_helper_mcp_exposes_readiness_tool(self) -> None:

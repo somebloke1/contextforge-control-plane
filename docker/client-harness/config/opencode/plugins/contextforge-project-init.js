@@ -280,16 +280,6 @@ const serviceOnboardingPlanResponse = (cwd) =>
     credentialRequired: false,
     credentialBoundary: "No credentials yet.",
     expectedTools: ["search meeting summaries"],
-    validationProbePlan: [
-      {
-        layer: "source_review",
-        description: "Review the local stdio server contract before any runtime work.",
-      },
-      {
-        layer: "bridge_transport_smoke_plan",
-        description: "Later prove stdio bridge behavior only after explicit runtime approval.",
-      },
-    ],
     issue: "254",
   })
 

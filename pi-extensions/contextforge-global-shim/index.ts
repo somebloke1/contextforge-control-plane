@@ -983,7 +983,6 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
         credentialRequired: { type: "boolean", description: "Whether the user indicated credentials are required." },
         credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
         expectedTools: { type: "array", items: { type: "string" }, description: "User-supplied expected tool names or capabilities." },
-        validationProbePlan: { type: "array", items: { type: "object" }, description: "Planned proof layers only; do not run probes." },
         issue: { type: "string", description: "Optional tracking issue id." },
       }),
     },

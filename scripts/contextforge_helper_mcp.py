@@ -2053,7 +2053,7 @@ def apply_project_init_recovery(
     contextforge_servers: list[dict[str, Any]] | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Apply a helper-approved recovery plan and return reload or validation next_turn."""
+    """Apply a helper-approved recovery plan and return the install/reload next turn."""
     try:
         clean_plan = _unwrap_tool_envelope(plan)
         helper.restore_process_local_approval_session(project_root=project_root, plan=clean_plan, receipts=receipts)

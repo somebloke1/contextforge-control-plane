@@ -151,78 +151,6 @@ def installation_complete_turn(*, client_type: str, reload_requirement: Mapping[
     )
 
 
-def client_reload_before_validation_turn(reload_requirement: Mapping[str, Any]) -> dict[str, Any]:
-    client_type = str(reload_requirement.get("client_type") or "client")
-    command = str(reload_requirement.get("command") or "reload")
-    if client_type == "codex":
-        return next_turn(
-            question_id="codex-client-reload-before-validation",
-            prompt=(
-                "Start a new Codex session from this project root before validating ContextForge service functionality. "
-                "Codex launches configured MCP servers and exposes their tools when a session starts; /mcp is only a status view and does not reload MCP tools in-place. "
-                "After the new session is open, resume project init from there."
-            ),
-            choices=[
-                {
-                    "id": "start_new_codex_session",
-                    "label": "Start new session",
-                    "effect": "Open a new Codex session from the project root so newly configured MCP tools are loaded before validation.",
-                }
-            ],
-            allowed_response_shape="start a new Codex session from this project root, then resume project init there",
-        )
-    if client_type == "gemini":
-        return next_turn(
-            question_id="gemini-client-reload-before-validation",
-            prompt=(
-                "Start a new Gemini CLI session from this project root before validating ContextForge service functionality. "
-                "Gemini CLI discovers configured MCP servers when a session starts. "
-                "After the new session is open, resume project init from there."
-            ),
-            choices=[
-                {
-                    "id": "start_new_gemini_session",
-                    "label": "Start new session",
-                    "effect": "Open a new Gemini CLI session from the project root so newly configured MCP tools are loaded before validation.",
-                }
-            ],
-            allowed_response_shape="start a new Gemini CLI session from this project root, then resume project init there",
-        )
-    if client_type == "opencode":
-        return next_turn(
-            question_id="opencode-client-reload-before-validation",
-            prompt=(
-                "Start a new OpenCode session from this project root before validating ContextForge service functionality. "
-                "OpenCode discovers configured MCP servers and loads user-home plugins when a session starts. "
-                "After the new session is open, resume project init from there."
-            ),
-            choices=[
-                {
-                    "id": "start_new_opencode_session",
-                    "label": "Start new session",
-                    "effect": "Open a new OpenCode session from the project root so newly configured MCP tools and user-home plugin context are loaded before validation.",
-                }
-            ],
-            allowed_response_shape="start a new OpenCode session from this project root, then resume project init there",
-        )
-    label_client = "Pi" if client_type == "pi" else client_type
-    return next_turn(
-        question_id=f"{client_type}-client-reload-before-validation",
-        prompt=(
-            f"Issue {command} in {label_client} before validating ContextForge service functionality. "
-            "After the reload, resume project init from the reloaded client."
-        ),
-        choices=[
-            {
-                "id": "issue_reload",
-                "label": f"Issue {command}",
-                "effect": "Reload the client so newly installed or changed extension/plugin tools are active before validation.",
-            }
-        ],
-        allowed_response_shape=f"issue {command}, then resume project init from the reloaded client",
-    )
-
-
 def config_repair_turn(*, client_type: str = "codex") -> dict[str, Any]:
     if client_type == "pi":
         return next_turn(
@@ -556,12 +484,12 @@ def _project_reset_postcondition(root: Path, services: Sequence[Mapping[str, Any
 def state_repair_turn(*, client_type: str = "codex") -> dict[str, Any]:
     return next_turn(
         question_id="repair-project-init-state",
-        prompt="Project-init state is missing durable validation metadata, but existing ContextForge service records match this project. Repair the state and resume validation?",
+        prompt="Project-init state is missing durable install metadata, but existing ContextForge service records match this project. Repair the state?",
         choices=[
             {
                 "id": "repair_project_init_state",
                 "label": "Repair state",
-                "effect": "Add only missing project-init validation metadata and preserve existing service and config evidence.",
+                "effect": "Add only missing project-init install metadata and preserve existing service and config evidence.",
             },
             {"id": "restart_selection", "label": "Restart selection", "effect": "Start a new service-selection plan instead of repairing existing records."},
         ],
@@ -663,7 +591,7 @@ def list_available_capabilities(
             "client_type": client_type,
             "root_attestation": readiness["root_attestation"],
             "status": "state_repair_required",
-            "resume_reason": "project state has existing ContextForge service records but is missing project-init validation metadata",
+            "resume_reason": "project state has existing ContextForge service records but is missing project-init install metadata",
             "project_state_inspection": inspection,
             "next_turn": state_repair_turn(client_type=client_type),
             "non_actions": [
@@ -866,7 +794,7 @@ def propose_project_init(
             return {
                 "root_attestation": _root_attestation(root, client_type=client_type),
                 "status": "state_repair_required",
-                "resume_reason": "project state has existing ContextForge service records but is missing project-init validation metadata",
+                "resume_reason": "project state has existing ContextForge service records but is missing project-init install metadata",
                 "project_state_inspection": inspection,
                 "next_turn": state_repair_turn(client_type=client_type),
                 "non_actions": [
@@ -1184,7 +1112,7 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
             "config_repair": repair_status,
             "next_turn": config_repair_turn(client_type=client_type),
             "non_actions": [
-                _repair_validation_block_label(client_type),
+                _repair_project_init_block_label(client_type),
                 "do not edit target-client activation state directly outside contextforge-helper repair",
                 "do not mutate user-global config or trust",
             ],
@@ -1203,7 +1131,7 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
                 "do not mutate user-global config or trust",
             ],
         }
-    if job.get("status") == "installed" and _job_reload_acknowledged(job, reload_requirement or {}):
+    if _job_reload_acknowledged(job, reload_requirement or {}):
         return None
     return {
         "status": "installed_reload_required",
@@ -1315,29 +1243,7 @@ def _post_reload_validation_continuation(
     client_type: str,
     validation_mode: str | None,
 ) -> dict[str, Any]:
-    if validation_mode is None:
-        return {}
-    if validation_mode == "presume_working":
-        return {
-            "next_action": {
-                "id": "record-presumed-working",
-                "operation": "record_project_init_validation",
-                "validation_mode": "presume_working",
-                "client_type": client_type,
-                "description": "Record the already-selected skip validation choice without asking the user the same validation-choice question again.",
-            }
-        }
-    services = _services_from_state_or_catalog(root, state, selected, selected_bindings=selected_bindings, client_type=client_type)
-    return {
-        "next_action": {
-            "id": "run-target-client-validation-probes",
-            "operation": "record_project_init_validation",
-            "validation_mode": "validate_now",
-            "client_type": client_type,
-            "description": "Call the selected service's non-destructive tool through the target client, then tell the helper whether it worked.",
-            "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
-        }
-    }
+    return {}
 
 
 def repair_pending_project_init_config(
@@ -1463,7 +1369,7 @@ def repair_missing_project_init_state(
                 "job_id": job_id,
                 "plan_id": plan_id,
                 "plan_digest": stable_digest({"plan_id": plan_id, "services": selected_ids, "repair": "missing_project_init"}),
-                "status": "applied_validation_choice_pending",
+                "status": "installed",
                 "client_type": client_type,
                 "selected_service_ids": selected_ids,
                 "selected_service_bindings": selected_bindings,
@@ -1497,20 +1403,8 @@ def repair_missing_project_init_state(
                 },
                 "consent_receipt_refs": ["run/project-init-repair/imported-existing-state.json"],
                 "local_client_config_digest": config_plan.get("before_digest"),
-                "validation_records": {
-                    service["service_identity_id"]: {
-                        "mode": "pending_choice",
-                        "status": "pending_user_choice",
-                        "target_client_visible": False,
-                        "proof_ref": None,
-                        "skipped_reason": None,
-                        "safe_probe_id": None,
-                        "x_service_identity_id": service["service_identity_id"],
-                        "x_service_binding": service["service_binding"],
-                    }
-                    for service in services
-                },
-                "recovery_state": "local_written_validation_pending",
+                "validation_records": {},
+                "recovery_state": "none",
                 "non_actions": [
                     "preserved existing service records",
                     "did not overwrite unmanaged target-client config",
@@ -1521,28 +1415,11 @@ def repair_missing_project_init_state(
                 "x_repair_kind": "missing_project_init",
             }
         },
-        "x_hook_prompt_state": project_state.HOOK_PROMPT_ACTIVE,
+        "x_hook_prompt_state": project_state.HOOK_PROMPT_COMPLETED_UNVERIFIED,
     }
     repaired.setdefault("migration", project_state.default_migration())
     repaired["migration"].setdefault("client_config_migrations", {})
     _record_repaired_client_config_evidence(repaired, root, client_type=client_type, config_plan=config_plan)
-    project_state._upsert_open_item(
-        repaired,
-        {
-            "id": "project-init-validation",
-            "type": "verification",
-            "severity": "warning",
-            "blocks_initialized": False,
-            "resource": "target-client-visible MCP proof",
-            "created_at": now,
-            "resolution_state": "open",
-            "detail": {
-                "validation_mode": "pending_choice",
-                "reason": "project-init metadata was repaired from existing service records and still needs target-client validation or presumed-working confirmation",
-                "accepted_state": "bindings imported but not verified as working",
-            },
-        },
-    )
     project_state.validate_state(repaired)
     result = {
         "status": "state_repair_dry_run" if dry_run else "state_repaired",
@@ -1583,138 +1460,24 @@ def record_project_init_validation(
     client_type: str = "codex",
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    if validation_mode not in {"validate_now", "presume_working"}:
-        raise ProjectInitHelperError("validation_mode must be validate_now or presume_working")
-    root = project_state.validate_project_root(project_root, require_workspace=True)
-    state, job, selected = _pending_validation_state_job(root, client_type=client_type)
-    selected_bindings = _job_selected_service_bindings(job)
-    repair_status = _pending_job_config_repair_status(root, state, job, selected, selected_bindings=selected_bindings, client_type=client_type)
-    if repair_status.get("repair_required"):
-        return {
-            "status": "config_repair_required",
-            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
-            "config_repair": repair_status,
-            "next_turn": config_repair_turn(client_type=client_type),
-            "non_actions": [
-                _validation_not_recorded_label(client_type),
-                "repair must use contextforge-helper before validation completion",
-            ],
-        }
-    reload_requirement = client_reload_requirement(client_type, event="project_activation_apply")
-    if reload_requirement and reload_requirement.get("blocks_validation_until_done") and not _job_reload_acknowledged(job, reload_requirement):
-        return {
-            "status": "client_reload_required",
-            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
-            "client_reload_requirement": reload_requirement,
-            "next_turn": client_reload_before_validation_turn(reload_requirement),
-            "non_actions": [
-                _validation_not_recorded_label(client_type),
-                "do not validate before the reload is acknowledged",
-            ],
-        }
-    services = _services_from_state_or_catalog(root, state, selected, selected_bindings=selected_bindings, client_type=client_type)
-    config_plan = _client_activation_plan(root, services, client_type=client_type, existing_state=state)
-    validation_plan = binding.build_project_init_validation_plan(services, validation_mode=validation_mode, target_client=client_type)
-    validation_results_dict = dict(validation_results or {})
-    validation_diagnostic = _validation_results_diagnostic(services, validation_results_dict)
-    report_diagnostic = _validation_report_diagnostic(services, validation_results_dict, client_type=client_type)
-    if validation_mode == "validate_now" and not validation_results_dict:
-        return {
-            "status": "validation_results_required",
-            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
-            "validation_diagnostic": validation_diagnostic,
-            "validation_report_diagnostic": report_diagnostic,
-            "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
-            "next_turn": validation_choice_turn(),
-            "non_actions": [
-                _validation_not_recorded_label(client_type),
-                "validate_now needs the assistant to try the selected service tool and report the result",
-                "call the selected service tool through the target client, then report whether it worked",
-            ],
-        }
-    if (
-        validation_mode == "validate_now"
-        and validation_results_dict
-        and not validation_diagnostic["matched_keys"]
-    ):
-        return {
-            "status": "validation_results_unmatched",
-            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
-            "validation_diagnostic": validation_diagnostic,
-            "validation_report_diagnostic": report_diagnostic,
-            "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
-            "non_actions": [
-                _validation_not_recorded_label(client_type),
-                "validation_results must be a top-level object keyed by selected service binding, normalized binding key, or service identity id",
-            ],
-        }
-    if validation_mode == "validate_now" and report_diagnostic["insufficient_keys"]:
-        return {
-            "status": "validation_results_insufficient",
-            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
-            "validation_diagnostic": validation_diagnostic,
-            "validation_report_diagnostic": report_diagnostic,
-            "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
-            "next_turn": validation_choice_turn(),
-            "non_actions": [
-                _validation_not_recorded_label(client_type),
-                "validation_results must describe which selected service tool was tried and whether it worked",
-                "call the selected service tool through the target client, then report the working result",
-            ],
-        }
-    normalized_validation_results = _normalize_validation_results_for_recording(
-        services,
-        validation_results_dict,
-        client_type=client_type,
-    )
-    activation_job = dict(job)
-    activation_job["selected_service_ids"] = [str(service.get("service_identity_id")) for service in services]
-    activation_job["selected_service_bindings"] = [str(service.get("service_binding")) for service in services]
-    if (
-        config_plan.get("before_digest") == config_plan.get("after_digest")
-        and activation_job.get("local_client_config_digest") != config_plan.get("after_digest")
-    ):
-        activation_job["local_client_config_digest"] = config_plan.get("after_digest")
-    next_state = project_state.apply_project_init_activation_to_state(
-        state,
-        services,
-        target_client=client_type,
-        client_config_plan=config_plan,
-        validation_plan=validation_plan,
-        validation_results=normalized_validation_results,
-        activation_job=activation_job,
-        consent_receipt_refs=list(job.get("consent_receipt_refs") or []),
-        updated_by="control_plane_project_init_helper",
-    )
-    result = {
-        "status": "validation_recorded_dry_run" if dry_run else "validation_recorded",
-        "project_status": next_state.get("status"),
-        "current_job_id": next_state.get("project_init", {}).get("current_job_id"),
-        "service_statuses": {
-            key: {
-                "target_client": value.get("verification_layers", {}).get("target_client", {}),
-                "provision_status": value.get("provision_status"),
-            }
-            for key, value in (next_state.get("services") or {}).items()
-            if key in {project_state._state_map_key(binding_id) for binding_id in selected_bindings}
-        },
+    return {
+        "ok": False,
+        "status": "project_init_validation_retired",
+        "project_root": str(project_root),
+        "client_type": client_type,
+        "message": (
+            "Project init is install-only. Do not record post-install validation, "
+            "do not request service probes, and do not ask the user to choose validation. "
+            "If tools were installed, tell the user a new session or reload is required before they register."
+        ),
         "non_actions": [
+            "no project-init validation recorded",
+            "no target-client service probe requested",
             "no project-local client config write",
             _no_user_global_mutation_label(client_type),
             "no ContextForge registry or catalog mutation",
         ],
-        "validation_diagnostic": validation_diagnostic,
-        "validation_report_diagnostic": report_diagnostic,
-        "expected_validation_results_shape": _expected_validation_results_shape(services, target_client=client_type),
     }
-    if validation_mode == "validate_now" and (
-        validation_diagnostic["missing_keys"] or validation_diagnostic["unmatched_keys"]
-    ):
-        result["warning"] = "validation_results only matched a subset of selected services"
-    if not dry_run:
-        written = project_state.write_state_atomic(root, next_state, updated_by="control_plane_project_init_helper")
-        result["state_revision"] = written["meta"]["revision"]
-    return result
 
 
 def _validation_results_diagnostic(services: Sequence[Mapping[str, Any]], validation_results: Mapping[str, Any]) -> dict[str, Any]:
@@ -3213,7 +2976,7 @@ def _repair_resume_reason(client_type: str) -> str:
     return "project init selected services and recorded state, but project-local Codex config is missing approved bindings"
 
 
-def _repair_validation_block_label(client_type: str) -> str:
+def _repair_project_init_block_label(client_type: str) -> str:
     if client_type == "pi":
         return "do not continue project init until project-state Pi shim metadata matches the approved job"
     if client_type == "gemini":
@@ -3225,8 +2988,8 @@ def _repair_validation_block_label(client_type: str) -> str:
 
 def _validation_not_recorded_label(client_type: str) -> str:
     if client_type == "pi":
-        return "installed status was not advanced because Pi shim activation metadata is out of sync"
-    return "installed status was not advanced because project-local config is out of sync"
+        return "install status was not advanced because Pi shim activation metadata is out of sync"
+    return "install status was not advanced because project-local config is out of sync"
 
 
 def _resolve_selected_services(
@@ -3663,7 +3426,7 @@ def _activation_job_from_plan(
         "job_id": "job-" + str(plan.get("plan_id")),
         "plan_id": str(plan.get("plan_id")),
         "plan_digest": str(plan.get("plan_digest")),
-        "status": "applied_validation_choice_pending",
+        "status": "installed",
         "client_type": client_type,
         "selected_service_ids": [str(service.get("service_identity_id")) for service in plan.get("selected_services") or []],
         "selected_service_bindings": [str(service.get("service_binding")) for service in plan.get("selected_services") or []],
@@ -3692,7 +3455,7 @@ def _activation_job_from_plan(
         "consent_receipt_refs": refs,
         "local_client_config_digest": effective_config_plan.get("after_digest"),
         "validation_records": {},
-        "recovery_state": "local_written_validation_pending",
+        "recovery_state": "none",
         "non_actions": list(plan.get("non_actions") or []),
     }
 
