@@ -144,7 +144,14 @@ work, and do not revive post-install validation to close them.
   ContextForge's 50-character tag limit. Guidance replay for the three matched
   services has been applied to 4445: post-guidance readback shows 3 gateways,
   4 servers, 15 tools, 15 prompts, and 15 resources, with 15/81 source guidance
-  keys present and 66 remaining for unresolved services.
+  keys present and 66 remaining for unresolved services. Follow-up boundary
+  analysis recommends credential-scoped services first only after explicit
+  credential-scope approval, session/single-user services only after successor
+  runtime decisions, and project-scoped Serena only after targetable Serena and
+  project-init guidance helpers exist. The repo-only drift has been reconciled:
+  ssh-tmux now records 9 expected tools including
+  `ssh-tmux-cleanup-dead-sessions`, and the planner no longer describes
+  target-aware `register_tool_guidance.py` as unsafe due hardcoded IDs.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
@@ -178,4 +185,6 @@ target is PR/Project hygiene:
   decide the credential/session/project-scoped service boundaries, replay
   prompts/resources for those services after registration, clean up transitional
   Docker bootstrap residue, and require explicit parity reconciliation against
-  the 4444 legacy baseline before replacement-readiness is claimed.
+  the 4444 legacy baseline before replacement-readiness is claimed. Treat
+  host-gateway projections as interim migration projections unless a later
+  architecture decision promotes one to durable successor topology.

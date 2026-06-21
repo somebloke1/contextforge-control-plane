@@ -95,8 +95,8 @@ HELPER_DISPOSITIONS: dict[str, dict[str, str]] = {
         "reason": "Uses default wrapper env/base and host-local URLs unless explicitly parameterized.",
     },
     "scripts/register_tool_guidance.py": {
-        "disposition": "unsafe_as_is_for_4445",
-        "reason": "Hardcoded gateway IDs must be replaced by target-surface lookup.",
+        "disposition": "reusable_after_target_parameterization",
+        "reason": "Supports explicit 4445 base/env, dry-run planning, target gateway ID lookup, and bounded service selection.",
     },
     "scripts/register_project_init_prompt.py": {
         "disposition": "reusable_after_target_parameterization",

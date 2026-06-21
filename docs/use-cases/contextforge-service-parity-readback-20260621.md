@@ -268,6 +268,33 @@ resource guidance tags out of 81 source-defined guidance keys. The remaining
 66 missing keys correspond to the unresolved credential-scoped, session-scoped,
 and project-scoped services.
 
+## Remaining Boundary Analysis
+
+Read-only boundary analysis after the guidance replay classified the next work
+as policy/runtime sequencing, not blind bulk registration:
+
+- credential-scoped services (`exa-search`, `github`, `web-search`) should not
+  have secrets copied into the gateway container; any 4445 registration must
+  explicitly approve the credential scope and, for GitHub, the mutating tool
+  exposure.
+- session/single-user services (`playwright`, `ssh-tmux`) need isolated or
+  explicitly shared successor runtime decisions. `ssh-tmux` is especially
+  sensitive because its tools can send keys, write files, close sessions, and
+  clean up sessions.
+- project-scoped Serena must use the canonical cf-controlplane project root and
+  preserve the virtual-server exclusion of `activate_project`; it should not be
+  rebound to this issue worktree as if that were the durable project identity.
+
+The planner and manifest drift identified by that analysis has been reconciled:
+`server-instances/ssh-tmux/instance.json` now records the ninth canonical
+`ssh-tmux-cleanup-dead-sessions` tool, and the Docker migration planner records
+`scripts/register_tool_guidance.py` as reusable after target parameterization
+rather than unsafe due to hardcoded gateway IDs.
+
+Host-gateway projections in the Docker migration plan should be treated as
+explicit interim migration projections unless a later architecture decision
+promotes one to durable successor topology.
+
 ## Controller Disposition
 
 #284 should remain Active or In Review only after explicit controller

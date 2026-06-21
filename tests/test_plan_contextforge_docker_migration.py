@@ -166,6 +166,8 @@ class DockerMigrationPlanTests(unittest.TestCase):
                 self.assertTrue(services[slug]["unsafe_to_reuse_live_default"])
 
         self.assertFalse(services["openzeppelin-solidity-contracts"]["unsafe_to_reuse_live_default"])
+        self.assertEqual(9, len(services["ssh-tmux"]["expected_tool_names"]))
+        self.assertIn("ssh-tmux-cleanup-dead-sessions", services["ssh-tmux"]["expected_tool_names"])
         self.assertIn("ssh-tmux", plan["summary"]["approval_blocked_services"])
         self.assertIn("serena-cf-controlplane-d46fe58a2a20", plan["summary"]["approval_blocked_services"])
 
@@ -177,7 +179,7 @@ class DockerMigrationPlanTests(unittest.TestCase):
             plan["helper_dispositions"]["scripts/apply_contextforge_registry_recreation.py"]["disposition"],
         )
         self.assertEqual(
-            "unsafe_as_is_for_4445",
+            "reusable_after_target_parameterization",
             plan["helper_dispositions"]["scripts/register_tool_guidance.py"]["disposition"],
         )
 

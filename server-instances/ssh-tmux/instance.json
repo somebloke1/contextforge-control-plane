@@ -46,6 +46,7 @@
   "registration": {
     "status": "registered",
     "registered_tools": [
+      "ssh-tmux-cleanup-dead-sessions",
       "ssh-tmux-close-session",
       "ssh-tmux-get-snapshot",
       "ssh-tmux-list-sessions",
@@ -56,10 +57,10 @@
       "ssh-tmux-write-remote-file"
     ],
     "verified": {
-      "direct_streamable_http": "listed 8 ssh-tmux tools",
-      "direct_sse": "listed 8 ssh-tmux tools",
-      "contextforge_streamable_http": "listed 8 ssh-tmux-prefixed tools",
-      "contextforge_sse": "listed 8 ssh-tmux-prefixed tools"
+      "direct_streamable_http": "listed 9 ssh-tmux tools",
+      "direct_sse": "listed 9 ssh-tmux tools",
+      "contextforge_streamable_http": "listed 9 ssh-tmux-prefixed tools",
+      "contextforge_sse": "listed 9 ssh-tmux-prefixed tools"
     },
     "review_completed": [
       "command starts non-interactively through uvx",
