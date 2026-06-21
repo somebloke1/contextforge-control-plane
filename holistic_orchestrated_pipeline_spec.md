@@ -192,6 +192,39 @@ The method layer is stable across all use cases:
 16. Rerun from a virgin target-client state.
 17. Accept only after all client targets pass from clean starts.
 
+## Git And GitHub Hygiene Initiative
+
+Commit/push hygiene is a controller-owned gate, not incidental cleanup. The
+controller must maintain Git and GitHub state as part of every SuperLoop slice
+so the branch, PR, issue comments, and Project board remain a meaningful signal
+instead of lagging behind the work.
+
+Required boundary checks:
+
+1. before selecting a new implementation slice, run a current-worktree status
+   and branch/upstream readback;
+2. after every coherent verified slice, commit the durable tracked work and push
+   the active branch before starting another unrelated slice;
+3. never leave generated durable artifacts untracked merely because the next
+   task is urgent; either promote them, move them to an ignored evidence path,
+   or record why they remain local-only;
+4. keep unrelated artifacts in separate commits, not mixed into runtime or
+   implementation patches;
+5. after every push, refresh the PR head/state and update the PR body, issue
+   comment, and Project `Agent state` / `Agent owner` when the pushed slice
+   changes coordination state;
+6. if a branch or worktree cannot be pushed immediately, record the exact
+   blocker and owner in the relevant issue or controller report before
+   continuing;
+7. during idle waits for workers or long-running probes, audit branch tracking,
+   dirty worktrees, and stale issue/Project signals instead of waiting
+   passively.
+
+This initiative is part of the evidence discipline: unpushed commits,
+untracked durable artifacts, stale PR bodies, and stale Project fields are
+coordination defects. They do not invalidate source tests, but they do block a
+controller claim that the workflow is caught up.
+
 ## Reflective Learning
 
 The queue is defined, but the behavior and requirements are expected to improve
@@ -435,17 +468,22 @@ At each controller turn:
 1. Read this specification.
 2. Read active goal state.
 3. Inspect repo status and current branch.
-4. Inspect current use-case package and latest evidence.
-5. If package incomplete, complete package before testing.
-6. If deterministic harness incomplete, build or repair it before semantic
+4. Inspect branch/upstream tracking, uncommitted changes, untracked durable
+   artifacts, and pushed PR head state.
+5. If Git/GitHub hygiene is behind, commit/push/update coordination before
+   taking another unrelated slice, unless the current dirty work is the slice
+   being actively completed.
+6. Inspect current use-case package and latest evidence.
+7. If package incomplete, complete package before testing.
+8. If deterministic harness incomplete, build or repair it before semantic
    evaluation.
-7. If source tests fail, classify and remediate before claiming client pass.
-8. If runner/verifier fails, classify and remediate.
-9. If dialogue fails, classify and remediate.
-10. Rerun only after resetting to virgin target-client state.
-11. Accept current client only after evidence is complete.
-12. Accept current use case only after all required clients pass.
-13. Promote regression tests and durable package updates.
-14. Dequeue the next use case.
+9. If source tests fail, classify and remediate before claiming client pass.
+10. If runner/verifier fails, classify and remediate.
+11. If dialogue fails, classify and remediate.
+12. Rerun only after resetting to virgin target-client state.
+13. Accept current client only after evidence is complete.
+14. Accept current use case only after all required clients pass.
+15. Promote regression tests and durable package updates.
+16. Dequeue the next use case.
 
 The loop continues until all use cases in `Q` have controller-accepted evidence.

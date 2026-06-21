@@ -1,0 +1,4 @@
+interface:
+  display_name: "Schematic Abstract Diagrams"
+  short_description: "Explain schematic relationship diagrams"
+  default_prompt: "Use $schematic-abstract-diagrams to draft a human-readable diagram with labeled edges, explicit order, and clear cardinality."
