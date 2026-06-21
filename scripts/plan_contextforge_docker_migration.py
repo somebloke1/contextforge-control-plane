@@ -45,10 +45,10 @@ DOCKER_TARGET_PROFILE: dict[str, dict[str, Any]] = {
         "notes": "Browser/session state is user-local; do not blindly share without approval.",
     },
     "exa-search": {
-        "locality": "host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9105/mcp",
-        "approval_state": "blocked_pending_credential_boundary_review",
-        "notes": "Credential-scoped service; env presence and scope must be reviewed without printing secrets.",
+        "locality": "compose_sidecar",
+        "target_upstream_url": "http://exa-search-transceiver:9205/mcp",
+        "approval_state": "ready_after_credential_env_preflight",
+        "notes": "Credential-scoped sidecar uses ignored server-instances/exa-search/.env; prove env presence without printing secrets before apply.",
     },
     "github": {
         "locality": "host_gateway_projection",
@@ -340,8 +340,8 @@ def build_plan(
         "recommended_ordered_slices": [
             "parameterize target/auth inputs for 4445 without using 4444 wrapper defaults",
             "materialize Docker locality profile for each canonical service",
-            "register canonical sidecar-proven services first: context7 and mentality",
-            "add or approve host-gateway/service-specific projections for credential and single-user services",
+            "register canonical sidecar-proven services first: context7, mentality, and exa-search after env preflight",
+            "add or approve service-specific reachable topology for remaining credential and single-user services",
             "register remote OpenZeppelin directly",
             "replay tool guidance using 4445-discovered gateway IDs and canonical tool tags",
             "handle project-scoped Serena only after explicit runtime/project-state approval",

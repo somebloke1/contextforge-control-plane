@@ -164,3 +164,10 @@ gateway-container MCP install:
 5. register all validated packetized endpoints with ContextForge through the
    API;
 6. verify ContextForge readback and client access through the gateway.
+
+`exa-search` follows this pattern for the 4445 successor: the repo-local
+Python backend runs in `exa-search-transceiver`, reads only the ignored
+`server-instances/exa-search/.env`, and is registered by the gateway through
+the compose-network URL `http://exa-search-transceiver:9205/mcp` only after
+credential-env preflight and direct reachability evidence. Do not fall back to
+the host-loopback `127.0.0.1:9105` live surface for Docker successor parity.

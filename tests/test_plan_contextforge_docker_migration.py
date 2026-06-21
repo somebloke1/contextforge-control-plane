@@ -159,12 +159,18 @@ class DockerMigrationPlanTests(unittest.TestCase):
         plan = docker_plan.build_plan()
         services = {service["slug"]: service for service in plan["services"]}
 
-        for slug in ["exa-search", "github", "mentality", "playwright", "serena-cf-controlplane-d46fe58a2a20", "ssh-tmux", "web-search"]:
+        for slug in ["github", "mentality", "playwright", "serena-cf-controlplane-d46fe58a2a20", "ssh-tmux", "web-search"]:
             with self.subTest(slug=slug):
                 self.assertNotIn("127.0.0.1:910", services[slug]["target_upstream_url"])
                 self.assertTrue(services[slug]["docker_projection_required"])
                 self.assertTrue(services[slug]["unsafe_to_reuse_live_default"])
 
+        self.assertEqual("compose_sidecar", services["exa-search"]["locality"])
+        self.assertEqual("http://exa-search-transceiver:9205/mcp", services["exa-search"]["target_upstream_url"])
+        self.assertEqual("ready_after_credential_env_preflight", services["exa-search"]["approval_state"])
+        self.assertFalse(services["exa-search"]["approval_blocked"])
+        self.assertTrue(services["exa-search"]["docker_projection_required"])
+        self.assertTrue(services["exa-search"]["unsafe_to_reuse_live_default"])
         self.assertFalse(services["openzeppelin-solidity-contracts"]["unsafe_to_reuse_live_default"])
         self.assertEqual(9, len(services["ssh-tmux"]["expected_tool_names"]))
         self.assertIn("ssh-tmux-cleanup-dead-sessions", services["ssh-tmux"]["expected_tool_names"])

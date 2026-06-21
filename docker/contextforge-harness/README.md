@@ -30,6 +30,9 @@ Evidence freshness and PR citation rules for this harness are defined in
 - Context7 dev MCP sidecar: `context7-transceiver` on host
   `http://127.0.0.1:9203` and compose-network
   `http://context7-transceiver:9203`
+- Exa Search successor MCP sidecar: `exa-search-transceiver` on host
+  `http://127.0.0.1:9205` and compose-network
+  `http://exa-search-transceiver:9205`
 
 The named Docker volume has no explicit size cap. Initial gateway-only usage is
 expected to stay small; use `scripts/volume-usage.sh` to inspect it.
@@ -111,6 +114,24 @@ gateway and `context7_local_server` virtual server in the development gateway.
 The names intentionally match the project-init wrapper contract while the
 registry, volume, token, and upstream process remain isolated to the dev Docker
 surface.
+
+## Exa Search Successor MCP Transceiver
+
+The Exa Search sidecar fronts the repo-local Python backend in
+`server-instances/exa-search/server.py` through the stock bridge. It reads
+credentials from ignored `server-instances/exa-search/.env` through an optional
+Compose `env_file`; do not copy or print secret values. A clean checkout can
+still build and list Exa tools without that file, but actual Exa/Gemini calls
+require the ignored credential env to be present.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway exa-search-transceiver
+python ../../scripts/plan_contextforge_docker_migration.py
+```
+
+The migration planner targets the compose-network URL
+`http://exa-search-transceiver:9205/mcp`. Registry apply remains a separate
+explicit step after credential-env preflight and direct reachability evidence.
 
 ## Operations
 

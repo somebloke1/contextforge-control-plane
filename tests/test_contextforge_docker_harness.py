@@ -35,6 +35,21 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("--expose-streamable-http", dockerfile)
         self.assertIn('"9203"', dockerfile)
 
+    def test_compose_defines_exa_search_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/exa-search-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("exa-search-transceiver:", compose)
+        self.assertIn("contextforge-harness-exa-search-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9205:9205"', compose)
+        self.assertIn("docker/contextforge-harness/exa-search-transceiver/Dockerfile", compose)
+        self.assertIn("../../server-instances/exa-search/.env", compose)
+        self.assertIn("required: false", compose)
+        self.assertIn("server-instances/exa-search/server.py", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--expose-streamable-http", dockerfile)
+        self.assertIn('"9205"', dockerfile)
+
     def test_transceiver_dockerfile_uses_stock_contextforge_translate(self) -> None:
         dockerfile = (ROOT / "docker/contextforge-harness/mcp-transceiver/Dockerfile").read_text(encoding="utf-8")
 
@@ -265,6 +280,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("contextforge-gateway", service_names)
         self.assertIn("mentality-transceiver", service_names)
         self.assertIn("context7-transceiver", service_names)
+        self.assertIn("exa-search-transceiver", service_names)
 
     def test_service_locality_records_project_scoped_container_matrix(self) -> None:
         policy = (ROOT / "docker/contextforge-harness/SERVICE_LOCALITY.md").read_text(encoding="utf-8")
