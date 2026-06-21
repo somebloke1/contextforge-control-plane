@@ -218,7 +218,9 @@ host loopback through `host.docker.internal`, the successor surface uses
 host-gateway address `172.17.0.1:9208`. Register
 `http://host.docker.internal:9208/mcp` with the Docker gateway only after
 proving the proxy and preserving the virtual-server exclusion of
-`activate_project`.
+`activate_project`. Treat `172.17.0.1` as a current-host Docker bridge
+projection that must be preflighted; rootless Docker or custom bridge networks
+may require a different host-gateway bind address.
 
 Session-scoped services also require stateful gateway ingress. The Docker
 harness sets `USE_STATEFUL_SESSIONS=true` and `GUNICORN_WORKERS=1` so the

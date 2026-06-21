@@ -179,7 +179,9 @@ stock ContextForge bridge. It reads credentials from ignored
 `server-instances/github/.env` via an optional Compose `env_file`. Do not pass
 host shell API-token variables through Compose, and do not copy or print token
 values. A clean checkout can still launch the bridge; real GitHub tool calls
-require a credential in the ignored env file.
+require a credential in the ignored env file. The image installs
+`@modelcontextprotocol/server-github@2025.4.8` at build time and runs the
+installed `mcp-server-github` binary at runtime.
 
 ```sh
 docker compose -f compose.yml up -d --build contextforge-gateway github-transceiver
@@ -196,7 +198,8 @@ Chrome for Testing/Chromium runtime. It is a native MCP HTTP/SSE backend rather
 than a `mcpgateway.translate` bridge. The sidecar uses an in-memory shared
 browser context so stateful multi-tool workflows survive the ContextForge proxy
 without sharing host browser/session state or writing a persistent browser
-profile.
+profile. The image installs `@playwright/mcp@0.0.76` at build time and runs the
+installed `playwright-mcp` binary at runtime.
 
 The harness gateway enables stateful Streamable HTTP sessions and runs a single
 Gunicorn worker. Both are intentional: ContextForge binds upstream MCP client
@@ -254,7 +257,10 @@ published ContextForge gateway URL, never the proxy or upstream address.
 This is not a general host rebind and not a project-mounted Serena sidecar. The
 canonical Serena service remains host/project-scoped, `activate_project` must
 remain excluded from the ContextForge virtual server, and runtime proof must
-show the proxy plus virtual server before claiming parity.
+show the proxy plus virtual server before claiming parity. The fixed
+`172.17.0.1` binding is a current-host Docker bridge projection, not a portable
+assumption for rootless Docker or custom bridge networks; run the proxy
+preflight before any Serena apply.
 
 ## Operations
 
