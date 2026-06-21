@@ -1,0 +1,4 @@
+interface:
+  display_name: "Comprehensive MCP Testing"
+  short_description: "Run real-client MCP test loops."
+  default_prompt: "Use this skill to plan, run, evaluate, triage, and refine comprehensive ContextForge MCP service testing through real Pi and OpenCode qwen-backed client sessions."

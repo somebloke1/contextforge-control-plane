@@ -1,0 +1,19 @@
+{
+  "schema_uri": "contextforge://client-harness/comprehensive-mcp-testing-services/v1",
+  "global_issue": 316,
+  "target_clients": ["pi", "opencode"],
+  "model_family": "qwen",
+  "semantic_evaluator_required": true,
+  "deterministic_semantic_oracles_allowed": false,
+  "services": [
+    {"slug": "context7", "issue": 307, "display": "Context7", "virtual_server": "context7_local_server"},
+    {"slug": "mentality", "issue": 308, "display": "mentality", "virtual_server": "mentality_server"},
+    {"slug": "ssh-tmux", "issue": 309, "display": "ssh-tmux", "virtual_server": "ssh_tmux_server"},
+    {"slug": "playwright", "issue": 310, "display": "playwright", "virtual_server": "playwright_server"},
+    {"slug": "exa-search", "issue": 311, "display": "exa-search", "virtual_server": "exa_search_server"},
+    {"slug": "github", "issue": 312, "display": "GitHub", "virtual_server": "github_server"},
+    {"slug": "web-search", "issue": 313, "display": "web-search", "virtual_server": "web_search_server"},
+    {"slug": "openzeppelin-solidity-contracts", "issue": 314, "display": "OpenZeppelin Solidity Contracts", "virtual_server": "openzeppelin_solidity_contracts_server"},
+    {"slug": "serena", "issue": 315, "display": "Serena", "virtual_server": "serena_cf_controlplane_d46fe58a2a20_server"}
+  ]
+}
