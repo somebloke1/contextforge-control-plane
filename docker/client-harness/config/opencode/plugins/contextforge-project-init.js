@@ -222,6 +222,16 @@ const governanceLedgerForPrompt = (text) => {
   return ""
 }
 
+const governancePromptRequestsSpecificEntry = (text) => {
+  const lowered = String(text ?? "").toLowerCase()
+  return (
+    lowered.includes("detail") ||
+    lowered.includes("details") ||
+    lowered.includes("specific") ||
+    /\b(task|dec|oq|ai)-[a-z0-9-]+\b/.test(lowered)
+  )
+}
+
 const helperResponse = (cwd, operation) => {
   const helper = process.env.CONTEXTFORGE_PROJECT_INIT_HELPER_CLI ?? "/repo/scripts/pi_project_init_helper_cli.py"
   const result = spawnSync(
@@ -363,6 +373,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
       recordLatestUserMessage(sessionID, cwd, latestText)
       const governanceLedger = governanceLedgerForPrompt(latestText)
       if (governanceLedger) {
+        const wantsSpecificGovernanceEntry = governancePromptRequestsSpecificEntry(latestText)
         governancePromptActiveUntil = Date.now() + 120000
         output.messages.unshift({
           info: {
@@ -382,9 +393,14 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
                 "The user is asking an ordinary governance question for an already initialized ContextForge project.",
                 "Do not ask which services to activate and do not restart project init.",
                 `Call the read-only ContextForge MCP governance list tool exposed by the mentality MCP server. In OpenCode it may appear as mentality_governance_list, mentality-governance-list, or governance_list under the mentality server.`,
-                `Use exactly this tool argument shape: {"repo":"${String(cwd)}","ledger":"${governanceLedger}"}.`,
-                "After the tool call returns, answer concisely from the returned entries and include entry ids or titles as source signal.",
-                "Do not use read, glob, grep, bash, project-state file inspection, or ledger-file reads as a substitute for the governance MCP tool.",
+                `Use exactly this list argument shape: {"repo":"${String(cwd)}","ledger":"${governanceLedger}"}.`,
+                wantsSpecificGovernanceEntry
+                  ? `If the user asked for details of a specific entry, then call the read-only governance read tool exposed by the mentality MCP server for the matching entry id. It may appear as mentality_governance_read, mentality-governance-read, or governance_read. Use exactly this read argument shape: {"repo":"${String(cwd)}","ledger":"${governanceLedger}","id":"ENTRY_ID_FROM_THE_USER_OR_LIST_RESULT"}.`
+                  : "If the user only asks for a list or status summary, do not call the governance read tool.",
+                "After the tool call returns, produce a visible final answer from the returned entries or entry detail and include entry ids or titles as source signal.",
+                "Do not stop with an empty assistant message after a successful governance list or read tool call.",
+                "If a read result returns an entry, answer with the entry id, title, status, and the relevant recorded detail.",
+                "Do not use glob, grep, bash, project-state file inspection, or ledger-file reads as a substitute for the governance MCP tool.",
                 "Do not call governance create, update, or delete.",
                 "</contextforge-project-governance>",
               ].join("\n"),

@@ -18,11 +18,15 @@ ROOT = Path(__file__).resolve().parents[1]
 class ContextForgeDockerHarnessTests(unittest.TestCase):
     def test_compose_defines_dev_mentality_transceiver_sidecar(self) -> None:
         compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/mcp-transceiver/Dockerfile").read_text(encoding="utf-8")
 
         self.assertIn("mentality-transceiver:", compose)
         self.assertIn("contextforge-harness-mentality-transceiver:latest", compose)
         self.assertIn('"127.0.0.1:9201:9201"', compose)
+        self.assertIn("../client-harness/workspace:/workspace", compose)
         self.assertIn("docker/contextforge-harness/mcp-transceiver/Dockerfile", compose)
+        self.assertIn("PYTHONPATH=/opt/mentality/scripts", dockerfile)
+        self.assertIn("python /opt/mentality/scripts/governance_mcp.py", dockerfile)
 
     def test_compose_defines_ssh_tmux_transceiver_sidecar(self) -> None:
         compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
@@ -559,9 +563,23 @@ print(json.dumps(redact_value(payload), sort_keys=True))
         runner = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py").read_text(
             encoding="utf-8"
         )
+        services = json.loads((ROOT / "docker/client-harness/comprehensive-mcp-testing-services.json").read_text(encoding="utf-8"))
 
         self.assertIn("Please use this project's documentation lookup capability", runner)
-        self.assertIn("Please check whether this project has any recorded open tasks", runner)
+        self.assertIn("MENTALITY_FIXTURE_TASK_ID", runner)
+        self.assertIn("Please check the details recorded for task", runner)
+        self.assertIn("TASKS.md", runner)
+        self.assertTrue(all("service_binding" in service for service in services["services"]))
+        self.assertIn("SEMANTIC_MODEL_OVERRIDE_KEYS", runner)
+        self.assertIn("semantic_model_env_overrides", runner)
+        self.assertIn("-e", runner)
+        self.assertIn('"semantic_model_env_overrides": semantic_overrides', runner)
+        self.assertIn("activation_postcondition_command", runner)
+        self.assertIn("activation-postcondition.raw.txt", runner)
+        self.assertIn('"activation_postcondition"', runner)
+        self.assertIn('"service_test_executed": service_test_executed', runner)
+        self.assertIn('activation_postcondition["returncode"] == 0', runner)
+        self.assertIn('"service_fixture": service_fixture', runner)
         self.assertIn("What ContextForge tools are available in this project?", runner)
         self.assertIn('"tool_inventory": tool_inventory', runner)
         self.assertIn("tool-inventory-turn.raw.txt", runner)
@@ -573,9 +591,28 @@ print(json.dumps(redact_value(payload), sort_keys=True))
         guidance_wrapped = " ".join(guidance.split())
 
         self.assertIn("asks about recorded project tasks", guidance_wrapped)
-        self.assertIn("prefer listing recorded tasks", guidance_wrapped)
+        self.assertIn("first identify it from the relevant ledger", guidance_wrapped)
+        self.assertIn("prefer the tasks ledger", guidance_wrapped)
+        self.assertIn("exact current project root path", guidance_wrapped)
+        self.assertIn("/workspace", guidance_wrapped)
         self.assertIn("substitute helper availability", guidance_wrapped)
+        self.assertIn("Do not end with an empty assistant message", guidance_wrapped)
         self.assertIn("for a requested governance/mentality task", guidance_wrapped)
+
+    def test_opencode_governance_hook_supports_read_route_without_task_interception(self) -> None:
+        plugin = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn('lowered.includes("task")', plugin)
+        self.assertIn("governancePromptRequestsSpecificEntry", plugin)
+        self.assertIn("mentality_governance_read", plugin)
+        self.assertIn("governance_read", plugin)
+        self.assertIn('"id":"ENTRY_ID_FROM_THE_USER_OR_LIST_RESULT"', plugin)
+        self.assertIn("If the user only asks for a list or status summary", plugin)
+        self.assertIn("produce a visible final answer", plugin)
+        self.assertIn("Do not stop with an empty assistant message", plugin)
+        self.assertNotIn("Do not use read, glob, grep", plugin)
 
     def test_pi_availability_readback_passes_live_runtime_tools_to_helper(self) -> None:
         pi_source = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
