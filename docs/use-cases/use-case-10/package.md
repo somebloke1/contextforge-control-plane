@@ -4,13 +4,11 @@ Issue: #252.
 
 ## Status
 
-Queue state: selected after accepted UC9 cross-client consistency.
+Queue state: accepted by controller after UC9 cross-client consistency.
 
-Controller state: package materialized; acceptance requires fresh Pi and
-OpenCode CLI evidence already exists. Codex parity extension requires fresh Pi,
-OpenCode, and Codex CLI evidence, structured pre/post state comparison,
-non-Spark semantic evaluation, remediation as needed, and controller
-integration.
+Controller state: Pi/OpenCode acceptance and the Codex parity extension are
+recorded in `controller-acceptance-20260620.md`. This package remains the
+localized requirement and evidence plan, not the semantic acceptance authority.
 
 ## Method Binding
 

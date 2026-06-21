@@ -213,11 +213,32 @@ def check_generation_report(
             checks["prompt_count_matches_use_case"] = prompt_count == expected_prompt_count
             if not checks["prompt_count_matches_use_case"]:
                 failures.append(failure("prompt_count_mismatch", "generation_report prompt count must match use case"))
+    prompt_count = totals.get("prompt_count") if isinstance(totals, dict) else None
+    generation_step_count = totals.get("generation_step_count") if isinstance(totals, dict) else None
     if isinstance(steps, list):
+        checks["step_generation_count_matches_prompt_count"] = isinstance(prompt_count, int) and len(steps) == prompt_count
+        if not checks["step_generation_count_matches_prompt_count"]:
+            failures.append(failure("step_generation_count_mismatch", "step_generations length must match totals.prompt_count"))
+        checks["step_generation_count_matches_total"] = isinstance(generation_step_count, int) and len(steps) == generation_step_count
+        if not checks["step_generation_count_matches_total"]:
+            failures.append(failure("generation_step_count_mismatch", "step_generations length must match totals.generation_step_count"))
+        if isinstance(prompt_count, int) and prompt_count > 0:
+            observed_turns = [step.get("turn") for step in steps if isinstance(step, dict)]
+            checks["step_turns_complete"] = observed_turns == list(range(1, prompt_count + 1))
+            if not checks["step_turns_complete"]:
+                failures.append(failure("step_turn_sequence_incomplete", "step_generations must contain consecutive turns 1..prompt_count"))
         for index, step in enumerate(steps, start=1):
             if not isinstance(step, dict):
                 failures.append(failure("step_generation_not_object", f"step generation {index} must be an object"))
                 continue
+            raw_artifact = step.get("raw_artifact")
+            raw_path = Path(str(raw_artifact)) if isinstance(raw_artifact, str) and raw_artifact else None
+            if raw_path is None:
+                failures.append(failure("step_raw_artifact_missing", f"step generation {index} must declare raw_artifact path"))
+            elif not raw_path.exists() or not raw_path.is_file():
+                failures.append(failure("step_raw_artifact_absent", f"step generation {index} raw_artifact file must exist"))
+            elif raw_path.stat().st_size <= 0:
+                failures.append(failure("step_raw_artifact_empty", f"step generation {index} raw_artifact file must be non-empty"))
             if step.get("model_dependent") is not True:
                 failures.append(failure("step_not_model_dependent", f"step generation {index} must declare model_dependent true"))
             if step.get("returncode") != 0:

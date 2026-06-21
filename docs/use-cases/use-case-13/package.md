@@ -4,15 +4,17 @@ Issue: #255.
 
 ## Status
 
-Queue state: selected after accepted UC12. UC13 formalizes the development
+Queue state: accepted by controller after UC12. UC13 formalizes the development
 evidence surface already used throughout the SuperLoop: isolated ContextForge
 dev Docker, isolated Pi/OpenCode/Codex client containers, current-worktree test
 venv, idempotent reset, evidence capture, and explicit claim boundaries.
 
-Controller state: package materialized. Acceptance requires source checks,
-runtime evidence package generation, and controller review. If model-dependent
-dialogue evidence is cited as a selected-use-case proof, it must still be
-reviewed by a non-Spark semantic evaluator under the ordinary dialogue method.
+Controller state: Pi/OpenCode and Codex controlled-dev-surface acceptance are
+recorded in `controller-acceptance-20260620.md`. This package remains the
+localized requirement and evidence plan, not a semantic dialogue-readiness
+authority. If model-dependent dialogue evidence is cited as a selected-use-case
+proof, it must still be reviewed by a non-Spark semantic evaluator under the
+ordinary dialogue method.
 
 ## Method Binding
 

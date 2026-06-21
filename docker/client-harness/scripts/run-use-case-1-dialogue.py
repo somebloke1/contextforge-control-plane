@@ -555,19 +555,32 @@ def parse_json_or_text(text: str) -> Any:
 def render_command_block(result: dict[str, Any]) -> str:
     return "\n".join(
         [
-            f"COMMAND: {result['command_text']}",
+            f"COMMAND: {redact_text(str(result['command_text']))}",
             f"CWD: {result['cwd']}",
             f"RETURNCODE: {result['returncode']}",
             f"TIMEOUT: {str(result['timeout']).lower()}",
             "",
             "STDOUT:",
-            str(result.get("stdout") or ""),
+            redact_text(str(result.get("stdout") or "")),
             "",
             "STDERR:",
-            str(result.get("stderr") or ""),
+            redact_text(str(result.get("stderr") or "")),
             "",
         ]
     )
+
+
+def redact_text(text: str) -> str:
+    redactor = Path(__file__).with_name("redact-contextforge-secrets.py")
+    completed = subprocess.run(
+        [sys.executable, str(redactor)],
+        input=text,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    return completed.stdout if completed.returncode == 0 else text
 
 
 def render_combined_evidence(
@@ -1057,7 +1070,7 @@ def summarize_dialogue(turns: list[dict[str, Any]]) -> dict[str, Any]:
     summary: dict[str, Any] = {"visible_dialogue": [], "hidden_or_extension_messages": [], "tool_audit_index": []}
 
     def add_visible(turn_no: int, role: str, text: str) -> None:
-        normalized = text.strip()
+        normalized = redact_text(text).strip()
         if not normalized:
             return
         item = {"turn": turn_no, "role": role, "text": normalized}
@@ -1124,7 +1137,7 @@ def summarize_dialogue(turns: list[dict[str, Any]]) -> dict[str, Any]:
                             "turn": turn_no,
                             "custom_type": message.get("customType"),
                             "display": message.get("display"),
-                            "text_excerpt": str(message.get("content") or "")[:500],
+                            "text_excerpt": redact_text(str(message.get("content") or ""))[:500],
                         }
                     )
                 elif role in {"assistant", "user"} and isinstance(content, list):

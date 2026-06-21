@@ -37,6 +37,7 @@ OPENCODE_SAFE_CALL_COMMAND="${OPENCODE_SAFE_CALL_COMMAND:-}"
 REDACTOR="${REPO_ROOT}/docker/client-harness/scripts/redact-contextforge-secrets.py"
 
 TOKEN_ID=""
+TOKEN_ENV_FILE=""
 
 if [[ -n "${OPENCODE_SAFE_CALL_COMMAND}" ]]; then
   SAFE_CALL_COMMAND_TOOL_ALLOWED=0
@@ -114,9 +115,22 @@ probe.revoke_probe_token(base_url, admin_token, token_id)
 PY
   printf 'probe_token_revoked=%s\n' "${TOKEN_ID}" | tee -a evidence/opencode-contextforge-dev-smoke.txt
 }
-trap revoke_probe_token EXIT
+cleanup() {
+  revoke_probe_token
+  if [[ -n "${TOKEN_ENV_FILE}" ]]; then
+    rm -f "${TOKEN_ENV_FILE}"
+  fi
+}
+trap cleanup EXIT
 
 MCP_URL="${CONTEXTFORGE_CONTAINER_BASE_URL%/}/servers/${SERVER_ID}/mcp/"
+TOKEN_ENV_FILE="$(mktemp)"
+chmod 0600 "${TOKEN_ENV_FILE}"
+{
+  printf 'CONTEXTFORGE_DEV_MCP_NAME=%s\n' "${OPENCODE_DEV_MCP_NAME}"
+  printf 'CONTEXTFORGE_DEV_MCP_URL=%s\n' "${MCP_URL}"
+  printf 'CONTEXTFORGE_DEV_BEARER_TOKEN=%s\n' "${ACCESS_TOKEN}"
+} > "${TOKEN_ENV_FILE}"
 
 redact_token_stream() {
   CONTEXTFORGE_REDACT_VALUES="${ACCESS_TOKEN:-}" PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" "${REDACTOR}"
@@ -136,6 +150,7 @@ redact_token_stream() {
 } | tee evidence/opencode-contextforge-dev-smoke.txt
 
 docker compose -f compose.yml run --rm --no-deps \
+  --env-file "${TOKEN_ENV_FILE}" \
   -e HOME=/tmp/opencode-home \
   -e OPENCODE_CONFIG_DIR=/tmp/opencode-home/.config/opencode \
   -e OPENCODE_CONFIG=/tmp/opencode-home/.config/opencode/opencode.json \
@@ -145,9 +160,6 @@ docker compose -f compose.yml run --rm --no-deps \
   -e XDG_RUNTIME_DIR=/tmp/opencode-home/.local/state/contextforge-client-harness-runtime \
   -e CONTEXTFORGE_PROJECT_INIT_RUN_ROOT=/tmp/opencode-home/.local/state/contextforge-client-harness-runtime/project-init \
   -e CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH=/tmp/opencode-home/.local/state/contextforge-client-harness-runtime/project-init/opencode-latest-user-message.json \
-  -e CONTEXTFORGE_DEV_MCP_NAME="${OPENCODE_DEV_MCP_NAME}" \
-  -e CONTEXTFORGE_DEV_MCP_URL="${MCP_URL}" \
-  -e CONTEXTFORGE_DEV_BEARER_TOKEN="${ACCESS_TOKEN}" \
   -e OPENCODE_SAFE_PROBE_ID="${OPENCODE_SAFE_PROBE_ID}" \
   -e OPENCODE_SAFE_PROBE_SERVICE="${OPENCODE_SAFE_PROBE_SERVICE}" \
   -e OPENCODE_SAFE_PROBE_ALLOWED_TOOLS="${OPENCODE_SAFE_PROBE_ALLOWED_TOOLS}" \

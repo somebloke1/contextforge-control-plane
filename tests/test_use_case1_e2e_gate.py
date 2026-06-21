@@ -55,8 +55,14 @@ class UseCase1E2EGateTests(unittest.TestCase):
             tmp_path = Path(tmp)
             evidence = tmp_path / f"{client}.md"
             metadata_path = tmp_path / f"{client}-metadata.json"
+            metadata = json.loads(json.dumps(metadata))
+            for step in metadata.get("generation_report", {}).get("step_generations", []):
+                if isinstance(step, dict) and not step.get("raw_artifact"):
+                    raw = tmp_path / f"{client}-turn{step.get('turn', 'x')}.raw.txt"
+                    raw.write_text(f"raw transcript artifact for turn {step.get('turn')}\n", encoding="utf-8")
+                    step["raw_artifact"] = str(raw)
             evidence.write_text(evidence_text, encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -75,6 +81,14 @@ class UseCase1E2EGateTests(unittest.TestCase):
                 stderr=subprocess.PIPE,
             )
         return completed.returncode, json.loads(completed.stdout), completed.stderr
+
+    def write_metadata_with_raw_artifacts(self, metadata: dict[str, Any], tmp_path: Path, metadata_path: Path) -> None:
+        for step in metadata.get("generation_report", {}).get("step_generations", []):
+            if isinstance(step, dict) and not step.get("raw_artifact"):
+                raw = tmp_path / f"{metadata.get('client', 'client')}-turn{step.get('turn', 'x')}.raw.txt"
+                raw.write_text(f"raw transcript artifact for turn {step.get('turn')}\n", encoding="utf-8")
+                step["raw_artifact"] = str(raw)
+        metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
 
     def valid_metadata(self, client: str = "opencode", session_id: str = "ses_structural") -> dict[str, Any]:
         reset_client = "codex-cli" if client == "codex" else client
@@ -151,7 +165,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
     def test_verifier_checks_structure_not_dialogue_meaning(self) -> None:
         code, result, stderr = self.run_verifier(
             "opencode",
-            "arbitrary non-empty evidence text; semantic meaning is evaluator-owned",
+            "complete transcript package text; semantic meaning is evaluator-owned",
             self.valid_metadata(),
             "--session-id",
             "ses_structural",
@@ -168,7 +182,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
     def test_verifier_accepts_codex_structural_metadata(self) -> None:
         code, result, stderr = self.run_verifier(
             "codex",
-            "arbitrary non-empty Codex evidence text; semantic meaning is evaluator-owned",
+            "complete Codex transcript package text; semantic meaning is evaluator-owned",
             self.valid_metadata(client="codex", session_id="019ee47e-a6fd-7e10-a6c7-c8cb398ce460"),
             "--session-id",
             "019ee47e-a6fd-7e10-a6c7-c8cb398ce460",
@@ -189,6 +203,20 @@ class UseCase1E2EGateTests(unittest.TestCase):
         self.assertNotEqual(0, code)
         failure_codes = {failure["code"] for failure in result["failures"]}  # type: ignore[index]
         self.assertIn("required_command_nonzero", failure_codes)
+        self.assertNotIn("semantic_observations", result)
+
+    def test_verifier_rejects_truncated_generation_report_without_scoring_prose(self) -> None:
+        metadata = self.valid_metadata()
+        metadata["generation_report"]["step_generations"] = metadata["generation_report"]["step_generations"][:1]
+
+        code, result, stderr = self.run_verifier("opencode", "complete package shell", metadata)
+
+        self.assertEqual("", stderr)
+        self.assertNotEqual(0, code)
+        failure_codes = {failure["code"] for failure in result["failures"]}  # type: ignore[index]
+        self.assertIn("step_generation_count_mismatch", failure_codes)
+        self.assertIn("generation_step_count_mismatch", failure_codes)
+        self.assertIn("step_turn_sequence_incomplete", failure_codes)
         self.assertNotIn("semantic_observations", result)
 
     def test_dialogue_skill_records_structure_not_meaning_restriction(self) -> None:
@@ -300,7 +328,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
             evidence = tmp_path / "codex-uc2.md"
             metadata_path = tmp_path / "codex-uc2-metadata.json"
             evidence.write_text("non-empty UC2 Codex evidence; semantic meaning is evaluator-owned", encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -398,7 +426,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
             evidence = tmp_path / "codex-uc3.md"
             metadata_path = tmp_path / "codex-uc3-metadata.json"
             evidence.write_text("non-empty UC3 Codex evidence; semantic meaning is evaluator-owned", encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -550,7 +578,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
             evidence = tmp_path / "uc12-codex.md"
             metadata_path = tmp_path / "uc12-codex-metadata.json"
             evidence.write_text("non-empty UC12 Codex evidence; semantic meaning is evaluator-owned", encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -671,7 +699,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
             evidence = tmp_path / "uc9.md"
             metadata_path = tmp_path / "uc9-metadata.json"
             evidence.write_text("non-empty UC9 evidence; semantic meaning is evaluator-owned", encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -805,7 +833,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
             evidence = tmp_path / "uc10.md"
             metadata_path = tmp_path / "uc10-metadata.json"
             evidence.write_text("non-empty UC10 evidence; semantic meaning is evaluator-owned", encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -903,7 +931,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
             evidence = tmp_path / "codex-uc4.md"
             metadata_path = tmp_path / "codex-uc4-metadata.json"
             evidence.write_text("non-empty UC4 Codex evidence; semantic meaning is evaluator-owned", encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -1003,7 +1031,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
             evidence = tmp_path / "codex-uc5.md"
             metadata_path = tmp_path / "codex-uc5-metadata.json"
             evidence.write_text("non-empty UC5 Codex evidence; semantic meaning is evaluator-owned", encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -1118,7 +1146,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
             evidence = tmp_path / "codex-uc6.md"
             metadata_path = tmp_path / "codex-uc6-metadata.json"
             evidence.write_text("non-empty UC6 Codex evidence; semantic meaning is evaluator-owned", encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -1206,7 +1234,7 @@ class UseCase1E2EGateTests(unittest.TestCase):
             evidence = tmp_path / "codex-uc7.md"
             metadata_path = tmp_path / "codex-uc7-metadata.json"
             evidence.write_text("non-empty UC7 Codex evidence; semantic meaning is evaluator-owned", encoding="utf-8")
-            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            self.write_metadata_with_raw_artifacts(metadata, tmp_path, metadata_path)
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -1270,13 +1298,15 @@ class UseCase1E2EGateTests(unittest.TestCase):
         self.assertIn("claim ladder", package)
         self.assertIn("must not use matched strings, regexes, keyword searches", package)
         self.assertIn("semantic_report_review_required", runner)
-        self.assertIn("build_acceptance_groups", runner)
+        self.assertIn("build_use_case_evidence_groups", runner)
         self.assertIn("safe_call_proof", runner)
         self.assertIn("handoff_readiness", runner)
         self.assertIn("forbidden_overclaims", runner)
+        self.assertIn("semantic_evaluator_verdicts_required_for_acceptance", runner)
         self.assertIn("REQUIRED_CLIENTS", verifier)
         self.assertIn("REQUIRED_LAYERS", verifier)
-        self.assertIn("acceptance_groups", verifier)
+        self.assertIn("use_case_evidence_groups", verifier)
+        self.assertIn("artifact presence into semantic acceptance", verifier)
         self.assertIn("does not judge report prose meaning", verifier)
 
     def test_use_case15_handoff_package_runner_and_verifier_define_handoff_boundary(self) -> None:
@@ -1289,14 +1319,15 @@ class UseCase1E2EGateTests(unittest.TestCase):
         self.assertIn("issue owns each gap", package)
         self.assertIn("semantic_handoff_review_required", runner)
         self.assertIn("client_operating_notes", runner)
-        self.assertIn("validated_flows", runner)
+        self.assertIn("covered_flow_claims", runner)
         self.assertIn("read_issue_statuses", runner)
         self.assertIn("issue_owners", runner)
         self.assertIn("not release readiness", runner)
         self.assertIn("REQUIRED_CLIENTS", verifier)
         self.assertIn("REQUIRED_ISSUES", verifier)
         self.assertIn("what_works", verifier)
-        self.assertIn("validated_flows", verifier)
+        self.assertIn("covered_flow_claims", verifier)
+        self.assertIn("artifact presence into semantic acceptance", verifier)
         self.assertIn("does not judge handoff prose meaning", verifier)
 
 

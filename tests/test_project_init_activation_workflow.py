@@ -2834,6 +2834,17 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertFalse(numeric_denied["ok"])
             self.assertEqual("PermissionError", numeric_denied["error"]["type"])
 
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": "do not approve this plan"}) + "\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, guarded_env):
+                negated_denied = contextforge_helper_mcp.cf_project_init_approve(
+                    str(root),
+                    challenge["challenge_id"],
+                    challenge["plan_digest"],
+                )
+
+            self.assertFalse(negated_denied["ok"])
+            self.assertEqual("PermissionError", negated_denied["error"]["type"])
+
     def test_contextforge_helper_mcp_approval_guard_accepts_approval_text(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
             root = Path(tmp).resolve()
@@ -3354,6 +3365,37 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("allow", approval["decision"])
         self.assertTrue(applied["ok"], applied.get("error"))
         self.assertEqual("opencode-project-init-installed", applied["next_turn"]["question_id"])
+
+    def test_contextforge_helper_mcp_apply_rejects_caller_supplied_receipt_replay_without_cached_receipts(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            challenge = proposal["approval_challenge"]
+            approval = contextforge_helper_mcp.cf_project_init_approve(
+                str(root),
+                challenge["challenge_id"],
+                proposal["plan_digest"],
+            )
+
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._APPROVED_RECEIPT_IDS_BY_PLAN.clear()
+            contextforge_helper_mcp._write_durable_cache(str(root), {"plan": proposal})
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root), receipts=approval["receipts"], dry_run=True)
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+
+        self.assertTrue(proposal["ok"])
+        self.assertTrue(approval["ok"])
+        self.assertFalse(applied["ok"])
+        self.assertEqual("ValueError", applied["error"]["type"])
+        self.assertIn("cached project-init receipts", applied["error"]["message"])
 
     def test_contextforge_helper_mcp_accepts_service_ids_and_expands_descriptors(self) -> None:
         with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:

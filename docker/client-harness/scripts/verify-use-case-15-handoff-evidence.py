@@ -66,10 +66,10 @@ def verify(metadata_path: Path) -> dict[str, Any]:
         checks["issue_owners_present"] = isinstance(issue_owners, dict) and REQUIRED_ISSUES <= set(issue_owners)
         if not checks["issue_owners_present"]:
             failures.append(failure("issue_owners_missing", "handoff.issue_owners must include required follow-up issues"))
-        flows = handoff.get("validated_flows")
-        checks["validated_flows_present"] = isinstance(flows, dict) and len(flows) >= 5
-        if not checks["validated_flows_present"]:
-            failures.append(failure("validated_flows_missing", "handoff.validated_flows must summarize accepted flows"))
+        flows = handoff.get("covered_flow_claims")
+        checks["covered_flow_claims_present"] = isinstance(flows, dict) and len(flows) >= 5
+        if not checks["covered_flow_claims_present"]:
+            failures.append(failure("covered_flow_claims_missing", "handoff.covered_flow_claims must summarize reviewed flow claims"))
         non_claims = handoff.get("non_claims")
         checks["non_claims_present"] = isinstance(non_claims, list) and len(non_claims) >= 6
         if not checks["non_claims_present"]:
@@ -100,7 +100,8 @@ def result(metadata_path: Path, checks: dict[str, bool], failures: list[dict[str
         "failures": failures,
         "deterministic_boundary": (
             "This verifier checks metadata shape, artifact presence, required clients, "
-            "issue-owner fields, and non-claim declarations. It does not judge handoff prose meaning."
+            "issue-owner fields, covered flow-claim fields, and non-claim declarations. It does not judge handoff prose meaning "
+            "or convert artifact presence into semantic acceptance."
         ),
     }
 

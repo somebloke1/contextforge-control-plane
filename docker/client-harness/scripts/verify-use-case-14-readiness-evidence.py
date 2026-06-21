@@ -94,15 +94,21 @@ def verify(metadata_path: Path) -> dict[str, Any]:
         if bad_json:
             failures.append(failure("json_artifacts_invalid", f"{len(bad_json)} JSON evidence artifacts failed to parse"))
 
-    groups = metadata.get("acceptance_groups")
-    checks["acceptance_groups_list"] = isinstance(groups, list) and len(groups) == 13
-    if not checks["acceptance_groups_list"]:
-        failures.append(failure("missing_acceptance_groups", "acceptance_groups must contain UC1 through UC13"))
+    groups = metadata.get("use_case_evidence_groups")
+    checks["use_case_evidence_groups_list"] = isinstance(groups, list) and len(groups) == 13
+    if not checks["use_case_evidence_groups_list"]:
+        failures.append(failure("missing_use_case_evidence_groups", "use_case_evidence_groups must contain UC1 through UC13"))
     else:
-        failed_groups = [group for group in groups if not isinstance(group, dict) or group.get("ok") is not True]
-        checks["acceptance_groups_ok"] = not failed_groups
-        if failed_groups:
-            failures.append(failure("acceptance_groups_incomplete", f"{len(failed_groups)} use-case acceptance groups are incomplete"))
+        incomplete_groups = [
+            group
+            for group in groups
+            if not isinstance(group, dict)
+            or group.get("evidence_package_complete") is not True
+            or group.get("semantic_evaluator_verdicts_required_for_acceptance") is not True
+        ]
+        checks["use_case_evidence_groups_complete"] = not incomplete_groups
+        if incomplete_groups:
+            failures.append(failure("use_case_evidence_groups_incomplete", f"{len(incomplete_groups)} use-case evidence groups are incomplete"))
 
     for key in ("readiness_report_path", "evaluation_package_path"):
         value = metadata.get(key)
@@ -124,7 +130,8 @@ def result(metadata_path: Path, checks: dict[str, bool], failures: list[dict[str
         "failures": failures,
         "deterministic_boundary": (
             "This verifier checks metadata shape, artifact presence, JSON parseability, clients, "
-            "claim-layer fields, and overclaim flags. It does not judge report prose meaning."
+            "claim-layer fields, evidence-group fields, and overclaim flags. It does not judge report prose meaning "
+            "or convert artifact presence into semantic acceptance."
         ),
     }
 

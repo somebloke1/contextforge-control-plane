@@ -8,11 +8,10 @@ Queue state: selected after accepted UC11 and the cross-client projection
 substrate (#286/#285/#287) because UC12 depends on service addition, guidance
 behavior, and honest project-service/client-projection boundaries.
 
-Controller state: package materialized. Acceptance requires source-helper
-coverage, fresh Pi and OpenCode CLI dialogue evidence, non-Spark semantic
-evaluation, remediation as needed, and controller integration. Codex parity
-extension requires the same fresh source-only dialogue evidence in the
-authenticated Codex Docker client. This package is not an acceptance claim.
+Controller state: Pi/OpenCode acceptance and the Codex parity extension are
+recorded in `controller-acceptance-20260620.md`. This package remains the
+localized source-only onboarding requirement and evidence plan, not the
+semantic acceptance authority.
 
 ## Method Binding
 

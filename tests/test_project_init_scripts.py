@@ -2222,12 +2222,18 @@ class SerenaManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             context = init_hook.project_init_continuation_context_for_prompt(root, "approve", target_client="codex")
+            natural_context = init_hook.project_init_continuation_context_for_prompt(root, "I approve", target_client="codex")
+            yes_context = init_hook.project_init_continuation_context_for_prompt(root, "yes approve", target_client="codex")
+            negated_context = init_hook.project_init_continuation_context_for_prompt(root, "do not approve", target_client="codex")
 
-        self.assertIn("final-choice", context)
-        self.assertIn('"dry_run":false', context)
-        self.assertIn("cf_project_init_continue", context)
-        self.assertIn("approve, decline, and defer", context)
-        self.assertIn("Do not validate, probe, use the installed service", context)
+        for positive_context in (context, natural_context, yes_context):
+            self.assertIn("final-choice", positive_context)
+            self.assertIn('"dry_run":false', positive_context)
+            self.assertIn("cf_project_init_continue", positive_context)
+            self.assertIn("approve, decline, and defer", positive_context)
+            self.assertIn("Do not validate, probe, use the installed service", positive_context)
+        self.assertIn("selection/plan", negated_context)
+        self.assertIn('"dry_run":true', negated_context)
 
     def test_codex_project_init_negative_choice_continuation_context_records_decision(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

@@ -92,12 +92,12 @@ def build_evidence_inventory(repo_root: Path) -> list[dict[str, Any]]:
     return items
 
 
-def build_acceptance_groups(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_use_case_evidence_groups(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: list[dict[str, Any]] = []
     for uc in range(1, 14):
         prefix = f"uc{uc}_"
         package = [item for item in evidence if item.get("label") == f"uc{uc}_package"]
-        acceptance = [
+        controller_review = [
             item
             for item in evidence
             if str(item.get("label", "")).startswith(prefix)
@@ -111,9 +111,11 @@ def build_acceptance_groups(evidence: list[dict[str, Any]]) -> list[dict[str, An
             {
                 "use_case": f"UC{uc}",
                 "package_present": bool(package and package[0].get("exists") is True),
-                "acceptance_artifact_count": len(acceptance),
-                "ok": bool(package and package[0].get("exists") is True and acceptance),
-                "acceptance_artifacts": [item.get("path") for item in acceptance],
+                "controller_review_artifact_count": len(controller_review),
+                "evidence_package_complete": bool(package and package[0].get("exists") is True and controller_review),
+                "controller_review_artifacts": [item.get("path") for item in controller_review],
+                "semantic_evaluator_verdict_refs": [],
+                "semantic_evaluator_verdicts_required_for_acceptance": True,
             }
         )
     return groups
@@ -136,7 +138,7 @@ def build_claim_layers() -> dict[str, Any]:
             },
             "contextforge_route": {
                 "status": "proven_for_selected_routes_and_services",
-                "basis": "accepted UC4/UC5/UC8/UC11/UC13 evidence; not all services in all clients",
+                "basis": "packaged controller-review evidence for UC4/UC5/UC8/UC11/UC13; not all services in all clients",
             },
             "target_client_visibility": {
                 "status": "proven_for_pi_opencode_codex_project_init_surfaces",
@@ -144,7 +146,7 @@ def build_claim_layers() -> dict[str, Any]:
             },
             "ordinary_interactive_proof": {
                 "status": "proven_by_use_case_not_global_release",
-                "basis": "accepted dialogue packages and semantic evaluators for selected ordinary use cases",
+                "basis": "dialogue packages plus semantic evaluator/controller-review artifacts for selected ordinary use cases",
             },
             "safe_call_proof": {
                 "status": "partial",
@@ -189,7 +191,7 @@ def render_report(metadata: dict[str, Any]) -> str:
         "",
         "The ContextForge project-init harness is ready for continued supervised use-case progression and review, but it is not yet a final release or handoff claim.",
         "",
-        "The strongest current claim is scoped: Pi, OpenCode, and Codex have accepted evidence across the project-init SuperLoop slices, and the controlled development surface now includes all three clients. OpenCode and Codex still have explicit safe-call gaps where UC13 records only list/config-readback evidence.",
+        "The strongest current claim is scoped: Pi, OpenCode, and Codex have packaged controller-review evidence across the project-init SuperLoop slices, and the controlled development surface now includes all three clients. OpenCode and Codex still have explicit safe-call gaps where UC13 records only list/config-readback evidence.",
         "",
         "## Claim Ladder",
         "",
@@ -308,9 +310,9 @@ def main(argv: list[str] | None = None) -> int:
     package_path = output_root / f"use-case-14-evaluation-package-{timestamp}.md"
 
     evidence = build_evidence_inventory(repo_root)
-    acceptance_groups = build_acceptance_groups(evidence)
+    evidence_groups = build_use_case_evidence_groups(evidence)
     missing = [item for item in evidence if item.get("required") is True and item.get("exists") is not True]
-    missing_groups = [group for group in acceptance_groups if group.get("ok") is not True]
+    incomplete_groups = [group for group in evidence_groups if group.get("evidence_package_complete") is not True]
     metadata: dict[str, Any] = {
         "use_case": "use-case-14",
         "issue": 256,
@@ -320,9 +322,9 @@ def main(argv: list[str] | None = None) -> int:
         "clients": list(CLIENTS),
         "claim_layers": build_claim_layers(),
         "evidence_inventory": evidence,
-        "acceptance_groups": acceptance_groups,
+        "use_case_evidence_groups": evidence_groups,
         "missing_required_artifacts": missing,
-        "missing_acceptance_groups": missing_groups,
+        "incomplete_use_case_evidence_groups": incomplete_groups,
         "metadata_path": str(metadata_path),
         "verifier_path": str(verifier_path),
         "readiness_report_path": str(report_path),

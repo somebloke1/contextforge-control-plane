@@ -576,22 +576,7 @@ def render_package(
 
 
 def render_command_block(result: dict[str, Any]) -> str:
-    command_text = result.get("command_text") or " ".join(str(part) for part in result.get("command", []))
-    return "\n".join(
-        [
-            f"COMMAND: {command_text}",
-            f"CWD: {result.get('cwd')}",
-            f"RETURNCODE: {result.get('returncode')}",
-            f"TIMEOUT: {str(bool(result.get('timeout'))).lower()}",
-            "",
-            "STDOUT:",
-            str(result.get("stdout") or ""),
-            "",
-            "STDERR:",
-            str(result.get("stderr") or ""),
-            "",
-        ]
-    )
+    return load_runner("1").render_command_block(result)
 
 
 if __name__ == "__main__":

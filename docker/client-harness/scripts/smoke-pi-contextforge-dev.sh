@@ -31,6 +31,7 @@ EVIDENCE_FILE="evidence/pi-contextforge-dev-smoke.txt"
 REDACTOR="${REPO_ROOT}/docker/client-harness/scripts/redact-contextforge-secrets.py"
 
 TOKEN_ID=""
+TOKEN_ENV_FILE=""
 
 create_payload="$(
   PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" - "${REPO_ROOT}" "${CONTEXTFORGE_HOST_BASE_URL}" "${CONTEXTFORGE_DEV_ENV_FILE}" "${CONTEXTFORGE_DEV_SERVER_NAME}" <<'PY'
@@ -92,7 +93,20 @@ probe.revoke_probe_token(base_url, admin_token, token_id)
 PY
   printf 'probe_token_revoked=%s\n' "${TOKEN_ID}" | tee -a "${EVIDENCE_FILE}"
 }
-trap revoke_probe_token EXIT
+cleanup() {
+  revoke_probe_token
+  if [[ -n "${TOKEN_ENV_FILE}" ]]; then
+    rm -f "${TOKEN_ENV_FILE}"
+  fi
+}
+trap cleanup EXIT
+TOKEN_ENV_FILE="$(mktemp)"
+chmod 0600 "${TOKEN_ENV_FILE}"
+{
+  printf 'CONTEXTFORGE_BASE_URL=%s\n' "${CONTEXTFORGE_CONTAINER_BASE_URL}"
+  printf 'CONTEXTFORGE_SERVER_ID=%s\n' "${SERVER_ID}"
+  printf 'CONTEXTFORGE_BEARER_TOKEN=%s\n' "${ACCESS_TOKEN}"
+} > "${TOKEN_ENV_FILE}"
 
 PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" - "${ROOT}/workspace/.project/context_forge_state.json" "${SERVER_ID}" <<'PY'
 import json
@@ -146,11 +160,9 @@ PY
 } | tee "${EVIDENCE_FILE}"
 
 docker compose -f compose.yml run --rm --no-deps \
+  --env-file "${TOKEN_ENV_FILE}" \
   -v "${REPO_ROOT}:/repo:ro" \
   -e NODE_PATH=/usr/lib/node_modules/@earendil-works/pi-coding-agent/node_modules:/usr/lib/node_modules \
-  -e CONTEXTFORGE_BASE_URL="${CONTEXTFORGE_CONTAINER_BASE_URL}" \
-  -e CONTEXTFORGE_SERVER_ID="${SERVER_ID}" \
-  -e CONTEXTFORGE_BEARER_TOKEN="${ACCESS_TOKEN}" \
   -e CONTEXTFORGE_CONFIG_ENV=/tmp/missing-contextforge.env \
   -e CONTEXTFORGE_TOKEN_CACHE=/tmp/contextforge-wrapper-token.local.json \
   -e CONTEXTFORGE_TOKEN_LOCK=/tmp/contextforge-wrapper-token.local.json.lock \

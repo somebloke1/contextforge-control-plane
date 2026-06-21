@@ -4,7 +4,7 @@ Issue: #257.
 
 ## Status
 
-Queue state: selected after accepted UC14 readiness report. UC15 turns the
+Queue state: selected after reviewed UC14 readiness report. UC15 turns the
 current evidence state into a concise handoff: what works, how to operate it,
 what remains unproven, and which issue owns each gap.
 
@@ -17,7 +17,7 @@ handoff usefulness and claim honesty.
 1. Use the current checkout as the authority.
 2. Use only the current-worktree test venv:
    `run/test-venvs/project-init-workflow/bin/python`.
-3. Consume the accepted UC14 readiness metadata and report.
+3. Consume the reviewed UC14 readiness metadata and report.
 4. Generate a user-facing handoff document with Pi, OpenCode, and Codex
    operating notes.
 5. Include evidence paths, known limitations, follow-up issue ownership, and
@@ -32,7 +32,7 @@ handoff usefulness and claim honesty.
 The terminal boundary is a generated handoff package with:
 
 - concise operating instructions for Pi, OpenCode, and Codex;
-- links to the readiness report and accepted use-case evidence;
+- links to the readiness report and reviewed use-case evidence;
 - explicit residual risks and issue ownership;
 - clear next actions;
 - GitHub Project/issue coordination updates performed by the controller.

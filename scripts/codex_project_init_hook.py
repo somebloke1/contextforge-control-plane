@@ -7,6 +7,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -272,7 +273,17 @@ def project_init_continuation_context_for_prompt(project_root: Path, prompt: str
 
     approval_words = {"approve", "approved", "yes", "y", "ok", "okay", "go ahead", "proceed"}
     negative_choice_words = {"decline", "declined", "defer", "deferred"}
-    final_choice = lowered in approval_words or lowered in negative_choice_words or lowered.startswith("approve ")
+    approval_negated = bool(
+        re.search(r"\b(?:do\s+not|don't|dont|not|never|no)\s+approve\b", lowered)
+        or re.search(r"\bi\s+(?:do\s+not|don't|dont)\s+approve\b", lowered)
+    )
+    positive_approval = (
+        lowered in approval_words
+        or lowered in {"yes approve", "i approve", "ok approve", "okay approve"}
+        or lowered.startswith("approve ")
+        or lowered.startswith("approved ")
+    ) and not approval_negated
+    final_choice = positive_approval or lowered in negative_choice_words
     dry_run = "false" if final_choice else "true"
     phase = "final-choice" if final_choice else "selection/plan"
     return "\n".join(

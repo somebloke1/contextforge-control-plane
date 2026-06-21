@@ -47,14 +47,15 @@ Remediation:
 
 - expanded each client note into `what_works`, `how_to_use`, `evidence`,
   `gap`, and `next_action`;
-- added a validated-flow summary across activation, readback, selected tool
-  use, cross-client state, service onboarding, and readiness;
+- added a covered-flow claim summary across activation, readback, selected
+  tool use, cross-client state, service onboarding, and readiness;
 - added current issue-status readback for #257, #280, #285, #286, #287, and
   #289;
 - corrected the #280 owner text after readback showed #280 is a historical
   `.venv` friction issue with label `invalid`, not service-set parity work;
-- strengthened the verifier to require detailed client notes, validated flows,
-  issue-owner fields, issue-status readback, and explicit non-claims.
+- strengthened the verifier to require detailed client notes, covered flow
+  claims, issue-owner fields, issue-status readback, and explicit non-claims
+  without treating artifact presence as semantic acceptance.
 
 Corrected evaluator Banach `019ee6b1-3d8b-7db3-884c-ae287061c1ed` scored the
 corrected package PASS 94/100 with no primary failure class and recommended

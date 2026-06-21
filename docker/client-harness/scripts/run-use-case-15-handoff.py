@@ -28,7 +28,7 @@ def build_handoff() -> dict[str, Any]:
         "summary": "Use-case evidence supports continued supervised operation and handoff planning, not release promotion.",
         "client_operating_notes": {
             "pi": {
-                "what_works": "Pi has accepted ordinary dialogue evidence across the project-init path, including selected read-only tool use.",
+                "what_works": "Pi has reviewed ordinary dialogue evidence across the project-init path, including selected read-only tool use.",
                 "how_to_use": "Use the Docker client harness runners for repeatable tests, for example `run-use-case-8-dialogue.py --client pi` for Context7 tool-use behavior.",
                 "evidence": [
                     "run/holistic-orchestrator/reports/uc1-controller-acceptance-20260620T010301Z.md",
@@ -39,7 +39,7 @@ def build_handoff() -> dict[str, Any]:
                 "next_action": "Use Pi as the strongest interactive foil for regressions that need ordinary dialogue behavior.",
             },
             "opencode": {
-                "what_works": "OpenCode has accepted ordinary dialogue evidence for the scoped use cases and controlled dev MCP list evidence.",
+                "what_works": "OpenCode has reviewed ordinary dialogue evidence for the scoped use cases and controlled dev MCP list evidence.",
                 "how_to_use": "Use Docker harness runners, for example `run-use-case-8-dialogue.py --client opencode`; treat UC13 dev smoke as list-only unless a reviewed safe-call command is supplied.",
                 "evidence": [
                     "docs/use-cases/use-case-8/controller-acceptance-20260620.md",
@@ -61,12 +61,12 @@ def build_handoff() -> dict[str, Any]:
                 "next_action": "Keep Codex changes Docker-only until a separate host-safe client promotion decision exists.",
             },
         },
-        "validated_flows": {
-            "activation": "UC1 install/reload boundary accepted for Pi/OpenCode/Codex.",
-            "readback_and_capabilities": "UC2/UC3/UC7 accepted initialized-state and capability/readiness-layer readback.",
-            "tool_use": "UC4 and UC8/UC11 prove selected read-only governance/Context7 tool-use paths, not every service.",
-            "cross_client_state": "UC9/UC10 prove pre-aligned cross-client readback and refresh behavior, not automatic new-client alignment.",
-            "service_onboarding": "UC12 proves source-only onboarding handoff, not runtime registration for calendar-notes.",
+        "covered_flow_claims": {
+            "activation": "UC1 install/reload boundary has packaged review evidence for Pi/OpenCode/Codex.",
+            "readback_and_capabilities": "UC2/UC3/UC7 have packaged initialized-state and capability/readiness-layer readback evidence.",
+            "tool_use": "UC4 and UC8/UC11 provide reviewed evidence for selected read-only governance/Context7 tool-use paths, not every service.",
+            "cross_client_state": "UC9/UC10 provide reviewed evidence for pre-aligned cross-client readback and refresh behavior, not automatic new-client alignment.",
+            "service_onboarding": "UC12 provides reviewed source-only onboarding handoff evidence, not runtime registration for calendar-notes.",
             "readiness": "UC14 is the current scoped readiness artifact.",
         },
         "issue_owners": {
@@ -153,8 +153,8 @@ def render_handoff(metadata: dict[str, Any]) -> str:
         for evidence in note["evidence"]:
             lines.append(f"  - `{evidence}`")
         lines.append("")
-    lines.extend(["## Validated Flow Summary", ""])
-    for flow, summary in handoff["validated_flows"].items():
+    lines.extend(["## Covered Flow Claims", ""])
+    for flow, summary in handoff["covered_flow_claims"].items():
         lines.append(f"- `{flow}`: {summary}")
     lines.extend(["", "## Follow-Up Ownership", ""])
     for issue, owner in handoff["issue_owners"].items():

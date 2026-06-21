@@ -174,28 +174,26 @@ client-specific service identities or duplicate project-scoped service
 instances. UC14 must not report readiness by collapsing project service
 presence into target-client import, visibility, reload state, or proof.
 
-## Current Next-Target Judgment
+## Current Queue Judgment
 
-After UC1-UC3 substrate work, the best next target is `UC7` unless active
-evidence proves that narrow governance service-route defect discovery is the
-dominant shared blocker.
+The earlier next-target judgment selected `UC7` after UC1-UC3 because state
+readback was a lower-layer dependency than a single governance service route.
+That sequencing rationale remains useful history, but it is no longer the
+current queue state.
 
-Rationale:
+Current PR #271 evidence has progressed through the ordinary use-case path
+through UC15 as a draft review surface. The next queue pressure is therefore
+not another numeric use-case step; it is remediation of PR-review findings,
+then coordination of the follow-up projection/alignment issues:
 
-- UC5 explicitly depends on project-state readback from #249.
-- UC8 explicitly depends on available tools and readback.
-- UC9 and UC10 require exact state revision/root/service readback across
-  clients before cross-client or refresh claims are meaningful.
-- UC14 and UC15 are claim-ladder/reporting cases; they become trustworthy only
-  after the state-readback layer can state what is proven, unproven, skipped,
-  or client-visible.
-- UC4 has high value for service-route proof, but it is narrower than UC7 and
-  should not be used to skip the shared state/readback substrate.
+- #287: project service graph and target-client projection model;
+- #286: readback vocabulary for cross-client service disparity;
+- #285: explicit alignment/import helper behavior for new clients.
 
-Therefore the controller should pause UC4 as the sole next target and assemble
-`P[7]` next, while preserving UC4 as the next service-route regression target
-after UC7 readback is available or if later evidence identifies an overriding
-service-route dependency.
+Those follow-ups should be sequenced before stronger cross-client readiness,
+new-client alignment, or release-style claims. If any PR remediation invalidates
+UC9, UC10, UC12, UC14, or UC15 claim boundaries, rerun only the affected
+localized package and evaluator loop from a clean harness state.
 
 ## Ambiguities To Reconcile
 

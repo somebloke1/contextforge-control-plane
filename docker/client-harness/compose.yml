@@ -78,6 +78,7 @@ x-pi-contextforge-baseline: &pi-contextforge-baseline
     CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
     CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init
     CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH: /home/agent/.local/state/contextforge-client-harness-runtime/project-init/pi-latest-user-message.json
+    CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT: "1"
     CONTEXTFORGE_SERENA_NO_SYSTEMD: "1"
     CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
 

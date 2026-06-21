@@ -1302,7 +1302,23 @@ def _contains_selection_number(text: str, selection_number: int) -> bool:
 
 def _latest_text_is_approval(text: str) -> bool:
     lowered = text.strip().lower()
-    return lowered in {"approve", "approved", "yes approve", "i approve"} or re.search(r"\bapprove\b", lowered) is not None
+    if _latest_text_has_approval_negation(lowered):
+        return False
+    return (
+        lowered in {"approve", "approved", "yes approve", "i approve", "ok approve", "okay approve"}
+        or lowered.startswith("approve ")
+        or lowered.startswith("approved ")
+    )
+
+
+def _latest_text_has_approval_negation(text: str) -> bool:
+    lowered = text.strip().lower()
+    return bool(
+        re.search(r"\b(?:do\s+not|don't|dont|not|never|no)\s+approve\b", lowered)
+        or re.search(r"\bi\s+(?:do\s+not|don't|dont)\s+approve\b", lowered)
+        or re.search(r"\bdecline\b", lowered)
+        or re.search(r"\bdefer\b", lowered)
+    )
 
 
 def _latest_text_is_decline(text: str) -> bool:
@@ -1379,14 +1395,13 @@ def _require_user_approval_text(project_root: str, challenge_id: str | None, pla
     if not _env_truthy("CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT"):
         return
     text = _read_latest_user_message_text(project_root)
-    lowered = text.lower()
+    lowered = text.strip().lower()
     approved = (
-        "approve" in lowered
-        or "approved" in lowered
+        _latest_text_is_approval(text)
         or (bool(challenge_id) and str(challenge_id) in text)
         or (bool(plan_digest) and str(plan_digest) in text)
     )
-    if not approved:
+    if _latest_text_has_approval_negation(lowered) or not approved:
         raise PermissionError(
             "latest user message does not contain explicit approval text; "
             "ask the user to approve or decline the listed project-local effects before calling approval tools"
@@ -2252,8 +2267,6 @@ def cf_project_init_apply(
     try:
         plan = _matching_cached_plan(project_root, None, None)
         cached_receipts = _matching_cached_receipts(project_root, plan)
-        if cached_receipts is None and receipts is not None:
-            cached_receipts = receipts
         if not isinstance(cached_receipts, list):
             raise ValueError("no cached project-init receipts are available; approve the plan before calling cf_project_init_apply")
         helper.restore_process_local_approval_session(project_root=project_root, plan=plan, receipts=cached_receipts)

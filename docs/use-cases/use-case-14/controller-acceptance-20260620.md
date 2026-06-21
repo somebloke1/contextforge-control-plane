@@ -43,8 +43,9 @@ Remediation:
 
 - replaced broad `uc{n}*acceptance-*.md` matching with exact controller and
   Codex-parity acceptance report patterns;
-- added `acceptance_groups` for UC1 through UC13;
-- required all acceptance groups to be complete in the verifier;
+- added use-case evidence groups for UC1 through UC13;
+- required all evidence groups to be complete in the verifier without treating
+  artifact presence as semantic acceptance;
 - expanded generated non-claims for UC10 hot registration, UC12
   `calendar-notes` runtime readiness, credential validity, and Serena runtime
   indexing/LSP health.
@@ -69,7 +70,7 @@ PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python \
   docker/client-harness/evidence/use-case-14/use-case-14-metadata-20260620T201054Z.json
 ```
 
-Result: `ok=true`, all UC1 through UC13 acceptance groups complete.
+Result: `ok=true`, all UC1 through UC13 use-case evidence groups complete.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python \

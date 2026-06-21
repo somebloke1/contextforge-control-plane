@@ -40,11 +40,22 @@ def run(command: list[str], *, cwd: Path, dry_run: bool) -> dict[str, object]:
     }
 
 
-def docker_ids(command: list[str], *, cwd: Path, dry_run: bool) -> list[str]:
+def docker_ids(command: list[str], *, cwd: Path, dry_run: bool) -> tuple[list[str], dict[str, object]]:
     result = run(command, cwd=cwd, dry_run=dry_run)
     if result["returncode"] != 0:
-        return []
-    return [line.strip() for line in str(result["stdout"]).splitlines() if line.strip()]
+        return [], result
+    return [line.strip() for line in str(result["stdout"]).splitlines() if line.strip()], result
+
+
+def docker_volume_absent(result: dict[str, object], *, dry_run: bool) -> bool:
+    if dry_run:
+        return True
+    if int(result.get("returncode", 0)) == 0:
+        return False
+    stderr = str(result.get("stderr", ""))
+    stdout = str(result.get("stdout", ""))
+    message = f"{stdout}\n{stderr}".lower()
+    return "no such volume" in message or "not found" in message
 
 
 def preserve_workspace(workspace: Path, evidence_dir: Path, *, dry_run: bool) -> dict[str, object]:
@@ -140,12 +151,29 @@ def reset_client(client: str, compose_file: Path, repo_root: Path, *, reset_home
     compose = ["docker", "compose", "-f", str(compose_file)]
     commands.append(run([*compose, "rm", "-sf", *spec["services"]], cwd=repo_root, dry_run=dry_run))
     volume = str(spec["home_volume"])
-    holder_ids = docker_ids(["docker", "ps", "-aq", "--filter", f"volume={volume}"], cwd=repo_root, dry_run=dry_run)
+    holder_ids, holder_ps = docker_ids(["docker", "ps", "-aq", "--filter", f"volume={volume}"], cwd=repo_root, dry_run=dry_run)
+    commands.append(holder_ps)
     if holder_ids:
         commands.append(run(["docker", "rm", "-f", *holder_ids], cwd=repo_root, dry_run=dry_run))
+    volume_rm: dict[str, object] | None = None
     if reset_home_volume:
-        commands.append(run(["docker", "volume", "rm", volume], cwd=repo_root, dry_run=dry_run))
-    remaining = docker_ids(["docker", "ps", "-aq", "--filter", f"volume={volume}"], cwd=repo_root, dry_run=dry_run)
+        volume_rm = run(["docker", "volume", "rm", volume], cwd=repo_root, dry_run=dry_run)
+        commands.append(volume_rm)
+    remaining, remaining_ps = docker_ids(["docker", "ps", "-aq", "--filter", f"volume={volume}"], cwd=repo_root, dry_run=dry_run)
+    commands.append(remaining_ps)
+    volume_inspect: dict[str, object] | None = None
+    volume_absent = True
+    if reset_home_volume:
+        volume_inspect = run(["docker", "volume", "inspect", volume], cwd=repo_root, dry_run=dry_run)
+        commands.append(volume_inspect)
+        volume_absent = docker_volume_absent(volume_inspect, dry_run=dry_run)
+    command_failures = [command for command in commands if int(command.get("returncode", 0)) != 0]
+    tolerated_failures: list[dict[str, object]] = []
+    if volume_inspect is not None and volume_inspect in command_failures and volume_absent:
+        tolerated_failures.append(volume_inspect)
+    hard_failures = [command for command in command_failures if command not in tolerated_failures]
+    if volume_rm is not None and int(volume_rm.get("returncode", 0)) != 0 and docker_volume_absent(volume_rm, dry_run=dry_run):
+        hard_failures = [command for command in hard_failures if command is not volume_rm]
     return {
         "client": client,
         "commands": commands,
@@ -153,8 +181,10 @@ def reset_client(client: str, compose_file: Path, repo_root: Path, *, reset_home
         "authenticated_image": spec.get("authenticated_image"),
         "authenticated_image_preserved": bool(spec.get("authenticated_image")),
         "home_volume_reset_requested": reset_home_volume,
+        "home_volume_absent": volume_absent,
         "remaining_target_volume_containers": remaining,
-        "postcondition": not remaining,
+        "command_failures": hard_failures,
+        "postcondition": not remaining and not hard_failures and volume_absent,
     }
 
 

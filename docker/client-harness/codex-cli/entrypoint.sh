@@ -29,6 +29,7 @@ done < <(env)
 
 config_path="${CODEX_HOME}/config.toml"
 agents_path="${CODEX_HOME}/AGENTS.md"
+target_model='model = "gpt-5.4-mini"'
 mkdir -p "${CODEX_HOME}" "${XDG_RUNTIME_DIR}" "${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT}"
 touch "${config_path}"
 touch "${agents_path}"
@@ -44,9 +45,25 @@ if ! grep -q '^cli_auth_credentials_store = "file"$' "${config_path}"; then
   printf 'cli_auth_credentials_store = "file"\n' >> "${config_path}"
 fi
 
-if ! grep -q '^model = "gpt-5.4-mini"$' "${config_path}"; then
-  printf 'model = "gpt-5.4-mini"\n' >> "${config_path}"
-fi
+tmp_config="$(mktemp)"
+awk -v target_model="${target_model}" '
+  BEGIN { replaced = 0 }
+  /^model[[:space:]]*=/ {
+    if (!replaced) {
+      print target_model
+      replaced = 1
+    }
+    next
+  }
+  { print }
+  END {
+    if (!replaced) {
+      print target_model
+    }
+  }
+' "${config_path}" > "${tmp_config}"
+cat "${tmp_config}" > "${config_path}"
+rm -f "${tmp_config}"
 
 if ! grep -q '^\[projects\."/workspace"\]$' "${config_path}"; then
   {

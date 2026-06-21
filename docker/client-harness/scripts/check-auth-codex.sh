@@ -17,6 +17,7 @@ scripts/run-codex-authenticated.sh bash -lc '
     esac
   done < <(env)
   grep -qx "cli_auth_credentials_store = \"file\"" "${HOME}/.codex/config.toml"
+  test "$(grep -Ec "^model[[:space:]]*=" "${HOME}/.codex/config.toml")" -eq 1
   grep -qx "model = \"gpt-5.4-mini\"" "${HOME}/.codex/config.toml"
   codex --version
   codex login status

@@ -4,8 +4,8 @@ Issue: #256.
 
 ## Status
 
-Queue state: selected after UC13 Codex parity acceptance. UC14 aggregates the
-accepted use-case evidence into a user-facing readiness report that separates
+Queue state: selected after UC13 Codex parity review. UC14 aggregates the
+reviewed use-case evidence into a user-facing readiness report that separates
 proven layers from remaining gaps.
 
 Controller state: package materialized. Acceptance requires report generation,
@@ -27,8 +27,8 @@ for Pi, OpenCode, and Codex, and what remains unproven.
 1. Use the current checkout as the authority.
 2. Use only the current-worktree test venv:
    `run/test-venvs/project-init-workflow/bin/python`.
-3. Gather durable evidence from accepted use-case packages, controller
-   acceptance records, runtime evidence packages, verifier JSON, semantic
+3. Gather durable evidence from use-case packages, controller review records,
+   runtime evidence packages, verifier JSON, semantic
    evaluator reports, and issue/Project coordination records.
 4. Build a structured claim ladder with separate layers for source/tests,
    backend/container, ContextForge route, target-client visibility, ordinary
@@ -92,7 +92,7 @@ controller.
 
 ### evidence_inventory (20 pts)
 
-Expected: the package lists the accepted evidence artifacts it relies on and
+Expected: the package lists the evidence artifacts it relies on and
 flags missing artifacts.
 
 Fail if: missing artifacts are silently ignored.
@@ -154,7 +154,7 @@ PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python \
 
 ## Remediation Routing
 
-- missing accepted evidence: record the gap and either rerun the source use case
+- missing reviewed evidence: record the gap and either rerun the source use case
   or lower the readiness claim;
 - collapsed claim layers: repair the report metadata and visible report before
   evaluator review;
