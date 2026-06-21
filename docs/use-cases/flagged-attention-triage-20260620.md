@@ -3,8 +3,9 @@
 Controller: `codex-thread:019ede5e-c2c8-72b0-8665-2effa6288d05`
 
 Scope: open GitHub issues with `flagged-for-attention` after UC15 handoff
-acceptance. Project #6 is a coordination index; issue bodies, PR comments,
-source files, tests, and controller acceptance artifacts remain authoritative.
+acceptance and the PR #271 ready-for-review transition. Project #6 is a
+coordination index; issue bodies, PR comments, source files, tests, and
+controller acceptance artifacts remain authoritative.
 
 ## Project Hygiene Applied
 
@@ -21,9 +22,9 @@ current controller after the UC15 acceptance comment.
 
 ## Category A: Use Cases With Local Acceptance Evidence
 
-These flagged issues remain open because the draft PR and broader review/merge
-state are still pending, but they have controller-local acceptance artifacts or
-reports in the current branch:
+These flagged issues remain open because broader review/merge state is still
+pending, but they have controller-local acceptance artifacts or reports in the
+current branch:
 
 - #243 UC1: `run/holistic-orchestrator/reports/uc1-controller-acceptance-20260620T010301Z.md`
   and `run/holistic-orchestrator/reports/uc1-codex-parity-acceptance-20260620T121626Z.md`.
@@ -79,13 +80,29 @@ Coordination disposition: promote one bounded cleanup pass if the next queue
 focus remains project-init simplification. Do not treat these as independent
 target-client validation feature work.
 
-## Category C: Active Follow-Up Or Future Work
+## Category C: Remediated Or Packaged Follow-Ups Still Awaiting Review/Merge
+
+- #290 Pi Serena defer continuation/direct-apply bug: helper-level remediation,
+  focused tests, and live Pi verifier evidence are recorded in issue comments.
+  It remains open/In Review until the containing PR/review surface is resolved.
+- #292 Pi post-reload stale-state/raw-status bug: investigation, remediation,
+  source verification, and live Pi verifier evidence are recorded in issue
+  comments. It remains open/In Review until the containing PR/review surface is
+  resolved.
+- #293 agent-invokable reset helper: initial implementation plus follow-up
+  remediation for reset ownership, root derivation, receipt shape, evidence
+  collision safety, and unsafe-root refusal are recorded in issue comments and
+  PR #271. It remains open/In Review pending review/merge.
+- #289 visible placeholder regression guard: methodology-only acceptance is
+  recorded in `docs/use-cases/visible-placeholder-regression-guard-acceptance-20260620.md`
+  and the issue comment. It remains open/In Review pending review/merge; do not
+  reimplement it as a deterministic placeholder detector.
+
+## Category D: Active Follow-Up Or Future Work
 
 - #284 legacy/new ContextForge service, prompt, and resource parity: large
   service-ops/readiness lane. Keep visible, but it is broader than the current
   post-UC cleanup slice.
-- #289 visible placeholder regression guard: narrow, ready now. It improves the
-  dialogue-evaluation method without deterministic prose matching.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
@@ -94,11 +111,12 @@ target-client validation feature work.
 
 ## Current Next Target
 
-Select #289 first because it is narrow, flagged, aligned with the current
-methodology, and can be handled without changing runtime behavior or reopening
-validation semantics. The work is methodology-only:
+Do not select #289 again unless review finds a concrete gap; it is already
+packaged. The next controller-maintenance target is PR/Project hygiene:
 
-- refine reusable evaluator guidance;
-- preserve the no-pattern-matching rule;
-- add source checks that the guidance exists;
-- comment and mark #289 in review after verification.
+- reconcile stale duplicate review surfaces such as draft PR #291 versus the
+  active PR #271 review surface;
+- keep #290/#292/#293/#289 in review rather than active development unless
+  reviewers return actionable defects;
+- then choose between the validation-era cleanup group (#272-#276/#279) and
+  the broader service parity lane (#284) based on dependency pressure.
