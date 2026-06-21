@@ -22,6 +22,8 @@ and reconciled before 4444 is retired.
   `generated/contextforge-284-4445-authenticated-readback-20260621T023120Z.local.json`
 - 4445 authenticated summary:
   `generated/contextforge-284-4445-authenticated-summary-20260621T023120Z.local.md`
+- 4445 Docker migration dry-run plan:
+  `generated/contextforge-284-docker-migration-plan-20260621.local.json`
 - Token values were used only in memory and were not written to the artifacts.
 - No registry, service, prompt, resource, tool, or server mutation was performed
   by these readbacks.
@@ -66,15 +68,23 @@ The ninth server is the project-scoped Serena instance for this repository.
 
 ## Guidance Parity
 
-`scripts/register_tool_guidance.py` currently defines 81 tool-guidance
+`scripts/register_tool_guidance.py` currently defines 81 source tool-guidance
 prompt/resource entries across the canonical services.
 
-Tag-based comparison on the 4444 readback found:
+The first tag-analysis artifact counted 81 `tool-guidance` prompt records and
+81 `tool-guidance` resource records by tag bucket. The later Docker migration
+planner performs a stricter source-keyed comparison against the 81 tool names
+currently defined by `scripts/register_tool_guidance.py` and found:
 
-- 81 `tool-guidance` prompt records keyed by canonical tool tag.
-- 81 `tool-guidance` resource records keyed by canonical tool tag.
-- No prompt tool tags missing a corresponding resource tool tag.
-- No resource tool tags missing a corresponding prompt tool tag.
+- 80 prompt records with a source-defined canonical tool tag.
+- 80 resource records with a source-defined canonical tool tag.
+- `openzeppelin-solidity-contracts-solidity-stablecoin` is missing as a
+  canonical tool tag on both its 4444 prompt and resource records; those records
+  carry `tool-guidance` plus the service tag only.
+- No 4445 prompt or resource guidance records are present.
+
+This means 4444 remains the legacy migration baseline, but the 4445 successor
+should repair this guidance association defect rather than replicate it.
 
 The raw URI comparison initially shows GitHub and web-search URI differences
 because registered resources use upstream underscore names such as
@@ -123,6 +133,18 @@ The existing manifest-driven registry recreation helper is not safe to apply to
 4445 without a Docker-specific migration layer: its default URLs are
 host-local `127.0.0.1:910x` live-surface assumptions, which are not equivalent
 to gateway-container-reachable compose or host endpoints.
+
+The read-only Docker migration planner added for this issue classifies all nine
+baseline services and emits a no-mutation successor profile:
+
+- compose sidecars: `context7`, `mentality`;
+- host-gateway projections requiring review: `ssh-tmux`, `playwright`,
+  `exa-search`, `github`, `web-search`, and the project-scoped Serena service;
+- direct remote target: `openzeppelin-solidity-contracts`;
+- unsafe live defaults: every host-local `127.0.0.1:910x` service must be
+  projected or redesigned before 4445 registration;
+- approval-blocked services: credential-scoped services, single-user/session
+  services, and project-scoped Serena.
 
 ## Controller Disposition
 

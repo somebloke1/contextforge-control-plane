@@ -117,7 +117,11 @@ work, and do not revive post-install validation to close them.
   tools, 0 prompts, and 0 resources. Refreshed full-list 4444 readback is
   recorded in `docs/use-cases/contextforge-service-parity-readback-20260621.md`:
   the host gateway has 9 servers, 104 tools, 83 prompts, 84 resources, and
-  complete 81/81 `tool-guidance` prompt/resource pairing by canonical tool tag.
+  the source guidance map has 81 expected tool-guidance entries. A later strict
+  source-keyed planner check found 80/81 canonical tool tags on 4444 because
+  `openzeppelin-solidity-contracts-solidity-stablecoin` carries only the
+  service tag; the 4445 successor should repair that association rather than
+  replicate it.
   The operator has since clarified that 4444 is scheduled for decommissioning,
   so this readback is a legacy migration baseline rather than a durable
   operating authority. The remaining required boundary is Docker-specific 4445
@@ -148,7 +152,8 @@ target is PR/Project hygiene:
 - keep #138, #143, and #154 deferred as future ideal-form lanes until
   issue-specific implementation or acceptance evidence exists;
 - treat #284's next safe slice as a Docker-specific successor-surface migration
-  plan and implementation path: do not apply live-surface `127.0.0.1:910x`
-  registry recreation defaults directly to 4445, and require explicit parity
-  reconciliation against the 4444 legacy baseline before replacement-readiness
-  is claimed.
+  implementation path guided by
+  `scripts/plan_contextforge_docker_migration.py`: do not apply live-surface
+  `127.0.0.1:910x` registry recreation defaults directly to 4445, repair the
+  stablecoin guidance association, and require explicit parity reconciliation
+  against the 4444 legacy baseline before replacement-readiness is claimed.
