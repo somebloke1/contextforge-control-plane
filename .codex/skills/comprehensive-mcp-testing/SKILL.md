@@ -44,6 +44,8 @@ Supported clients are `pi` and `opencode`. Supported services are defined in `do
 
 For client-visible ContextForge tool tests, provide an ignored harness env file with admin credentials so the runner can create a short-lived scoped token for the selected virtual server. The runner must not print or persist the raw token and must revoke it after the run.
 
+When proving a non-default ContextForge harness, explicitly set both the gateway base URL and an isolated token cache. Do not let helper defaults silently target the legacy 4444 server while the intended proof is against the Docker successor gateway, for example 4445.
+
 Read [method.md](references/method.md) when selecting services, interpreting runner output, dispatching evaluators, or refining the package.
 
 ## Qwen Discipline
