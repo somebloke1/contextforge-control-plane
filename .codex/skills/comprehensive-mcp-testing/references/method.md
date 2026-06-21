@@ -284,13 +284,21 @@ The runner does not decide semantic pass/fail. The evaluator narrative is part o
 ## Active Session Stewardship
 
 Before starting a model-backed Pi/OpenCode slice, capture a short ownership
-preflight:
+preflight. First identify the configured semantic profile from the env file and
+client defaults. Always check active runners and slice-owned containers. Only
+check local model servers, `nvidia-smi`, or `ollama ps` when that profile is
+actually hosted by the local model stack.
+
+```bash
+ps -u "$USER" -o pid,stat,cmd
+docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Command}}'
+```
+
+For local-hosted profiles only, add:
 
 ```bash
 nvidia-smi
 ollama ps
-ps -u "$USER" -o pid,stat,cmd
-docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Command}}'
 ```
 
 Also read any active-slice ledger from the controlling issue comment,
@@ -303,13 +311,16 @@ first.
 
 Interpretation rules:
 
-- GPU memory held by a local model server is not by itself proof of active
-  inference. Treat nonzero `GPU-Util`, active client runner processes, growing
-  transcript files, or a live command session as stronger evidence of an active
-  test turn.
-- A local model server process holding many GiB with `GPU-Util` near 0% is
-  usually resident/idle model state. Do not kill it or declare a hung slice
-  from memory residency alone.
+- GPU and local model server signals are relevant only for a local-hosted
+  semantic profile. Do not spend time checking `nvidia-smi`, `ollama ps`, or a
+  llama server when the active profile is OpenRouter or another remote provider.
+- For local-hosted profiles, GPU memory held by a local model server is not by
+  itself proof of active inference. Treat nonzero `GPU-Util`, active client
+  runner processes, growing transcript files, or a live command session as
+  stronger evidence of an active test turn.
+- For local-hosted profiles, a local model server process holding many GiB with
+  `GPU-Util` near 0% is usually resident/idle model state. Do not kill it or
+  declare a hung slice from memory residency alone.
 - Running `cf-mcp-<service>-<client>-*` containers are slice ownership evidence.
   Reuse, inspect, or stop only containers whose names and evidence paths belong
   to the current comprehensive MCP testing loop.

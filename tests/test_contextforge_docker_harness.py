@@ -1292,8 +1292,9 @@ print(json.dumps(outputs))
             contract,
         )
 
-    def test_llama_probe_records_exact_advertised_model_identity(self) -> None:
-        probe = (ROOT / "docker/client-harness/scripts/probe-llama.sh").read_text(encoding="utf-8")
+    def test_semantic_model_probe_records_exact_advertised_model_identity(self) -> None:
+        probe = (ROOT / "docker/client-harness/scripts/probe-semantic-model.sh").read_text(encoding="utf-8")
+        legacy_probe = (ROOT / "docker/client-harness/scripts/probe-llama.sh").read_text(encoding="utf-8")
         readme = (ROOT / "docker/client-harness/README.md").read_text(encoding="utf-8")
 
         self.assertIn("client_model_identity.py", probe)
@@ -1301,8 +1302,27 @@ print(json.dumps(outputs))
         self.assertIn("--fail-on-stale", probe)
         self.assertIn("evidence/pi-semantic-model-identity.json", probe)
         self.assertIn("evidence/opencode-semantic-model-identity.json", probe)
+        self.assertIn('exec "${ROOT}/scripts/probe-semantic-model.sh" "$@"', legacy_probe)
+        self.assertIn("scripts/probe-semantic-model.sh", readme)
+        self.assertIn("legacy `scripts/probe-llama.sh` name remains only as a compatibility", readme)
         self.assertIn("exact advertised model identity reports", readme)
         self.assertIn("current`, `stale`, or `unverified`", readme)
+
+    def test_comprehensive_mcp_gpu_stewardship_is_local_profile_conditional(self) -> None:
+        skill = (ROOT / ".codex/skills/comprehensive-mcp-testing/SKILL.md").read_text(encoding="utf-8")
+        method = (ROOT / ".codex/skills/comprehensive-mcp-testing/references/method.md").read_text(
+            encoding="utf-8"
+        )
+        skill_line_wrapped = " ".join(skill.split())
+        method_line_wrapped = " ".join(method.split())
+
+        self.assertIn("Determine the configured provider/model first", skill_line_wrapped)
+        self.assertIn("Only run local-model/GPU stewardship checks", skill_line_wrapped)
+        self.assertIn("Only check local model servers, `nvidia-smi`, or `ollama ps`", method_line_wrapped)
+        self.assertIn("when that profile is actually hosted by the local model stack", method_line_wrapped)
+        self.assertIn("For local-hosted profiles only, add:", method)
+        self.assertIn("Do not spend time checking `nvidia-smi`, `ollama ps`, or a", method_line_wrapped)
+        self.assertIn("when the active profile is OpenRouter or another remote provider", method_line_wrapped)
 
 
 if __name__ == "__main__":
