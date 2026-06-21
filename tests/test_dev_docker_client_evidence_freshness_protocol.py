@@ -37,9 +37,12 @@ class DevDockerClientEvidenceFreshnessProtocolTests(unittest.TestCase):
             "known-safe governance list/read call",
             "same OpenCode client Docker run",
             "prove Pi through the extension/shim validation path",
-            "local Qwen/llama.cpp as configuration",
+            "configured semantic-test model profile as configuration",
+            "effective model profile produced by the branch-local semantic",
+            "model env file and generator",
             "exact advertised model",
-            "mark the evidence `stale` when they differ",
+            "mark stale",
+            "evidence when they differ",
         ]
 
         for phrase in required_phrases:

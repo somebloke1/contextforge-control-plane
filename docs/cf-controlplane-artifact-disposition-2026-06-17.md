@@ -37,10 +37,10 @@ legacy/live ContextForge surface may be inspected read-only, but must not be
 mutated. The ContextForge development Docker surface owns mutable registration,
 endpoint, resettable integration, and gateway/app validation. Pi client Docker
 and OpenCode client Docker are the only current client foils, and they target
-the development Docker surface using the already served local llama.cpp-hosted
-Qwen 3.6 A3B model as configuration/default model state. Avoid Codex and Gemini
-client containers unless the user explicitly reopens them. Evidence must
-identify the exercised surface.
+the development Docker surface using the configured semantic-test model profile
+as configuration/default model state. Avoid Codex and Gemini client containers
+unless the user explicitly reopens them. Evidence must identify the exercised
+surface.
 
 ## Evidence Commands
 

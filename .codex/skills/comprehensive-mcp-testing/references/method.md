@@ -23,7 +23,11 @@ Each test slice must declare:
 
 - `service`: ContextForge service slug.
 - `client`: `pi` or `opencode`.
-- `model`: qwen-backed tested assistant, currently local `qwen3.6-a3b` in the harness.
+- `model`: configured semantic-test model profile from the client harness
+  environment. Record the effective values produced by the branch-local
+  semantic model env file and generator, including `CONTEXTFORGE_TEST_MODEL`
+  and the client-specific default model variables. Do not hardcode a provider
+  or model name in the test package.
 - `state`: target-client virgin reset; no stale container/home/workspace state.
 - `behavior_bundle`: the small user-behavior slice being explored.
 - `prompt`: natural, short, sufficient user request.
@@ -55,10 +59,10 @@ target clients by dispatched runner agents. Each bundle should explore one
 plausible user behavior against one service/client surface, then return a
 compact evidence package for semantic evaluator review.
 
-Do not build one large monolithic test story. Qwen-backed tested assistants
-have a 128k context limit, and oversized sessions hide the point of failure.
-Coverage should come from many smallish tests with fresh state, compact prompts,
-and explicit evidence roots.
+Do not build one large monolithic test story. Tested assistants have finite
+usable context even when the configured provider/model changes, and oversized
+sessions hide the point of failure. Coverage should come from many smallish
+tests with fresh state, compact prompts, and explicit evidence roots.
 
 Useful behavior dimensions include:
 
@@ -101,10 +105,10 @@ The runner may help create, execute, package, and index these bundles. It must
 not score the meaning of prose. Semantic evaluation belongs to the SO or a
 gpt-5.5/non-Spark evaluator.
 
-## Qwen-Sized Evaluation Packets
+## Model-Sized Evaluation Packets
 
-Build evaluator packets for qwen-limited tested-assistant sessions as compact
-indexes, not transcript dumps. Each packet should begin with a manifest that
+Build evaluator packets for tested-assistant sessions as compact indexes, not
+transcript dumps. Each packet should begin with a manifest that
 names the use case or service slice, client, model, session ids, terminal
 boundary, prompt count, generation count, raw artifact paths, verifier status,
 fatal criteria, and defect-routing target.
@@ -233,7 +237,7 @@ Classify as cross-MCP (#316) when the dominant failure is:
 - client token/auth propagation
 - noisy helper state shown to user
 - target-client reset/idempotency
-- qwen context blow-up or timeout caused by too much tool universe or prompt bulk
+- semantic-model context blow-up or timeout caused by too much tool universe or prompt bulk
 - runner/evidence package defect
 
 Classify as service-specific when the dominant failure is:
@@ -270,7 +274,7 @@ The runner does not decide semantic pass/fail. The evaluator narrative is part o
 
 ## Active Session Stewardship
 
-Before starting a qwen-backed Pi/OpenCode slice, capture a short ownership
+Before starting a model-backed Pi/OpenCode slice, capture a short ownership
 preflight:
 
 ```bash
@@ -285,7 +289,8 @@ controller notes, or latest `run-summary.json`. The ledger must name, at
 minimum, the service, client, container, activation/test session ids, evidence
 root, start time, current state, and owner. Keep it terse enough to update
 often. Its purpose is not ceremony; it prevents the controller from launching a
-second qwen turn merely because the conversational context forgot the first.
+second model-backed turn merely because the conversational context forgot the
+first.
 
 Interpretation rules:
 
@@ -293,9 +298,9 @@ Interpretation rules:
   inference. Treat nonzero `GPU-Util`, active client runner processes, growing
   transcript files, or a live command session as stronger evidence of an active
   test turn.
-- A model server such as `llama-server` holding many GiB with `GPU-Util` near
-  0% is usually resident/idle model state. Do not kill it or declare a hung
-  slice from memory residency alone.
+- A local model server process holding many GiB with `GPU-Util` near 0% is
+  usually resident/idle model state. Do not kill it or declare a hung slice
+  from memory residency alone.
 - Running `cf-mcp-<service>-<client>-*` containers are slice ownership evidence.
   Reuse, inspect, or stop only containers whose names and evidence paths belong
   to the current comprehensive MCP testing loop.
@@ -310,9 +315,9 @@ Interpretation rules:
 - If a stale slice-owned container is idle, preserve its transcript/evidence
   before cleanup. Cleanup should reset by deleting the whole slice-owned
   container/home/workspace state, not by hand-calculating deltas inside it.
-- If GPU utilization is pegged, defer new qwen-backed launches until the active
-  owner is identified. A controller may continue deterministic repo/GitHub work
-  while waiting.
+- If GPU utilization is pegged during a local-model profile, defer new
+  model-backed launches until the active owner is identified. A controller may
+  continue deterministic repo/GitHub work while waiting.
 
 State transitions:
 
@@ -326,7 +331,7 @@ State transitions:
 
 Before fan-out, there should be no ambiguous `running` or
 `stale-needs-preservation` slice for the same client/service. If there is, do
-not dispatch another qwen-backed runner for that slice until the state is
+not dispatch another model-backed runner for that slice until the state is
 resolved.
 
 ## Controller Discipline
