@@ -4,10 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+import urllib.error
+import urllib.request
 
 import contextforge_mcp_wrapper as gateway
 import control_plane_registry_discipline as registry_discipline
@@ -26,6 +30,7 @@ from project_init_common import (
 
 OWNER = "admin@contextforge.dev"
 VISIBILITY = "public"
+SCHEMA_URI = "contextforge://diagnostics/project-init-guidance-registration/v1"
 
 SQL_TRIGGER_RE = re.compile(r"\b(update|delete|drop|insert|alter|truncate|exec|execute|merge)\s+", re.IGNORECASE)
 SHELL_CHAIN_RE = re.compile(r"(?<![`\\])(?:&&|\|\||;\s*(?:rm|curl|wget|bash|sh|python|python3|node|npm|uv)\b)")
@@ -107,13 +112,74 @@ def rendered_messages_text(rendered: Any) -> str:
     return "\n".join(part for part in parts if part)
 
 
-def api_request(method: str, path: str, token: str, payload: dict[str, Any] | None = None) -> Any:
+def target_request(method: str, base_url: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+    headers = {"Accept": "application/json"}
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode()
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}{path}",
+        data=data,
+        headers=headers,
+        method=method,
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        body = response.read()
+    return json.loads(body) if body else None
+
+
+def target_login_token(base_url: str, email: str, password: str) -> str:
+    for login_path in ("/auth/login", "/auth/email/login"):
+        try:
+            payload = target_request("POST", base_url, login_path, {"email": email, "password": password})
+        except urllib.error.HTTPError as exc:
+            if exc.code in {404, 405}:
+                continue
+            raise
+        token = payload.get("access_token") if isinstance(payload, dict) else None
+        if isinstance(token, str) and token:
+            return token
+    raise RuntimeError(f"ContextForge login did not return an access token for {base_url.rstrip('/')}")
+
+
+def api_request(
+    method: str,
+    path: str,
+    token: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    base_url: str | None = None,
+) -> Any:
     registry_discipline.assert_public_contextforge_api_path(method, path)
+    if base_url:
+        headers = {"Accept": "application/json"}
+        data = None
+        if payload is not None:
+            data = json.dumps(payload).encode()
+            headers["Content-Type"] = "application/json"
+        headers["Authorization"] = f"Bearer {token}"
+        request = urllib.request.Request(
+            f"{base_url.rstrip('/')}{path}",
+            data=data,
+            headers=headers,
+            method=method,
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read()
+        return json.loads(body) if body else None
     return gateway._request(method, path, token=token, body=payload)
 
 
-def api_items(method: str, path: str, token: str, payload: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    return gateway._items(api_request(method, path, token, payload=payload))
+def api_items(
+    method: str,
+    path: str,
+    token: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    base_url: str | None = None,
+) -> list[dict[str, Any]]:
+    return gateway._items(api_request(method, path, token, payload=payload, base_url=base_url))
 
 
 def by_resource_uri(resources: list[dict[str, Any]], uri: str) -> dict[str, Any] | None:
@@ -143,10 +209,19 @@ def preflight_prompt(name: str, template: str) -> None:
     security.detect_malicious_patterns(template, content_type=name, user_email=OWNER)
 
 
-def upsert_resource(token: str, *, name: str, uri: str, content: str, description: str, tags: list[str]) -> dict[str, Any]:
+def upsert_resource(
+    token: str,
+    *,
+    name: str,
+    uri: str,
+    content: str,
+    description: str,
+    tags: list[str],
+    base_url: str | None = None,
+) -> dict[str, Any]:
     safe_content = sanitize_scanner_text(content)
     preflight_resource(name, uri, safe_content)
-    resources = api_items("GET", "/resources?include_inactive=true&limit=1000", token)
+    resources = api_items("GET", "/resources?include_inactive=true&limit=1000", token, base_url=base_url)
     existing = by_resource_uri(resources, uri)
     payload = {
         "uri": uri,
@@ -162,14 +237,22 @@ def upsert_resource(token: str, *, name: str, uri: str, content: str, descriptio
         "annotations": {"audience": ["assistant"], "priority": 0.85},
     }
     if existing:
-        return api_request("PUT", f"/resources/{existing['id']}", token, payload=payload)
-    return api_request("POST", "/resources", token, payload={"resource": payload, "visibility": VISIBILITY})
+        return api_request("PUT", f"/resources/{existing['id']}", token, payload=payload, base_url=base_url)
+    return api_request("POST", "/resources", token, payload={"resource": payload, "visibility": VISIBILITY}, base_url=base_url)
 
 
-def upsert_prompt(token: str, *, name: str, template: str, description: str, tags: list[str]) -> dict[str, Any]:
+def upsert_prompt(
+    token: str,
+    *,
+    name: str,
+    template: str,
+    description: str,
+    tags: list[str],
+    base_url: str | None = None,
+) -> dict[str, Any]:
     safe_template = sanitize_scanner_text(template)
     preflight_prompt(name, safe_template)
-    prompts = api_items("GET", "/prompts?include_inactive=true&limit=1000", token)
+    prompts = api_items("GET", "/prompts?include_inactive=true&limit=1000", token, base_url=base_url)
     existing = by_prompt_name(prompts, name)
     payload = {
         "name": name,
@@ -185,8 +268,8 @@ def upsert_prompt(token: str, *, name: str, template: str, description: str, tag
         "isActive": True,
     }
     if existing:
-        return api_request("PUT", f"/prompts/{existing['id']}", token, payload=payload)
-    return api_request("POST", "/prompts", token, payload={"prompt": payload, "visibility": VISIBILITY})
+        return api_request("PUT", f"/prompts/{existing['id']}", token, payload=payload, base_url=base_url)
+    return api_request("POST", "/prompts", token, payload={"prompt": payload, "visibility": VISIBILITY}, base_url=base_url)
 
 
 def prompt_id(prompt: dict[str, Any]) -> str:
@@ -247,9 +330,15 @@ def retired_serena_guidance_resource_ids(resources: list[dict[str, Any]], keep_i
     return ids
 
 
-def associate_serena_guidance(token: str, prompt: dict[str, Any], resource: dict[str, Any]) -> list[str]:
-    servers = api_items("GET", "/servers?include_inactive=true&limit=1000", token)
-    resources = api_items("GET", "/resources?include_inactive=true&limit=1000", token)
+def associate_serena_guidance(
+    token: str,
+    prompt: dict[str, Any],
+    resource: dict[str, Any],
+    *,
+    base_url: str | None = None,
+) -> list[str]:
+    servers = api_items("GET", "/servers?include_inactive=true&limit=1000", token, base_url=base_url)
+    resources = api_items("GET", "/resources?include_inactive=true&limit=1000", token, base_url=base_url)
     retired_resource_ids = retired_serena_guidance_resource_ids(resources, resource_id(resource))
     associated: list[str] = []
     for server in servers:
@@ -270,12 +359,12 @@ def associate_serena_guidance(token: str, prompt: dict[str, Any], resource: dict
             "ownerEmail": OWNER,
             "visibility": VISIBILITY,
         }
-        api_request("PUT", f"/servers/{server['id']}", token, payload=payload)
+        api_request("PUT", f"/servers/{server['id']}", token, payload=payload, base_url=base_url)
         associated.append(str(server["name"]))
     return associated
 
 
-def verify_prompt_render(token: str, prompt: dict[str, Any]) -> None:
+def verify_prompt_render(token: str, prompt: dict[str, Any], *, base_url: str | None = None) -> None:
     args = {
         "project_name": "cf-controlplane",
         "project_root": "/home/dgk/workspace/cf-controlplane",
@@ -293,7 +382,7 @@ def verify_prompt_render(token: str, prompt: dict[str, Any]) -> None:
         "project_init_hook_prompt_state": "active",
         "prompt_version": PROMPT_VERSION,
     }
-    rendered = api_request("POST", f"/prompts/{prompt_id(prompt)}", token, payload=args)
+    rendered = api_request("POST", f"/prompts/{prompt_id(prompt)}", token, payload=args, base_url=base_url)
     text = rendered_messages_text(rendered)
     if "ContextForge project initialization" not in text:
         raise RuntimeError("project_init_prompt render did not include expected title")
@@ -310,20 +399,77 @@ def preflight_all_artifacts() -> None:
     preflight_prompt(SERENA_GUIDANCE_PROMPT_NAME, sanitize_scanner_text(SERENA_GUIDANCE_TEXT))
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Register ContextForge project-init prompt/resource artifacts.")
-    parser.add_argument("--dry-run", action="store_true", help="Preflight generated prompt/resource text without mutating ContextForge.")
-    args = parser.parse_args(argv)
-    if args.dry_run:
-        preflight_all_artifacts()
+def target_metadata(base_url: str | None, env_file: Path | None) -> dict[str, Any]:
+    return {
+        "base_url": base_url or gateway.GATEWAY_BASE,
+        "env_file": str(env_file) if env_file else str(gateway.CONFIG_ENV),
+        "env_values_recorded": False,
+    }
+
+
+def dry_run_summary(base_url: str | None, env_file: Path | None) -> dict[str, Any]:
+    return {
+        "schema_uri": SCHEMA_URI,
+        "apply_requested": False,
+        "mutation_performed": False,
+        "target": target_metadata(base_url, env_file),
+        "resources": {"create_or_update": 2},
+        "prompts": {"create_or_update": 2},
+        "server_association": {"serena_guidance": "planned"},
+        "non_actions": [
+            "dry-run; no ContextForge API mutation",
+            "dry-run; no prompt, resource, server, gateway, tool, Docker, systemd, or client mutation",
+            "dry-run; target env values not read",
+        ],
+    }
+
+
+def output_summary(summary: dict[str, Any], *, json_output: bool) -> None:
+    if json_output:
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return
+    if not summary.get("apply_requested"):
         print(f"would_register project_init_prompt name={PROJECT_INIT_PROMPT_NAME}")
         print(f"would_register project_init_resource uri={PROJECT_INIT_RESOURCE_URI}")
         print(f"would_register serena_project_instance_guidance name={SERENA_GUIDANCE_PROMPT_NAME}")
         print(f"would_register serena guidance resource uri={SERENA_GUIDANCE_RESOURCE_URI}")
+        return
+    print(f"registered project_init_prompt id={summary['ids']['project_prompt']}")
+    print(f"registered project_init_resource id={summary['ids']['project_resource']}")
+    print(f"registered serena_project_instance_guidance id={summary['ids']['serena_prompt']}")
+    print(f"registered serena guidance resource id={summary['ids']['serena_resource']}")
+    associated = summary.get("associated_serena_servers") or []
+    print(f"associated_serena_servers={','.join(associated) if associated else '<none>'}")
+    print(f"verified_render_at={summary['verified_render_at']}")
+
+
+def load_token_for_target(base_url: str | None, env_file: Path | None) -> str:
+    if bool(base_url) != bool(env_file):
+        raise RuntimeError("--base-url and --env-file must be supplied together")
+    if base_url and env_file:
+        config = gateway._read_env(env_file)
+        email = config.get("PLATFORM_ADMIN_EMAIL")
+        password = config.get("PLATFORM_ADMIN_PASSWORD")
+        if not email or not password:
+            raise RuntimeError(f"missing PLATFORM_ADMIN_EMAIL or PLATFORM_ADMIN_PASSWORD in {env_file}")
+        return target_login_token(base_url, email, password)
+    env = gateway._read_env(gateway.CONFIG_ENV)
+    return gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Register ContextForge project-init prompt/resource artifacts.")
+    parser.add_argument("--dry-run", action="store_true", help="Preflight generated prompt/resource text without mutating ContextForge.")
+    parser.add_argument("--base-url", help="Target ContextForge base URL; omit to use wrapper defaults.")
+    parser.add_argument("--env-file", type=Path, help="Target env file; omit to use wrapper defaults.")
+    parser.add_argument("--json", action="store_true", help="Print structured JSON summary.")
+    args = parser.parse_args(argv)
+    if args.dry_run:
+        preflight_all_artifacts()
+        output_summary(dry_run_summary(args.base_url, args.env_file), json_output=args.json)
         return 0
 
-    env = gateway._read_env(gateway.CONFIG_ENV)
-    token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
+    token = load_token_for_target(args.base_url, args.env_file)
     project_resource = upsert_resource(
         token,
         name=PROJECT_INIT_RESOURCE_NAME,
@@ -331,6 +477,7 @@ def main(argv: list[str] | None = None) -> int:
         content=PROJECT_INIT_TEXT,
         description="ContextForge project initialization guidance for Codex hooks.",
         tags=["contextforge", "project-init", PROMPT_VERSION],
+        base_url=args.base_url,
     )
     project_prompt = upsert_prompt(
         token,
@@ -338,6 +485,7 @@ def main(argv: list[str] | None = None) -> int:
         template=PROJECT_INIT_TEXT,
         description="Render project initialization guidance for a detected Codex project.",
         tags=["contextforge", "project-init", PROMPT_VERSION],
+        base_url=args.base_url,
     )
     serena_resource = upsert_resource(
         token,
@@ -346,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
         content=SERENA_GUIDANCE_TEXT,
         description="Per-project Serena instance guidance for ContextForge virtual servers.",
         tags=["contextforge", "serena", "project-instance", PROMPT_VERSION],
+        base_url=args.base_url,
     )
     serena_prompt = upsert_prompt(
         token,
@@ -353,17 +502,31 @@ def main(argv: list[str] | None = None) -> int:
         template=SERENA_GUIDANCE_TEXT,
         description="Guidance attached only to real Serena virtual servers.",
         tags=["contextforge", "serena", "project-instance", PROMPT_VERSION],
+        base_url=args.base_url,
     )
-    associated = associate_serena_guidance(token, serena_prompt, serena_resource)
-    verify_prompt_render(token, project_prompt)
+    associated = associate_serena_guidance(token, serena_prompt, serena_resource, base_url=args.base_url)
+    verify_prompt_render(token, project_prompt, base_url=args.base_url)
 
     refreshed_at = datetime.now(timezone.utc).isoformat()
-    print(f"registered project_init_prompt id={project_prompt['id']}")
-    print(f"registered project_init_resource id={project_resource['id']}")
-    print(f"registered serena_project_instance_guidance id={serena_prompt['id']}")
-    print(f"registered serena guidance resource id={serena_resource['id']}")
-    print(f"associated_serena_servers={','.join(associated) if associated else '<none>'}")
-    print(f"verified_render_at={refreshed_at}")
+    output_summary(
+        {
+            "schema_uri": SCHEMA_URI,
+            "apply_requested": True,
+            "mutation_performed": True,
+            "target": target_metadata(args.base_url, args.env_file),
+            "ids": {
+                "project_prompt": project_prompt["id"],
+                "project_resource": project_resource["id"],
+                "serena_prompt": serena_prompt["id"],
+                "serena_resource": serena_resource["id"],
+            },
+            "resources": {"create_or_update": 2},
+            "prompts": {"create_or_update": 2},
+            "associated_serena_servers": associated,
+            "verified_render_at": refreshed_at,
+        },
+        json_output=args.json,
+    )
     return 0
 
 

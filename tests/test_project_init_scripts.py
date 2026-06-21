@@ -1963,10 +1963,13 @@ class SerenaManagerTests(unittest.TestCase):
             path: str,
             token: str,
             payload: dict[str, object] | None = None,
+            *,
+            base_url: str | None = None,
         ) -> dict[str, object]:
             self.assertEqual("POST", method)
             self.assertEqual("/prompts/prompt-id", path)
             self.assertEqual("token", token)
+            self.assertIsNone(base_url)
             calls.append(payload)
             text = prompt_registration.PROJECT_INIT_TEXT
             for key, value in (payload or {}).items():
@@ -1980,12 +1983,120 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertEqual("codex", (calls[0] or {})["target_client"])
         self.assertEqual("/home/dgk/workspace/cf-controlplane", (calls[0] or {})["project_root"])
 
+    def test_prompt_registration_target_dry_run_json_does_not_read_env(self) -> None:
+        original_read_env = prompt_registration.gateway._read_env
+        try:
+            def fail_read_env(_path: object) -> dict[str, str]:
+                raise AssertionError("target dry-run must not read env values")
+
+            prompt_registration.gateway._read_env = fail_read_env  # type: ignore[assignment]
+
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                code = prompt_registration.main(
+                    [
+                        "--dry-run",
+                        "--base-url",
+                        "http://127.0.0.1:4445",
+                        "--env-file",
+                        "/tmp/contextforge.env",
+                        "--json",
+                    ]
+                )
+        finally:
+            prompt_registration.gateway._read_env = original_read_env  # type: ignore[assignment]
+
+        self.assertEqual(0, code)
+        parsed = json.loads(stdout.getvalue())
+        self.assertFalse(parsed["mutation_performed"])
+        self.assertEqual("http://127.0.0.1:4445", parsed["target"]["base_url"])
+        self.assertEqual("/tmp/contextforge.env", parsed["target"]["env_file"])
+        self.assertFalse(parsed["target"]["env_values_recorded"])
+        self.assertIn("dry-run; target env values not read", parsed["non_actions"])
+
+    def test_prompt_registration_target_apply_passes_base_url_and_json_target_metadata(self) -> None:
+        calls: list[tuple[str, str | None, str]] = []
+
+        def fake_read_env(path: Path) -> dict[str, str]:
+            self.assertEqual(Path("/tmp/contextforge.env"), path)
+            return {"PLATFORM_ADMIN_EMAIL": "admin@example.test", "PLATFORM_ADMIN_PASSWORD": "password"}
+
+        def fake_login(base_url: str, email: str, password: str) -> str:
+            self.assertEqual("http://127.0.0.1:4445", base_url)
+            self.assertEqual("admin@example.test", email)
+            self.assertEqual("password", password)
+            return "target-token"
+
+        def fake_resource(token: str, **kwargs: object) -> dict[str, object]:
+            self.assertEqual("target-token", token)
+            self.assertEqual("http://127.0.0.1:4445", kwargs.get("base_url"))
+            calls.append(("resource", str(kwargs.get("base_url")), str(kwargs["name"])))
+            return {"id": f"resource-{len(calls)}"}
+
+        def fake_prompt(token: str, **kwargs: object) -> dict[str, object]:
+            self.assertEqual("target-token", token)
+            self.assertEqual("http://127.0.0.1:4445", kwargs.get("base_url"))
+            calls.append(("prompt", str(kwargs.get("base_url")), str(kwargs["name"])))
+            return {"id": f"prompt-{len(calls)}"}
+
+        def fake_associate(token: str, prompt: dict[str, object], resource: dict[str, object], *, base_url: str | None = None) -> list[str]:
+            self.assertEqual("target-token", token)
+            self.assertEqual("http://127.0.0.1:4445", base_url)
+            return ["serena_cf_controlplane_d46fe58a2a20_server"]
+
+        def fake_verify(token: str, prompt: dict[str, object], *, base_url: str | None = None) -> None:
+            self.assertEqual("target-token", token)
+            self.assertEqual("http://127.0.0.1:4445", base_url)
+
+        with (
+            mock.patch.object(prompt_registration.gateway, "_read_env", side_effect=fake_read_env),
+            mock.patch.object(prompt_registration, "target_login_token", side_effect=fake_login),
+            mock.patch.object(prompt_registration, "upsert_resource", side_effect=fake_resource),
+            mock.patch.object(prompt_registration, "upsert_prompt", side_effect=fake_prompt),
+            mock.patch.object(prompt_registration, "associate_serena_guidance", side_effect=fake_associate),
+            mock.patch.object(prompt_registration, "verify_prompt_render", side_effect=fake_verify),
+            contextlib.redirect_stdout(io.StringIO()) as stdout,
+        ):
+            code = prompt_registration.main(
+                [
+                    "--base-url",
+                    "http://127.0.0.1:4445",
+                    "--env-file",
+                    "/tmp/contextforge.env",
+                    "--json",
+                ]
+            )
+
+        self.assertEqual(0, code)
+        self.assertEqual(
+            [
+                ("resource", "http://127.0.0.1:4445", common.PROJECT_INIT_RESOURCE_NAME),
+                ("prompt", "http://127.0.0.1:4445", common.PROJECT_INIT_PROMPT_NAME),
+                ("resource", "http://127.0.0.1:4445", common.SERENA_GUIDANCE_RESOURCE_NAME),
+                ("prompt", "http://127.0.0.1:4445", common.SERENA_GUIDANCE_PROMPT_NAME),
+            ],
+            calls,
+        )
+        parsed = json.loads(stdout.getvalue())
+        self.assertTrue(parsed["mutation_performed"])
+        self.assertEqual("http://127.0.0.1:4445", parsed["target"]["base_url"])
+        self.assertEqual("/tmp/contextforge.env", parsed["target"]["env_file"])
+        self.assertFalse(parsed["target"]["env_values_recorded"])
+        self.assertEqual(["serena_cf_controlplane_d46fe58a2a20_server"], parsed["associated_serena_servers"])
+
     def test_serena_guidance_association_replaces_retired_resources(self) -> None:
         requests: list[tuple[str, str, dict[str, object] | None]] = []
 
-        def fake_items(method: str, path: str, token: str, payload: dict[str, object] | None = None) -> list[dict[str, object]]:
+        def fake_items(
+            method: str,
+            path: str,
+            token: str,
+            payload: dict[str, object] | None = None,
+            *,
+            base_url: str | None = None,
+        ) -> list[dict[str, object]]:
             self.assertEqual("GET", method)
             self.assertEqual("token", token)
+            self.assertIsNone(base_url)
             if path == "/servers?include_inactive=true&limit=1000":
                 return [
                     {
@@ -2010,9 +2121,12 @@ class SerenaManagerTests(unittest.TestCase):
             path: str,
             token: str,
             payload: dict[str, object] | None = None,
+            *,
+            base_url: str | None = None,
         ) -> dict[str, object]:
             self.assertEqual("PUT", method)
             self.assertEqual("token", token)
+            self.assertIsNone(base_url)
             requests.append((method, path, payload))
             return {"id": "server-id"}
 
