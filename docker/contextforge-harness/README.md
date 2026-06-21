@@ -174,14 +174,23 @@ explicit step after credential-env preflight and direct reachability evidence.
 
 ## GitHub Successor MCP Transceiver
 
-The GitHub sidecar fronts `@modelcontextprotocol/server-github` through the
-stock ContextForge bridge. It reads credentials from ignored
-`server-instances/github/.env` via an optional Compose `env_file`. Do not pass
-host shell API-token variables through Compose, and do not copy or print token
-values. A clean checkout can still launch the bridge; real GitHub tool calls
-require a credential in the ignored env file. The image installs
-`@modelcontextprotocol/server-github@2025.4.8` at build time and runs the
-installed `mcp-server-github` binary at runtime.
+The GitHub sidecar fronts GitHub's maintained official MCP server
+(`ghcr.io/github/github-mcp-server:v1.4.0`) through the stock ContextForge
+bridge. The image copies the pinned official binary from GHCR and runs
+`github-mcp-server stdio` behind `mcpgateway.translate`. This keeps
+ContextForge registration on the bridge-owned `/mcp` and `/sse` surfaces while
+avoiding the deprecated `@modelcontextprotocol/server-github` npm package.
+
+The official server also supports native HTTP, but that mode enforces GitHub
+Authorization at the upstream HTTP boundary. The harness deliberately keeps the
+stdio bridge so credentials remain inside the sidecar env-file boundary instead
+of requiring ContextForge to forward GitHub PAT headers. It reads credentials
+from ignored `server-instances/github/.env` via an optional Compose `env_file`.
+Do not pass host shell API-token variables through Compose, and do not copy or
+print token values. A clean checkout can build the image, but the sidecar must
+fail fast unless the ignored env file supplies `GITHUB_PERSONAL_ACCESS_TOKEN`;
+otherwise the bridge can expose a misleading transport surface after the
+upstream stdio server exits.
 
 ```sh
 docker compose -f compose.yml up -d --build contextforge-gateway github-transceiver
