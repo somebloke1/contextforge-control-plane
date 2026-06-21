@@ -208,6 +208,12 @@ registry is process-local unless a separate session-affinity backend is
 configured. Without those settings, stateful workflows can degrade into
 per-call upstream sessions.
 
+Dev probe scripts disable optional MCP DELETE-session cleanup when using
+server-scoped probe tokens. The probe success criterion is initialize/list/call
+through the virtual MCP endpoint plus revocation of the ephemeral token through
+the ContextForge token API; it is not proof that the same scoped token can
+terminate a gateway session.
+
 ```sh
 docker compose -f compose.yml up -d --build contextforge-gateway playwright-transceiver
 python ../../scripts/plan_contextforge_docker_migration.py

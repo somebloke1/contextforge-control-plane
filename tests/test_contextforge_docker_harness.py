@@ -189,6 +189,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("def revoke_probe_token", source)
         self.assertIn('print(f"probe_token_id={probe_token_id}")', source)
         self.assertIn("virtual_safe_probe_status=passed", source)
+        self.assertIn("terminate_on_close=False", source)
         self.assertNotIn("print(probe_token", source)
         self.assertNotIn("print(access_token", source)
 
@@ -213,6 +214,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('\"expires_in_days\": 1', source)
         self.assertIn("def revoke_probe_token", source)
         self.assertIn('\"DELETE\"', source)
+        self.assertIn("terminate_on_close=False", source)
         self.assertIn('print(f\"probe_token_id={probe_token_id}\")', source)
         self.assertNotIn("print(probe_token", source)
         self.assertNotIn("print(access_token", source)
