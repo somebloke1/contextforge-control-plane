@@ -48,6 +48,23 @@ When proving a non-default ContextForge harness, explicitly set both the gateway
 
 Read [method.md](references/method.md) when selecting services, interpreting runner output, dispatching evaluators, or refining the package.
 
+## Host-Side Validation Floor
+
+Do not stop at "pytest is unavailable." This repository's default Python
+validation surface is `unittest` plus `py_compile`; pytest absence is not a
+permission to skip focused tests or post a passive limitation. If the
+branch-local `.venv` exists but lacks pytest, run the applicable `unittest`,
+`py_compile`, skill validation, Node syntax check, or runner dry-run that
+matches the changed files.
+
+If a changed slice genuinely requires a dependency that the branch-local
+`.venv` lacks, create or reuse an ignored current-worktree test venv such as
+`run/test-venvs/<suite>/`. Never borrow a sibling checkout venv, and never
+claim validation is blocked solely because the root has no dependency manifest.
+If no executable validation is possible, record a concrete blocker with owner,
+issue/PR link, and the attempted fallback commands before making any readiness
+claim.
+
 ## Qwen Discipline
 
 Assume tested Pi/OpenCode qwen sessions have limited usable context. Activate only the target service for a service slice unless testing multi-service behavior. Avoid all-service activation, huge tool catalogs, and long prompt narratives. Split large services into smaller function groups if needed, but preserve full untruncated use-case stories in the package and evidence.

@@ -34,6 +34,11 @@ Work toward a systemd-controlled ContextForge installation that:
 - The Python environment was created with `uv venv .venv`.
 - Use `uv pip install --python .venv/bin/python ...` for dependency
   installation with the currently installed `uv`.
+- If a valuable or integral local development/test enabler is missing and can
+  be installed into the current worktree `.venv`, install it there and record
+  the command/evidence. Do not rely on the user for ordinary local `.venv`
+  package installation, and do not treat a missing installable package as a
+  reason to skip validation.
 - Do not assume `python -m pip` exists until verified.
 - Keep `.venv/` out of Git.
 

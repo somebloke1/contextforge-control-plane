@@ -66,6 +66,36 @@ Disallowed deterministic checks:
 
 Structured JSON may be checked structurally, but semantic adequacy still requires non-deterministic evaluation.
 
+## Host-Side Validation And Dependency Gaps
+
+Missing pytest is not an acceptable stopping condition for this repository.
+The ordinary host-side validation fallback order is:
+
+1. Run the focused `unittest` module or test case that covers the changed
+   files.
+2. Run `py_compile` for touched Python scripts and tests.
+3. Run skill validation for changed skills.
+4. Run Node syntax checks for touched JavaScript harness or plugin files.
+5. Run the runner in the smallest no-build/dry-run mode that exercises the
+   changed invocation path.
+
+Only after those options are impossible should a dependency gap be reported as
+a blocker. A valid blocker report must include:
+
+- the current-worktree Python path that was used or missing;
+- the focused commands attempted;
+- why `unittest`/`py_compile`/skill validation could not cover the slice;
+- the owning issue or PR where the blocker will be retired;
+- the exact next remediation, such as creating `run/test-venvs/<suite>/` or
+  adding a root dependency manifest.
+
+Use the current worktree only. If `.venv` is absent or lacks a required package,
+create an ignored isolated venv under `run/test-venvs/<suite>/` when that is
+needed for validation. Do not borrow sibling checkout virtual environments or
+replace executable validation with a passive PR note. The phrase "no root
+dependency declaration" may explain why bootstrap is not standardized; it does
+not by itself justify skipping focused validation.
+
 ## Prompt Shape
 
 Prefer prompts like:
