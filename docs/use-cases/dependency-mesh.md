@@ -182,18 +182,20 @@ That sequencing rationale remains useful history, but it is no longer the
 current queue state.
 
 Current PR #271 evidence has progressed through the ordinary use-case path
-through UC15 as a draft review surface. The next queue pressure is therefore
-not another numeric use-case step; it is remediation of PR-review findings,
-then coordination of the follow-up projection/alignment issues:
+through UC15 as a draft review surface. The #293-#296 issue-level review wave
+has been integrated into the PR head, so the next queue pressure is not another
+numeric use-case step. The next strategic pressure is coordination of the
+follow-up projection/alignment issues:
 
 - #287: project service graph and target-client projection model;
 - #286: readback vocabulary for cross-client service disparity;
 - #285: explicit alignment/import helper behavior for new clients.
 
 Those follow-ups should be sequenced before stronger cross-client readiness,
-new-client alignment, or release-style claims. If any PR remediation invalidates
-UC9, UC10, UC12, UC14, or UC15 claim boundaries, rerun only the affected
-localized package and evaluator loop from a clean harness state.
+new-client alignment, or release-style claims. If any projection/alignment
+remediation invalidates UC9, UC10, UC12, UC14, or UC15 claim boundaries, rerun
+only the affected localized package and evaluator loop from a clean harness
+state.
 
 ## Ambiguities To Reconcile
 

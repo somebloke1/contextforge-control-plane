@@ -15,7 +15,7 @@ Current readback on 2026-06-20:
 ```text
 base: dev-root
 head branch: codex/issue-270-259-260-context7
-head oid: 9d2fabbb6efcbe43cf3cc996012dd5f7f5c2bc12
+head oid: 8c71238c2d7dd58edc1b3de6a9f638377df77b68
 state: open draft
 merge state: CLEAN
 title: Add ContextForge project-init SuperLoop harness
@@ -42,6 +42,7 @@ diagram-focused branch.
 ## Recommended Next GitHub Step
 
 Do not merge, mark ready, or close linked issues from this snapshot alone.
-Use PR #271 as the current review surface, keep it draft while reviewer
-findings are still being remediated, and update this snapshot again after the
-next push/readback cycle.
+Use PR #271 as the current review surface. The #293-#296 issue-level review
+wave has been integrated through `8c71238`; keep the PR draft until the
+controller decides whether any remaining issue or projection/alignment work
+belongs in this PR before ordinary review.
