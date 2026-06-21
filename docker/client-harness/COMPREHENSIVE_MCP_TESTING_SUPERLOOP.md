@@ -28,13 +28,19 @@ For each service and each target client:
 2. Reset only the target client with the idempotent harness reset script.
 3. Use a persistent non-ephemeral Pi or OpenCode container.
 4. Use the configured qwen model and record the actual emitted model string.
-5. Run the natural all-services activation flow.
+5. Activate only the service under test unless the slice explicitly requires a
+   dependency; do not spend qwen context on an all-service tool universe.
 6. Start a fresh post-activation client session.
-7. Ask the assistant, in ordinary user language, to comprehensively test the
-   selected MCP service.
+7. Run one small semantic behavior bundle at a time. The prompt should be an
+   ordinary user task that naturally requires the selected service, not a
+   coached request to satisfy internal evaluator criteria or low-level tool
+   mechanics.
 8. Preserve raw transcript, command ledger, runtime readback, tool traces, and
    logs.
-9. A non-Spark evaluator judges the transcript and classifies findings.
+9. A non-Spark evaluator judges the transcript, identifies the actual route the
+   assistant used, and classifies findings. A correct-looking answer through
+   shell, memory, direct upstream execution, web search, or the wrong MCP
+   service is wrong-route evidence, not a pass.
 10. Triage defects to the service-specific issue or #316.
 11. Remediate, retest, and loop until the service/client slice passes or a
     blocker is explicitly owned.
@@ -48,8 +54,10 @@ instructions, or giant one-turn tool reports.
 - Activate only the service under test unless the slice explicitly requires a
   dependency.
 - Keep service-test prompts short and natural.
-- For services with many tools, split testing into bounded chunks and use fresh
-  post-activation sessions where needed.
+- For services with many tools or diverse behaviors, split testing into
+  bounded chunks and use fresh post-activation sessions where needed. Preserve
+  full specified stories in the package, but do not run them as one monolithic
+  qwen conversation.
 - Preserve raw evidence to files, but feed evaluators targeted readbacks rather
   than entire raw JSON streams.
 - Treat timeout after a large prompt or large tool universe as a runner/package
