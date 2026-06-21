@@ -84,7 +84,7 @@ the backend's real service boundary:
 
 | Service class | Container default | Reason |
 | --- | --- | --- |
-| Shared canonical services such as `mentality`, `context7`, `playwright`, `ssh-tmux`, `exa-search`, `github`, `web-search`, and hosted/native services | Shared service or existing native endpoint | These services are not project-specific by default; duplicating them per project would create sibling identities, token scope drift, port churn, and extra lifecycle state without proving new behavior. |
+| Shared canonical services such as `mentality`, `context7`, `playwright`, `ssh-tmux`, `exa-search`, `web-search`, and hosted/native services | Shared service or existing native endpoint | These services are not project-specific by default; duplicating them per project would create sibling identities, token scope drift, port churn, and extra lifecycle state without proving new behavior. |
 | Credential-scoped or user-scoped services | One backend or transceiver per credential or user when the backend cannot safely multiplex | Credential and local-user boundaries are service boundaries. A shared container is acceptable only when the credential scope and lifecycle are intentionally shared. |
 | Session-scoped or client-local services | One backend or transceiver per client-local state boundary only when required | Client config discovery is not service identity. Keep client-local state out of the gateway image and avoid per-client duplication unless runtime behavior materially differs. |
 | Project-scoped services | One backend or transceiver per project when the backend reads or writes project-local state | The project filesystem, project metadata, code index, language server state, and approval boundary are part of the service identity. |
@@ -185,6 +185,13 @@ context, and is registered through `http://playwright-transceiver:9204/mcp`
 only after direct reachability evidence. Do not fall back to the host-loopback
 `127.0.0.1:9104` live surface for Docker successor parity; the successor must
 not inherit host browser or session residue.
+
+`github` follows the same compose-sidecar-locality for credential-scoped stdio
+backend: `github-transceiver` runs `@modelcontextprotocol/server-github` in the
+Compose network and is registered through `http://github-transceiver:9206/mcp`
+only after token-boundary preflight and direct reachability evidence. Use the
+ignored `server-instances/github/.env` boundary or exported
+`GITHUB_PERSONAL_ACCESS_TOKEN`; do not persist secrets in tracked files.
 
 Session-scoped services also require stateful gateway ingress. The Docker
 harness sets `USE_STATEFUL_SESSIONS=true` and `GUNICORN_WORKERS=1` so the

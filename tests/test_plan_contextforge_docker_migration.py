@@ -180,6 +180,12 @@ class DockerMigrationPlanTests(unittest.TestCase):
         self.assertFalse(services["openzeppelin-solidity-contracts"]["unsafe_to_reuse_live_default"])
         self.assertEqual(9, len(services["ssh-tmux"]["expected_tool_names"]))
         self.assertIn("ssh-tmux-cleanup-dead-sessions", services["ssh-tmux"]["expected_tool_names"])
+        self.assertEqual("compose_sidecar", services["github"]["locality"])
+        self.assertEqual("http://github-transceiver:9206/mcp", services["github"]["target_upstream_url"])
+        self.assertEqual("ready_after_credential_env_preflight", services["github"]["approval_state"])
+        self.assertFalse(services["github"]["approval_blocked"])
+        self.assertTrue(services["github"]["docker_projection_required"])
+        self.assertTrue(services["github"]["unsafe_to_reuse_live_default"])
         self.assertIn("ssh-tmux", plan["summary"]["approval_blocked_services"])
         self.assertIn("serena-cf-controlplane-d46fe58a2a20", plan["summary"]["approval_blocked_services"])
 

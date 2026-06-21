@@ -50,6 +50,25 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("--expose-streamable-http", dockerfile)
         self.assertIn('"9205"', dockerfile)
 
+    def test_compose_defines_github_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/github-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("github-transceiver:", compose)
+        self.assertIn("contextforge-harness-github-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9206:9206"', compose)
+        self.assertIn("docker/contextforge-harness/github-transceiver/Dockerfile", compose)
+        self.assertIn("../../server-instances/github/.env", compose)
+        self.assertIn("required: false", compose)
+        self.assertIn("- GITHUB_PERSONAL_ACCESS_TOKEN", compose)
+        self.assertIn("mcp-contextforge-gateway", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--expose-sse", dockerfile)
+        self.assertIn("--expose-streamable-http", dockerfile)
+        self.assertIn("--stdio", dockerfile)
+        self.assertIn("npx -y @modelcontextprotocol/server-github", dockerfile)
+        self.assertIn('"9206"', dockerfile)
+
     def test_compose_defines_playwright_transceiver_sidecar(self) -> None:
         compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
         dockerfile = (ROOT / "docker/contextforge-harness/playwright-transceiver/Dockerfile").read_text(encoding="utf-8")
@@ -305,6 +324,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("contextforge-gateway", service_names)
         self.assertIn("mentality-transceiver", service_names)
         self.assertIn("context7-transceiver", service_names)
+        self.assertIn("github-transceiver", service_names)
         self.assertIn("exa-search-transceiver", service_names)
 
     def test_service_locality_records_project_scoped_container_matrix(self) -> None:

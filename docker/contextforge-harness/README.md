@@ -37,6 +37,9 @@ registration targets used by the gateway from inside the Compose network.
 - Exa Search successor MCP sidecar: `exa-search-transceiver` on host
   `http://127.0.0.1:9205` and compose-network
   `http://exa-search-transceiver:9205`
+- GitHub successor MCP sidecar: `github-transceiver` on host
+  `http://127.0.0.1:9206` and compose-network
+  `http://github-transceiver:9206`
 - Playwright successor MCP sidecar: `playwright-transceiver` on host
   `http://127.0.0.1:9204` and compose-network
   `http://playwright-transceiver:9204`
@@ -139,6 +142,24 @@ python ../../scripts/plan_contextforge_docker_migration.py
 The migration planner targets the compose-network URL
 `http://exa-search-transceiver:9205/mcp`. Registry apply remains a separate
 explicit step after credential-env preflight and direct reachability evidence.
+
+## GitHub Successor MCP Transceiver
+
+The GitHub sidecar fronts `@modelcontextprotocol/server-github` through the
+stock ContextForge bridge. It reads credentials from ignored
+`server-instances/github/.env` via an optional Compose `env_file` or from
+`GITHUB_PERSONAL_ACCESS_TOKEN` in the active shell environment. Compose uses
+pass-through environment form so an unset shell variable does not overwrite the
+ignored env file. Do not copy or print token values. A clean checkout can still
+launch the bridge; real GitHub tool calls require a credential.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway github-transceiver
+```
+
+The migration planner targets the compose-network URL
+`http://github-transceiver:9206/mcp`. Registry apply remains a separate explicit
+step after credential-env preflight and direct reachability evidence.
 
 ## Playwright Successor MCP Transceiver
 
