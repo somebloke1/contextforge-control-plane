@@ -465,7 +465,7 @@ def target_client_command(client: str, session_id: str, prompt: str, *, create_s
     session_arg = "" if create_session else f"--session {shlex.quote(session_id)} "
     return (
         "cd /workspace && "
-        f"opencode run {session_arg}--dangerously-skip-permissions "
+        f"opencode run {session_arg}--dir /workspace --dangerously-skip-permissions "
         '--model "llama.cpp/${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}" --agent build --format json '
         f"{quoted_prompt}"
     )

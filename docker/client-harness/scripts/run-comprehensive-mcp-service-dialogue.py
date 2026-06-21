@@ -8,7 +8,6 @@ import importlib.util
 import json
 import os
 import sys
-import tempfile
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -53,6 +52,13 @@ def default_session_id(client: str, service: str, phase: str, timestamp: str) ->
 
 
 def service_test_prompt(service: str, display: str, issue: int, global_issue: int) -> str:
+    if service == "context7":
+        return (
+            "Use Context7 to answer this: for Next.js, resolve the library id first, then look up documentation about server actions and authentication. "
+            "Do not use shell commands, package installs, web search, or direct upstream calls as substitutes. "
+            "Keep the report under 20 lines with the Context7 functions used, concise results, and issue target "
+            f"(#{issue} for {service}, #{global_issue} for shared wrapper/client problems)."
+        )
     return (
         f"Test the {display} MCP service now. "
         "Use the MCP tools already exposed in this assistant session; do not use shell scripts, package installs, or direct upstream calls as substitutes. "
@@ -179,24 +185,29 @@ def revoke_probe_token(base_url: str, admin_token: str, token_id: str) -> None:
     )
 
 
-def write_scoped_env(container_base_url: str, server_id: str, access_token: str) -> Path:
-    handle = tempfile.NamedTemporaryFile(
-        "w",
-        encoding="utf-8",
-        prefix="contextforge-comprehensive-mcp-token-",
-        suffix=".env",
-        delete=False,
+CLIENT_SCOPED_ENV_PATH = "/run/contextforge-client-scoped/contextforge.env"
+WRAPPER_TOKEN_CACHE = "/tmp/contextforge-wrapper-token.local.json"
+WRAPPER_TOKEN_LOCK = "/tmp/contextforge-wrapper-token.local.json.lock"
+HOST_CLIENT_SCOPED_ENV_RELATIVE = Path("client-scoped/contextforge.env")
+
+
+def scoped_env_text(container_base_url: str, server_id: str, access_token: str) -> str:
+    return "\n".join(
+        [
+            f"CONTEXTFORGE_BASE_URL={container_base_url}",
+            f"CONTEXTFORGE_SERVER_ID={server_id}",
+            f"CONTEXTFORGE_BEARER_TOKEN={access_token}",
+            f"CONTEXTFORGE_TOKEN_CACHE={WRAPPER_TOKEN_CACHE}",
+            f"CONTEXTFORGE_TOKEN_LOCK={WRAPPER_TOKEN_LOCK}",
+            "",
+        ]
     )
-    path = Path(handle.name)
-    try:
-        handle.write(f"CONTEXTFORGE_BASE_URL={container_base_url}\n")
-        handle.write(f"CONTEXTFORGE_SERVER_ID={server_id}\n")
-        handle.write(f"CONTEXTFORGE_BEARER_TOKEN={access_token}\n")
-        handle.write("CONTEXTFORGE_CONFIG_ENV=/tmp/missing-contextforge.env\n")
-        handle.write("CONTEXTFORGE_TOKEN_CACHE=/tmp/contextforge-wrapper-token.local.json\n")
-        handle.write("CONTEXTFORGE_TOKEN_LOCK=/tmp/contextforge-wrapper-token.local.json.lock\n")
-    finally:
-        handle.close()
+
+
+def write_host_client_scoped_env(harness_root: Path, payload: str) -> Path:
+    path = harness_root / HOST_CLIENT_SCOPED_ENV_RELATIVE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload, encoding="utf-8")
     os.chmod(path, 0o600)
     return path
 
@@ -237,7 +248,10 @@ def main(argv: list[str] | None = None) -> int:
     commands: list[dict[str, Any]] = []
     admin_token = ""
     scoped_token_id = ""
-    scoped_env_file: Path | None = None
+    scoped_env_payload = ""
+    host_scoped_env_file: Path | None = None
+    scoped_env_installed = False
+    scoped_env_removed = False
     scoped_server_id = ""
     scoped_token_revoked = False
 
@@ -258,7 +272,9 @@ def main(argv: list[str] | None = None) -> int:
                 scoped_server_id,
                 args.service,
             )
-            scoped_env_file = write_scoped_env(args.contextforge_container_base_url, scoped_server_id, access_token)
+            scoped_env_payload = scoped_env_text(args.contextforge_container_base_url, scoped_server_id, access_token)
+            host_scoped_env_file = write_host_client_scoped_env(harness_root, scoped_env_payload)
+            scoped_env_installed = True
 
         reset = uc1.run(
             [
@@ -300,8 +316,6 @@ def main(argv: list[str] | None = None) -> int:
             "--no-deps",
             "-d",
         ]
-        if scoped_env_file is not None:
-            launch_command.extend(["--env-from-file", str(scoped_env_file)])
         launch_command.extend([uc1.compose_service_name(args.client), "sleep", "infinity"])
         launch = uc1.run(
             launch_command,
@@ -350,6 +364,48 @@ def main(argv: list[str] | None = None) -> int:
             if discovered:
                 test_session = discovered
 
+        mcp_status: dict[str, Any] | None = None
+        if args.client == "opencode":
+            mcp_status = uc1.run(
+                [
+                    "docker",
+                    "exec",
+                    container,
+                    "bash",
+                    "-lc",
+                    "cd /workspace && opencode mcp list --print-logs --log-level DEBUG",
+                ],
+                cwd=repo_root,
+                timeout=120,
+                commands=commands,
+            )
+            mcp_status_path = output_root / "opencode-mcp-status.raw.txt"
+            mcp_status_path.write_text(uc1.render_command_block(mcp_status), encoding="utf-8")
+            mcp_status["path"] = str(mcp_status_path)
+
+        cleanup = uc1.run(
+            [
+                "docker",
+                "exec",
+                container,
+                "bash",
+                "-lc",
+                f"rm -f {WRAPPER_TOKEN_CACHE} {WRAPPER_TOKEN_LOCK}",
+            ],
+            cwd=repo_root,
+            timeout=30,
+            commands=commands,
+        )
+        cache_removed = cleanup["returncode"] == 0
+        if host_scoped_env_file is not None:
+            try:
+                host_scoped_env_file.unlink()
+                scoped_env_removed = True
+            except FileNotFoundError:
+                scoped_env_removed = True
+        else:
+            scoped_env_removed = cache_removed
+
         if scoped_token_id and admin_token:
             revoke_probe_token(args.contextforge_host_base_url, admin_token, scoped_token_id)
             scoped_token_revoked = True
@@ -374,13 +430,24 @@ def main(argv: list[str] | None = None) -> int:
                 "virtual_server": service.get("virtual_server"),
                 "server_id": scoped_server_id or None,
                 "probe_token_id": scoped_token_id or None,
-                "probe_token_env_file": str(scoped_env_file) if scoped_env_file is not None else None,
+                "probe_token_delivery": "client_scoped_env_file" if scoped_env_payload else None,
+                "client_scoped_env_path": CLIENT_SCOPED_ENV_PATH if scoped_env_payload else None,
+                "host_client_scoped_env_file": str(HOST_CLIENT_SCOPED_ENV_RELATIVE) if scoped_env_payload else None,
+                "client_scoped_env_installed": scoped_env_installed,
+                "client_scoped_env_removed": scoped_env_removed,
                 "probe_token_revoked": scoped_token_revoked,
             },
             "reset": reset_json,
             "build_returncode": None if build_result is None else build_result["returncode"],
             "launch_returncode": launch["returncode"],
             "runtime_returncode": runtime["returncode"],
+            "mcp_status": None
+            if mcp_status is None
+            else {
+                "path": mcp_status["path"],
+                "returncode": mcp_status["returncode"],
+                "timeout": mcp_status["timeout"],
+            },
             "turns": [
                 {
                     "phase": turn["phase"],
@@ -412,10 +479,27 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(summary, indent=2, sort_keys=True))
         return 0 if all(not turn["timeout"] and turn["returncode"] == 0 for turn in turns) else 1
     finally:
-        if scoped_env_file is not None:
+        if scoped_env_payload and not scoped_env_removed:
+            if host_scoped_env_file is not None:
+                try:
+                    host_scoped_env_file.unlink()
+                except FileNotFoundError:
+                    pass
             try:
-                scoped_env_file.unlink(missing_ok=True)
-            except OSError:
+                uc1.run(
+                    [
+                        "docker",
+                        "exec",
+                        container,
+                        "bash",
+                        "-lc",
+                        f"rm -f {WRAPPER_TOKEN_CACHE} {WRAPPER_TOKEN_LOCK}",
+                    ],
+                    cwd=repo_root,
+                    timeout=30,
+                    commands=commands,
+                )
+            except Exception:
                 pass
         if scoped_token_id and admin_token and not scoped_token_revoked:
             try:

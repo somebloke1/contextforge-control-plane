@@ -1,7 +1,7 @@
 // contextforge-project-init-owner = "ContextForge client harness"
 // contextforge-project-init-hook = "scripts/opencode_project_init_hook.py"
 import { spawnSync } from "node:child_process"
-import { mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 
 const PYTHON =
@@ -130,6 +130,16 @@ const recordLatestUserMessage = (sessionID, cwd, text) => {
     )
   } catch {
     return
+  }
+}
+
+const previousRecordedSessionID = () => {
+  try {
+    if (!existsSync(APPROVAL_SOURCE)) return ""
+    const payload = JSON.parse(readFileSync(APPROVAL_SOURCE, "utf8"))
+    return typeof payload?.session_id === "string" ? payload.session_id : ""
+  } catch {
+    return ""
   }
 }
 
@@ -267,6 +277,7 @@ const helperResponseWithPayload = (cwd, operation, payload) => {
 const availabilityResponse = (cwd) => helperResponse(cwd, "get_project_tool_availability")
 const capabilitySummaryResponse = (cwd) => helperResponse(cwd, "get_project_capability_summary")
 const stateReadbackResponse = (cwd) => helperResponse(cwd, "get_project_state_readback")
+const recordReloadIfPending = (cwd) => helperResponseWithPayload(cwd, "record_project_init_client_reload", {})
 const serviceOnboardingPlanResponse = (cwd) =>
   helperResponseWithPayload(cwd, "build_service_onboarding_plan", {
     candidateService: "calendar-notes",
@@ -345,6 +356,10 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
       const messageID = `msg_contextforge_project_init_${Date.now()}`
       const cwd = directory ?? process.cwd()
       const latestText = latestUserMessageText(output.messages)
+      const previousSessionID = previousRecordedSessionID()
+      if (previousSessionID && previousSessionID !== String(sessionID)) {
+        recordReloadIfPending(cwd)
+      }
       recordLatestUserMessage(sessionID, cwd, latestText)
       const governanceLedger = governanceLedgerForPrompt(latestText)
       if (governanceLedger) {

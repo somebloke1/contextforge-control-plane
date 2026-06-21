@@ -31,7 +31,20 @@ Each test slice must declare:
 
 The phrase "through the tested assistant" means through ContextForge-installed tools visible in that client session. Direct package execution, direct stdio JSON-RPC, shell scripts, or upstream tool calls outside the client-visible ContextForge tool surface do not satisfy the slice.
 
-For ContextForge-hosted service slices, the runner must create a scoped token for the target virtual server and pass it into the client container via a temporary env file. A checked-in `contextforge.env.example` or an empty mounted client-scoped directory is not sufficient. The raw access token must not appear in summaries, command ledgers, GitHub comments, or transcripts, and the token must be revoked after the run.
+For ContextForge-hosted service slices, the runner must create a scoped token for the target virtual server and pass it into the client container via the temporary client-scoped env file the wrapper reads. A checked-in `contextforge.env.example` or an empty mounted client-scoped directory is not sufficient. The raw access token must not appear in summaries, command ledgers, GitHub comments, or transcripts, and the token must be revoked after the run.
+
+For OpenCode command-mode harness runs, pass the project root explicitly (`--dir /workspace` in the Docker harness). `cd /workspace` alone can leave command sessions behaving as if only the home config is authoritative, which masks project-local MCP installation.
+
+When the installed MCP wrapper reads `CONTEXTFORGE_CONFIG_ENV`, install the
+scoped credential at the host-side client-scoped env file mounted read-only into
+the container. Do not pass the bearer token with Docker `--env-from-file` as the
+primary mechanism: OpenCode project-local MCP entries may not inherit the outer
+container token environment, and Docker environment persistence makes secret
+cleanup weaker. Delete the host-side client-scoped env file and wrapper token
+cache after the run. For OpenCode slices, capture `opencode mcp list` before
+cleanup as structural evidence of whether the client saw the MCP server as
+connected, failed, or absent; do not use that structural status as a substitute
+for semantic evidence that the assistant actually used the tool.
 
 ## Evaluation Boundary
 
@@ -58,11 +71,13 @@ Structured JSON may be checked structurally, but semantic adequacy still require
 Prefer prompts like:
 
 ```text
-Test the Context7 MCP service now. Use the MCP tools already exposed in this assistant session; do not use shell scripts, package installs, or direct upstream calls as substitutes. Use each safe function once if visible. Skip mutating functions unless there is a dry-run or no-op target. If the service tools are not visible, say that directly. Do not test unrelated services or governance routes. Keep the report under 20 lines with function, result, and issue target (#307 for context7, #316 for shared wrapper/client problems).
+Use Context7 to answer this: for Next.js, resolve the library id first, then look up documentation about server actions and authentication. Do not use shell commands, package installs, web search, or direct upstream calls as substitutes. Keep the report under 20 lines with the Context7 functions used, concise results, and issue target (#307 for context7, #316 for shared wrapper/client problems).
 ```
 
 Avoid prompts that:
 
+- ask the assistant to meta-test a service when an ordinary user task would
+  naturally require the service tools.
 - list low-level helper calls to perform unless testing helper behavior.
 - pre-narrate the desired conclusion.
 - invite broad codebase exploration when the target is service use.
