@@ -1963,10 +1963,13 @@ class SerenaManagerTests(unittest.TestCase):
             path: str,
             token: str,
             payload: dict[str, object] | None = None,
+            *,
+            base_url: str | None = None,
         ) -> dict[str, object]:
             self.assertEqual("POST", method)
             self.assertEqual("/prompts/prompt-id", path)
             self.assertEqual("token", token)
+            self.assertIsNone(base_url)
             calls.append(payload)
             text = prompt_registration.PROJECT_INIT_TEXT
             for key, value in (payload or {}).items():
@@ -1980,12 +1983,120 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertEqual("codex", (calls[0] or {})["target_client"])
         self.assertEqual("/home/dgk/workspace/cf-controlplane", (calls[0] or {})["project_root"])
 
+    def test_prompt_registration_target_dry_run_json_does_not_read_env(self) -> None:
+        original_read_env = prompt_registration.gateway._read_env
+        try:
+            def fail_read_env(_path: object) -> dict[str, str]:
+                raise AssertionError("target dry-run must not read env values")
+
+            prompt_registration.gateway._read_env = fail_read_env  # type: ignore[assignment]
+
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                code = prompt_registration.main(
+                    [
+                        "--dry-run",
+                        "--base-url",
+                        "http://127.0.0.1:4445",
+                        "--env-file",
+                        "/tmp/contextforge.env",
+                        "--json",
+                    ]
+                )
+        finally:
+            prompt_registration.gateway._read_env = original_read_env  # type: ignore[assignment]
+
+        self.assertEqual(0, code)
+        parsed = json.loads(stdout.getvalue())
+        self.assertFalse(parsed["mutation_performed"])
+        self.assertEqual("http://127.0.0.1:4445", parsed["target"]["base_url"])
+        self.assertEqual("/tmp/contextforge.env", parsed["target"]["env_file"])
+        self.assertFalse(parsed["target"]["env_values_recorded"])
+        self.assertIn("dry-run; target env values not read", parsed["non_actions"])
+
+    def test_prompt_registration_target_apply_passes_base_url_and_json_target_metadata(self) -> None:
+        calls: list[tuple[str, str | None, str]] = []
+
+        def fake_read_env(path: Path) -> dict[str, str]:
+            self.assertEqual(Path("/tmp/contextforge.env"), path)
+            return {"PLATFORM_ADMIN_EMAIL": "admin@example.test", "PLATFORM_ADMIN_PASSWORD": "password"}
+
+        def fake_login(base_url: str, email: str, password: str) -> str:
+            self.assertEqual("http://127.0.0.1:4445", base_url)
+            self.assertEqual("admin@example.test", email)
+            self.assertEqual("password", password)
+            return "target-token"
+
+        def fake_resource(token: str, **kwargs: object) -> dict[str, object]:
+            self.assertEqual("target-token", token)
+            self.assertEqual("http://127.0.0.1:4445", kwargs.get("base_url"))
+            calls.append(("resource", str(kwargs.get("base_url")), str(kwargs["name"])))
+            return {"id": f"resource-{len(calls)}"}
+
+        def fake_prompt(token: str, **kwargs: object) -> dict[str, object]:
+            self.assertEqual("target-token", token)
+            self.assertEqual("http://127.0.0.1:4445", kwargs.get("base_url"))
+            calls.append(("prompt", str(kwargs.get("base_url")), str(kwargs["name"])))
+            return {"id": f"prompt-{len(calls)}"}
+
+        def fake_associate(token: str, prompt: dict[str, object], resource: dict[str, object], *, base_url: str | None = None) -> list[str]:
+            self.assertEqual("target-token", token)
+            self.assertEqual("http://127.0.0.1:4445", base_url)
+            return ["serena_cf_controlplane_d46fe58a2a20_server"]
+
+        def fake_verify(token: str, prompt: dict[str, object], *, base_url: str | None = None) -> None:
+            self.assertEqual("target-token", token)
+            self.assertEqual("http://127.0.0.1:4445", base_url)
+
+        with (
+            mock.patch.object(prompt_registration.gateway, "_read_env", side_effect=fake_read_env),
+            mock.patch.object(prompt_registration, "target_login_token", side_effect=fake_login),
+            mock.patch.object(prompt_registration, "upsert_resource", side_effect=fake_resource),
+            mock.patch.object(prompt_registration, "upsert_prompt", side_effect=fake_prompt),
+            mock.patch.object(prompt_registration, "associate_serena_guidance", side_effect=fake_associate),
+            mock.patch.object(prompt_registration, "verify_prompt_render", side_effect=fake_verify),
+            contextlib.redirect_stdout(io.StringIO()) as stdout,
+        ):
+            code = prompt_registration.main(
+                [
+                    "--base-url",
+                    "http://127.0.0.1:4445",
+                    "--env-file",
+                    "/tmp/contextforge.env",
+                    "--json",
+                ]
+            )
+
+        self.assertEqual(0, code)
+        self.assertEqual(
+            [
+                ("resource", "http://127.0.0.1:4445", common.PROJECT_INIT_RESOURCE_NAME),
+                ("prompt", "http://127.0.0.1:4445", common.PROJECT_INIT_PROMPT_NAME),
+                ("resource", "http://127.0.0.1:4445", common.SERENA_GUIDANCE_RESOURCE_NAME),
+                ("prompt", "http://127.0.0.1:4445", common.SERENA_GUIDANCE_PROMPT_NAME),
+            ],
+            calls,
+        )
+        parsed = json.loads(stdout.getvalue())
+        self.assertTrue(parsed["mutation_performed"])
+        self.assertEqual("http://127.0.0.1:4445", parsed["target"]["base_url"])
+        self.assertEqual("/tmp/contextforge.env", parsed["target"]["env_file"])
+        self.assertFalse(parsed["target"]["env_values_recorded"])
+        self.assertEqual(["serena_cf_controlplane_d46fe58a2a20_server"], parsed["associated_serena_servers"])
+
     def test_serena_guidance_association_replaces_retired_resources(self) -> None:
         requests: list[tuple[str, str, dict[str, object] | None]] = []
 
-        def fake_items(method: str, path: str, token: str, payload: dict[str, object] | None = None) -> list[dict[str, object]]:
+        def fake_items(
+            method: str,
+            path: str,
+            token: str,
+            payload: dict[str, object] | None = None,
+            *,
+            base_url: str | None = None,
+        ) -> list[dict[str, object]]:
             self.assertEqual("GET", method)
             self.assertEqual("token", token)
+            self.assertIsNone(base_url)
             if path == "/servers?include_inactive=true&limit=1000":
                 return [
                     {
@@ -2010,9 +2121,12 @@ class SerenaManagerTests(unittest.TestCase):
             path: str,
             token: str,
             payload: dict[str, object] | None = None,
+            *,
+            base_url: str | None = None,
         ) -> dict[str, object]:
             self.assertEqual("PUT", method)
             self.assertEqual("token", token)
+            self.assertIsNone(base_url)
             requests.append((method, path, payload))
             return {"id": "server-id"}
 
@@ -2304,10 +2418,10 @@ class SerenaManagerTests(unittest.TestCase):
                 client_config_plan=config_plan,
                 validation_plan=binding.build_project_init_validation_plan(
                     [service],
-                    validation_mode="installed",
+                    validation_mode="validate_now",
                     target_client="codex",
                 ),
-                validation_results={},
+                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": True}},
                 consent_receipt_refs=CONSENT_REFS,
             )
             project_state.write_state_atomic(root, state)
@@ -2578,10 +2692,12 @@ class SerenaManagerTests(unittest.TestCase):
                 client_config_plan=config_plan,
                 validation_plan=binding.build_project_init_validation_plan(
                     [service],
-                    validation_mode="installed",
+                    validation_mode="validate_now",
                     target_client="codex",
                 ),
-                validation_results={},
+                validation_results={
+                    "mentality:static_repo_local": {"status": "passed", "target_client_visible": True}
+                },
                 consent_receipt_refs=CONSENT_REFS,
             )
             project_state.write_state_atomic(root, state)
@@ -2612,6 +2728,54 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertIn('"ledger":"decisions"', context)
             self.assertIn("Do not ask which services to activate", context)
             self.assertIn("Do not use shell commands", context)
+
+    def test_codex_hook_reminds_reload_before_governance_guidance_when_tools_are_not_observed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("mentality")
+            service["service_binding"] = "mentality:static_repo_local"
+            service["instantiation_class"] = "static_repo_local"
+            service["virtual_server"] = "mentality_dev_docker_server"
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(
+                    [service],
+                    validation_mode="installed",
+                    target_client="codex",
+                ),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+            self.assertTrue(init_hook.should_inject(root, {}, target_client="codex"))
+
+            run_root = Path(run_tmp)
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "session-governance-reload",
+                "cwd": str(root),
+                "prompt": "what decisions are recorded for this project?",
+            }
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.object(init_hook, "read_payload", return_value=payload),
+                contextlib.redirect_stdout(io.StringIO()) as stdout,
+            ):
+                self.assertEqual(0, init_hook.main_for_events(init_hook.CODEX_HOOK_EVENTS, target_client="codex"))
+
+            output = json.loads(stdout.getvalue())
+            context = output["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("<contextforge-project-init-continuation>", context)
+            self.assertIn("cf_project_init_continue", context)
+            self.assertIn("Do not validate, probe, use the installed service", context)
+            self.assertNotIn("<contextforge-project-governance>", context)
 
     def test_hook_decision_repairs_invalid_current_shape_without_fresh_init_classification(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
