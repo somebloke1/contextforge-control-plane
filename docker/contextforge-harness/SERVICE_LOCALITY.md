@@ -211,6 +211,15 @@ TypeScript sources into the image; inspect that checkout before treating runtime
 evidence as canonical. Use the ignored `server-instances/web-search/.env`
 boundary; do not persist secrets in tracked files.
 
+`serena-cf-controlplane-d46fe58a2a20` is project-scoped and remains owned by the
+canonical host project instance on `127.0.0.1:9108`. Because Docker cannot reach
+host loopback through `host.docker.internal`, the successor surface uses
+`serena-cf-controlplane-proxy`, a host-network proxy bound only to Docker's
+host-gateway address `172.17.0.1:9208`. Register
+`http://host.docker.internal:9208/mcp` with the Docker gateway only after
+proving the proxy and preserving the virtual-server exclusion of
+`activate_project`.
+
 Session-scoped services also require stateful gateway ingress. The Docker
 harness sets `USE_STATEFUL_SESSIONS=true` and `GUNICORN_WORKERS=1` so the
 downstream `Mcp-Session-Id` can bind to one process-local upstream MCP session

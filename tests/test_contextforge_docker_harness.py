@@ -125,6 +125,26 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("npm prune --omit=dev", dockerfile)
         self.assertIn("9207", dockerfile)
 
+    def test_compose_defines_serena_cf_controlplane_host_proxy(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/serena-host-proxy/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("serena-cf-controlplane-proxy:", compose)
+        self.assertIn("contextforge-harness-serena-host-proxy:latest", compose)
+        self.assertIn("network_mode: host", compose)
+        self.assertIn('SERENA_PROXY_BIND: "172.17.0.1"', compose)
+        self.assertIn('SERENA_PROXY_PORT: "9208"', compose)
+        self.assertIn('SERENA_TARGET_HOST: "127.0.0.1"', compose)
+        self.assertIn('SERENA_TARGET_PORT: "9108"', compose)
+        self.assertIn("nc -z 172.17.0.1 9208", compose)
+        entrypoint = (ROOT / "docker/contextforge-harness/serena-host-proxy/entrypoint.sh").read_text(encoding="utf-8")
+        self.assertIn("nginx", dockerfile)
+        self.assertIn("serena-host-proxy-entrypoint", dockerfile)
+        self.assertIn("listen ${SERENA_PROXY_BIND}:${SERENA_PROXY_PORT}", entrypoint)
+        self.assertIn("proxy_pass http://${SERENA_TARGET_HOST}:${SERENA_TARGET_PORT}", entrypoint)
+        self.assertIn("proxy_set_header Host ${SERENA_TARGET_HOST}:${SERENA_TARGET_PORT}", entrypoint)
+        self.assertIn("proxy_buffering off", entrypoint)
+
     def test_transceiver_dockerfile_uses_stock_contextforge_translate(self) -> None:
         dockerfile = (ROOT / "docker/contextforge-harness/mcp-transceiver/Dockerfile").read_text(encoding="utf-8")
 

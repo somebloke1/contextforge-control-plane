@@ -49,6 +49,9 @@ registration targets used by the gateway from inside the Compose network.
 - Web Search successor MCP sidecar: `web-search-transceiver` on host
   `http://127.0.0.1:9207` and compose-network
   `http://web-search-transceiver:9207`
+- Serena cf-controlplane host proxy: `serena-cf-controlplane-proxy` on Docker
+  host-gateway `http://172.17.0.1:9208`, forwarding to host loopback
+  `http://127.0.0.1:9108`
 
 The named Docker volume has no explicit size cap. Initial gateway-only usage is
 expected to stay small; use `scripts/volume-usage.sh` to inspect it.
@@ -235,6 +238,24 @@ python ../../scripts/plan_contextforge_docker_migration.py
 The migration planner targets the compose-network URL
 `http://web-search-transceiver:9207/mcp`. Registry apply remains a separate
 explicit step after credential-env preflight and direct reachability evidence.
+
+## Serena cf-controlplane Host Proxy
+
+The Serena cf-controlplane service is project-scoped to the canonical host
+checkout `/home/dgk/workspace/cf-controlplane` and already runs as a native
+streamable HTTP backend on host loopback `127.0.0.1:9108`. Docker containers
+cannot reach that loopback listener through `host.docker.internal`.
+
+The harness therefore uses `serena-cf-controlplane-proxy`, a constrained
+host-network proxy that binds only the Docker host-gateway address
+`172.17.0.1:9208` and forwards to `127.0.0.1:9108`. The gateway registers
+`http://host.docker.internal:9208/mcp`; remote clients still use only the
+published ContextForge gateway URL, never the proxy or upstream address.
+
+This is not a general host rebind and not a project-mounted Serena sidecar. The
+canonical Serena service remains host/project-scoped, `activate_project` must
+remain excluded from the ContextForge virtual server, and runtime proof must
+show the proxy plus virtual server before claiming parity.
 
 ## Operations
 

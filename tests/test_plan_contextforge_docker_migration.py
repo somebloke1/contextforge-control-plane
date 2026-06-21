@@ -198,8 +198,18 @@ class DockerMigrationPlanTests(unittest.TestCase):
         self.assertFalse(services["github"]["approval_blocked"])
         self.assertTrue(services["github"]["docker_projection_required"])
         self.assertTrue(services["github"]["unsafe_to_reuse_live_default"])
+        self.assertEqual("project_scoped_host_proxy", services["serena-cf-controlplane-d46fe58a2a20"]["locality"])
+        self.assertEqual(
+            "http://host.docker.internal:9208/mcp",
+            services["serena-cf-controlplane-d46fe58a2a20"]["target_upstream_url"],
+        )
+        self.assertEqual(
+            "ready_after_project_scoped_proxy_preflight",
+            services["serena-cf-controlplane-d46fe58a2a20"]["approval_state"],
+        )
+        self.assertFalse(services["serena-cf-controlplane-d46fe58a2a20"]["approval_blocked"])
         self.assertNotIn("ssh-tmux", plan["summary"]["approval_blocked_services"])
-        self.assertIn("serena-cf-controlplane-d46fe58a2a20", plan["summary"]["approval_blocked_services"])
+        self.assertNotIn("serena-cf-controlplane-d46fe58a2a20", plan["summary"]["approval_blocked_services"])
 
     def test_helper_dispositions_mark_unsafe_apply_paths(self) -> None:
         plan = docker_plan.build_plan()

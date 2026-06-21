@@ -69,10 +69,10 @@ DOCKER_TARGET_PROFILE: dict[str, dict[str, Any]] = {
         "notes": "Remote shared service does not need host gateway projection.",
     },
     "serena-cf-controlplane-d46fe58a2a20": {
-        "locality": "project_scoped_host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9108/mcp",
-        "approval_state": "blocked_pending_project_scoped_runtime_approval",
-        "notes": "Project-scoped code-intelligence state needs explicit Docker/runtime approval.",
+        "locality": "project_scoped_host_proxy",
+        "target_upstream_url": "http://host.docker.internal:9208/mcp",
+        "approval_state": "ready_after_project_scoped_proxy_preflight",
+        "notes": "Host-network proxy binds only the Docker host-gateway address and forwards to the loopback-bound canonical Serena backend.",
     },
 }
 
