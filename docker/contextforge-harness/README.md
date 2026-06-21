@@ -176,11 +176,10 @@ explicit step after credential-env preflight and direct reachability evidence.
 
 The GitHub sidecar fronts `@modelcontextprotocol/server-github` through the
 stock ContextForge bridge. It reads credentials from ignored
-`server-instances/github/.env` via an optional Compose `env_file` or from
-`GITHUB_PERSONAL_ACCESS_TOKEN` in the active shell environment. Compose uses
-pass-through environment form so an unset shell variable does not overwrite the
-ignored env file. Do not copy or print token values. A clean checkout can still
-launch the bridge; real GitHub tool calls require a credential.
+`server-instances/github/.env` via an optional Compose `env_file`. Do not pass
+host shell API-token variables through Compose, and do not copy or print token
+values. A clean checkout can still launch the bridge; real GitHub tool calls
+require a credential in the ignored env file.
 
 ```sh
 docker compose -f compose.yml up -d --build contextforge-gateway github-transceiver

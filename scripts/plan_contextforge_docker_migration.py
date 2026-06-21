@@ -54,7 +54,7 @@ DOCKER_TARGET_PROFILE: dict[str, dict[str, Any]] = {
         "locality": "compose_sidecar",
         "target_upstream_url": "http://github-transceiver:9206/mcp",
         "approval_state": "ready_after_credential_env_preflight",
-        "notes": "GitHub credentials are user-scoped; run sidecar with either server-instances/github/.env or exported GITHUB_PERSONAL_ACCESS_TOKEN and complete token preflight before registry apply.",
+        "notes": "GitHub credentials are user-scoped; run sidecar with ignored server-instances/github/.env and complete token preflight before registry apply. Do not pass host shell token variables through Compose.",
     },
     "web-search": {
         "locality": "compose_sidecar",

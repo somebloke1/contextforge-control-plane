@@ -198,8 +198,8 @@ not inherit host browser or session residue.
 backend: `github-transceiver` runs `@modelcontextprotocol/server-github` in the
 Compose network and is registered through `http://github-transceiver:9206/mcp`
 only after token-boundary preflight and direct reachability evidence. Use the
-ignored `server-instances/github/.env` boundary or exported
-`GITHUB_PERSONAL_ACCESS_TOKEN`; do not persist secrets in tracked files.
+ignored `server-instances/github/.env` boundary; do not pass host shell token
+variables through Compose and do not persist secrets in tracked files.
 
 `web-search` follows the same compose-sidecar-locality for credential-scoped stdio
 backend: `web-search-transceiver` runs the local `web_search/dist/mcp-server.js`

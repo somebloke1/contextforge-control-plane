@@ -77,7 +77,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("docker/contextforge-harness/github-transceiver/Dockerfile", compose)
         self.assertIn("../../server-instances/github/.env", compose)
         self.assertIn("required: false", compose)
-        self.assertIn("- GITHUB_PERSONAL_ACCESS_TOKEN", compose)
+        self.assertNotIn("- GITHUB_PERSONAL_ACCESS_TOKEN", compose)
         self.assertIn("mcp-contextforge-gateway", dockerfile)
         self.assertIn("mcpgateway.translate", dockerfile)
         self.assertIn("--expose-sse", dockerfile)

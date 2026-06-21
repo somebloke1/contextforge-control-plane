@@ -126,8 +126,6 @@ services:
     env_file:
       - path: ../../server-instances/github/.env
         required: false
-    environment:
-      - GITHUB_PERSONAL_ACCESS_TOKEN
     ports:
       - "127.0.0.1:9206:9206"
     healthcheck:
