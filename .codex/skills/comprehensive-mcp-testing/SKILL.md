@@ -52,7 +52,9 @@ Read [method.md](references/method.md) when selecting services, interpreting run
 
 Assume tested Pi/OpenCode qwen sessions have limited usable context. Activate only the target service for a service slice unless testing multi-service behavior. Avoid all-service activation, huge tool catalogs, and long prompt narratives. Split large services into smaller function groups if needed, but preserve full untruncated use-case stories in the package and evidence.
 
-Before launching another qwen-backed client session, check for active runner/client/model processes and existing evidence from the current slice. Do not stack duplicate sessions just because the controller lost conversational context. If GPU utilization is pegged, identify whether a known test slice is still running before dispatching more model work; stop only sessions owned by this testing loop or ask the SO when ownership is unclear.
+Before launching another qwen-backed client session, check for active runner/client/model processes, existing evidence from the current slice, and target-client containers left from the prior run. Distinguish loaded-model memory residency from active generation: GPU memory held by `llama-server` with near-zero utilization is not the same signal as an in-flight tested-assistant turn. Do not stack duplicate sessions just because the controller lost conversational context. If GPU utilization is pegged, identify whether a known test slice is still running before dispatching more model work; stop only sessions owned by this testing loop or ask the SO when ownership is unclear.
+
+Use [method.md](references/method.md#active-session-stewardship) for the concrete preflight/readback commands and ownership rules.
 
 ## Bypass Rule
 

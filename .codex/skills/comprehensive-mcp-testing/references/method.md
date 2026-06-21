@@ -131,6 +131,38 @@ A complete package includes:
 
 The runner does not decide semantic pass/fail. The evaluator narrative is part of the signal.
 
+## Active Session Stewardship
+
+Before starting a qwen-backed Pi/OpenCode slice, capture a short ownership
+preflight:
+
+```bash
+nvidia-smi
+ollama ps
+ps -u "$USER" -o pid,stat,cmd
+docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Command}}'
+```
+
+Interpretation rules:
+
+- GPU memory held by a local model server is not by itself proof of active
+  inference. Treat nonzero `GPU-Util`, active client runner processes, growing
+  transcript files, or a live command session as stronger evidence of an active
+  test turn.
+- Running `cf-mcp-<service>-<client>-*` containers are slice ownership evidence.
+  Reuse, inspect, or stop only containers whose names and evidence paths belong
+  to the current comprehensive MCP testing loop.
+- If ownership is unclear, do not kill model servers or client containers
+  speculatively. Record the ambiguity and ask the SO, or isolate the next test
+  with a new explicit container name and evidence directory only after resource
+  contention is understood.
+- If a stale slice-owned container is idle, preserve its transcript/evidence
+  before cleanup. Cleanup should reset by deleting the whole slice-owned
+  container/home/workspace state, not by hand-calculating deltas inside it.
+- If GPU utilization is pegged, defer new qwen-backed launches until the active
+  owner is identified. A controller may continue deterministic repo/GitHub work
+  while waiting.
+
 ## Controller Discipline
 
 Before dispatching wider runners:
