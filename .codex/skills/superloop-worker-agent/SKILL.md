@@ -95,6 +95,16 @@ if M=Sp:
   semantic/authority need → stop(report boundary)
 ```
 
+Semantic boundary:
+
+```text
+SEM claims require non-deterministic evaluator judgment.
+WK ✗ use matched strings, regexes, keyword searches, or string parsing as the
+oracle for free-form model/user-visible prose meaning, quality, readiness, or
+semantic pass/fail. Deterministic checks may verify structure only; structured
+JSON meaning still needs evaluator review when meaning matters.
+```
+
 ## Worker Loop
 
 ```text

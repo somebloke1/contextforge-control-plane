@@ -57,6 +57,8 @@ CR:
   }
 
 WK/child output = E, not ✓.
+SEM claims require evaluator judgment; regex/string/keyword matching over
+free-form prose is never a semantic or readiness oracle.
 ```
 
 ## Controller SuperLoop

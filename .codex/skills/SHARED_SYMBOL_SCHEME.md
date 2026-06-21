@@ -26,6 +26,7 @@ Entities:
 - `Sp` = `gpt-5.3-codex-spark`
 - `M55` = `gpt-5.5`
 - `M54m` = `gpt-5.4-mini`
+- `SEM` = semantic acceptance of free-form model/user-visible prose
 
 Operators:
 
@@ -67,6 +68,7 @@ DC ⊥ L             # dispatch card augments lease, not replaces it
 E ⊥ ✓             # evidence is not acceptance until SO integrates
 GP ⊥ issue/PR/doc  # Project #6 is coordination index, not substance
 Sp ⊥ judgment      # Spark extraction is not semantic judgment
+SEM ⊥ regex/string # pattern matching is not semantic acceptance
 ```
 
 ```text
@@ -133,6 +135,18 @@ Sp default → fork_context=false unless parent already Sp with no setting chang
 WK report + E + DC compliance + repo/GH/runtime readback ⊗ SO judgment → ✓
 WK ∉ ✓
 Sp ∉ controller-only decisions
+```
+
+```text
+SEM:
+  free-form model/user-visible prose may be accepted only by non-deterministic
+  evaluator judgment. Deterministic checks may verify setup, structure,
+  parseability, schemas, required fields, enum/value shape, and artifact
+  presence, but must not use matched strings, regexes, keyword searches, or
+  string parsing as the oracle for semantic pass/fail, readiness, quality, or
+  user-facing meaning. Structured model output such as JSON may receive
+  deterministic structure checks only when paired with evaluator review for
+  meaning.
 ```
 
 ## Shared Model Surface

@@ -24,12 +24,14 @@ class SymbolicSkillSetTests(unittest.TestCase):
             "Sp",
             "M55",
             "M54m",
+            "SEM",
             "RC → SO → DM → DG → WK → SO",
             "DM ⊥ SO",
             "DC ⊥ L",
             "E ⊥ ✓",
             "GP ⊥ issue/PR/doc",
             "Sp ⊥ judgment",
+            "SEM ⊥ regex/string",
         ]:
             self.assertIn(token, shared)
 
@@ -95,6 +97,8 @@ class SymbolicSkillSetTests(unittest.TestCase):
 
         self.assertIn("WK/child output = E, not ✓", skill)
         self.assertIn("SO accepts WK output only if", skill)
+        self.assertIn("SEM claims require evaluator judgment", skill)
+        self.assertIn("regex/string/keyword matching over\nfree-form prose is never a semantic or readiness oracle", skill)
 
     def test_worker_preserves_lease_identity_authority_and_reporting(self):
         skill = read("superloop-worker-agent/SKILL.md")
@@ -118,6 +122,27 @@ class SymbolicSkillSetTests(unittest.TestCase):
 
         self.assertIn("L ∉ substitute for active explicit user approval", skill)
         self.assertIn("selected M unsuitable for T", skill)
+        self.assertIn("SEM claims require non-deterministic evaluator judgment", skill)
+        self.assertIn("WK ✗ use matched strings, regexes, keyword searches, or string parsing", skill)
+
+    def test_project_init_skill_keeps_low_level_approval_values_internal(self):
+        skill = read("contextforge-project-init/SKILL.md")
+        helper_flow = read("contextforge-project-init/references/helper-flow.md")
+
+        for token in [
+            "user-meaningful installation\n   package effects",
+            "plain scoped approval or decline",
+            "Do not ask the\n   user to restate low-level challenge ids, digests, keys, or proof values",
+            "exact\n   helper-returned challenge id and plan digest internally",
+            "Installing the project-local activation package is the project-init endpoint",
+        ]:
+            self.assertIn(token, skill)
+
+        for token in [
+            "Do not ask the user to provide low-level keys",
+            "challenge values, or proof values that the helper already generated",
+        ]:
+            self.assertIn(token, helper_flow)
 
     def test_spark_is_positioned_as_accelerant_not_judgment_owner(self):
         joined = "\n".join(
