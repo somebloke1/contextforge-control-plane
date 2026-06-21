@@ -24,7 +24,7 @@ Treat this as a semantic, model-engaged test regimen. Deterministic tooling may 
    - Shared reload, wrapper, auth, token, client, reset, prompt-noise, qwen-context, or runner defects go to the cross-MCP issue.
 10. Remediate the smallest process/code defect that makes the requested final state more true.
 11. Update GitHub and the branch before dispatching wider agents.
-12. Refine this skill when a new recurrent testing lesson appears.
+12. Refine this skill when a new recurrent testing lesson appears, then validate and commit the skill change before relying on that lesson in the next wider wave.
 
 ## Runner
 
@@ -69,3 +69,5 @@ The controller retains GitHub privileges and final acceptance. Subagents return 
 ## Refinement Trigger
 
 Patch this skill when a failure reveals a reusable lesson about prompt shape, reset strategy, evidence packaging, qwen context limits, evaluator criteria, or GitHub triage. Do not bury repeated lessons only in issue comments.
+
+Refinement is part of the testing loop. For each durable lesson, decide whether it belongs in the short `SKILL.md` operating rules or the detailed `references/method.md` guidance, make the smallest durable edit, run the skill validator, and include the refinement in the same branch/GitHub evidence stream as the test work that produced it. If a lesson is uncertain, record it as a candidate in the relevant issue instead of turning it into a rule prematurely.
