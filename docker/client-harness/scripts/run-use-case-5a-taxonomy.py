@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 ISSUES = [247, 270, 259, 260]
 PR_NUMBER = 271
@@ -45,15 +47,15 @@ def parse_json(text: str) -> Any:
 def command_block(item: dict[str, Any]) -> str:
     return "\n".join(
         [
-            f"COMMAND: {item['command_text']}",
+            f"COMMAND: {redact_text(str(item['command_text']))}",
             f"RETURNCODE: {item['returncode']}",
             f"TIMEOUT: {str(item['timeout']).lower()}",
             "",
             "STDOUT:",
-            item.get("stdout") or "",
+            redact_text(str(item.get("stdout") or "")),
             "",
             "STDERR:",
-            item.get("stderr") or "",
+            redact_text(str(item.get("stderr") or "")),
         ]
     )
 
@@ -162,7 +164,7 @@ def render_evidence(
         "",
     ]
     for item in commands:
-        lines.append(f"- `{item['command_text']}` -> rc={item['returncode']} timeout={item['timeout']}")
+        lines.append(f"- `{redact_text(item['command_text'])}` -> rc={item['returncode']} timeout={item['timeout']}")
     if verifier_path is not None and verifier_json is not None:
         lines.extend(
             [
@@ -271,6 +273,7 @@ def main(argv: list[str] | None = None) -> int:
         "test_command": test_command,
     }
 
+    metadata = redact_value(metadata)
     metadata_path = output_root / f"taxonomy-metadata-{timestamp}.json"
     metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     evidence_path = output_root / f"taxonomy-use-case-5a-evidence-{timestamp}.md"

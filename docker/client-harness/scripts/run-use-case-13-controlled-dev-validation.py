@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_value
+
 
 def command_text(command: list[str]) -> str:
     return " ".join(command)
@@ -133,6 +135,9 @@ def latest_package(repo_root: Path, use_case: str, client: str) -> str:
 
 
 def render_package(metadata: dict[str, Any], verifier: dict[str, Any], ledger: list[dict[str, Any]]) -> str:
+    metadata = redact_value(metadata)
+    verifier = redact_value(verifier)
+    ledger = redact_value(ledger)
     lines = [
         "# Use Case 13 Controlled Development Validation Evidence",
         "",
@@ -402,7 +407,8 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     metadata_path = output_root / f"use-case-13-metadata-{timestamp}.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    safe_metadata = redact_value(metadata)
+    metadata_path.write_text(json.dumps(safe_metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     verifier_result = run(
         [
             str(python),
@@ -420,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     verifier_path.write_text(json.dumps(verifier_json, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     package_path = output_root / f"use-case-13-evaluation-package-{timestamp}.md"
-    package_path.write_text(render_package(metadata, verifier_json, ledger), encoding="utf-8")
+    package_path.write_text(render_package(safe_metadata, verifier_json, ledger), encoding="utf-8")
 
     summary = {
         "ok": bool(isinstance(verifier_json, dict) and verifier_json.get("ok")),

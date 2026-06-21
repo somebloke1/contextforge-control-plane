@@ -78,6 +78,10 @@ def _stamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
+def _reset_id() -> str:
+    return f"reset-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}-{secrets.token_hex(4)}"
+
+
 def next_turn(
     *,
     question_id: str,
@@ -207,7 +211,7 @@ def reset_current_project(
         raise ProjectInitHelperError(f"unsupported client_type: {client_type}")
     root = project_state.validate_project_root(project_root, require_workspace=True)
     state_path = project_state.project_state_path(root)
-    reset_id = f"reset-{_stamp()}"
+    reset_id = _reset_id()
     evidence_dir = root / project_state.STATE_DIR_NAME / "contextforge-reset-evidence" / reset_id
 
     state = None
@@ -480,6 +484,14 @@ def _reset_json_mcp_project_config(
                     "dry_run": dry_run,
                 }
             )
+        elif _json_mcp_entry_uses_contextforge_wrapper(existing):
+            refusals.append(
+                {
+                    "surface": str(config_path),
+                    "alias": str(alias),
+                    "reason": "unmanaged_wrapper_json_mcp_entry_preserved",
+                }
+            )
     if actions:
         preserve(config_path, f"before/{config_path.name}")
         if not output_servers:
@@ -492,6 +504,14 @@ def _reset_json_mcp_project_config(
 def _json_mcp_entry_is_contextforge_owned(existing: Any) -> bool:
     if not isinstance(existing, Mapping):
         return False
+    if not _json_mcp_entry_has_project_init_owner_marker(existing):
+        return False
+    return _json_mcp_entry_uses_contextforge_wrapper(existing)
+
+
+def _json_mcp_entry_uses_contextforge_wrapper(existing: Any) -> bool:
+    if not isinstance(existing, Mapping):
+        return False
     command = existing.get("command")
     args = existing.get("args")
     if isinstance(command, list):
@@ -501,6 +521,13 @@ def _json_mcp_entry_is_contextforge_owned(existing: Any) -> bool:
         arg_parts = [str(item) for item in args]
         return any(part.endswith("contextforge_mcp_wrapper.py") for part in arg_parts)
     return False
+
+
+def _json_mcp_entry_has_project_init_owner_marker(existing: Mapping[str, Any]) -> bool:
+    env = existing.get("environment")
+    if not isinstance(env, Mapping):
+        env = existing.get("env")
+    return isinstance(env, Mapping) and str(env.get(binding.PROJECT_INIT_OWNER_ENV) or "") == binding.PROJECT_INIT_OWNER_VALUE
 
 
 def _project_reset_postcondition(root: Path) -> bool:

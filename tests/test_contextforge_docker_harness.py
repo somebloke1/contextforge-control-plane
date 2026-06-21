@@ -366,6 +366,71 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("probe_token_id=tok_public_identifier", output)
         self.assertIn("server_id=srv_public_identifier", output)
 
+    def test_client_harness_importable_redactor_redacts_nested_values(self) -> None:
+        script = """
+import json
+import os
+import sys
+sys.path.insert(0, "docker/client-harness/scripts")
+from harness_redaction import redact_value
+os.environ["CONTEXTFORGE_REDACT_VALUES"] = "explicit-secret-value"
+payload = {
+    "command_text": "curl -H Authorization=Bearer bearer-secret-token",
+    "stdout": {"access_token": "json-secret-token", "credential_scope": "safe"},
+    "stderr": ["CONTEXTFORGE_BEARER_TOKEN=explicit-secret-value"],
+}
+print(json.dumps(redact_value(payload), sort_keys=True))
+"""
+        result = subprocess.run(
+            ["python3", "-c", script],
+            cwd=ROOT,
+            text=True,
+            check=True,
+            capture_output=True,
+        )
+
+        output = result.stdout
+        self.assertIn("[REDACTED_CONTEXTFORGE_SECRET]", output)
+        self.assertNotIn("bearer-secret-token", output)
+        self.assertNotIn("json-secret-token", output)
+        self.assertNotIn("explicit-secret-value", output)
+        self.assertIn('"credential_scope": "safe"', output)
+
+    def test_dialogue_evidence_runners_redact_persisted_command_streams(self) -> None:
+        for script_name in [
+            "run-use-case-1-dialogue.py",
+            "run-use-case-2-dialogue.py",
+            "run-use-case-3-dialogue.py",
+            "run-use-case-4-dialogue.py",
+        ]:
+            source = (ROOT / "docker/client-harness/scripts" / script_name).read_text(encoding="utf-8")
+            self.assertIn("from harness_redaction import", source)
+            self.assertIn("redact_text(str(result.get(\"stdout\") or \"\"))", source)
+            self.assertIn("redact_text(str(result.get(\"stderr\") or \"\"))", source)
+            self.assertIn("redact_text(str(result['command_text']))", source)
+            self.assertIn("redact_value(reset_json)", source)
+            self.assertIn("\"commands\": redact_value(commands)", source)
+
+    def test_source_evidence_runners_redact_metadata_and_command_streams(self) -> None:
+        for path in sorted((ROOT / "docker/client-harness/scripts").glob("run-use-case-5[a-l]-*.py")):
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("from harness_redaction import redact_text, redact_value", source, msg=str(path))
+            self.assertIn("redact_text(str(item['command_text']))", source, msg=str(path))
+            self.assertIn("redact_text(str(item.get(\"stdout\") or \"\"))", source, msg=str(path))
+            self.assertIn("redact_text(str(item.get(\"stderr\") or \"\"))", source, msg=str(path))
+            self.assertIn("redact_text(item['command_text'])", source, msg=str(path))
+            self.assertIn("metadata = redact_value(metadata)", source, msg=str(path))
+
+    def test_controlled_dev_runner_redacts_metadata_and_ledger_package(self) -> None:
+        source = (ROOT / "docker/client-harness/scripts/run-use-case-13-controlled-dev-validation.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("from harness_redaction import redact_value", source)
+        self.assertIn("safe_metadata = redact_value(metadata)", source)
+        self.assertIn("ledger = redact_value(ledger)", source)
+        self.assertIn("json.dumps(safe_metadata", source)
+
     def test_client_harness_redaction_guidance_covers_all_active_clients(self) -> None:
         opencode_rules = (ROOT / "docker/client-harness/config/opencode/AGENTS.md").read_text(encoding="utf-8")
         pi_rules = (ROOT / "docker/client-harness/config/pi/AGENTS.md").read_text(encoding="utf-8")

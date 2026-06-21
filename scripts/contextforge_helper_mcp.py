@@ -622,6 +622,15 @@ def _mcp_runtime_diagnostic_note(diagnostics: Sequence[Mapping[str, Any]], sessi
     return str(session_boundary.get("instruction") or "")
 
 
+def _mcp_runtime_diagnostic_blocks_availability(diagnostic: Mapping[str, Any]) -> bool:
+    return str(diagnostic.get("classification") or "") in {
+        "mcp_server_startup_failed",
+        "contextforge_auth_failed",
+        "contextforge_transport_failed",
+        "tool_listing_failed",
+    }
+
+
 def _missing_projection_action(service_binding: str, client_type: str) -> dict[str, str]:
     return {
         "action": "align_target_client_to_existing_project_service",
@@ -743,6 +752,8 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
         projection_status = _target_client_projection_status(target_client_state)
         tool_policy_status = _tool_policy_status_for_service(service, tool_names)
         mcp_diagnostic = _target_client_mcp_runtime_diagnostic(target_client_state, session_boundary)
+        runtime_blocks_availability = _mcp_runtime_diagnostic_blocks_availability(mcp_diagnostic)
+        available_to_target_client = bool(projection_status == "recorded" and tool_names and not runtime_blocks_availability)
         mcp_runtime_diagnostics.append({"service_binding": service_binding, **mcp_diagnostic})
         availability_item = {
             "service_binding": service_binding,
@@ -756,7 +767,7 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
             "target_client_visibility_status": _target_client_visibility_status(target_client_state),
             "target_client_proof_status": _target_client_proof_status(target_client_state),
             "mcp_runtime_diagnostic": mcp_diagnostic,
-            "available_to_target_client": bool(projection_status == "recorded" and tool_names),
+            "available_to_target_client": available_to_target_client,
         }
         if projection_status == "missing":
             action = _missing_projection_action(service_binding, client_type)
@@ -773,7 +784,7 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
             }
         )
         if tool_names:
-            if projection_status == "recorded":
+            if available_to_target_client:
                 available_tools.append(
                     {
                         "service_binding": service_binding,
@@ -784,6 +795,7 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
                         "target_client_projection_status": projection_status,
                         "tool_policy_status": tool_policy_status,
                         "tool_policy_names": tool_names,
+                        "mcp_runtime_diagnostic": mcp_diagnostic,
                         "available_to_target_client": True,
                     }
                 )
@@ -1075,6 +1087,7 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
         tool_policy_status = _tool_policy_status_for_service(service, tool_names)
         target_client_user_state = _target_client_user_state(target_client_state, session_boundary)
         mcp_diagnostic = _target_client_mcp_runtime_diagnostic(target_client_state, session_boundary)
+        runtime_blocks_availability = _mcp_runtime_diagnostic_blocks_availability(mcp_diagnostic)
         mcp_runtime_diagnostics.append({"service_binding": service_binding, **mcp_diagnostic})
         readback_item = {
             "service_binding": service_binding,
@@ -1091,7 +1104,7 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
             "target_client_visibility_status": _target_client_visibility_status(target_client_state),
             "target_client_proof_status": _target_client_proof_status(target_client_state),
             "mcp_runtime_diagnostic": mcp_diagnostic,
-            "available_to_target_client": bool(projection_status == "recorded" and tool_names),
+            "available_to_target_client": bool(projection_status == "recorded" and tool_names and not runtime_blocks_availability),
             "readiness_layers": {
                 "source_ready": "present_in_project_state",
                 "backend_ready": _layer_status(service, "backend", "upstream_backend", "service_backend"),

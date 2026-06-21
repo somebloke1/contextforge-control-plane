@@ -1306,7 +1306,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             project_state.write_state_atomic(root, state)
 
             result = helper.reset_current_project(project_root=root, client_type="codex")
-            repeat = helper.reset_current_project(project_root=root, client_type="codex", preserve_evidence=False)
+            repeat = helper.reset_current_project(project_root=root, client_type="codex")
 
             self.assertEqual("reset", result["status"])
             self.assertTrue(result["postcondition"])
@@ -1325,6 +1325,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertEqual(["keep"], sorted(gemini_config["mcpServers"]))
             self.assertEqual("reset", repeat["status"])
             self.assertEqual([], repeat["actions"])
+            self.assertNotEqual(result["reset_id"], repeat["reset_id"])
+            self.assertNotEqual(result["evidence_dir"], repeat["evidence_dir"])
+            self.assertTrue(Path(str(repeat["evidence_dir"])).exists())
 
     def test_reset_current_project_removes_orphaned_helper_entries_without_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1377,6 +1380,54 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             operations = {action["operation"] for action in result["actions"]}
             self.assertIn("remove_orphaned_owned_codex_mcp_block", operations)
             self.assertIn("remove_orphaned_contextforge_json_mcp_entry", operations)
+
+    def test_reset_current_project_preserves_unowned_wrapper_shaped_json_entries_without_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            wrapper_path = str(REPO_ROOT / "scripts" / "contextforge_mcp_wrapper.py")
+            (root / "opencode.json").write_text(
+                json.dumps(
+                    {
+                        "mcp": {
+                            "manual-wrapper": {
+                                "type": "local",
+                                "command": [sys.executable, wrapper_path, "manual_server"],
+                                "enabled": True,
+                                "environment": {"MCP_WRAPPER_LOG_LEVEL": "INFO"},
+                            }
+                        }
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".gemini").mkdir()
+            (root / ".gemini" / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "manual-wrapper": {
+                                "command": sys.executable,
+                                "args": [wrapper_path, "manual_server"],
+                                "env": {"MCP_WRAPPER_LOG_LEVEL": "INFO"},
+                            }
+                        }
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = helper.reset_current_project(project_root=root, client_type="opencode", preserve_evidence=False)
+
+            self.assertEqual("reset", result["status"])
+            self.assertTrue(result["postcondition"])
+            opencode_config = json.loads((root / "opencode.json").read_text(encoding="utf-8"))
+            self.assertEqual(["manual-wrapper"], sorted(opencode_config["mcp"]))
+            gemini_config = json.loads((root / ".gemini" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(["manual-wrapper"], sorted(gemini_config["mcpServers"]))
+            refusal_reasons = {refusal["reason"] for refusal in result["refusals"]}
+            self.assertEqual({"unmanaged_wrapper_json_mcp_entry_preserved"}, refusal_reasons)
 
     def test_project_reset_is_available_through_mcp_and_pi_cli(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2433,6 +2484,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(diagnostic["secret_values_redacted"])
         self.assertEqual("not_claimed", diagnostic["validation_proof"])
         self.assertEqual("process_exit", diagnostic["error_class"])
+        self.assertFalse(availability["project_services"][0]["available_to_target_client"])
+        self.assertEqual([], availability["available_tools"])
         self.assertIn("do not ask for another reload", availability["assistant_visible_response"])
         self.assertNotIn("start a new OpenCode session", availability["assistant_visible_response"])
         self.assertIn("mcp_server_startup_failed", capabilities["assistant_visible_response"])
@@ -2441,6 +2494,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             "mcp_server_startup_failed",
             readback["target_client_services"][0]["mcp_runtime_diagnostic"]["classification"],
         )
+        self.assertFalse(readback["target_client_services"][0]["available_to_target_client"])
         self.assertEqual(
             "mcp_server_startup_failed",
             readback["target_client_services"][0]["readiness_layers"]["mcp_runtime"],
@@ -2502,6 +2556,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 self.assertTrue(diagnostic["attempted"])
                 self.assertEqual(auth_status, diagnostic["auth_status"])
                 self.assertEqual(transport_status, diagnostic["transport_status"])
+                self.assertFalse(availability["project_services"][0]["available_to_target_client"])
+                self.assertEqual([], availability["available_tools"])
+                self.assertFalse(readback["target_client_services"][0]["available_to_target_client"])
                 self.assertIn("do not ask for another reload", availability["assistant_visible_response"])
                 self.assertIn(classification, readback["assistant_visible_response"])
                 self.assertIn("do not ask for another reload", readback["assistant_visible_response"])

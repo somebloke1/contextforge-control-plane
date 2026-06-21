@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 PROMPT = "what can you do in this project?"
 
@@ -330,7 +332,7 @@ def extract_codex_session_id(text: str) -> str:
 
 
 def command_block(result: dict[str, Any]) -> str:
-    return "\n".join([f"COMMAND: {result['command_text']}", f"CWD: {result['cwd']}", f"RETURNCODE: {result['returncode']}", f"TIMEOUT: {str(result['timeout']).lower()}", "", "STDOUT:", str(result.get("stdout") or ""), "", "STDERR:", str(result.get("stderr") or ""), ""])
+    return "\n".join([f"COMMAND: {redact_text(str(result['command_text']))}", f"CWD: {result['cwd']}", f"RETURNCODE: {result['returncode']}", f"TIMEOUT: {str(result['timeout']).lower()}", "", "STDOUT:", redact_text(str(result.get("stdout") or "")), "", "STDERR:", redact_text(str(result.get("stderr") or "")), ""])
 
 
 def build_generation_report(*, client: str, session_id: str, prompt: str, turn: dict[str, Any]) -> dict[str, Any]:
@@ -520,7 +522,7 @@ def render_combined(**kwargs: Any) -> str:
         "",
     ]
     for item in kwargs["commands"]:
-        lines.append(f"- `{item['command_text']}` -> rc={item['returncode']} timeout={item['timeout']}")
+        lines.append(f"- `{redact_text(item['command_text'])}` -> rc={item['returncode']} timeout={item['timeout']}")
     lines.extend(["", "## Generation Report", "```json", json.dumps(kwargs["generation_report"], indent=2, sort_keys=True), "```", ""])
     lines.extend(["", "## Reset Readback", "```json", json.dumps(kwargs["reset_json"], indent=2, sort_keys=True), "```", ""])
     for label in ("setup", "runtime", "fixture", "turn"):
@@ -586,9 +588,9 @@ def build_structural_metadata(
             "reset_client": reset_client_name(client),
             "compose_service": compose_service_name(client),
         },
-        "reset_json": reset_json,
+        "reset_json": redact_value(reset_json),
         "generation_report": generation_report,
-        "commands": commands,
+        "commands": redact_value(commands),
         "required_command_statuses": {
             "setup": command_status(setup),
             "launch": command_status(launch),

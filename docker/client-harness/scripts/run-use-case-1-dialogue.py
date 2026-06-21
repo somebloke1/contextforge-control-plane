@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 PROMPTS = ["hello", "1", "approve"]
 
@@ -570,19 +572,6 @@ def render_command_block(result: dict[str, Any]) -> str:
     )
 
 
-def redact_text(text: str) -> str:
-    redactor = Path(__file__).with_name("redact-contextforge-secrets.py")
-    completed = subprocess.run(
-        [sys.executable, str(redactor)],
-        input=text,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    return completed.stdout if completed.returncode == 0 else text
-
-
 def render_combined_evidence(
     *,
     client: str,
@@ -612,7 +601,7 @@ def render_combined_evidence(
         "",
     ]
     for item in commands:
-        lines.append(f"- `{item['command_text']}` -> rc={item['returncode']} timeout={item['timeout']}")
+        lines.append(f"- `{redact_text(item['command_text'])}` -> rc={item['returncode']} timeout={item['timeout']}")
     lines.extend(render_dialogue_summary_markdown(dialogue_summary))
     lines.extend(["", "## Generation Report", "", "```json", json.dumps(generation_report, indent=2, sort_keys=True), "```", ""])
     lines.extend(["", "## Reset Readback", "", "```json", json.dumps(reset_json, indent=2, sort_keys=True), "```", ""])
@@ -750,8 +739,8 @@ def build_evaluation_package(
                 "8. Score summary and final evaluator verdict:",
             ],
         },
-        "reset_readback": reset_json,
-        "verifier_result": verifier_json,
+        "reset_readback": redact_value(reset_json),
+        "verifier_result": redact_value(verifier_json),
         "deterministic_verifier_status": "pass" if verifier_ok else "fail",
         "deterministic_verifier_scope": "harness and structured-evidence support; not semantic acceptance",
     }
@@ -791,9 +780,9 @@ def build_structural_metadata(
             "reset_client": reset_client_name(client),
             "compose_service": compose_service_name(client),
         },
-        "reset_json": reset_json,
+        "reset_json": redact_value(reset_json),
         "generation_report": generation_report,
-        "commands": commands,
+        "commands": redact_value(commands),
         "required_command_statuses": required_statuses,
         "semantic_criteria": [step["id"] for step in STEP_CRITERIA],
     }

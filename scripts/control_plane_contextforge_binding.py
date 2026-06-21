@@ -73,6 +73,8 @@ REQUIRED_CLIENT_BINDING_TRACE_LAYERS = (
     "redaction",
 )
 PROJECT_INIT_OWNER_MARKER = "# contextforge-project-init-owner = \"ContextForge\""
+PROJECT_INIT_OWNER_ENV = "CONTEXTFORGE_PROJECT_INIT_OWNER"
+PROJECT_INIT_OWNER_VALUE = "ContextForge"
 PROJECT_INIT_BINDING_MARKER = "# contextforge-project-init-service-binding = \"{service_binding}\""
 PROJECT_INIT_SERVER_MARKER = "# contextforge-project-init-virtual-server = \"{virtual_server}\""
 VALIDATION_MODES = frozenset({"installed", "pending_choice", "validate_now", "presume_working"})
@@ -454,6 +456,7 @@ def build_project_init_gemini_binding_entry(service: Mapping[str, Any]) -> dict[
         "args": [str(WRAPPER_PATH), virtual_server],
         "cwd": str(REPO_ROOT),
         "env": {
+            PROJECT_INIT_OWNER_ENV: PROJECT_INIT_OWNER_VALUE,
             "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
             "MCP_WRAPPER_LOG_LEVEL": "INFO",
         },
@@ -671,6 +674,7 @@ def build_project_init_opencode_binding_entry(service: Mapping[str, Any]) -> dic
     wrapper_python = os.environ.get(OPENCODE_WRAPPER_PYTHON_ENV) or str(PYTHON_PATH)
     wrapper_script = os.environ.get(OPENCODE_WRAPPER_SCRIPT_ENV) or str(WRAPPER_PATH)
     environment = {
+        PROJECT_INIT_OWNER_ENV: PROJECT_INIT_OWNER_VALUE,
         "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
         "MCP_WRAPPER_LOG_LEVEL": "INFO",
     }
