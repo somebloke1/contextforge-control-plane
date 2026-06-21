@@ -107,12 +107,16 @@ work, and do not revive post-install validation to close them.
 ## Category D: Active Follow-Up Or Future Work
 
 - #284 legacy/new ContextForge service, prompt, and resource parity: large
-  service-ops/readiness lane. Keep visible, but it is broader than the current
-  post-UC cleanup slice.
+  service-ops/readiness lane. A read-only parity investigation is now leased
+  to `codex-agent:019ee7cf-f72e-7022-9b9a-c370d3a55ca9` because current
+  evidence shows both `4444` and `4445` listeners and the service-map/#284
+  legacy/new port descriptions need reconciliation before implementation.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
-- #152 service onboarding workflow: ready future service-onboarding lane.
+- #152 service onboarding workflow: ideal-form acceptance boundary for #52, not
+  a separate duplicate implementation lane. It is now In Review because #52 and
+  draft PR #197 already carry the service-onboarding helper review path.
 - #154 prompt/resource guidance association: future tool-guidance lane.
 
 ## Current Next Target
@@ -124,5 +128,7 @@ packaged. The next controller-maintenance target is PR/Project hygiene:
   active PR #271 review surface;
 - keep #290/#292/#293/#289 in review rather than active development unless
   reviewers return actionable defects;
-- then choose between the validation-era cleanup group (#272-#276/#279) and
-  the broader service parity lane (#284) based on dependency pressure.
+- keep the validation-era cleanup group (#272-#276/#279) In Review under the
+  install-only quarantine boundary;
+- integrate the #284 read-only parity report before selecting any runtime,
+  registration, prompt, or resource implementation slice.
