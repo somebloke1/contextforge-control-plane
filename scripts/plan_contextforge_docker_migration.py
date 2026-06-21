@@ -116,7 +116,11 @@ HELPER_DISPOSITIONS: dict[str, dict[str, str]] = {
     },
 }
 
-EXPECTED_TOOL_GUIDANCE_TAGS = set(register_tool_guidance.PROMPTS)
+EXPECTED_TOOL_GUIDANCE_TAG_TO_TOOL = {
+    register_tool_guidance.tool_guidance_tag(tool_name): tool_name
+    for tool_name in register_tool_guidance.PROMPTS
+}
+EXPECTED_TOOL_GUIDANCE_TAGS = set(EXPECTED_TOOL_GUIDANCE_TAG_TO_TOOL)
 
 
 def _read_json(path: Path | None) -> dict[str, Any] | None:
@@ -173,6 +177,10 @@ def _tool_guidance_tags(rows: list[dict[str, Any]]) -> set[str]:
             continue
         tags.update(label for label in labels if label in EXPECTED_TOOL_GUIDANCE_TAGS)
     return tags
+
+
+def _tool_names_for_tags(tags: set[str]) -> list[str]:
+    return sorted(EXPECTED_TOOL_GUIDANCE_TAG_TO_TOOL.get(tag, tag) for tag in tags)
 
 
 def _counts(readback: dict[str, Any] | None, surface: str) -> dict[str, int]:
@@ -285,6 +293,10 @@ def build_plan(
     baseline_resource_tags = _tool_guidance_tags(_endpoint_rows(baseline, "host_4444", "resources"))
     target_prompt_tags = _tool_guidance_tags(_endpoint_rows(current, "docker_4445", "prompts"))
     target_resource_tags = _tool_guidance_tags(_endpoint_rows(current, "docker_4445", "resources"))
+    baseline_prompt_missing = EXPECTED_TOOL_GUIDANCE_TAGS - baseline_prompt_tags
+    baseline_resource_missing = EXPECTED_TOOL_GUIDANCE_TAGS - baseline_resource_tags
+    target_prompt_missing = baseline_prompt_tags - target_prompt_tags
+    target_resource_missing = baseline_resource_tags - target_resource_tags
 
     return {
         "schema_uri": SCHEMA_URI,
@@ -314,10 +326,14 @@ def build_plan(
             "baseline_resource_tool_guidance_tags": len(baseline_resource_tags),
             "target_prompt_tool_guidance_tags": len(target_prompt_tags),
             "target_resource_tool_guidance_tags": len(target_resource_tags),
-            "baseline_prompt_tags_missing_expected_source": sorted(EXPECTED_TOOL_GUIDANCE_TAGS - baseline_prompt_tags),
-            "baseline_resource_tags_missing_expected_source": sorted(EXPECTED_TOOL_GUIDANCE_TAGS - baseline_resource_tags),
-            "prompt_tags_missing_on_4445": sorted(baseline_prompt_tags - target_prompt_tags),
-            "resource_tags_missing_on_4445": sorted(baseline_resource_tags - target_resource_tags),
+            "baseline_prompt_tags_missing_expected_source": sorted(baseline_prompt_missing),
+            "baseline_resource_tags_missing_expected_source": sorted(baseline_resource_missing),
+            "baseline_prompt_tools_missing_expected_source": _tool_names_for_tags(baseline_prompt_missing),
+            "baseline_resource_tools_missing_expected_source": _tool_names_for_tags(baseline_resource_missing),
+            "prompt_tags_missing_on_4445": sorted(target_prompt_missing),
+            "resource_tags_missing_on_4445": sorted(target_resource_missing),
+            "prompt_tools_missing_on_4445": _tool_names_for_tags(target_prompt_missing),
+            "resource_tools_missing_on_4445": _tool_names_for_tags(target_resource_missing),
         },
         "helper_dispositions": HELPER_DISPOSITIONS,
         "services": services,

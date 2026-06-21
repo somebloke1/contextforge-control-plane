@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import sys
 import time
 import urllib.error
+import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import control_plane_registry_discipline as registry_discipline
@@ -22,6 +26,7 @@ VISIBILITY = "public"
 SERVICE_META = {
     "mentality": {
         "server": "mentality_server",
+        "gateway_name": "mentality",
         "gateway": "21bf9a1aa70a49e9ba2d11bafa280ef7",
         "sources": [
             "Local governance MCP: scripts/governance_mcp.py",
@@ -31,12 +36,14 @@ SERVICE_META = {
     },
     "ssh-tmux": {
         "server": "ssh_tmux_server",
+        "gateway_name": "ssh-tmux",
         "gateway": "5c2a76c98c074afe87df07dc207476e3",
         "sources": ["https://github.com/johnpyp/mcp-ssh-tmux", "Package: mcp-ssh-tmux"],
         "notes": "Persistent SSH sessions are backed by tmux. Inspect snapshots before closing sessions or sending raw keys.",
     },
     "context7": {
         "server": "context7_local_server",
+        "gateway_name": "context7-local",
         "gateway": "c8e2bd7d99254b98b2904bce6f39aedc",
         "sources": [
             "https://github.com/upstash/context7",
@@ -47,6 +54,7 @@ SERVICE_META = {
     },
     "playwright": {
         "server": "playwright_server",
+        "gateway_name": "playwright",
         "gateway": "19af5a4c3a944decb7242ea51b072bce",
         "sources": [
             "https://playwright.dev/docs/getting-started-mcp",
@@ -58,6 +66,7 @@ SERVICE_META = {
     },
     "exa-search": {
         "server": "exa_search_server",
+        "gateway_name": "exa-search",
         "gateway": "05754613e3644721aa12f2d923dc6403",
         "sources": [
             "https://exa.ai/docs/reference/exa-mcp",
@@ -69,6 +78,7 @@ SERVICE_META = {
     },
     "openzeppelin-solidity-contracts": {
         "server": "openzeppelin_solidity_contracts_server",
+        "gateway_name": "openzeppelin-solidity-contracts",
         "gateway": "30e0189877854e24879e1428fcc73b2c",
         "sources": [
             "https://mcp.openzeppelin.com/contracts/solidity/mcp",
@@ -79,6 +89,7 @@ SERVICE_META = {
     },
     "github": {
         "server": "github_server",
+        "gateway_name": "github",
         "gateway": "35de0ef8f791449898317435f986d6dd",
         "sources": [
             "https://github.com/modelcontextprotocol/servers/tree/main/src/github",
@@ -89,6 +100,7 @@ SERVICE_META = {
     },
     "web-search": {
         "server": "web_search_server",
+        "gateway_name": "web-search",
         "gateway": "68493a5f5b5048f5973edb8c5d00dc5b",
         "sources": [
             "/home/dgk/workspace/web_search",
@@ -198,6 +210,8 @@ SQL_WORD_REPLACEMENTS = {
     "drop": "place",
 }
 
+MAX_CONTEXTFORGE_TAG_LENGTH = 50
+
 
 @dataclass(frozen=True)
 class GuidanceItem:
@@ -207,8 +221,8 @@ class GuidanceItem:
     prompt_body: dict[str, Any]
 
 
-def api_items(path: str, token: str) -> list[dict[str, Any]]:
-    return gateway._items(api_request("GET", path, token=token))
+def api_items(path: str, token: str, *, base_url: str | None = None) -> list[dict[str, Any]]:
+    return gateway._items(api_request("GET", path, token=token, base_url=base_url))
 
 
 def api_request(
@@ -217,12 +231,17 @@ def api_request(
     *,
     token: str,
     body: dict[str, Any] | None = None,
+    base_url: str | None = None,
     attempts: int = 8,
 ) -> Any:
     registry_discipline.assert_public_contextforge_api_path(method, path)
     for attempt in range(attempts):
         try:
-            result = gateway._request(method, path, token=token, body=body)
+            result = (
+                target_request(method, base_url, path, token=token, body=body)
+                if base_url
+                else gateway._request(method, path, token=token, body=body)
+            )
             if method != "GET":
                 time.sleep(0.2)
             return result
@@ -238,6 +257,63 @@ def api_request(
 
 def index_by(rows: list[dict[str, Any]], key: str) -> dict[str, dict[str, Any]]:
     return {row[key]: row for row in rows if isinstance(row.get(key), str)}
+
+
+def target_request(
+    method: str,
+    base_url: str,
+    path: str,
+    *,
+    token: str | None = None,
+    body: dict[str, Any] | None = None,
+) -> Any:
+    headers = {"Accept": "application/json"}
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode()
+        headers["Content-Type"] = "application/json"
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}{path}",
+        data=data,
+        headers=headers,
+        method=method,
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = response.read()
+    return json.loads(payload) if payload else None
+
+
+def target_login_token(base_url: str, email: str, password: str) -> str:
+    for login_path in ("/auth/login", "/auth/email/login"):
+        try:
+            payload = target_request(
+                "POST",
+                base_url,
+                login_path,
+                body={"email": email, "password": password},
+            )
+        except urllib.error.HTTPError as exc:
+            if exc.code in {404, 405}:
+                continue
+            raise
+        token = payload.get("access_token") if isinstance(payload, dict) else None
+        if isinstance(token, str) and token:
+            return token
+    raise RuntimeError(f"ContextForge login did not return an access token for {base_url.rstrip('/')}")
+
+
+def resolve_service_meta(gateways_by_name: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    resolved: dict[str, dict[str, Any]] = {}
+    for service, meta in SERVICE_META.items():
+        item = dict(meta)
+        gateway_name = str(item.get("gateway_name") or "")
+        live_gateway = gateways_by_name.get(gateway_name)
+        if live_gateway and isinstance(live_gateway.get("id"), str):
+            item["gateway"] = live_gateway["id"]
+        resolved[service] = item
+    return resolved
 
 
 def prompt_args(template: str) -> list[dict[str, Any]]:
@@ -300,6 +376,16 @@ def unmapped_extra_tools(tools_by_name: dict[str, dict[str, Any]]) -> list[str]:
         for name in set(tools_by_name) - set(PROMPTS)
         if not tool_guidance_managed_elsewhere(name)
     )
+
+
+def tool_guidance_tag(tool_name: str) -> str:
+    if len(tool_name) <= MAX_CONTEXTFORGE_TAG_LENGTH:
+        return tool_name
+    return "tool-" + hashlib.sha256(tool_name.encode("utf-8")).hexdigest()[:16]
+
+
+def expected_tool_guidance_tags() -> set[str]:
+    return {tool_guidance_tag(tool_name) for tool_name in PROMPTS}
 
 
 def resource_uri(tool: dict[str, Any], service: str) -> str:
@@ -418,16 +504,20 @@ def build_guidance_items(
     prompts_by_custom: dict[str, dict[str, Any]],
     prompts_by_name: dict[str, dict[str, Any]],
     prompt_defs: dict[str, tuple[str, str]],
+    *,
+    service_meta: dict[str, dict[str, Any]] | None = None,
+    owner_email: str = OWNER,
 ) -> tuple[list[GuidanceItem], dict[str, dict[str, Any] | None]]:
     items: list[GuidanceItem] = []
     existing_by_key: dict[str, dict[str, Any] | None] = {}
+    meta_by_service = service_meta or SERVICE_META
 
     for tool_name in sorted(prompt_defs):
         prompt_name, raw_template = prompt_defs[tool_name]
         template = sanitize_scanner_text(raw_template)
         tool = tools_by_name[tool_name]
         service = service_for_tool(tool_name)
-        meta = SERVICE_META[service]
+        meta = meta_by_service[service]
         uri = resource_uri(tool, service)
         name = resource_name(tool, service)
 
@@ -438,8 +528,8 @@ def build_guidance_items(
             "description": f"Project-independent guidance resource for {safe_identifier_text(tool_name)}.",
             "mimeType": "text/markdown",
             "content": resource_content(tool, service, template),
-            "tags": ["tool-guidance", service, tool_name],
-            "owner_email": OWNER,
+            "tags": ["tool-guidance", service, tool_guidance_tag(tool_name)],
+            "owner_email": owner_email,
             "visibility": VISIBILITY,
             "gateway_id": meta["gateway"],
         }
@@ -451,8 +541,8 @@ def build_guidance_items(
             "description": f"Succinct prompt for {safe_identifier_text(tool_name)}. {compact(sanitize_scanner_text(tool.get('description') or ''))}",
             "template": template,
             "arguments": prompt_args(template),
-            "tags": ["tool-guidance", service, tool_name],
-            "ownerEmail": OWNER,
+            "tags": ["tool-guidance", service, tool_guidance_tag(tool_name)],
+            "ownerEmail": owner_email,
             "visibility": VISIBILITY,
             "gatewayId": meta["gateway"],
         }
@@ -470,7 +560,7 @@ def build_guidance_items(
     return items, existing_by_key
 
 
-def preflight_guidance(items: list[GuidanceItem]) -> None:
+def preflight_guidance(items: list[GuidanceItem], *, owner_email: str = OWNER) -> None:
     from mcpgateway.services.content_security import get_content_security_service
 
     service = get_content_security_service()
@@ -479,8 +569,8 @@ def preflight_guidance(items: list[GuidanceItem]) -> None:
         content = item.resource_body["content"]
         template = item.prompt_body["template"]
         try:
-            service.validate_resource_size(content, uri=item.resource_body["uri"], user_email=OWNER)
-            service.detect_malicious_patterns(content, content_type="Resource content", user_email=OWNER)
+            service.validate_resource_size(content, uri=item.resource_body["uri"], user_email=owner_email)
+            service.detect_malicious_patterns(content, content_type="Resource content", user_email=owner_email)
         except Exception as exc:  # noqa: BLE001 - report ContextForge validation details.
             violation = getattr(exc, "violation_type", type(exc).__name__)
             pattern = getattr(exc, "pattern_matched", "")
@@ -490,8 +580,8 @@ def preflight_guidance(items: list[GuidanceItem]) -> None:
             )
 
         try:
-            service.validate_prompt_size(template, name=item.prompt_body["name"], user_email=OWNER)
-            service.validate_prompt_template(template, name=item.prompt_body["name"], user_email=OWNER)
+            service.validate_prompt_size(template, name=item.prompt_body["name"], user_email=owner_email)
+            service.validate_prompt_template(template, name=item.prompt_body["name"], user_email=owner_email)
         except Exception as exc:  # noqa: BLE001 - report ContextForge validation details.
             violation = getattr(exc, "violation_type", type(exc).__name__)
             pattern = getattr(exc, "pattern_matched", "")
@@ -504,31 +594,76 @@ def preflight_guidance(items: list[GuidanceItem]) -> None:
         raise RuntimeError("ContextForge validation preflight failed:\n" + "\n".join(errors))
 
 
+def guidance_counts(
+    guidance_items: list[GuidanceItem],
+    existing_by_key: dict[str, dict[str, Any] | None],
+    services_to_update: list[str],
+) -> dict[str, Any]:
+    by_service = {
+        service: {
+            "resources": sum(1 for item in guidance_items if item.service == service),
+            "prompts": sum(1 for item in guidance_items if item.service == service),
+        }
+        for service in services_to_update
+    }
+    return {
+        "tools_covered": len(guidance_items),
+        "resources": {
+            "create": sum(1 for item in guidance_items if not existing_by_key[f"resource:{item.tool_name}"]),
+            "update": sum(1 for item in guidance_items if existing_by_key[f"resource:{item.tool_name}"]),
+        },
+        "prompts": {
+            "create": sum(1 for item in guidance_items if not existing_by_key[f"prompt:{item.tool_name}"]),
+            "update": sum(1 for item in guidance_items if existing_by_key[f"prompt:{item.tool_name}"]),
+        },
+        "by_service": by_service,
+    }
+
+
+def print_summary(summary: dict[str, Any]) -> None:
+    print(f"tools covered: {summary['tools_covered']}")
+    print(f"resources created={summary['resources']['create']} updated={summary['resources']['update']}")
+    print(f"prompts created={summary['prompts']['create']} updated={summary['prompts']['update']}")
+    for service in sorted(SERVICE_META):
+        counts = summary["by_service"].get(service, {"resources": 0, "prompts": 0})
+        print(f"{service}: resources={counts['resources']} prompts={counts['prompts']}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--service", choices=sorted(SERVICE_META), help="Only refresh one service's guidance")
+    parser.add_argument("--service", action="append", choices=sorted(SERVICE_META), help="Only refresh one service's guidance; repeatable.")
+    parser.add_argument("--base-url", help="Target ContextForge base URL; omit to use wrapper defaults.")
+    parser.add_argument("--env-file", help="Target env file; omit to use wrapper defaults.")
+    parser.add_argument("--dry-run", action="store_true", help="Plan guidance changes without creating or updating prompts/resources/servers.")
+    parser.add_argument("--json", action="store_true", help="Print structured JSON summary.")
     args = parser.parse_args()
 
-    config = gateway._read_env(gateway.CONFIG_ENV)
-    token = gateway._token(config["PLATFORM_ADMIN_EMAIL"], config["PLATFORM_ADMIN_PASSWORD"])
+    env_path = Path(args.env_file) if args.env_file else gateway.CONFIG_ENV
+    config = gateway._read_env(env_path)
+    email = config["PLATFORM_ADMIN_EMAIL"]
+    token = target_login_token(args.base_url, email, config["PLATFORM_ADMIN_PASSWORD"]) if args.base_url else gateway._token(email, config["PLATFORM_ADMIN_PASSWORD"])
+    owner_email = email
 
+    selected_services = set(args.service or [])
     prompt_defs = {
         tool_name: prompt
         for tool_name, prompt in PROMPTS.items()
-        if args.service is None or service_for_tool(tool_name) == args.service
+        if not selected_services or service_for_tool(tool_name) in selected_services
     }
 
-    tools = api_items("/tools?include_inactive=true&limit=1000", token)
+    tools = api_items("/tools?include_inactive=true&limit=1000", token, base_url=args.base_url)
     tools_by_name = index_by(tools, "name")
     missing = sorted(set(prompt_defs) - set(tools_by_name))
-    extra = unmapped_extra_tools(tools_by_name) if args.service is None else []
+    extra = unmapped_extra_tools(tools_by_name) if not selected_services else []
     if missing or extra:
         print(f"tool/prompt mismatch: missing={missing} extra={extra}", file=sys.stderr)
         return 1
 
-    servers_by_name = index_by(api_items("/servers?include_inactive=true&limit=1000", token), "name")
-    resources_by_uri = index_by(api_items("/resources?include_inactive=true&limit=1000", token), "uri")
-    prompts = api_items("/prompts?include_inactive=true&limit=1000", token)
+    gateways_by_name = index_by(api_items("/gateways?include_inactive=true&limit=1000", token, base_url=args.base_url), "name")
+    service_meta = resolve_service_meta(gateways_by_name)
+    servers_by_name = index_by(api_items("/servers?include_inactive=true&limit=1000", token, base_url=args.base_url), "name")
+    resources_by_uri = index_by(api_items("/resources?include_inactive=true&limit=1000", token, base_url=args.base_url), "uri")
+    prompts = api_items("/prompts?include_inactive=true&limit=1000", token, base_url=args.base_url)
     prompts_by_custom = {
         prompt.get("customName") or prompt.get("custom_name") or prompt.get("name"): prompt
         for prompt in prompts
@@ -542,12 +677,41 @@ def main() -> int:
         prompts_by_custom,
         prompts_by_name,
         prompt_defs,
+        service_meta=service_meta,
+        owner_email=owner_email,
     )
     try:
-        preflight_guidance(guidance_items)
+        preflight_guidance(guidance_items, owner_email=owner_email)
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+
+    services_to_update = sorted(selected_services) if selected_services else sorted(SERVICE_META)
+    for service in services_to_update:
+        meta = service_meta[service]
+        if meta["server"] not in servers_by_name:
+            print(f"missing server {meta['server']}", file=sys.stderr)
+            return 1
+
+    planned_summary = guidance_counts(guidance_items, existing_by_key, services_to_update)
+    if args.dry_run:
+        result = {
+            "schema_uri": "contextforge://diagnostics/tool-guidance-registration/v1",
+            "mutation_performed": False,
+            "apply_requested": False,
+            "target": {
+                "base_url": args.base_url or gateway.GATEWAY_BASE,
+                "env_file": str(env_path),
+                "env_values_recorded": False,
+            },
+            **planned_summary,
+            "non_actions": [
+                "dry-run; no ContextForge API mutation",
+                "dry-run; no prompt, resource, server, gateway, tool, Docker, systemd, or client mutation",
+            ],
+        }
+        print(json.dumps(result, indent=2, sort_keys=True) if args.json else result)
+        return 0
 
     resource_ids: dict[str, list[str]] = defaultdict(list)
     prompt_ids: dict[str, list[str]] = defaultdict(list)
@@ -557,12 +721,12 @@ def main() -> int:
         existing_resource = existing_by_key[f"resource:{item.tool_name}"]
         if existing_resource:
             resource = api_request(
-                "PUT", f"/resources/{existing_resource['id']}", token=token, body=item.resource_body
+                "PUT", f"/resources/{existing_resource['id']}", token=token, body=item.resource_body, base_url=args.base_url
             )
             updated_resources += 1
         else:
             resource = api_request(
-                "POST", "/resources", token=token, body={"resource": item.resource_body, "visibility": VISIBILITY}
+                "POST", "/resources", token=token, body={"resource": item.resource_body, "visibility": VISIBILITY}, base_url=args.base_url
             )
             created_resources += 1
         resource_ids[item.service].append(resource["id"])
@@ -570,38 +734,50 @@ def main() -> int:
         existing_prompt = existing_by_key[f"prompt:{item.tool_name}"]
         if existing_prompt:
             prompt = api_request(
-                "PUT", f"/prompts/{existing_prompt['id']}", token=token, body=item.prompt_body
+                "PUT", f"/prompts/{existing_prompt['id']}", token=token, body=item.prompt_body, base_url=args.base_url
             )
             updated_prompts += 1
         else:
             prompt = api_request(
-                "POST", "/prompts", token=token, body={"prompt": item.prompt_body, "visibility": VISIBILITY}
+                "POST", "/prompts", token=token, body={"prompt": item.prompt_body, "visibility": VISIBILITY}, base_url=args.base_url
             )
             created_prompts += 1
         prompt_ids[item.service].append(prompt["id"])
 
-    services_to_update = [args.service] if args.service else sorted(SERVICE_META)
     for service in services_to_update:
-        meta = SERVICE_META[service]
+        meta = service_meta[service]
         server = servers_by_name.get(meta["server"])
-        if not server:
-            print(f"missing server {meta['server']}", file=sys.stderr)
-            return 1
         body = {
             "associatedTools": server.get("associatedToolIds") or [],
             "associatedResources": resource_ids[service],
             "associatedPrompts": prompt_ids[service],
             "associatedA2aAgents": server.get("associatedA2aAgents") or [],
-            "ownerEmail": OWNER,
+            "ownerEmail": owner_email,
             "visibility": VISIBILITY,
         }
-        api_request("PUT", f"/servers/{server['id']}", token=token, body=body)
+        api_request("PUT", f"/servers/{server['id']}", token=token, body=body, base_url=args.base_url)
 
-    print(f"tools covered: {len(prompt_defs)}")
-    print(f"resources created={created_resources} updated={updated_resources}")
-    print(f"prompts created={created_prompts} updated={updated_prompts}")
-    for service in sorted(SERVICE_META):
-        print(f"{service}: resources={len(resource_ids[service])} prompts={len(prompt_ids[service])}")
+    summary = {
+        "schema_uri": "contextforge://diagnostics/tool-guidance-registration/v1",
+        "mutation_performed": True,
+        "apply_requested": True,
+        "target": {
+            "base_url": args.base_url or gateway.GATEWAY_BASE,
+            "env_file": str(env_path),
+            "env_values_recorded": False,
+        },
+        "tools_covered": len(prompt_defs),
+        "resources": {"create": created_resources, "update": updated_resources},
+        "prompts": {"create": created_prompts, "update": updated_prompts},
+        "by_service": {
+            service: {"resources": len(resource_ids[service]), "prompts": len(prompt_ids[service])}
+            for service in services_to_update
+        },
+    }
+    if args.json:
+        print(json.dumps(summary, indent=2, sort_keys=True))
+    else:
+        print_summary(summary)
     return 0
 
 

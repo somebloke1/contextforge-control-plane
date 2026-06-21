@@ -28,6 +28,15 @@ and reconciled before 4444 is retired.
   `generated/contextforge-284-docker-migration-apply-dry-run-20260621.local.json`
 - 4445 Docker migration safe-service apply:
   `generated/contextforge-284-docker-migration-apply-safe-services-20260621.local.json`
+- 4445 Docker guidance dry-run/apply artifacts:
+  `generated/contextforge-284-4445-guidance-safe-services-dry-run-20260621.local.json`,
+  `generated/contextforge-284-4445-guidance-safe-services-apply-20260621.local.json`,
+  and
+  `generated/contextforge-284-4445-guidance-openzeppelin-retag-20260621.local.json`
+- 4445 post-guidance readback and migration plan:
+  `generated/contextforge-284-4445-post-guidance-readback-20260621.local.json`
+  and
+  `generated/contextforge-284-docker-migration-plan-post-guidance-20260621.local.json`
 - Token values were used only in memory and were not written to the artifacts.
 - The initial readbacks and dry-runs performed no registry, service, prompt,
   resource, tool, or server mutation. The safe-service apply intentionally
@@ -208,6 +217,57 @@ service discovery is manifest-backed and keys readback to expected virtual
 server names, but it should be reconciled before claiming a fully clean
 successor surface.
 
+## 4445 Guidance Replay
+
+`scripts/register_tool_guidance.py` now accepts explicit target metadata:
+`--base-url`, `--env-file`, repeatable `--service`, `--dry-run`, and `--json`.
+It resolves gateway IDs from live target gateway readback instead of relying on
+the hardcoded 4444 gateway IDs in `SERVICE_META`.
+
+The script also now uses deterministic short guidance tags for ContextForge tag
+values longer than 50 characters. This repairs the OpenZeppelin stablecoin
+association problem without depending on an over-limit tag that the stock
+ContextForge API silently drops. The stablecoin source tool
+`openzeppelin-solidity-contracts-solidity-stablecoin` maps to the short tag
+`tool-1d3cda5a19e32f4a` on 4445 prompt/resource records.
+
+Bounded guidance dry-run for `context7`, `mentality`, and
+`openzeppelin-solidity-contracts` planned:
+
+| Service | Resources | Prompts |
+| --- | ---: | ---: |
+| `context7` | 2 | 2 |
+| `mentality` | 5 | 5 |
+| `openzeppelin-solidity-contracts` | 8 | 8 |
+
+The bounded apply created 15 resources and 15 prompts on 4445. After introducing
+the short stablecoin guidance tag, a follow-up OpenZeppelin-only apply updated 8
+resources and 8 prompts without creating new rows.
+
+Post-guidance authenticated 4445 readback returned:
+
+| Endpoint | Count |
+| --- | ---: |
+| `/gateways` | 3 |
+| `/servers` | 4 |
+| `/tools` | 15 |
+| `/prompts` | 15 |
+| `/resources` | 15 |
+
+Server association readback:
+
+| Server | Tools | Prompts | Resources |
+| --- | ---: | ---: | ---: |
+| `context7_local_server` | 2 | 2 | 2 |
+| `mentality_server` | 5 | 5 | 5 |
+| `openzeppelin_solidity_contracts_server` | 8 | 8 | 8 |
+| `mentality_dev_docker_server` | 5 | 0 | 0 |
+
+The post-guidance planner reports 15 target prompt guidance tags and 15 target
+resource guidance tags out of 81 source-defined guidance keys. The remaining
+66 missing keys correspond to the unresolved credential-scoped, session-scoped,
+and project-scoped services.
+
 ## Controller Disposition
 
 #284 should remain Active or In Review only after explicit controller
@@ -219,6 +279,6 @@ evidence and partial safe-service apply evidence. Because 4444 is scheduled for
 decommissioning, 4445 parity is not optional cleanup; it is the next required
 migration-readiness slice before any claim that the replacement ContextForge
 surface preserves the canonical service and guidance set. Remaining work:
-boundary decisions for credential/session/project-scoped services, prompt and
-resource guidance replay to 4445, cleanup of stale dev bootstrap residue, and a
-final parity readback.
+boundary decisions for credential/session/project-scoped services, guidance
+replay for those services after registration, cleanup of stale dev bootstrap
+residue, and a final parity readback.

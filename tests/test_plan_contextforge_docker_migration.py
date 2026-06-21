@@ -152,7 +152,7 @@ class DockerMigrationPlanTests(unittest.TestCase):
         )
         self.assertIn(
             "openzeppelin-solidity-contracts-solidity-stablecoin",
-            plan["guidance_tag_gap"]["baseline_prompt_tags_missing_expected_source"],
+            plan["guidance_tag_gap"]["baseline_prompt_tools_missing_expected_source"],
         )
 
     def test_host_local_defaults_are_flagged_for_docker_projection(self) -> None:

@@ -137,7 +137,14 @@ work, and do not revive post-install validation to close them.
   apply shows 3 gateways, 4 servers, 15 tools, 0 prompts, and 0 resources; the
   project-init read model marks those three services matched and the remaining
   credential-scoped, session-scoped, and project-scoped services still missing
-  or not provisioned.
+  or not provisioned. `scripts/register_tool_guidance.py` is now targetable
+  with `--base-url`, `--env-file`, repeatable `--service`, `--dry-run`, and
+  `--json`, resolves live gateway IDs from target readback, and uses a
+  deterministic short guidance tag when a canonical tool name exceeds
+  ContextForge's 50-character tag limit. Guidance replay for the three matched
+  services has been applied to 4445: post-guidance readback shows 3 gateways,
+  4 servers, 15 tools, 15 prompts, and 15 resources, with 15/81 source guidance
+  keys present and 66 remaining for unresolved services.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
@@ -168,8 +175,7 @@ target is PR/Project hygiene:
   `scripts/plan_contextforge_docker_migration.py` and the targetable dry-run
   path in `scripts/apply_contextforge_registry_recreation.py`: do not apply
   live-surface `127.0.0.1:910x` registry recreation defaults directly to 4445,
-  repair the stablecoin guidance association, replay prompts/resources to 4445,
-  decide the credential/session/project-scoped service boundaries, clean up
-  transitional Docker bootstrap residue, and require explicit parity
-  reconciliation against the 4444 legacy baseline before replacement-readiness
-  is claimed.
+  decide the credential/session/project-scoped service boundaries, replay
+  prompts/resources for those services after registration, clean up transitional
+  Docker bootstrap residue, and require explicit parity reconciliation against
+  the 4444 legacy baseline before replacement-readiness is claimed.
