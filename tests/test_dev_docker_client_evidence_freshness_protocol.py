@@ -38,6 +38,8 @@ class DevDockerClientEvidenceFreshnessProtocolTests(unittest.TestCase):
             "same OpenCode client Docker run",
             "prove Pi through the extension/shim validation path",
             "local Qwen/llama.cpp as configuration",
+            "exact advertised model",
+            "mark the evidence `stale` when they differ",
         ]
 
         for phrase in required_phrases:

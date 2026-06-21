@@ -101,6 +101,19 @@ are run with:
 scripts/smoke-agents.sh
 ```
 
+The probe writes exact advertised model identity reports to ignored local
+evidence files:
+
+```text
+evidence/pi-llama-model-identity.json
+evidence/opencode-llama-model-identity.json
+```
+
+Each report records the expected harness model id, the endpoint-advertised model
+ids, the exercised client surface, and a `current`, `stale`, or `unverified`
+status. A mismatch marks the evidence stale rather than silently accepting a
+nearby Qwen alias.
+
 The Pi config follows the public Pi custom model docs from:
 
 - https://pi.dev/
