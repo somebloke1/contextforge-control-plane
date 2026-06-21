@@ -84,7 +84,7 @@ the backend's real service boundary:
 
 | Service class | Container default | Reason |
 | --- | --- | --- |
-| Shared canonical services such as `mentality`, `context7`, `playwright`, `ssh-tmux`, `exa-search`, `web-search`, and hosted/native services | Shared service or existing native endpoint | These services are not project-specific by default; duplicating them per project would create sibling identities, token scope drift, port churn, and extra lifecycle state without proving new behavior. |
+| Shared canonical services such as `mentality`, `context7`, `playwright`, `ssh-tmux`, `exa-search`, and hosted/native services | Shared service or existing native endpoint | These services are not project-specific by default; duplicating them per project would create sibling identities, token scope drift, port churn, and extra lifecycle state without proving new behavior. |
 | Credential-scoped or user-scoped services | One backend or transceiver per credential or user when the backend cannot safely multiplex | Credential and local-user boundaries are service boundaries. A shared container is acceptable only when the credential scope and lifecycle are intentionally shared. |
 | Session-scoped or client-local services | One backend or transceiver per client-local state boundary only when required | Client config discovery is not service identity. Keep client-local state out of the gateway image and avoid per-client duplication unless runtime behavior materially differs. |
 | Project-scoped services | One backend or transceiver per project when the backend reads or writes project-local state | The project filesystem, project metadata, code index, language server state, and approval boundary are part of the service identity. |
@@ -192,6 +192,16 @@ Compose network and is registered through `http://github-transceiver:9206/mcp`
 only after token-boundary preflight and direct reachability evidence. Use the
 ignored `server-instances/github/.env` boundary or exported
 `GITHUB_PERSONAL_ACCESS_TOKEN`; do not persist secrets in tracked files.
+
+`web-search` follows the same compose-sidecar-locality for credential-scoped stdio
+backend: `web-search-transceiver` runs the local `web_search/dist/mcp-server.js`
+bundle through the stock bridge in the harness network and is registered through
+`http://web-search-transceiver:9207/mcp` only after credential-env preflight and
+direct reachability evidence. The image uses the sibling `web_search` checkout
+as a named Compose build context and copies only package metadata plus
+TypeScript sources into the image; inspect that checkout before treating runtime
+evidence as canonical. Use the ignored `server-instances/web-search/.env`
+boundary; do not persist secrets in tracked files.
 
 Session-scoped services also require stateful gateway ingress. The Docker
 harness sets `USE_STATEFUL_SESSIONS=true` and `GUNICORN_WORKERS=1` so the

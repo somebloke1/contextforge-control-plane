@@ -87,6 +87,27 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("localhost:9204,127.0.0.1:9204,playwright-transceiver:9204", dockerfile)
         self.assertIn("9204", dockerfile)
 
+    def test_compose_defines_web_search_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/web-search-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("web-search-transceiver:", compose)
+        self.assertIn("contextforge-harness-web-search-transceiver:latest", compose)
+        self.assertIn("additional_contexts:", compose)
+        self.assertIn("web_search: ../../../web_search", compose)
+        self.assertIn('"127.0.0.1:9207:9207"', compose)
+        self.assertIn("docker/contextforge-harness/web-search-transceiver/Dockerfile", compose)
+        self.assertIn("../../server-instances/web-search/.env", compose)
+        self.assertIn("required: false", compose)
+        self.assertIn("COPY --from=web_search package.json package-lock.json tsconfig.mcp.json ./", dockerfile)
+        self.assertIn("COPY --from=web_search *.ts ./", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--stdio", dockerfile)
+        self.assertIn("node /workspace/web_search/dist/mcp-server.js", dockerfile)
+        self.assertIn("npm run build", dockerfile)
+        self.assertIn("npm prune --omit=dev", dockerfile)
+        self.assertIn("9207", dockerfile)
+
     def test_transceiver_dockerfile_uses_stock_contextforge_translate(self) -> None:
         dockerfile = (ROOT / "docker/contextforge-harness/mcp-transceiver/Dockerfile").read_text(encoding="utf-8")
 

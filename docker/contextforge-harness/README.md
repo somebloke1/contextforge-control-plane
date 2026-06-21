@@ -43,6 +43,9 @@ registration targets used by the gateway from inside the Compose network.
 - Playwright successor MCP sidecar: `playwright-transceiver` on host
   `http://127.0.0.1:9204` and compose-network
   `http://playwright-transceiver:9204`
+- Web Search successor MCP sidecar: `web-search-transceiver` on host
+  `http://127.0.0.1:9207` and compose-network
+  `http://web-search-transceiver:9207`
 
 The named Docker volume has no explicit size cap. Initial gateway-only usage is
 expected to stay small; use `scripts/volume-usage.sh` to inspect it.
@@ -185,6 +188,30 @@ python ../../scripts/plan_contextforge_docker_migration.py
 The migration planner targets the compose-network URL
 `http://playwright-transceiver:9204/mcp`. Registry apply remains a separate
 explicit step after direct reachability evidence.
+
+## Web Search Successor MCP Transceiver
+
+The Web Search sidecar fronts the repo-local stdio MCP server in
+`/home/dgk/workspace/web_search/dist/mcp-server.js` through the stock
+ContextForge bridge. It runs in a dedicated container and reads credentials from
+ignored `server-instances/web-search/.env` via an optional Compose `env_file`.
+The image build uses the sibling `web_search` checkout as a named Compose build
+context, not as the primary cf-controlplane context. The Dockerfile copies only
+package metadata and TypeScript sources from that named context, runs
+`npm run build`, then prunes development dependencies. Inspect the sibling
+checkout state before relying on runtime evidence from this sidecar.
+Do not copy or print API key or token values. A clean checkout can still build
+and reach transport checks; provider-dependent tool behavior requires appropriate
+credential values.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway web-search-transceiver
+python ../../scripts/plan_contextforge_docker_migration.py
+```
+
+The migration planner targets the compose-network URL
+`http://web-search-transceiver:9207/mcp`. Registry apply remains a separate
+explicit step after credential-env preflight and direct reachability evidence.
 
 ## Operations
 

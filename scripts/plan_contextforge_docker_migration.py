@@ -57,10 +57,10 @@ DOCKER_TARGET_PROFILE: dict[str, dict[str, Any]] = {
         "notes": "GitHub credentials are user-scoped; run sidecar with either server-instances/github/.env or exported GITHUB_PERSONAL_ACCESS_TOKEN and complete token preflight before registry apply.",
     },
     "web-search": {
-        "locality": "host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9107/mcp",
-        "approval_state": "blocked_pending_credential_boundary_review",
-        "notes": "Credential/cookie-backed capabilities must be reviewed before successor registration.",
+        "locality": "compose_sidecar",
+        "target_upstream_url": "http://web-search-transceiver:9207/mcp",
+        "approval_state": "ready_after_credential_env_preflight",
+        "notes": "Credential-scoped stdio sidecar uses ignored server-instances/web-search/.env; prove env presence without printing secrets before apply.",
     },
     "openzeppelin-solidity-contracts": {
         "locality": "remote_direct",
@@ -340,7 +340,7 @@ def build_plan(
         "recommended_ordered_slices": [
             "parameterize target/auth inputs for 4445 without using 4444 wrapper defaults",
             "materialize Docker locality profile for each canonical service",
-            "register canonical sidecar-proven services first: context7, mentality, playwright, github, and exa-search after env preflight where applicable",
+            "register canonical sidecar-proven services first: context7, mentality, playwright, github, exa-search, and web-search after env preflight where applicable",
             "add or approve service-specific reachable topology for remaining credential and single-user services",
             "register remote OpenZeppelin directly",
             "replay tool guidance using 4445-discovered gateway IDs and canonical tool tags",
