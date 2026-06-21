@@ -79,6 +79,20 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
         ]:
             self.assertIn(text, self.controller)
 
+    def test_controller_skill_defines_tight_branch_develop_merge_cycle(self) -> None:
+        for text in [
+            "tight branch -> develop -> merge cycle",
+            "freshly fetched\n   current `origin/dev-root`",
+            "do not stack unrelated work on stale or already\n   merged branches",
+            "small enough that the controller can review the diff",
+            "Push and open or update the PR as soon as the slice has local evidence",
+            "A draft PR is not a storage shelf",
+            "refresh `dev-root`, reconcile dependent branches/PRs",
+            "closed-unmerged and conflict-bearing branches as debt",
+            "record the retirement path and keep them out of the active queue",
+        ]:
+            self.assertIn(text, self.controller)
+
     def test_controller_skill_requires_worker_goal_text(self) -> None:
         for text in [
             "initial worker formal goal text",
@@ -212,6 +226,21 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
             "clear `Agent owner` when a lease is completed",
             "do not create duplicate Project items while waiting for auto-add latency",
             "Do not infer that `Agent owner` was cleared merely because `Status` is `Done`",
+        ]:
+            self.assertIn(text, self.project)
+
+    def test_project_skill_defines_branch_and_pr_disposition(self) -> None:
+        for text in [
+            "Branch And PR Disposition",
+            "draft PRs, closed-unmerged PRs, or stale remote branches",
+            "branch -> develop -> merge",
+            "fresh `origin/dev-root`, small branch, local evidence, PR",
+            "A draft PR must have an explicit next action",
+            "A conflict-bearing branch is not `Ready`",
+            "A closed-unmerged PR is retired unless a controller explicitly reopens",
+            "After a merge, reconcile dependent PR bases",
+            "If GraphQL budget prevents Project field mutation",
+            "do not skip the disposition decision",
         ]:
             self.assertIn(text, self.project)
 

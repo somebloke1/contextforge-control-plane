@@ -386,6 +386,27 @@ mutations small, explicit, and evidence-backed.
 - A roadmap lane intentionally reserved for a later stability phase: draft item
   `Deferred`.
 
+## Branch And PR Disposition
+
+Use Project #6 and PR/issue comments to keep branch state legible. Do not let
+draft PRs, closed-unmerged PRs, or stale remote branches serve as hidden
+backlog.
+
+- Current work should normally move through branch -> develop -> merge in
+  short cycles: fresh `origin/dev-root`, small branch, local evidence, PR,
+  controller disposition, merge or retirement.
+- A draft PR must have an explicit next action: `promote for review`, `rebase
+  and retest`, `defer with trigger`, or `close/retire`.
+- A conflict-bearing branch is not `Ready`; mark or comment it as blocked,
+  deferred, or rework-needed before it can attract merge attention.
+- A closed-unmerged PR is retired unless a controller explicitly reopens or
+  creates a new clean successor branch from current `dev-root`.
+- After a merge, reconcile dependent PR bases, branch containment, and Project
+  `Agent state`/`Agent owner` before selecting the next implementation lane.
+- If GraphQL budget prevents Project field mutation, record the intended
+  disposition in an issue/PR comment or local no-op plan and revisit when quota
+  recovers; do not skip the disposition decision.
+
 ## Useful Commands
 
 ```sh
