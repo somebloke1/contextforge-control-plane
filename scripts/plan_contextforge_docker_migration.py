@@ -232,7 +232,8 @@ def _current_server_summary(current: dict[str, Any] | None) -> dict[str, dict[st
 
 
 def _approval_blocked(profile: dict[str, Any]) -> bool:
-    return str(profile.get("approval_state", "")).startswith("blocked_")
+    approval_state = str(profile.get("approval_state", ""))
+    return approval_state.startswith("blocked_") or approval_state.startswith("ready_after_")
 
 
 def _unsafe_live_default(default_url: str, target_url: str) -> bool:

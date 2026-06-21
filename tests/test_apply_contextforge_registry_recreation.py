@@ -60,6 +60,31 @@ def write_docker_plan_multi(root: Path, services: list[tuple[str, str, bool]]) -
     return path
 
 
+def write_docker_plan_with_state(root: Path, slug: str, target_url: str, approval_state: str, approval_blocked: bool) -> Path:
+    path = root / "docker-plan.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_uri": "contextforge://diagnostics/docker-successor-migration-plan/v1",
+                "mutation_performed": False,
+                "services": [
+                    {
+                        "slug": slug,
+                        "target_upstream_url": target_url,
+                        "locality": "compose_sidecar",
+                        "approval_state": approval_state,
+                        "approval_blocked": approval_blocked,
+                        "docker_projection_required": True,
+                        "unsafe_to_reuse_live_default": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 class FakeClient:
     def __init__(self) -> None:
         self.requests: list[tuple[str, str, dict | None]] = []
@@ -287,6 +312,33 @@ class ApplyRegistryRecreationTests(unittest.TestCase):
 
         self.assertEqual("mentality", result["services"][0]["slug"])
         self.assertEqual([], result["skipped_services"])
+
+    def test_apply_blocks_ready_after_preflight_even_if_plan_flag_is_false(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, "github", ["example-tool"])
+            docker_plan = write_docker_plan_with_state(
+                root,
+                "github",
+                "http://github-transceiver:9206/mcp",
+                "ready_after_credential_env_preflight",
+                False,
+            )
+            client = FakeClient()
+
+            result = apply_helper.run(
+                apply=True,
+                manifests_root=root,
+                docker_migration_plan=docker_plan,
+                client=client,
+                include_helper_services=True,
+            )
+
+        self.assertFalse(result["mutation_performed"])
+        self.assertEqual([], result["services"])
+        self.assertEqual("github", result["skipped_services"][0]["slug"])
+        self.assertEqual("approval_blocked", result["skipped_services"][0]["reason"])
+        self.assertEqual([], client.requests)
 
     def test_include_helper_services_allows_explicit_helper_backed_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
