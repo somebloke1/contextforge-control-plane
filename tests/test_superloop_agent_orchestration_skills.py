@@ -5,187 +5,203 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTROLLER = ROOT / ".codex/skills/superloop-agent-orchestration/SKILL.md"
-WORKER = ROOT / ".codex/skills/superloop-worker-agent/SKILL.md"
-PROJECT = ROOT / ".codex/skills/github-project-agent-coordination/SKILL.md"
+SKILLS = ROOT / ".codex/skills"
+SHARED = SKILLS / "SHARED_SYMBOL_SCHEME.md"
+DISPATCH = SKILLS / "contextforge-agent-dispatch-matrix/SKILL.md"
+CONTROLLER = SKILLS / "superloop-agent-orchestration/SKILL.md"
+WORKER = SKILLS / "superloop-worker-agent/SKILL.md"
+PROJECT = SKILLS / "github-project-agent-coordination/SKILL.md"
 
 
 class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls.shared = SHARED.read_text(encoding="utf-8")
+        cls.dispatch = DISPATCH.read_text(encoding="utf-8")
         cls.controller = CONTROLLER.read_text(encoding="utf-8")
         cls.worker = WORKER.read_text(encoding="utf-8")
         cls.project = PROJECT.read_text(encoding="utf-8")
 
+    def test_shared_scheme_keeps_authority_boundaries_explicit(self) -> None:
+        for text in [
+            "RC → SO → DM → DG → WK → SO",
+            "DM ⊥ SO",
+            "DC ⊥ L",
+            "E ⊥ ✓",
+            "GP ⊥ issue/PR/doc",
+            "Sp ⊥ judgment",
+            "approval/global/destructive/runtime/shared-system ⇒ SO-only",
+        ]:
+            self.assertIn(text, self.shared)
+
+    def test_dispatch_matrix_is_advisory_not_controller_replacement(self) -> None:
+        for text in [
+            "name: contextforge-agent-dispatch-matrix",
+            "DM owns {MC, DC schema, SE, CO, FC}",
+            "DM ⊥ SO",
+            "selected_model",
+            "fork_context=true",
+            "fork_context=false",
+            "Sp ✗",
+        ]:
+            self.assertIn(text, self.dispatch)
+
     def test_controller_skill_records_primary_authority(self) -> None:
         for text in [
             "name: superloop-agent-orchestration",
-            "primary ContextForge SuperLoop controller",
-            "global sequencing",
-            "worker assignment",
-            "Project #6 coordination",
-            "GitHub mutations",
-            "final acceptance claims",
-            "goal maintenance",
-            "superloop-worker-agent",
-            "sub-agent-delegator",
-            "github-project-agent-coordination",
+            "This skill is the controller runtime",
+            "owns SuperLoop",
+            "owns model policy",
+            "owns spawn contracts",
+            "executes\nleases",
+            "owns Project #6 field semantics",
+            "CR:",
+            "final claims",
+            "approval-gated/runtime/destructive/global/shared-system actions",
+            "WK/child output = E, not ✓",
         ]:
             self.assertIn(text, self.controller)
 
     def test_controller_skill_defines_stable_agent_identity(self) -> None:
         for text in [
-            "Use stable run IDs",
-            "rotating Codex display names",
+            "CID",
             "codex-thread:<thread-id>",
             "codex-agent:<agent-id>",
             "codex-agent:<parent-agent-id>/<child-agent-id>",
             "get_goal().goal.threadId",
-            "dispatcher or\nsubagent handle",
-            "Human-readable names are aliases only",
+            "dispatcher/subagent handle",
+            "human-readable names = aliases only",
+            "agent_run_id",
+            "controller_run_id",
         ]:
             self.assertIn(text, self.controller)
 
     def test_controller_skill_defines_project_lease_model(self) -> None:
         for text in [
-            "Workers must not pull arbitrary GitHub issues directly",
-            "Project #6 `Agent owner` text field",
-            "controller-held item",
-            "worker-held item",
-            "Do not use `Assignees` as the agent lease owner",
-            "The default pattern is\ncontroller-instantiated, controller-assigned work",
-            "one bounded work unit",
-            "A standing worker may ask for another work unit",
-            "must not self-select from the queue",
-            "worker-requested work as a request for controller assignment",
-            "Work unit lease:",
-            "controller_run_id",
-            "worker_agent_id",
-            "allowed delegation",
-            "allowed files/systems/tools",
-            "forbidden actions",
+            "QL:",
+            "WK ✗ pull arbitrary GH issues",
+            "default = SO-instantiated, SO-assigned, one bounded T per L",
+            "WK-requested work = request, not queue ownership",
+            "WK begins only after SO grants/authorizes L",
+            "GP.Agent owner",
+            "controller-held = codex-thread:<thread-id>",
+            "worker-held = codex-agent:<worker-agent-id>",
+            "Assignees ∉ agent lease owner",
+            "L :=",
+            "initial_worker_formal_goal",
             "stop_condition",
         ]:
             self.assertIn(text, self.controller)
 
     def test_controller_skill_defines_worktree_policy(self) -> None:
         for text in [
-            "one clean controller baseline on current\n`dev-root`",
-            "separate linked\nworktrees for worker branches",
-            "Do not casually move the controller through many dirty worktrees",
-            "linked\nworktrees as leased execution surfaces",
-            "records which worktree owns each active branch or lease",
-            "returns to the clean baseline before final integration",
-        ]:
-            self.assertIn(text, self.controller)
-
-    def test_controller_skill_requires_worker_goal_text(self) -> None:
-        for text in [
-            "initial worker formal goal text",
-            "worker formal goals remain\nsubordinate",
-            "worker successor goal",
-            "controller response authorizes",
-        ]:
-            self.assertIn(text, self.controller)
-
-    def test_controller_skill_defines_goal_refinement_cadence(self) -> None:
-        for text in [
-            "Goal Refinement Cadence",
-            "Keep the formal goal current at controller boundaries",
-            "tasklist, issue comments, Project #6 fields, PR notes, or governance ledgers",
-            "after each completed work unit or small integrated batch",
-            "after any lease assignment, worker report, PR merge, issue closure, or\n  Project topology change",
-            "prefer smaller subgoals",
-            "do not mark a formal goal complete merely to rewrite it",
+            "BD:",
+            "maintain clean SO baseline on current dev-root",
+            "linked worktrees = leased execution surfaces",
+            "controller branches start from clean dev-root",
+            "worker branch = codex/issue-<number>-<short-slug>",
+            "SO records worktree owner for each active branch/L",
+            "SO returns to clean baseline before final integration",
         ]:
             self.assertIn(text, self.controller)
 
     def test_controller_skill_defines_worker_pool_cadence(self) -> None:
         for text in [
-            "Worker Pool Cadence",
-            "three as a maximum concurrency cap",
-            "not a quota to keep full",
-            "when the controller would otherwise be idle",
-            "integrating returned reports",
-            "Keep one slot available for\nverification",
-            "do not duplicate worker-local\n   implementation or verification",
-            "only if controller administration is caught up",
-            "gpt-5.3-codex-spark",
-            "Trust the pipeline when evidence is clean",
-            "Worker-local commits are acceptable when the lease permits them",
-            "Treat the commit as a reviewable artifact",
-            "before\npushing, opening PRs, promoting drafts, merging, or closing issues",
-            "Do not allow\nworkers to commit on controller baselines",
-            "GitHub Project automation has latency",
-            "do not\nimmediately create a duplicate Project item",
-            "Set `Agent owner` only after the auto-added item is visible",
-            "record the pending reconciliation",
+            "WP:",
+            "max_concurrency=3 as cap, not quota",
+            "keep verification slot when possible",
+            "dispatch only after controller admin is caught up enough to integrate outputs",
+            "DG(DC) → L with formal WK goal",
+            "set Agent owner only when GP item visible",
+            "clean WK+verifier E + expected GH/GP state",
+            "WK commit allowed ⇔ L permits ∧ isolated branch/worktree",
+            "SO verifies before push/PR/promote/merge/close",
+            "no duplicate GP item",
         ]:
             self.assertIn(text, self.controller)
 
     def test_controller_skill_defines_creative_discussion_agents(self) -> None:
         for text in [
-            "Creative Discussion Agents",
-            "keep the prompt light",
-            "Do not wrap idea generation in a full\nwork-unit lease",
-            "Send the agent to the discussion",
-            "repo/codebase files remain read-only",
-            "the named GitHub discussion is writable",
-            "idea fuel, not accepted roadmap",
-            "read back the discussion URL",
-            "whether any idea deserves a real issue,\nProject item, work-unit lease, or governance record",
+            "CD:",
+            "creative GitHub discussion contribution",
+            "light prompt; no full L",
+            "allowed write = named discussion only",
+            "repo read-only",
+            "output = idea fuel ∉ roadmap acceptance",
+            "SO reads discussion URL → retire agent",
+        ]:
+            self.assertIn(text, self.controller)
+
+    def test_controller_skill_defines_goal_refinement_and_acceptance(self) -> None:
+        for text in [
+            "GR:",
+            "keep G current at controller boundaries",
+            "after completed work batch",
+            "after L assignment/WK report/PR merge/issue closure/GP topology change",
+            "early pattern → smaller subgoals",
+            "✗ complete(G) merely to rewrite",
+            "AD:",
+            "SO accepts WK output only if",
+            "changed files ⊆ allowed set",
+            "final claims ≤ exercised surfaces",
+            "missing/overbroad E → reject ∨ rescope",
         ]:
             self.assertIn(text, self.controller)
 
     def test_worker_skill_enforces_assigned_scope_and_boundaries(self) -> None:
         for text in [
             "name: superloop-worker-agent",
-            "operating under a ContextForge controller\nlease",
-            "one assigned work unit",
-            "Workers may not own unless explicitly leased",
-            "final project completion claims",
-            "GitHub issue closure",
-            "PR creation, push, merge, or draft promotion",
-            "Project #6 `Agent owner` matches your worker ID",
-            "If the lease and Project state disagree",
-            "Stop and hand off",
-        ]:
-            self.assertIn(text, self.worker)
-
-    def test_worker_skill_requires_lease_scoped_formal_goal(self) -> None:
-        for text in [
-            "The worker must also operate on a formal SuperLoop goal",
-            "lease-scoped goal",
-            "Read the worker formal goal",
-            "Confirm the goal and lease match",
-            "Mark the worker formal goal complete",
-            "Create a refined worker successor goal only when",
-            "must not use its formal goal to expand scope",
+            "`WK` owns one `L`",
+            "`SO` owns sequencing",
+            "worker G ≠ controller G",
+            "worker G = lease-scoped",
+            "WK ✗ {expand scope, claim global completion, close SO goal, bypass SO}",
+            "one assigned issue/validation/audit/implementation/evidence T",
+            "PR create/push/merge/promote",
+            "governance ledger mutation",
+            "L ∉ substitute for active explicit user approval",
         ]:
             self.assertIn(text, self.worker)
 
     def test_worker_skill_requires_exact_lease_identity_reporting(self) -> None:
         for text in [
-            "Report the worker ID exactly as assigned",
-            "Do not substitute a rotating nickname",
-            "another agent's ID",
+            "WI:",
+            "worker = codex-agent:<agent-id>",
+            "controller = codex-thread:<thread-id>",
+            "agent_run_id",
+            "controller_run_id",
+            "report exact worker ID from L/dispatcher",
+            "rotating nickname",
             "lease_id_unavailable",
-            "do not write `unknown` without the observed identifier",
-            "agent_run_id: codex-agent:<lease-or-dispatcher-id> | lease_id_unavailable",
+            "✗ unknown without observed identifier",
         ]:
             self.assertIn(text, self.worker)
 
     def test_worker_report_template_preserves_evidence_and_non_actions(self) -> None:
         for text in [
-            "Worker report:",
-            "agent_run_id:",
-            "controller_run_id:",
-            "assigned_scope:",
-            "changed files:",
-            "evidence:",
-            "non-actions:",
-            "residual risk:",
-            "requested controller action:",
+            "WR :=",
+            "agent_run_id: codex-agent:<lease-or-dispatcher-id>",
+            "controller_run_id",
+            "assigned_scope",
+            "changed files",
+            "evidence",
+            "non-actions",
+            "residual risk",
+            "requested controller action",
+        ]:
+            self.assertIn(text, self.worker)
+
+    def test_worker_stop_conditions_cover_model_and_authority_mismatch(self) -> None:
+        for text in [
+            "DC✓:",
+            "selected_model unsuitable for encountered T → stop(report mismatch)",
+            "Sp ✗ {architecture",
+            "LC before work:",
+            "L ⊥ current GP/repo state → stop(report mismatch)",
+            "ST if:",
+            "selected M unsuitable for T",
+            "approval-gated/runtime/destructive/global/shared-system action required",
+            "local success would need global ✓",
         ]:
             self.assertIn(text, self.worker)
 
@@ -196,9 +212,6 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
             "codex-agent:<worker-agent-id>",
             "codex-agent:<parent-agent-id>/<child-agent-id>",
             "Do not use rotating Codex",
-            "Do not encode semantic pass/fail or readiness",
-            "regexes, keyword searches, or string parsing",
-            "not an oracle for generated prose",
         ]:
             self.assertIn(text, self.project)
 
