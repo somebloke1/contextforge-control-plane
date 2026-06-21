@@ -49,6 +49,32 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         )
         self.assertIn("do not start, stop, build, or rebuild Docker containers", record["non_actions"])
 
+    def test_serena_source_only_project_scoped_record_keeps_provisioning_abeyant(self) -> None:
+        record = self.record("serena_source_only_project_scoped_abeyant_provisioning")
+
+        self.assertEqual("ready_for_handoff", record["status"])
+        self.assertEqual("handoff", record["current_state"])
+        self.assertEqual("serena", record["candidate_service"])
+        self.assertFalse(record["approval_gate"]["approval_required"])  # type: ignore[index]
+        self.assertEqual("source_only_scaffolding", record["classification"]["plan_type"]["value"])  # type: ignore[index]
+        self.assertEqual("project_scoped", record["classification"]["localization_type"]["value"])  # type: ignore[index]
+        self.assertEqual("Project-scoped backend", record["integration_strategy"]["primary_paradigm"])  # type: ignore[index]
+        self.assertEqual("serena-cf-controlplane-d46fe58a2a20", record["footprint_plan"]["service_slug"])  # type: ignore[index]
+        self.assertEqual("deferred", record["feasibility"]["verdict"])  # type: ignore[index]
+        self.assertIn("abeyant", " ".join(record["feasibility"]["notes"]))  # type: ignore[index]
+        self.assertIn("hard-requires the project-scoped backend", " ".join(record["residual_risks"]))  # type: ignore[index]
+        self.assertIn(
+            "What project-local state does the backend read or write, and how will it be isolated?",
+            record["next_questions"],
+        )
+        gate = record["pre_runtime_workflow_gate"]
+        self.assertEqual("ready_for_pre_runtime_handoff", gate["gate_status"])  # type: ignore[index]
+        self.assertEqual([], gate["missing_dimensions"])  # type: ignore[index]
+        self.assertIn("serena_project_backend_provisioning_readback", _probe_layers(gate))  # type: ignore[arg-type]
+        provisioning_readback = _probe_layer(gate, "serena_project_backend_provisioning_readback")
+        self.assertTrue(provisioning_readback["required_before_runtime"])
+        self.assertFalse(provisioning_readback["runtime_execution"])
+
     def test_native_source_only_service_is_ready_for_handoff(self) -> None:
         record = self.record("native_http_shared_docs_source_only")
 
@@ -831,6 +857,13 @@ def _probe_layers(gate: object) -> list[str]:
         layer["layer"]
         for layer in gate["planned_validation_probe_layers"]  # type: ignore[index]
     ]
+
+
+def _probe_layer(gate: object, name: str) -> dict[str, object]:
+    for layer in gate["planned_validation_probe_layers"]:  # type: ignore[index]
+        if layer["layer"] == name:
+            return layer
+    raise AssertionError(f"missing probe layer: {name}")
 
 
 if __name__ == "__main__":
