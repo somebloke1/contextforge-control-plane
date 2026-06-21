@@ -33,6 +33,14 @@ body, PR body, evidence ledger, or goal store.
 - Preserve the board-use directive in successor formal goals.
 - Keep mutations idempotent: read the item and field IDs first, then update
   only the intended project item field.
+- Record dependency-aware queue changes and reflective-learning outcomes only
+  when they become durable coordination state. A transient idea from a run does
+  not need a board mutation; an incorporated requirement, promoted regression,
+  deferred owner, or selected next target does.
+- Do not encode semantic pass/fail or readiness in Project fields from matched
+  strings, regexes, keyword searches, or string parsing over free-form model
+  output. The board may summarize accepted evaluator results or structural
+  evidence, but it is not an oracle for generated prose.
 
 ## Field Semantics
 
@@ -79,6 +87,11 @@ it a ContextForge-specific meaning.
 - `Done`: merged, closed, or otherwise completed with durable evidence.
 - `Deferred`: intentionally later-phase work that should not attract ordinary
   cleanup pressure.
+
+Agent state should reflect evidence-backed coordination, not optimism. When a
+use case is reordered by dependency analysis, mark or comment only the durable
+selection rationale; do not make the numeric order look authoritative if the
+dependency mesh says otherwise.
 
 `Lane` values identify the dominant roadmap surface:
 
@@ -307,6 +320,28 @@ Use this rate-aware pattern:
   `updateProjectV2ItemFieldValue` calls after computing a no-op-free local
   plan. Treat each mutation result independently; aliased mutation batches are
   an efficiency tactic, not a transaction boundary.
+- For aliased single-select updates, resolve fresh IDs after schema changes:
+  Project ID, target item IDs, target field ID, and target option ID. Do not
+  reuse an old option map after the operator adds or renames a Project option.
+  Shape each alias like:
+
+  ```graphql
+  i52: updateProjectV2ItemFieldValue(input: {
+    projectId: "PROJECT_ID"
+    itemId: "PROJECT_ITEM_ID"
+    fieldId: "FIELD_ID"
+    value: { singleSelectOptionId: "OPTION_ID" }
+    clientMutationId: "agent-state-52-pre-review"
+  }) { projectV2Item { id } }
+  ```
+
+  Use bounded batches, typically 5-10 aliases, to reduce per-request overhead
+  and secondary-rate pressure while preserving readable failure isolation.
+  Batched aliases reduce repeated request costs but still consume primary
+  GraphQL cost and content-generation/CPU/secondary limits.
+- Keep issue-label cleanup separate from Project field updates. Labels are
+  issue/PR properties, not Project item fields. Prefer REST label operations
+  after a label readback, and skip absent labels instead of generating 404s.
 - Avoid concurrent Project mutation runs. Keep batches bounded, pause between
   larger mutative runs, and watch both primary GraphQL budget and secondary
   limits such as endpoint points, CPU time, and content generation.

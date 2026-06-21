@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${CONTEXTFORGE_HELPER_PYTHON:=/opt/contextforge-helper-venv/bin/python}"
+: "${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/home/agent/.local/state/contextforge-client-harness-runtime/project-init}"
+: "${CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH:=${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT}/codex-latest-user-message.json}"
+: "${CONTEXTFORGE_CONFIG_ENV:=/run/contextforge-client-scoped/contextforge.env}"
+: "${CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace}"
+
+export CONTEXTFORGE_PROJECT_INIT_RUN_ROOT
+export CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH
+export CONTEXTFORGE_CONFIG_ENV
+export CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS
+
+exec "${CONTEXTFORGE_HELPER_PYTHON}" /repo/scripts/codex_project_init_hook.py

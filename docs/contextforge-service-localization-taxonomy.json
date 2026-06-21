@@ -1,0 +1,146 @@
+{
+  "schema": "contextforge://control-plane/service-localization-taxonomy/v1",
+  "issues": {
+    "taxonomy": 270,
+    "matrix": 259,
+    "umbrella": 247
+  },
+  "interpretation_rules": {
+    "service_binding_suffix_authority": "identifier_only",
+    "lifecycle_authority": "taxonomy_type"
+  },
+  "types": [
+    {
+      "id": "shared_canonical",
+      "meaning": "One reusable ContextForge virtual server or native backend can serve many projects; project init binds the project or client to that existing service.",
+      "instantiation_rule": "Instantiate once per canonical backend unless transport, credential, or safety boundaries prove another instance is needed.",
+      "readiness_evidence": [
+        "manifest identity",
+        "ContextForge virtual server identity",
+        "project-local binding plan",
+        "target-client-visible list/call proof when a safe probe exists"
+      ]
+    },
+    {
+      "id": "credential_scoped",
+      "meaning": "Backend behavior depends on a provider credential, user account, installation, quota, or tenant boundary.",
+      "instantiation_rule": "Instantiate per credential or user only when the backend cannot safely multiplex or when the credential boundary is the service boundary.",
+      "readiness_evidence": [
+        "credential boundary without secret disclosure",
+        "redaction, cost, and rate-limit constraints",
+        "safe read-only target-client proof or explicit blocker"
+      ]
+    },
+    {
+      "id": "project_scoped",
+      "meaning": "Backend behavior depends on a specific project root, code index, language server, cache, or project-local state.",
+      "instantiation_rule": "Instantiate per project, or bind only to a previously approved project-specific instance.",
+      "readiness_evidence": [
+        "project root",
+        "instance identity",
+        "provisioning/readback status",
+        "target-client proof against the selected project instance"
+      ]
+    },
+    {
+      "id": "session_scoped",
+      "meaning": "Backend behavior depends on an ephemeral client or session runtime such as a browser or shell/tmux session.",
+      "instantiation_rule": "Instantiate per session/runtime boundary only when required by backend behavior.",
+      "readiness_evidence": [
+        "controlled session lifecycle",
+        "safe read/list probe",
+        "explicit non-actions for unsafe runtime mutation"
+      ]
+    },
+    {
+      "id": "repo_local_static",
+      "meaning": "Service source lives in this repository and is stable, but calls may require an explicit repo argument or governance boundary.",
+      "instantiation_rule": "Reuse the repo-local backend or transceiver; do not duplicate state into another source of truth.",
+      "readiness_evidence": [
+        "source path",
+        "stable tool contract",
+        "read-only target-client proof that does not mutate repo ledgers"
+      ]
+    },
+    {
+      "id": "client_global_bootstrap",
+      "meaning": "A user-home or container-user client hook, plugin, shim, or helper bootstrap that starts the project-init conversation; it is not itself a project service.",
+      "instantiation_rule": "Install or seed per client user/home surface through its own approval path; project init must not silently write it.",
+      "readiness_evidence": [
+        "client-visible helper/plugin/shim readback",
+        "separation from service binding readiness"
+      ]
+    },
+    {
+      "id": "not_a_service",
+      "meaning": "A user-flow option such as None, skip, defer, or decline.",
+      "instantiation_rule": "No backend, service binding, registry identity, or validation probe.",
+      "readiness_evidence": [
+        "recorded user choice",
+        "recorded non-actions"
+      ]
+    }
+  ],
+  "menu_examples": [
+    {
+      "menu_item": "context7",
+      "taxonomy_type": "shared_canonical",
+      "notes": "Global documentation lookup scoped by tool arguments; first #260 single-service slice."
+    },
+    {
+      "menu_item": "exa-search",
+      "taxonomy_type": "credential_scoped",
+      "notes": "Provider-key, quota, cost, and redaction boundaries must be explicit before runtime proof."
+    },
+    {
+      "menu_item": "github",
+      "taxonomy_type": "credential_scoped",
+      "notes": "GitHub account/token boundary; read-only proof only unless a later issue approves writes."
+    },
+    {
+      "menu_item": "mentality",
+      "taxonomy_type": "repo_local_static",
+      "notes": "Repo-local governance MCP; validation must list/read governance only and must not mutate ledgers."
+    },
+    {
+      "menu_item": "openzeppelin-solidity-contracts",
+      "taxonomy_type": "shared_canonical",
+      "notes": "Remote native template/documentation service; safe proof is constrained preview generation only."
+    },
+    {
+      "menu_item": "playwright",
+      "taxonomy_type": "session_scoped",
+      "notes": "Isolated browser runtime; proof must use a controlled fixture page."
+    },
+    {
+      "menu_item": "ssh-tmux",
+      "taxonomy_type": "session_scoped",
+      "notes": "Existing-session visibility only; no opening sessions or sending commands without separate approval."
+    },
+    {
+      "menu_item": "web-search",
+      "taxonomy_type": "credential_scoped",
+      "notes": "Provider/request scoped; safe low-cost query only after credential and redaction boundaries are bounded."
+    },
+    {
+      "menu_item": "serena",
+      "taxonomy_type": "project_scoped",
+      "notes": "Project-specific code intelligence; provisioning and language choice remain explicit approval boundaries."
+    },
+    {
+      "menu_item": "None",
+      "taxonomy_type": "not_a_service",
+      "notes": "Covered by decline/defer flow, not service readiness."
+    }
+  ],
+  "mapping_rules": [
+    "Client configs are consumption surfaces, not service identity.",
+    "Service binding suffixes such as canonical or credential_scoped are stable identifiers; taxonomy_type is the authoritative lifecycle/localization class.",
+    "Project-local activation may bind to a shared service without creating a per-project backend.",
+    "User-global hooks and helper bootstraps trigger or facilitate initialization but are not selected project services.",
+    "Credential-scoped services must not claim readiness from token or host-auth presence alone.",
+    "Project-scoped services must not activate another project's backend unless compatibility is explicitly documented and validated.",
+    "Session-scoped services must not use unsafe side effects as ordinary validation proof.",
+    "Backend health, bridge checks, and registry readback can support lower readiness layers, but target-client readiness requires target-client surface evidence."
+  ]
+}

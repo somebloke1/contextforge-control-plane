@@ -14,7 +14,15 @@ if [[ ! -f env/local-llama.env ]]; then
   scripts/make-local-llama-env.sh
 fi
 
-PYTHON="${PYTHON:-${REPO_ROOT}/.venv/bin/python}"
+if [[ -z "${PYTHON:-}" ]]; then
+  if [[ -x "${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python" ]]; then
+    PYTHON="${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python"
+  elif [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+    PYTHON="${REPO_ROOT}/.venv/bin/python"
+  else
+    PYTHON="python3"
+  fi
+fi
 CONTEXTFORGE_HOST_BASE_URL="${CONTEXTFORGE_HOST_BASE_URL:-http://127.0.0.1:4445}"
 CONTEXTFORGE_CONTAINER_BASE_URL="${CONTEXTFORGE_CONTAINER_BASE_URL:-http://host.docker.internal:4445}"
 CONTEXTFORGE_DEV_ENV_FILE="${CONTEXTFORGE_DEV_ENV_FILE:-${REPO_ROOT}/docker/contextforge-harness/env/contextforge.env}"
@@ -26,8 +34,10 @@ OPENCODE_SAFE_PROBE_ALLOWED_TOOLS="${OPENCODE_SAFE_PROBE_ALLOWED_TOOLS:-mentalit
 OPENCODE_SAFE_PROBE_EXPECTED_TOOL="${OPENCODE_SAFE_PROBE_EXPECTED_TOOL:-mentality-governance-list}"
 OPENCODE_REQUIRE_SAFE_CALL="${OPENCODE_REQUIRE_SAFE_CALL:-1}"
 OPENCODE_SAFE_CALL_COMMAND="${OPENCODE_SAFE_CALL_COMMAND:-}"
+REDACTOR="${REPO_ROOT}/docker/client-harness/scripts/redact-contextforge-secrets.py"
 
 TOKEN_ID=""
+TOKEN_ENV_FILE=""
 
 if [[ -n "${OPENCODE_SAFE_CALL_COMMAND}" ]]; then
   SAFE_CALL_COMMAND_TOOL_ALLOWED=0
@@ -105,22 +115,25 @@ probe.revoke_probe_token(base_url, admin_token, token_id)
 PY
   printf 'probe_token_revoked=%s\n' "${TOKEN_ID}" | tee -a evidence/opencode-contextforge-dev-smoke.txt
 }
-trap revoke_probe_token EXIT
+cleanup() {
+  revoke_probe_token
+  if [[ -n "${TOKEN_ENV_FILE}" ]]; then
+    rm -f "${TOKEN_ENV_FILE}"
+  fi
+}
+trap cleanup EXIT
 
 MCP_URL="${CONTEXTFORGE_CONTAINER_BASE_URL%/}/servers/${SERVER_ID}/mcp/"
+TOKEN_ENV_FILE="$(mktemp)"
+chmod 0600 "${TOKEN_ENV_FILE}"
+{
+  printf 'CONTEXTFORGE_DEV_MCP_NAME=%s\n' "${OPENCODE_DEV_MCP_NAME}"
+  printf 'CONTEXTFORGE_DEV_MCP_URL=%s\n' "${MCP_URL}"
+  printf 'CONTEXTFORGE_DEV_BEARER_TOKEN=%s\n' "${ACCESS_TOKEN}"
+} > "${TOKEN_ENV_FILE}"
 
 redact_token_stream() {
-  REDACT_TOKEN="${ACCESS_TOKEN:-}" PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" -c '
-import os
-import sys
-
-token = os.environ.get("REDACT_TOKEN", "")
-replacement = "[REDACTED_CONTEXTFORGE_DEV_BEARER_TOKEN]"
-for line in sys.stdin:
-    if token:
-        line = line.replace(token, replacement)
-    sys.stdout.write(line)
-'
+  CONTEXTFORGE_REDACT_VALUES="${ACCESS_TOKEN:-}" PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" "${REDACTOR}"
 }
 
 {
@@ -137,11 +150,16 @@ for line in sys.stdin:
 } | tee evidence/opencode-contextforge-dev-smoke.txt
 
 docker compose -f compose.yml run --rm --no-deps \
+  --env-file "${TOKEN_ENV_FILE}" \
   -e HOME=/tmp/opencode-home \
   -e OPENCODE_CONFIG_DIR=/tmp/opencode-home/.config/opencode \
-  -e CONTEXTFORGE_DEV_MCP_NAME="${OPENCODE_DEV_MCP_NAME}" \
-  -e CONTEXTFORGE_DEV_MCP_URL="${MCP_URL}" \
-  -e CONTEXTFORGE_DEV_BEARER_TOKEN="${ACCESS_TOKEN}" \
+  -e OPENCODE_CONFIG=/tmp/opencode-home/.config/opencode/opencode.json \
+  -e CONTEXTFORGE_OPENCODE_CONFIG_TARGET=/tmp/opencode-home/.config/opencode/opencode.json \
+  -e CONTEXTFORGE_OPENCODE_PLUGIN_TARGET=/tmp/opencode-home/.config/opencode/plugins/contextforge-project-init.js \
+  -e CONTEXTFORGE_OPENCODE_RULES_TARGET=/tmp/opencode-home/.config/opencode/AGENTS.md \
+  -e XDG_RUNTIME_DIR=/tmp/opencode-home/.local/state/contextforge-client-harness-runtime \
+  -e CONTEXTFORGE_PROJECT_INIT_RUN_ROOT=/tmp/opencode-home/.local/state/contextforge-client-harness-runtime/project-init \
+  -e CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH=/tmp/opencode-home/.local/state/contextforge-client-harness-runtime/project-init/opencode-latest-user-message.json \
   -e OPENCODE_SAFE_PROBE_ID="${OPENCODE_SAFE_PROBE_ID}" \
   -e OPENCODE_SAFE_PROBE_SERVICE="${OPENCODE_SAFE_PROBE_SERVICE}" \
   -e OPENCODE_SAFE_PROBE_ALLOWED_TOOLS="${OPENCODE_SAFE_PROBE_ALLOWED_TOOLS}" \

@@ -50,7 +50,7 @@ Pi project-init should require the same level of user labor as Codex:
 - same service discovery menu
 - same approval/consent flow
 - same non-actions
-- same validate-now vs presume-working choice
+- same post-install completion: report installed tools and required reload/new session, then stop
 - no manual editing of Pi extension code by the user
 - no per-service hand configuration by the user
 
@@ -65,8 +65,8 @@ Architecture:
    - dynamically registers each approved MCP tool as a Pi-visible tool
    - prefixes tool names safely to avoid collisions
    - enforces allowlists/policies for dangerous services
-   - exposes target-client-visible validation signals back to the workflow
-   - after any approved install or upgrade, the Pi agent must issue `/reload` before validation or other reliance on newly installed or changed extension tools
+   - exposes readback/diagnostic signals for troubleshooting without making them part of the normal user flow
+   - after any approved install or upgrade, the Pi agent must issue `/reload` before relying on newly installed or changed extension tools
 
 2. Pi project-init/hook equivalent:
    - research Pi's startup, workspace, extension activation, and user-facing prompt surfaces
@@ -91,12 +91,11 @@ Architecture:
    - distinguishes service identity from client activation:
      - service identity = ContextForge virtual server / service binding
      - client activation = Pi shim loading approved services for the current project
-     - target-client validation = Pi-visible tool list and safe tool call proof
+    - installed state = Pi shim can load approved project bindings in a new/reloaded session
    - supports repair/resume for Pi:
-     - pending validation resumes at validation choice
      - state/shim activation mismatch returns repair required
      - repair updates only approved project state/shim activation metadata
-     - validation recording is helper-owned
+     - no post-install validation recording phase is part of the user interaction
 
 Project state shape:
 Record Pi separately from Codex. Use a structure equivalent to:
@@ -107,8 +106,7 @@ Record Pi separately from Codex. Use a structure equivalent to:
     "status": "shim_activation_planned",
     "surface": "global Pi extension + .project/context_forge_state.json",
     "alias": "context7",
-    "virtual_server": "context7_local_server",
-    "validation_status": "pending"
+    "virtual_server": "context7_local_server"
   }
 }
 ```
@@ -139,7 +137,7 @@ Research tasks:
    - do not install or mutate user-global Pi files without explicit approval
    - if existing shim can be upgraded in-place, plan it separately
    - if repo-owned source should generate/install the shim, implement only the repo-owned source and an explicit install command
-   - include a structured post-install instruction requiring the Pi agent to issue `/reload` before validation; apply the same explicit reload-before-validation step for any future target client whose extension/plugin runtime requires reload after install or upgrade
+   - include a structured post-install instruction requiring the Pi agent to issue `/reload` before relying on newly installed tools; apply the same explicit reload/new-session instruction for any future target client whose extension/plugin runtime requires reload after install or upgrade
 
 Implementation requirements:
 1. Add pi to supported client types without weakening Codex behavior.
@@ -154,19 +152,17 @@ Implementation requirements:
    - approve scoped plan
    - apply project-local state activation
    - repair state/shim activation mismatch
-   - record validation results
 4. Add or scaffold the generic Pi MCP shim extension:
    - reads current project state
    - discovers approved target_clients.pi service bindings
    - imports all approved ContextForge virtual-server tools
    - prefixes names deterministically
    - blocks or gates dangerous tools based on policy
-   - provides validation/readback tool(s) visible to Pi
+   - provides diagnostic readback tool(s) visible to Pi
 5. Update project-init prompt/resource text:
    - mention Pi as a supported client type
    - for Pi, helper visibility may be through Pi-native tools registered by the shim, not native MCP
    - project init may activate ContextForge services through the Pi shim
-   - validation must prove Pi-visible tools and safe calls, not backend health only
 6. Preserve non-actions:
    - no user-global Pi config mutation during ordinary project activation
    - no user-global trust mutation
@@ -174,29 +170,14 @@ Implementation requirements:
    - no ContextForge registry/catalog mutation
    - no backend install/restart for shared canonical services
 
-Validation policy:
-Target-client validation for Pi must prove Pi-visible behavior:
-- list Pi-registered imported tools for selected services
-- perform safe non-destructive tool calls where available
-- record skipped with reason where credentials or semantics prevent safe probing
-- do not count backend-only probes as Pi validation
-
-Service-specific safe defaults:
-- context7: safe docs lookup
-- mentality: read/list only
-- ssh-tmux: list/session visibility only unless explicitly approved
-- github/web-search/exa/playwright/openzeppelin: safe read/search/list probes only where credentials and semantics allow; otherwise skipped with reason
-
 Tests:
 - Deterministic tests for Pi project-state activation planning.
 - Tests that Pi activation never calls Codex config writer.
 - Tests that no fake Pi MCP config surface is generated.
 - Tests for project state entries under target_clients.pi.
 - Tests for repair/resume:
-  - pending validation resumes
   - state/shim mismatch returns repair required
   - repair is project-state/shim-metadata scoped
-  - validation recording works
 - Tests for generic Pi shim importer:
   - reads approved bindings from project state
   - starts/connects ContextForge wrappers
@@ -209,7 +190,7 @@ Tests:
   - Pi user gets service menu
   - selected services require scoped approval before activation
   - no manual Pi extension editing is requested from user
-  - validation is Pi-visible
+  - after approved apply, the agent reports installation and reload requirement, then stops
 
 Verification:
 - Run focused deterministic tests.
@@ -220,7 +201,7 @@ Verification:
   - approved service bindings read from state
   - MCP tools/list import
   - Pi tool registration names
-  - safe validation/readback signal
+  - readback signal for diagnostics
 - If real Pi is installed, perform read-only discovery only unless explicit approval is given for user-global extension installation or mutation.
 
 Forbidden writes:

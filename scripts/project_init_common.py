@@ -37,6 +37,7 @@ ENV_SERENA_DECISION = "CONTEXTFORGE_SERENA_DECISION"
 ENV_SERENA_PROVISION_STATUS = "CONTEXTFORGE_SERENA_PROVISION_STATUS"
 ENV_SERENA_INSTANCE_SLUG = "CONTEXTFORGE_SERENA_INSTANCE_SLUG"
 ENV_SERENA_SERVER_NAME = "CONTEXTFORGE_SERENA_SERVER_NAME"
+ENV_USE_DEV_DOCKER_VIRTUAL_SERVER = "CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER"
 
 PROJECT_ENV_KEYS = {
     ENV_PROJECT_INIT_STATUS,
@@ -160,7 +161,7 @@ CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "command": "start_new_session",
         "actor": "user",
         "instruction": (
-            "Before validating after approved Codex project-local MCP config changes, start a new Codex session from the project root. "
+            "After approved Codex project-local MCP config changes, start a new Codex session from the project root before relying on the newly installed tools. "
             "Codex launches configured MCP servers and exposes their tools when a session starts; /mcp is a status view and does not reload MCP tools in-place."
         ),
         "blocks_validation_until_done": True,
@@ -170,7 +171,7 @@ CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "required_after": ["global_extension_install_or_upgrade", "project_activation_apply"],
         "command": "/reload",
         "actor": "pi_agent",
-        "instruction": "Before validating after an approved user-global Pi extension install or upgrade, issue /reload in Pi so the new or changed extension tools are active.",
+        "instruction": "After an approved user-global Pi extension install or upgrade, issue /reload in Pi so the new or changed extension tools are active.",
         "blocks_validation_until_done": True,
     },
     "gemini": {
@@ -179,7 +180,7 @@ CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "command": "start_new_session",
         "actor": "user",
         "instruction": (
-            "Before validating after approved Gemini project-local MCP settings changes, start a new Gemini CLI session from the project root. "
+            "After approved Gemini project-local MCP settings changes, start a new Gemini CLI session from the project root before relying on the newly installed tools. "
             "Gemini CLI discovers configured MCP servers when a session starts."
         ),
         "blocks_validation_until_done": True,
@@ -190,7 +191,7 @@ CLIENT_RELOAD_REQUIREMENTS: dict[str, dict[str, Any]] = {
         "command": "start_new_session",
         "actor": "user",
         "instruction": (
-            "Before validating after approved OpenCode project-local MCP config changes, start a new OpenCode session from the project root. "
+            "After approved OpenCode project-local MCP config changes, start a new OpenCode session from the project root before relying on the newly installed tools. "
             "OpenCode discovers project-local MCP servers and loads the user-home ContextForge plugin when a session starts."
         ),
         "blocks_validation_until_done": True,
@@ -281,7 +282,7 @@ def discover_contextforge_hosted_services(
             {
                 "service_family": service_family,
                 "canonical_service": str(manifest.get("canonical_service") or service_family),
-                "service_binding": _manifest_service_binding(service_family, instantiation_class, canonical_project_root),
+                "service_binding": _manifest_service_binding(manifest, service_family, instantiation_class, canonical_project_root),
                 "codex_alias": alias,
                 "instantiation_class": instantiation_class,
                 "backend_instance": str(manifest_path.parent.relative_to(REPO_ROOT)),
@@ -416,7 +417,10 @@ def safe_validation_policy(service_family: str) -> dict[str, Any]:
                 "default_probe": {
                     "safe_probe_id": "resolve-library-id",
                     "tool_name_hint": "context7-local-resolve-library-id",
-                    "arguments": {"libraryName": "python"},
+                    "arguments": {
+                        "libraryName": "python",
+                        "query": "standard library documentation lookup",
+                    },
                     "expected_result": "non-error library resolution result or explicit no-match response",
                 },
                 "accepted_proof_kinds": [
@@ -756,6 +760,15 @@ def _empty_workspace_dir_root(cwd: Path) -> Path | None:
     return None
 
 
+def _explicit_safe_root(cwd: Path) -> Path | None:
+    if not safe_workspace_project_root(cwd):
+        return None
+    for root in sorted(additional_safe_project_roots(), key=lambda path: len(path.parts), reverse=True):
+        if cwd == root or is_relative_to(cwd, root):
+            return root
+    return None
+
+
 def _workspace_child_root(cwd: Path) -> Path | None:
     if not is_relative_to(cwd, WORKSPACE_ROOT) or cwd == WORKSPACE_ROOT:
         return None
@@ -773,6 +786,9 @@ def detect_project_root(cwd: str | Path) -> Path | None:
     git_root = _git_root(canonical_cwd)
     if git_root is not None:
         candidates.append(git_root)
+    explicit_safe_root = _explicit_safe_root(canonical_cwd)
+    if explicit_safe_root is not None:
+        candidates.append(explicit_safe_root)
     empty_workspace_dir = _empty_workspace_dir_root(canonical_cwd)
     if empty_workspace_dir is not None:
         candidates.append(empty_workspace_dir)
@@ -816,6 +832,12 @@ def read_project_env(project_root: str | Path) -> dict[str, str]:
 
 
 def _manifest_virtual_server(manifest: dict[str, Any]) -> dict[str, Any]:
+    if os.environ.get(ENV_USE_DEV_DOCKER_VIRTUAL_SERVER) in {"1", "true", "yes"}:
+        dev_docker = manifest.get("dev_docker") if isinstance(manifest.get("dev_docker"), dict) else {}
+        dev_contextforge = dev_docker.get("contextforge") if isinstance(dev_docker.get("contextforge"), dict) else {}
+        dev_name = str(dev_contextforge.get("virtual_server_name") or "")
+        if dev_name:
+            return {"name": dev_name}
     contextforge = manifest.get("contextforge") if isinstance(manifest.get("contextforge"), dict) else {}
     virtual = contextforge.get("virtual_server") if isinstance(contextforge.get("virtual_server"), dict) else {}
     return virtual
@@ -837,7 +859,7 @@ def _manifest_instantiation_class(manifest: dict[str, Any]) -> str:
         return "static_repo_local"
     if scope_type in {"ssh_target_and_tmux_session", "isolated_browser_runtime"}:
         return "session_scoped"
-    if "credential" in scope_type:
+    if "credential" in scope_type or "account" in scope_type:
         return "credential_scoped"
     if "resource" in scope_type:
         return "resource_scoped"
@@ -846,7 +868,15 @@ def _manifest_instantiation_class(manifest: dict[str, Any]) -> str:
     return "shared_canonical"
 
 
-def _manifest_service_binding(service_family: str, instantiation_class: str, canonical_project_root: Any) -> str:
+def _manifest_service_binding(
+    manifest: dict[str, Any],
+    service_family: str,
+    instantiation_class: str,
+    canonical_project_root: Any,
+) -> str:
+    explicit = str(manifest.get("service_binding") or "").strip()
+    if explicit:
+        return explicit
     if instantiation_class == "instance_per_project" and canonical_project_root:
         return f"{service_family}:{project_root_hash(canonical_path(str(canonical_project_root)))[:12]}"
     if instantiation_class == "shared_canonical":

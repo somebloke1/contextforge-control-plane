@@ -4,6 +4,7 @@ import json
 import contextlib
 import io
 import inspect
+import os
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,7 @@ import control_plane_project_init_helper as helper
 import contextforge_helper_mcp
 import control_plane_project_state as project_state
 import manage_pi_global_shim
+import manage_serena_project_instance as serena_manager
 import pi_contextforge_shim_dry_run
 import pi_project_init_helper_cli
 import project_init_common as common
@@ -57,19 +59,32 @@ def pi_safe_probe_validation(tool_name: str = "cf_context7_s123__context7-local-
     return {
         "status": "passed",
         "target_client_visible": True,
+        "target_client": "pi",
         "proof_kind": "pi_safe_probe_result",
         "safe_probe_result": "passed",
         "safe_probe_id": "resolve-library-id",
+        "tool_name": tool_name,
+        "result_summary": "resolved python standard library documentation through Pi-visible ContextForge tool",
         "verification_trace_refs": [f"pi://contextforge-global-shim/tools/{tool_name}"],
     }
 
 
-def record_pi_reload(root: Path) -> dict[str, Any]:
-    return helper.record_project_init_client_reload(project_root=root, client_type="pi")
+def context7_safe_probe_validation(target_client: str = "codex") -> dict[str, Any]:
+    return common.build_safe_probe_validation_result(
+        "context7",
+        target_client=target_client,
+        tool_name="context7_context7-local-resolve-library-id",
+        verification_trace_refs=[f"contextforge://control-plane/traces/context7-{target_client}-target-client"],
+        result_summary="resolved python standard library documentation through target-client-visible context7 tool",
+    )
 
 
-def record_codex_new_session(root: Path) -> dict[str, Any]:
-    return helper.record_project_init_client_reload(project_root=root, client_type="codex")
+def record_pi_reload(root: Path, *, validation_mode: str | None = None) -> dict[str, Any]:
+    return helper.record_project_init_client_reload(project_root=root, client_type="pi", validation_mode=validation_mode)
+
+
+def record_codex_new_session(root: Path, *, validation_mode: str | None = None) -> dict[str, Any]:
+    return helper.record_project_init_client_reload(project_root=root, client_type="codex", validation_mode=validation_mode)
 
 
 def serena_descriptor() -> dict[str, Any]:
@@ -82,6 +97,12 @@ def serena_descriptor() -> dict[str, Any]:
 
 
 class ProjectInitActivationWorkflowTests(unittest.TestCase):
+    def assert_validation_operation_retired(self, result: dict[str, Any]) -> None:
+        self.assertFalse(result["ok"])
+        self.assertEqual("project_init_validation_retired", result["status"])
+        self.assertIn("Project init is install-only.", result["message"])
+        self.assertNotIn("state_revision", result)
+
     def test_client_local_adapters_define_activation_contracts(self) -> None:
         adapters = binding.project_init_client_adapters()
 
@@ -269,6 +290,32 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(first["after_digest"], second["after_digest"])
         self.assertEqual(second["changes"][0]["expected_block_digest"], second["changes"][0]["existing_block_digest"])
 
+    def test_codex_config_plan_honors_docker_wrapper_overrides(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CONTEXTFORGE_CODEX_WRAPPER_PYTHON": "/opt/contextforge-helper-venv/bin/python",
+                "CONTEXTFORGE_CODEX_WRAPPER_SCRIPT": "/repo/scripts/contextforge_mcp_wrapper.py",
+                "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV": "/run/contextforge-client-scoped/contextforge.env",
+                "CONTEXTFORGE_CODEX_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+                "CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE": "/tmp/contextforge-wrapper-token.local.json",
+            },
+            clear=False,
+        ):
+            plan = binding.plan_project_init_codex_config_write(
+                "/home/dgk/workspace/legacy-controlplane-archive",
+                [service_descriptor("context7")],
+                existing_text="",
+            )
+
+        text = plan["next_text"]
+        self.assertIn('command = "/opt/contextforge-helper-venv/bin/python"', text)
+        self.assertIn('args = ["/repo/scripts/contextforge_mcp_wrapper.py", "context7_server"]', text)
+        self.assertIn('CONTEXTFORGE_CONFIG_ENV = "/run/contextforge-client-scoped/contextforge.env"', text)
+        self.assertIn('CONTEXTFORGE_BASE_URL = "http://host.docker.internal:4445"', text)
+        self.assertIn('CONTEXTFORGE_TOKEN_CACHE = "/tmp/contextforge-wrapper-token.local.json"', text)
+        self.assertIn('CONTEXTFORGE_TOKEN_LOCK = "/tmp/contextforge-wrapper-token.local.json.lock"', text)
+
     def test_opencode_config_plan_writes_managed_project_mcp_only(self) -> None:
         plan = binding.plan_project_init_opencode_config_write(
             "/home/dgk/workspace/legacy-controlplane-archive",
@@ -287,6 +334,59 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("plugin_next_text", plan)
         self.assertNotIn("plugin_change", plan)
         self.assertIn("does not write user-global OpenCode config, plugin, or trust", plan["non_actions"])
+
+    def test_opencode_config_plan_honors_docker_wrapper_overrides(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON": "/opt/contextforge-helper-venv/bin/python",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT": "/repo/scripts/contextforge_mcp_wrapper.py",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/run/contextforge-client-scoped/contextforge.env",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/tmp/contextforge-wrapper-token.local.json",
+            },
+            clear=False,
+        ):
+            plan = binding.plan_project_init_opencode_config_write(
+                "/home/dgk/workspace/legacy-controlplane-archive",
+                [service_descriptor("context7")],
+                existing_text='{"$schema":"https://opencode.ai/config.json"}\n',
+                plugin_existing_text="",
+            )
+
+        entry = json.loads(plan["next_text"])["mcp"]["context7"]
+        self.assertEqual(
+            [
+                "/opt/contextforge-helper-venv/bin/python",
+                "/repo/scripts/contextforge_mcp_wrapper.py",
+                "context7_server",
+            ],
+            entry["command"],
+        )
+        self.assertEqual("/run/contextforge-client-scoped/contextforge.env", entry["environment"]["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual("http://host.docker.internal:4445", entry["environment"]["CONTEXTFORGE_BASE_URL"])
+        self.assertEqual("/tmp/contextforge-wrapper-token.local.json", entry["environment"]["CONTEXTFORGE_TOKEN_CACHE"])
+        self.assertEqual(
+            "/tmp/contextforge-wrapper-token.local.json.lock",
+            entry["environment"]["CONTEXTFORGE_TOKEN_LOCK"],
+        )
+
+    def test_project_init_bindings_do_not_embed_contextforge_bearer_token_material(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            services = [service_descriptor("context7")]
+
+            codex_plan = binding.plan_project_init_target_client_activation(root, services, target_client="codex")
+            opencode_plan = binding.plan_project_init_target_client_activation(root, services, target_client="opencode")
+            gemini_plan = binding.plan_project_init_target_client_activation(root, services, target_client="gemini")
+
+        self.assertIn("contextforge_mcp_wrapper.py", codex_plan["next_text"])
+        self.assertIn("contextforge_mcp_wrapper.py", opencode_plan["next_text"])
+        self.assertIn("contextforge_mcp_wrapper.py", gemini_plan["next_text"])
+        combined = "\n".join([codex_plan["next_text"], opencode_plan["next_text"], gemini_plan["next_text"]])
+        self.assertNotIn("CONTEXTFORGE_BEARER_TOKEN", combined)
+        self.assertNotIn("MCP_AUTH", combined)
+        self.assertNotIn("Authorization", combined)
 
     def test_opencode_config_plan_blocks_unmanaged_same_name(self) -> None:
         plan = binding.plan_project_init_opencode_config_write(
@@ -814,7 +914,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("replace_after_scoped_project_init_approval", planned_state["recovery"])
         self.assertIn("project_state_recovery", proposal["plan_summary"])
         self.assertEqual("invalid", proposal["plan_summary"]["project_state_recovery"]["artifact_status"])
-        self.assertEqual("in_progress", result["state_status"])
+        self.assertEqual("initialized", result["state_status"])
         assert written is not None
         self.assertIn("context7:canonical", written["services"])
         self.assertNotIn("x_stale_fixture", written)
@@ -840,7 +940,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         self.assertEqual("available", readiness["helper"]["status"])
         self.assertEqual("/reload", readiness["client_reload_requirement"]["command"])
-        self.assertIn("Before validating", readiness["client_reload_requirement"]["instruction"])
+        self.assertIn("issue /reload in Pi", readiness["client_reload_requirement"]["instruction"])
         self.assertEqual(["project_state_write"], proposal["required_consent_classes"])
         self.assertEqual(binding.PI_SHIM_SURFACE, proposal["config_plan"]["surface"])
         self.assertIsNone(proposal["config_plan"]["config_path"])
@@ -968,8 +1068,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         assert codex_resume is not None
         assert gemini_resume is not None
-        self.assertIn(codex_resume["status"], {"config_repair_required", "client_reload_required", "resume_validation"})
-        self.assertIn(gemini_resume["status"], {"config_repair_required", "client_reload_required", "resume_validation"})
+        self.assertIn(codex_resume["status"], {"config_repair_required", "client_reload_required", "installed_reload_required"})
+        self.assertIn(gemini_resume["status"], {"config_repair_required", "client_reload_required", "installed_reload_required"})
         self.assertEqual(
             codex_state["project_init"]["client_states"]["codex"]["current_job_id"],
             codex_resume["current_job"]["job_id"],
@@ -1004,10 +1104,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual({"project_state_write"}, {receipt["consent_class"] for receipt in approval["receipts"]})
         self.assertEqual({"pi"}, {receipt["source_client"] for receipt in approval["receipts"]})
         self.assertTrue(result["dry_run"])
-        self.assertEqual("pi-client-reload-before-validation", result["next_turn"]["question_id"])
+        self.assertEqual("pi-project-init-installed", result["next_turn"]["question_id"])
         self.assertEqual("/reload", result["client_reload_requirement"]["command"])
-        self.assertIn("After the reload", result["next_turn"]["prompt"])
-        self.assertIn('choose 1 or reply "validate"', result["next_turn"]["allowed_response_shape"])
+        self.assertIn("tools are installed", result["next_turn"]["prompt"])
+        self.assertIn("/reload", result["next_turn"]["prompt"])
+        self.assertNotIn("validate", result["next_turn"]["allowed_response_shape"])
+        self.assertNotIn("skip validation", result["next_turn"]["allowed_response_shape"])
         self.assertEqual("single_select", result["next_turn"]["response_form"]["type"])
         self.assertFalse((root / ".codex/config.toml").exists())
         service = result["planned_state"]["services"]["context7:canonical"]
@@ -1074,7 +1176,66 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("skipped", result["validation_signals"][0]["status"])
         self.assertEqual("no_matching_safe_pi_tool", result["validation_signals"][0]["skipped_reason"])
 
-    def test_pi_helper_resumes_pending_validation_when_shim_metadata_is_current(self) -> None:
+    def test_pi_helper_reports_installed_when_shim_metadata_is_current(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            project_state.write_state_atomic(root, state)
+
+            capabilities = helper.list_available_capabilities(project_root=root, client_type="pi")
+            proposal = helper.propose_project_init(project_root=root, selected_services=[service_descriptor("github")], client_type="pi")
+
+        self.assertEqual("client_reload_required", capabilities["status"])
+        self.assertEqual("pi-project-init-installed", capabilities["next_turn"]["question_id"])
+        self.assertEqual(["context7:canonical"], capabilities["current_job"]["selected_service_bindings"])
+        self.assertEqual("client_reload_required", proposal["status"])
+        self.assertEqual("pi-project-init-installed", proposal["next_turn"]["question_id"])
+
+    def test_client_reload_acknowledgement_rejects_validation_intent(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            (root / "opencode.json").write_text(str(config_plan["next_text"]), encoding="utf-8")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            written = project_state.write_state_atomic(root, state)
+
+            job_id = written["project_init"]["current_job_id"]
+            pending_job = written["project_init"]["activation_jobs"][job_id]
+            pending_client_state = written["project_init"]["client_states"]["opencode"]
+            with self.assertRaisesRegex(helper.ProjectInitHelperError, "install-only"):
+                helper.record_project_init_client_reload(
+                    project_root=root,
+                    client_type="opencode",
+                    validation_mode="validate_now",
+                )
+            after = project_state.load_state(root)
+
+        self.assertEqual("pending_reload", pending_job["x_client_reload_fsm"]["state"])
+        self.assertEqual("pending_reload", pending_client_state["reload_status"])
+        self.assertEqual(written, after)
+
+    def test_client_reload_acknowledgement_rejects_presume_working_intent(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1090,28 +1251,301 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
             )
             project_state.write_state_atomic(root, state)
+            before = project_state.load_state(root)
 
-            reload_required = helper.list_available_capabilities(project_root=root, client_type="pi")
+            with self.assertRaisesRegex(helper.ProjectInitHelperError, "install-only"):
+                record_pi_reload(root, validation_mode="presume_working")
+            after = project_state.load_state(root)
+
+        self.assertEqual(before, after)
+
+    def test_reset_current_project_removes_helper_owned_project_init_surfaces(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+
+            (root / ".codex").mkdir()
+            (root / ".codex" / "config.toml").write_text('[mcp_servers.keep]\ncommand = "keep"\n', encoding="utf-8")
+            codex_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="codex")
+            (root / ".codex" / "config.toml").write_text(str(codex_plan["next_text"]), encoding="utf-8")
+
+            (root / "opencode.json").write_text(
+                json.dumps({"mcp": {"keep": {"type": "local", "command": ["keep"], "enabled": True}}}) + "\n",
+                encoding="utf-8",
+            )
+            opencode_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            (root / "opencode.json").write_text(str(opencode_plan["next_text"]), encoding="utf-8")
+
+            (root / ".gemini").mkdir()
+            (root / ".gemini" / "settings.json").write_text(
+                json.dumps({"mcpServers": {"keep": {"command": "keep", "args": []}}}) + "\n",
+                encoding="utf-8",
+            )
+            gemini_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="gemini")
+            (root / ".gemini" / "settings.json").write_text(str(gemini_plan["next_text"]), encoding="utf-8")
+
+            state = project_state.default_state(root)
+            for target_client, config_plan in (
+                ("codex", codex_plan),
+                ("opencode", opencode_plan),
+                ("gemini", gemini_plan),
+            ):
+                state = project_state.apply_project_init_activation_to_state(
+                    state,
+                    selected,
+                    target_client=target_client,
+                    client_config_plan=config_plan,
+                    validation_plan=binding.build_project_init_validation_plan(
+                        selected,
+                        validation_mode="installed",
+                        target_client=target_client,
+                    ),
+                    validation_results={},
+                    consent_receipt_refs=CONSENT_REFS,
+                )
+            project_state.write_state_atomic(root, state)
+
+            result = helper.reset_current_project(project_root=root, client_type="codex")
+            repeat = helper.reset_current_project(project_root=root, client_type="codex")
+
+            self.assertEqual("reset", result["status"])
+            self.assertTrue(result["postcondition"])
+            self.assertFalse(project_state.project_state_path(root).exists())
+            self.assertTrue(Path(str(result["evidence_dir"])).exists())
+            evidence_manifest = json.loads((Path(str(result["evidence_dir"])) / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual("reset", evidence_manifest["status"])
+            self.assertTrue(evidence_manifest["postcondition"])
+            self.assertIn("assistant_visible_response", evidence_manifest)
+            codex_text = (root / ".codex" / "config.toml").read_text(encoding="utf-8")
+            self.assertIn("[mcp_servers.keep]", codex_text)
+            self.assertNotIn(binding.PROJECT_INIT_OWNER_MARKER, codex_text)
+            opencode_config = json.loads((root / "opencode.json").read_text(encoding="utf-8"))
+            self.assertEqual(["keep"], sorted(opencode_config["mcp"]))
+            gemini_config = json.loads((root / ".gemini" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(["keep"], sorted(gemini_config["mcpServers"]))
+            self.assertEqual("reset", repeat["status"])
+            self.assertEqual([], repeat["actions"])
+            self.assertNotEqual(result["reset_id"], repeat["reset_id"])
+            self.assertNotEqual(result["evidence_dir"], repeat["evidence_dir"])
+            self.assertTrue(Path(str(repeat["evidence_dir"])).exists())
+
+    def test_reset_current_project_removes_orphaned_helper_entries_without_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+
+            (root / ".codex").mkdir()
+            codex_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="codex")
+            (root / ".codex" / "config.toml").write_text(str(codex_plan["next_text"]), encoding="utf-8")
+
+            opencode_entry = binding.build_project_init_opencode_binding_entry(selected[0])
+            (root / "opencode.json").write_text(
+                json.dumps(
+                    {
+                        "mcp": {
+                            "keep": {"type": "local", "command": ["keep"], "enabled": True},
+                            "stale-contextforge": opencode_entry,
+                        }
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            gemini_entry = binding.build_project_init_gemini_binding_entry(selected[0])
+            (root / ".gemini").mkdir()
+            (root / ".gemini" / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "keep": {"command": "keep", "args": []},
+                            "stale-contextforge": gemini_entry,
+                        }
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = helper.reset_current_project(project_root=root, client_type="opencode")
+
+            self.assertEqual("reset", result["status"])
+            self.assertTrue(result["postcondition"])
+            self.assertIn("Project reset complete", result["assistant_visible_response"])
+            self.assertFalse((root / ".codex" / "config.toml").exists())
+            opencode_config = json.loads((root / "opencode.json").read_text(encoding="utf-8"))
+            self.assertEqual(["keep"], sorted(opencode_config["mcp"]))
+            gemini_config = json.loads((root / ".gemini" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(["keep"], sorted(gemini_config["mcpServers"]))
+            operations = {action["operation"] for action in result["actions"]}
+            self.assertIn("remove_orphaned_owned_codex_mcp_block", operations)
+            self.assertIn("remove_orphaned_contextforge_json_mcp_entry", operations)
+
+    def test_reset_current_project_preserves_unowned_wrapper_shaped_json_entries_without_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            wrapper_path = str(REPO_ROOT / "scripts" / "contextforge_mcp_wrapper.py")
+            (root / "opencode.json").write_text(
+                json.dumps(
+                    {
+                        "mcp": {
+                            "manual-wrapper": {
+                                "type": "local",
+                                "command": [sys.executable, wrapper_path, "manual_server"],
+                                "enabled": True,
+                                "environment": {"MCP_WRAPPER_LOG_LEVEL": "INFO"},
+                            }
+                        }
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".gemini").mkdir()
+            (root / ".gemini" / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "manual-wrapper": {
+                                "command": sys.executable,
+                                "args": [wrapper_path, "manual_server"],
+                                "env": {"MCP_WRAPPER_LOG_LEVEL": "INFO"},
+                            }
+                        }
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = helper.reset_current_project(project_root=root, client_type="opencode", preserve_evidence=False)
+
+            self.assertEqual("reset", result["status"])
+            self.assertTrue(result["postcondition"])
+            opencode_config = json.loads((root / "opencode.json").read_text(encoding="utf-8"))
+            self.assertEqual(["manual-wrapper"], sorted(opencode_config["mcp"]))
+            gemini_config = json.loads((root / ".gemini" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(["manual-wrapper"], sorted(gemini_config["mcpServers"]))
+            refusal_reasons = {refusal["reason"] for refusal in result["refusals"]}
+            self.assertEqual({"unmanaged_wrapper_json_mcp_entry_preserved"}, refusal_reasons)
+
+    def test_project_reset_is_available_through_mcp_and_pi_cli(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            state = project_state.default_state(root)
+            project_state.write_state_atomic(root, state)
+
+            cwd = Path.cwd()
+            try:
+                os.chdir(root)
+                mcp_result = contextforge_helper_mcp.cf_project_reset_current_project(
+                    client_type="codex",
+                    preserve_evidence=False,
+                )
+                project_state.write_state_atomic(root, state)
+                cli_result = pi_project_init_helper_cli.dispatch(
+                    "cf_project_reset_current_project",
+                    {"client_type": "pi", "preserve_evidence": False},
+                )
+            finally:
+                os.chdir(cwd)
+
+            self.assertTrue(mcp_result["ok"])
+            self.assertEqual("reset", mcp_result["status"])
+            self.assertEqual(str(root), mcp_result["project_root"])
+            self.assertIn("assistant_visible_response", mcp_result)
+            self.assertTrue(cli_result["ok"])
+            self.assertEqual("reset", cli_result["status"])
+            self.assertEqual(str(root), cli_result["project_root"])
+            self.assertIn("assistant_visible_response", cli_result)
+
+    def test_project_reset_defaults_to_latest_user_message_cwd_before_process_cwd(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            state = project_state.default_state(root)
+            project_state.write_state_atomic(root, state)
+            approval_source = Path(run_tmp) / "latest-user-message.json"
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": "reset this project"}) + "\n", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                mcp_result = contextforge_helper_mcp.cf_project_reset_current_project(
+                    client_type="codex",
+                    preserve_evidence=False,
+                )
+
+        self.assertTrue(mcp_result["ok"], mcp_result)
+        self.assertEqual("reset", mcp_result["status"])
+        self.assertEqual(str(root), mcp_result["project_root"])
+
+    def test_project_reset_refuses_unsafe_roots_on_reset_surface(self) -> None:
+        denied_result = contextforge_helper_mcp.cf_project_reset_current_project(
+            project_root=str(Path.home()),
+            client_type="codex",
+            preserve_evidence=False,
+        )
+        self.assertFalse(denied_result["ok"])
+        self.assertEqual("RootValidationError", denied_result["error"]["type"])
+
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            tmp_path = Path(tmp).resolve()
+            link = tmp_path / "escape-link"
+            link.symlink_to("/tmp")
+            symlink_result = contextforge_helper_mcp.cf_project_reset_current_project(
+                project_root=str(link),
+                client_type="codex",
+                preserve_evidence=False,
+            )
+
+        self.assertFalse(symlink_result["ok"])
+        self.assertEqual("RootValidationError", symlink_result["error"]["type"])
+
+    def test_pi_reload_acknowledgement_changes_normal_readback_contract(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
+            )
+            project_state.write_state_atomic(root, state)
+
+            pending_readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="pi")
             ack = record_pi_reload(root)
-            capabilities = helper.list_available_capabilities(project_root=root, client_type="pi")
-            proposal = helper.propose_project_init(project_root=root, selected_services=[service_descriptor("github")], client_type="pi")
+            acknowledged_readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="pi")
+            acknowledged_availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="pi")
+            acknowledged_summary = contextforge_helper_mcp.project_capability_summary(str(root), client_type="pi")
 
-        self.assertEqual("client_reload_required", reload_required["status"])
-        self.assertEqual("pi-client-reload-before-validation", reload_required["next_turn"]["question_id"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertTrue(ack["current_job"]["client_reload_acknowledged"])
-        self.assertEqual("resume_validation", capabilities["status"])
-        self.assertEqual("validation-choice", capabilities["next_turn"]["question_id"])
-        self.assertEqual(["context7:canonical"], capabilities["current_job"]["selected_service_bindings"])
-        self.assertEqual("resume_validation", proposal["status"])
-        self.assertEqual("validation-choice", proposal["next_turn"]["question_id"])
+        self.assertEqual("pending_reload", pending_readback["current_session_boundary"]["reload_status"])
+        self.assertEqual("reload_acknowledged", ack["current_job"]["client_reload_fsm"]["state"])
+        for result in (acknowledged_readback, acknowledged_availability, acknowledged_summary):
+            with self.subTest(status=result["status"]):
+                self.assertEqual("reload_acknowledged", result["current_session_boundary"]["reload_status"])
+                self.assertEqual("reload_acknowledged", result["current_session_boundary"]["user_status"])
+                self.assertFalse(result["current_session_boundary"]["requires_reload"])
+                self.assertTrue(result["current_session_boundary"]["reload_acknowledged"])
+                self.assertTrue(result["assistant_visible_response_policy"]["internal_status_terms_suppressed"])
+        self.assertEqual(
+            "projection recorded; reload acknowledged",
+            acknowledged_readback["target_client_services"][0]["target_client_user_state"],
+        )
+        self.assertEqual(
+            "shim_activation_planned",
+            acknowledged_readback["target_client_services"][0]["target_client_state"]["status"],
+        )
 
-    def test_pi_helper_detects_and_repairs_pending_shim_metadata_drift(self) -> None:
+    def test_pi_helper_detects_and_repairs_installed_shim_metadata_drift(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
-            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi")
             state = project_state.apply_project_init_activation_to_state(
                 project_state.default_state(root),
                 selected,
@@ -1125,38 +1559,26 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             project_state.write_state_atomic(root, state)
 
             capabilities = helper.list_available_capabilities(project_root=root, client_type="pi")
-            blocked_validation = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": True}},
-                dry_run=True,
-            )
             repair = helper.repair_pending_project_init_config(project_root=root, client_type="pi")
             repaired_state = project_state.load_state(root)
             after = helper.list_available_capabilities(project_root=root, client_type="pi")
-            ack = record_pi_reload(root)
-            after_ack = helper.list_available_capabilities(project_root=root, client_type="pi")
 
         self.assertEqual("config_repair_required", capabilities["status"])
         self.assertEqual("repair-pi-shim-activation-metadata", capabilities["next_turn"]["question_id"])
         self.assertEqual(["github:canonical"], capabilities["config_repair"]["changed_service_bindings"])
-        self.assertEqual("config_repair_required", blocked_validation["status"])
         self.assertEqual("config_repaired", repair["status"])
         self.assertFalse((root / ".codex/config.toml").exists())
         assert repaired_state is not None
         self.assertEqual("contextforge-global-shim", repaired_state["services"]["github:canonical"]["target_clients"]["pi"]["shim"])
         self.assertEqual("client_reload_required", after["status"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("resume_validation", after_ack["status"])
-        self.assertEqual("validation-choice", after_ack["next_turn"]["question_id"])
+        self.assertEqual("pi-project-init-installed", after["next_turn"]["question_id"])
 
-    def test_pi_helper_records_validation_only_with_pi_visible_proof(self) -> None:
+    def test_pi_helper_records_installation_without_post_install_validation(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
-            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
+            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi")
             state = project_state.apply_project_init_activation_to_state(
                 project_state.default_state(root),
                 selected,
@@ -1167,59 +1589,16 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
             )
             project_state.write_state_atomic(root, state)
-
-            blocked_before_reload = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": pi_safe_probe_validation()},
-                dry_run=True,
-            )
-            ack = record_pi_reload(root)
-            backend_only = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": False}},
-                dry_run=True,
-            )
-            weak_visible = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={
-                    "context7:canonical": {
-                        "status": "passed",
-                        "target_client_visible": True,
-                        "verification_trace_refs": ["pi://contextforge-global-shim/tools/cf_context7_s123__resolve"],
-                    }
-                },
-                dry_run=True,
-            )
-            visible = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": pi_safe_probe_validation()},
-            )
             written = project_state.load_state(root)
 
-        self.assertEqual("client_reload_required", blocked_before_reload["status"])
-        self.assertEqual("pi-client-reload-before-validation", blocked_before_reload["next_turn"]["question_id"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("validation_recorded_dry_run", backend_only["status"])
-        self.assertEqual("in_progress", backend_only["project_status"])
-        self.assertEqual("validation_recorded_dry_run", weak_visible["status"])
-        self.assertEqual("in_progress", weak_visible["project_status"])
-        self.assertEqual("validation_recorded", visible["status"])
-        self.assertEqual("initialized", visible["project_status"])
         self.assertFalse((root / ".codex/config.toml").exists())
         assert written is not None
+        self.assertEqual("initialized", written["status"])
         service = written["services"]["context7:canonical"]
-        self.assertEqual("passed", service["target_clients"]["pi"]["validation_status"])
-        self.assertEqual("passed", service["verification_layers"]["target_client"]["status"])
+        self.assertEqual("installed", service["target_clients"]["pi"]["validation_status"])
+        self.assertEqual("installed", service["verification_layers"]["target_client"]["status"])
 
-    def test_pi_helper_restores_safe_policy_from_state_with_null_policy(self) -> None:
+    def test_pi_helper_retired_validation_operation_does_not_restore_safe_policy(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1246,64 +1625,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             written = project_state.load_state(root)
 
-        self.assertEqual("validation_recorded", result["status"])
+        self.assert_validation_operation_retired(result)
         assert written is not None
         policy = written["services"]["context7:canonical"]["verification_layers"]["tool_policy"]["policy"]
-        self.assertEqual(common.safe_validation_policy("context7"), policy)
-        self.assertEqual("passed", written["services"]["context7:canonical"]["target_clients"]["pi"]["validation_status"])
+        self.assertIsNone(policy)
+        self.assertNotEqual("passed", written["services"]["context7:canonical"]["target_clients"]["pi"]["validation_status"])
 
-    def test_pi_helper_can_revalidate_after_stale_skipped_readback(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
-            root = Path(tmp).resolve()
-            selected = [service_descriptor("context7")]
-            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
-            validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="pending_choice", target_client="pi")
-            state = project_state.apply_project_init_activation_to_state(
-                project_state.default_state(root),
-                selected,
-                target_client="pi",
-                client_config_plan=config_plan,
-                validation_plan=validation_plan,
-                validation_results={},
-                consent_receipt_refs=["run/consent-receipts/receipt-project-state.json"],
-            )
-            project_state.write_state_atomic(root, state)
-
-            record_pi_reload(root)
-            first = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={
-                    "context7:canonical": {
-                        "status": "skipped",
-                        "skipped_reason": "project state has no approved target_clients.pi service bindings",
-                    }
-                },
-            )
-            stale = project_state.load_state(root)
-            assert stale is not None
-            job = stale["project_init"]["activation_jobs"][stale["project_init"]["current_job_id"]]
-            job["local_client_config_digest"] = "sha256:" + ("0" * 64)
-            project_state.write_state_atomic(root, stale)
-
-            resume = helper.list_available_capabilities(project_root=root, client_type="pi")
-            result = helper.record_project_init_validation(
-                project_root=root,
-                client_type="pi",
-                validation_mode="validate_now",
-                validation_results={"context7:canonical": pi_safe_probe_validation()},
-            )
-            written = project_state.load_state(root)
-
-        self.assertEqual("validation_recorded", first["status"])
-        self.assertEqual("resume_validation", resume["status"])
-        self.assertEqual("validation_recorded", result["status"])
-        assert written is not None
-        self.assertEqual("initialized", written["status"])
-        job = written["project_init"]["activation_jobs"][written["project_init"]["current_job_id"]]
-        self.assertNotEqual("sha256:" + ("0" * 64), job["local_client_config_digest"])
-        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
     def test_pi_global_shim_install_plan_is_explicit_and_non_mutating_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1331,20 +1658,22 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn(str(Path.home() / ".pi" / "agent" / "extensions" / "mcp-bridge"), plan["planned_non_writes"])
         self.assertEqual(str(REPO_ROOT), root_config["portalRoot"])
         self.assertEqual("/reload", plan["client_reload"]["command"])
-        self.assertEqual("pi-client-reload-before-validation", plan["next_turn"]["question_id"])
-        self.assertIn("After the reload", plan["next_turn"]["prompt"])
-        self.assertIn('choose 1 or reply "validate"', plan["next_turn"]["allowed_response_shape"])
+        self.assertEqual("pi-client-reload-after-install", plan["next_turn"]["question_id"])
+        self.assertIn("newly installed ContextForge tools register", plan["next_turn"]["prompt"])
+        self.assertIn("/reload", plan["next_turn"]["prompt"])
+        self.assertNotIn("validate", plan["next_turn"]["allowed_response_shape"])
+        self.assertNotIn("skip validation", plan["next_turn"]["allowed_response_shape"])
         self.assertEqual(1, plan["next_turn"]["choices"][0]["number"])
         self.assertEqual("installed_current", installed["status"])
         self.assertEqual("/reload", installed["client_reload"]["command"])
-        self.assertIn("Before validating", installed["next_action"])
+        self.assertIn("issue /reload in Pi", installed["next_action"])
 
     def test_pi_extension_source_registers_bootstrap_helper_tools_without_bridge_reuse(self) -> None:
         text = (REPO_ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
 
         self.assertIn("cf_project_init_list_capabilities", text)
         self.assertIn("cf_project_init_approve", text)
-        self.assertIn("cf_project_init_record_client_reload", text)
+        self.assertNotIn("cf_project_init_record_client_reload", text)
         self.assertIn("pi_project_init_helper_cli.py", text)
         self.assertNotIn('pi.on("input"', text)
         self.assertNotIn('action: "transform"', text)
@@ -1353,22 +1682,41 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("contextforge-project-init-first-prompt", text)
         self.assertIn("firstPromptInitOffered", text)
         self.assertIn("display: false", text)
-        self.assertIn("Your first action must be a tool call to cf_project_init_list_capabilities", text)
+        self.assertIn("Use the current Pi session transcript to decide whether this is the first project-init turn or a continuation", text)
+        self.assertIn("call only `cf_project_init_continue`", text)
+        self.assertIn("Serena language replies such as `python`", text)
+        self.assertIn("Do not call direct propose, approve, or apply tools", text)
+        self.assertIn("do not emit visible text before the call", text)
+        self.assertIn("Visible answer banlist during project init", text)
+        self.assertIn("name: \"cf_project_init_continue\"", text)
+        self.assertIn("Primary Pi project setup continuation", text)
+        self.assertIn("Internal fallback only when cf_project_init_continue is unavailable", text)
+        self.assertIn("A numeric service selection is never approval", text)
+        self.assertIn("Do not answer, resume, or return to the user's original ordinary prompt", text)
         self.assertIn("Do not invent, rename, summarize, or substitute service names from memory", text)
-        self.assertIn("helper could not be called; do not invent a service list", text)
+        self.assertIn("do not invent a service list", text)
         self.assertIn("Which ContextForge services should I activate for this project?", text)
+        self.assertIn('items: { type: "string" }', text)
+        self.assertIn("minItems: 1", text)
+        self.assertIn("next_turn.choices[].id", text)
+        self.assertIn('for example \\"context7:canonical\\"', text)
+        self.assertIn('client_type: "pi"', text)
         self.assertIn("root === workspaceRoot", text)
         self.assertNotIn("systemPrompt:", text)
         self.assertIn("runHelperOperationJson", text)
         self.assertIn("projectInitCache", text)
         self.assertIn("resolveCachedPlan", text)
+        self.assertIn('operation === "cf_project_init_approve"', text)
+        self.assertIn('operation === "cf_project_init_apply"', text)
         self.assertIn("status: \"already_approved_from_pi_shim_cache\"", text)
         self.assertIn("status: \"already_applied_from_pi_shim_cache\"", text)
-        self.assertIn("Supplying the full plan is optional", text)
         self.assertIn('renderShell: "self"', text)
         self.assertIn("renderNothing", text)
         self.assertIn("new Container()", text)
         self.assertIn("cf_project_init_prompt", text)
+        self.assertIn("record_project_init_client_reload", text)
+        self.assertIn("acknowledgeReload: true", text)
+        self.assertIn("piProjectReloadPending", text)
         self.assertIn("Diagnostic only", text)
         self.assertIn("cf_contextforge_pi_readback", text)
         self.assertIn("cf_contextforge_guidance_lookup", text)
@@ -1384,15 +1732,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("readback.resources", text)
         self.assertIn("lookupGuidance", text)
         self.assertIn("guidanceLookupKeys", text)
-        self.assertIn("cf_contextforge_pi_validate", text)
-        self.assertIn("cf_project_init_validate", text)
-        self.assertIn("Compatibility alias for cf_contextforge_pi_validate", text)
-        self.assertIn("runPiValidation", text)
-        self.assertIn('proof_kind: "pi_safe_probe_result"', text)
-        self.assertIn("safe_probe_result", text)
-        self.assertIn("safe_probe_available", text)
-        self.assertIn("Call cf_project_init_record_validation", text)
-        self.assertIn("await activateProject(pi, projectRootFromParams(params, ctx), clients)", text)
+        self.assertNotIn("cf_contextforge_pi_validate", text)
+        self.assertNotIn("cf_project_init_validate", text)
+        self.assertNotIn("runPiValidation", text)
+        self.assertNotIn("Call cf_project_init_record_validation", text)
+        self.assertIn("await activateProject(pi, projectRootFromParams(params, ctx), clients, { acknowledgeReload: true })", text)
         self.assertIn("routeNamesByKey", text)
         self.assertIn("stableRouteToolName", text)
         self.assertIn("routeKeyFor(service, mcpTool)", text)
@@ -1405,13 +1749,6 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("completed_unverified", text)
         self.assertIn("serviceIdentityToolSegment", text)
         self.assertIn("shouldRefreshAfterHelperOperation", text)
-        self.assertIn("defaultSafeOperationsFor", text)
-        self.assertIn("safeProbeArgs", text)
-        self.assertIn("fitArgsToSchema", text)
-        self.assertIn('base.libraryName = "React"', text)
-        self.assertIn('base.query = "modelcontextprotocol"', text)
-        self.assertIn('base.ledger = "decisions"', text)
-        self.assertIn("probeArgsAvailable", text)
         self.assertIn("acceptStderr(chunk)", text)
         self.assertIn("contextforge-root.json", text)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT", text)
@@ -1421,6 +1758,15 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("console.error", text)
         self.assertNotIn("mcp-bridge", text)
         self.assertNotIn("registerContext7Tools", text)
+
+    def test_pi_project_init_source_has_no_record_validation_payload_template(self) -> None:
+        text = (REPO_ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
+
+        self.assertNotIn("function recordValidationResult", text)
+        self.assertNotIn("validation_results", text)
+        self.assertNotIn("copy this exact top-level validation_results object", text)
+        self.assertIn("cf_project_init_apply", text)
+        self.assertIn("ContextForge tools are installed", text)
 
     def test_pi_helper_cli_stdout_is_clean_json(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1445,6 +1791,46 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         parsed = json.loads(result.stdout)
         self.assertTrue(parsed["ok"])
         self.assertEqual("pi", parsed["client_type"])
+
+    def test_pi_helper_cli_service_onboarding_plan_rejects_synthetic_source_summary(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/pi_project_init_helper_cli.py"),
+                    "--operation",
+                    "build_service_onboarding_plan",
+                    "--payload-json",
+                    json.dumps(
+                        {
+                            "project_root": str(root),
+                            "candidateService": "calendar-notes",
+                            "sourcePath": "user-supplied: reads project notes and exposes search over meeting summaries",
+                            "transportType": "stdio",
+                            "localizationType": "project_scoped",
+                            "functionalType": "search_retrieval",
+                            "stateType": "local_filesystem_state",
+                            "approvalType": "source_only",
+                            "credentialRequired": False,
+                        }
+                    ),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=REPO_ROOT,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        parsed = json.loads(result.stdout)
+        self.assertTrue(parsed["ok"])
+        self.assertEqual("source_only_onboarding_plan", parsed["status"])
+        self.assertFalse(parsed["mutation_allowed"])
+        self.assertEqual("needs_user_input", parsed["record"]["status"])
+        self.assertEqual([], parsed["record"]["source_evidence"])
+        self.assertIn("Please provide the source reference or local path", parsed["assistant_visible_response"])
+        self.assertIn("No service has been installed, registered, started, exposed, imported, validated, probed, or made available", parsed["assistant_visible_response"])
 
     def test_contextforge_helper_mcp_exposes_cached_project_init_id_digest_tools(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1487,13 +1873,15 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
     def test_all_project_init_next_turn_choices_are_numbered(self) -> None:
         def assert_numbered(turn: dict[str, Any]) -> None:
             self.assertTrue(turn["choices"])
-            self.assertEqual(list(range(1, len(turn["choices"]) + 1)), [choice["number"] for choice in turn["choices"]])
             self.assertEqual(turn["choices"], turn["response_form"]["options"])
-            self.assertIn("selection number", turn["allowed_response_shape"])
+            if "selection numbers are not accepted" in turn["allowed_response_shape"]:
+                self.assertTrue(all("number" not in choice for choice in turn["choices"]))
+            else:
+                self.assertEqual(list(range(1, len(turn["choices"]) + 1)), [choice["number"] for choice in turn["choices"]])
+                self.assertIn("selection number", turn["allowed_response_shape"])
 
-        assert_numbered(helper.validation_choice_turn())
-        assert_numbered(helper.client_reload_before_validation_turn(common.client_reload_requirement("pi", event="project_activation_apply") or {}))
-        assert_numbered(helper.client_reload_before_validation_turn(common.client_reload_requirement("codex", event="project_activation_apply") or {}))
+        assert_numbered(helper.installation_complete_turn(client_type="pi", reload_requirement=common.client_reload_requirement("pi", event="project_activation_apply")))
+        assert_numbered(helper.installation_complete_turn(client_type="codex", reload_requirement=common.client_reload_requirement("codex", event="project_activation_apply")))
         assert_numbered(helper.config_repair_turn(client_type="pi"))
         assert_numbered(helper.config_repair_turn(client_type="codex"))
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1507,7 +1895,104 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("multi_select", capabilities["next_turn"]["response_form"]["type"])
         assert_numbered(proposal["next_turn"])
 
-    def test_helper_resumes_pending_validation_instead_of_restarting_selection(self) -> None:
+    def test_declined_service_decision_blocks_active_import_and_remains_readable(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            result = helper.record_project_init_service_decision(
+                project_root=root,
+                selected_services=[service_descriptor("context7")],
+                decision_state="declined",
+                client_type="pi",
+            )
+            state = project_state.load_state(root)
+            availability = contextforge_helper_mcp.project_tool_availability(project_root=str(root), client_type="pi")
+            capabilities = contextforge_helper_mcp.project_capability_summary(project_root=str(root), client_type="pi")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("service_declined", result["status"])
+        self.assertEqual("initialized", state["status"])
+        self.assertEqual("declined", state["decisions"]["context7:canonical"]["state"])
+        self.assertNotIn("context7:canonical", state["services"])
+        self.assertEqual([], availability["approved_service_bindings"])
+        self.assertEqual("declined", availability["skipped_or_unavailable_services"][0]["status"])
+        self.assertNotIn("context7:canonical", {item["service_binding"] for item in capabilities["onboarding_needed"]})
+
+    def test_declined_service_decision_suppresses_inconsistent_active_service_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("context7")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="pi",
+                client_config_plan={
+                    "surface": "project_state_shim_metadata",
+                    "scope": "project_local",
+                    "decision": "allow_project_state_shim_binding",
+                    "changes": [],
+                    "writes": [],
+                    "non_actions": [],
+                },
+                validation_plan=binding.build_project_init_validation_plan([service], validation_mode="pending_choice"),
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            state = project_state.apply_project_init_decisions_to_state(
+                state,
+                [service],
+                target_client="pi",
+                decision_state="declined",
+            )
+            project_state.write_state_atomic(root, state)
+
+            availability = contextforge_helper_mcp.project_tool_availability(project_root=str(root), client_type="pi")
+
+        self.assertEqual([], availability["approved_service_bindings"])
+        self.assertEqual([], availability["available_tools"])
+        self.assertEqual("declined", availability["skipped_or_unavailable_services"][0]["status"])
+
+    def test_mcp_continuation_decline_records_cached_plan_decision(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            approval_source = root / "latest-user.json"
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False):
+                proposal = contextforge_helper_mcp.cf_project_init_propose(
+                    project_root=str(root),
+                    selected_services=["context7:canonical"],
+                    client_type="opencode",
+                )
+                approval_source.write_text(json.dumps({"cwd": str(root), "text": "decline"}), encoding="utf-8")
+                result = contextforge_helper_mcp.cf_project_init_continue(project_root=str(root), client_type="opencode")
+                state = project_state.load_state(root)
+
+        self.assertTrue(proposal["ok"])
+        self.assertTrue(result["ok"])
+        self.assertEqual("declined", result["decision_state"])
+        self.assertIn("assistant_visible_response", result)
+        self.assertEqual("declined", state["decisions"]["context7:canonical"]["state"])
+        self.assertNotIn("context7:canonical", state["services"])
+
+    def test_mcp_continuation_defer_records_pending_serena_decision(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            approval_source = root / "latest-user.json"
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False):
+                proposal = contextforge_helper_mcp.cf_project_init_propose(
+                    project_root=str(root),
+                    selected_services=[serena_descriptor()],
+                    client_type="pi",
+                )
+                approval_source.write_text(json.dumps({"cwd": str(root), "text": "defer"}), encoding="utf-8")
+                result = contextforge_helper_mcp.cf_project_init_continue(project_root=str(root), client_type="pi")
+                state = project_state.load_state(root)
+
+        self.assertTrue(proposal["ok"])
+        self.assertEqual("needs_input", proposal["status"])
+        self.assertTrue(result["ok"])
+        serena_key = next(key for key in state["decisions"] if key.startswith("serena:"))
+        self.assertEqual("deferred", state["decisions"][serena_key]["state"])
+        self.assertEqual({}, state["services"])
+
+    def test_helper_completes_install_only_flow_after_reload_acknowledgment(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             service = service_descriptor("context7")
@@ -1532,15 +2017,46 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             after_ack = helper.list_available_capabilities(project_root=root)
 
         self.assertEqual("client_reload_required", capabilities["status"])
-        self.assertEqual("codex-client-reload-before-validation", capabilities["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", capabilities["next_turn"]["question_id"])
         self.assertEqual(["context7:canonical"], capabilities["current_job"]["selected_service_bindings"])
         self.assertEqual("client_reload_required", proposal["status"])
-        self.assertEqual("codex-client-reload-before-validation", proposal["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", proposal["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("resume_validation", after_ack["status"])
-        self.assertEqual("validation-choice", after_ack["next_turn"]["question_id"])
+        self.assertIn("available_services", after_ack)
+        self.assertNotEqual("installed_reload_required", after_ack.get("status"))
 
-    def test_helper_detects_and_repairs_pending_config_drift_before_validation(self) -> None:
+    def test_helper_allows_new_selection_after_install_only_reload_acknowledgment(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            (root / ".codex").mkdir()
+            (root / ".codex/config.toml").write_text(config_plan["next_text"], encoding="utf-8")
+            validation_plan = binding.build_project_init_validation_plan([service], validation_mode="installed", target_client="codex")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            blocked = helper.propose_project_init(project_root=root, selected_services=[service_descriptor("github")])
+            ack = helper.record_project_init_client_reload(project_root=root, client_type="codex")
+            capabilities = helper.list_available_capabilities(project_root=root)
+            proposal = helper.propose_project_init(project_root=root, selected_services=[service_descriptor("github")])
+
+        self.assertEqual("client_reload_required", blocked["status"])
+        self.assertEqual("client_reload_recorded", ack["status"])
+        self.assertNotIn("next_turn", ack)
+        self.assertIn("available_services", capabilities)
+        self.assertEqual("approve-project-init-plan", proposal["next_turn"]["question_id"])
+        self.assertEqual("github:canonical", proposal["plan_summary"]["bindings"][0]["service_binding"])
+
+    def test_helper_detects_and_repairs_pending_config_drift_before_install_completion(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github")]
@@ -1575,14 +2091,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         self.assertEqual("config_repair_required", capabilities["status"])
         self.assertEqual("repair-project-local-config", capabilities["next_turn"]["question_id"])
-        self.assertEqual("config_repair_required", blocked_validation["status"])
+        self.assert_validation_operation_retired(blocked_validation)
         self.assertEqual("config_repaired", repair["status"])
         self.assertIn("[mcp_servers.github]", config_text)
         self.assertEqual("client_reload_required", after["status"])
-        self.assertEqual("codex-client-reload-before-validation", after["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", after["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("resume_validation", after_ack["status"])
-        self.assertEqual("validation-choice", after_ack["next_turn"]["question_id"])
+        self.assertIn("available_services", after_ack)
+        self.assertNotEqual("installed_reload_required", after_ack.get("status"))
 
     def test_helper_repairs_missing_project_init_state_without_overwriting_unmanaged_codex_config(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1620,19 +2136,19 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("state_repaired", repaired["status"])
         self.assertEqual(unmanaged_config, config_after)
         self.assertEqual("client_reload_required", resume["status"])
-        self.assertEqual("codex-client-reload-before-validation", resume["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", resume["next_turn"]["question_id"])
         self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertEqual("resume_validation", after_ack["status"])
-        self.assertEqual("validation_recorded", presumed["status"])
-        self.assertEqual("in_progress", presumed["project_status"])
+        self.assertIn("available_services", after_ack)
+        self.assertNotEqual("installed_reload_required", after_ack.get("status"))
+        self.assert_validation_operation_retired(presumed)
         assert written is not None
         self.assertEqual("completed_unverified", written["project_init"]["x_hook_prompt_state"])
         migration = written["migration"]["client_config_migrations"]["codex"]
         self.assertEqual("unmanaged_same_name", migration["ownership_class"])
         self.assertEqual("conflict", migration["disposition"])
-        self.assertEqual("presumed_working", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("presumed_working", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
-    def test_helper_records_validation_results_after_config_is_current(self) -> None:
+    def test_retired_validation_operation_ignores_results_after_config_is_current(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github")]
@@ -1656,11 +2172,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 project_root=root,
                 validation_mode="validate_now",
                 validation_results={
-                    "context7:canonical": {
-                        "status": "passed",
-                        "target_client_visible": True,
-                        "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
-                    },
+                    "context7:canonical": context7_safe_probe_validation(),
                     "github:canonical": {
                         "status": "skipped",
                         "skipped_reason": "credentials unavailable in this client turn",
@@ -1669,15 +2181,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             written = project_state.load_state(root)
 
-        self.assertEqual("validation_recorded", result["status"])
-        self.assertEqual("in_progress", result["project_status"])
+        self.assert_validation_operation_retired(result)
         assert written is not None
         job = written["project_init"]["activation_jobs"][written["project_init"]["current_job_id"]]
-        self.assertEqual("validation_pending", job["status"])
-        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
-        self.assertEqual("skipped", written["services"]["github:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("verified", job["status"])
+        self.assertNotEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("skipped", written["services"]["github:canonical"]["verification_layers"]["target_client"]["status"])
 
-    def test_helper_rejects_nested_validation_results_without_recording_state(self) -> None:
+    def test_retired_validation_operation_ignores_nested_results_without_recording_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1711,25 +2222,41 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             after = project_state.load_state(root)
 
-        self.assertEqual("validation_results_unmatched", result["status"])
-        self.assertNotIn("state_revision", result)
-        self.assertEqual(["services"], result["validation_diagnostic"]["unmatched_keys"])
-        self.assertEqual([], result["validation_diagnostic"]["matched_keys"])
-        self.assertIn("context7:canonical", result["expected_validation_results_shape"])
-        expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
-        self.assertEqual("target_client_safe_probe_result", expected_shape["proof_kind"])
-        self.assertEqual("passed", expected_shape["safe_probe_result"])
-        self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
-        self.assertEqual(
-            ["contextforge://control-plane/traces/context7:canonical-target-client"],
-            expected_shape["verification_trace_refs"],
-        )
+        self.assert_validation_operation_retired(result)
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
-        job = after["project_init"]["activation_jobs"][after["project_init"]["current_job_id"]]
-        self.assertEqual("pending_user_choice", job["validation_records"][job["selected_service_ids"][0]]["status"])
 
-    def test_helper_reports_unmatched_validation_result_keys_without_recording_state(self) -> None:
+    def test_retired_validation_operation_requires_no_results_and_records_no_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_codex_config_write(root, selected, existing_text="")
+            (root / ".codex").mkdir()
+            (root / ".codex/config.toml").write_text(config_plan["next_text"], encoding="utf-8")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="pending_choice"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            before = project_state.write_state_atomic(root, state)
+            record_codex_new_session(root)
+            before = project_state.load_state(root)
+
+            result = helper.record_project_init_validation(
+                project_root=root,
+                validation_mode="validate_now",
+            )
+            after = project_state.load_state(root)
+
+        self.assert_validation_operation_retired(result)
+        assert after is not None
+        self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
+
+    def test_retired_validation_operation_ignores_unmatched_result_keys_without_recording_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1761,14 +2288,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             after = project_state.load_state(root)
 
-        self.assertEqual("validation_results_unmatched", result["status"])
-        self.assertNotIn("state_revision", result)
-        self.assertEqual(["unselected:canonical"], result["validation_diagnostic"]["unmatched_keys"])
-        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["missing_keys"])
+        self.assert_validation_operation_retired(result)
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
 
-    def test_helper_rejects_validation_result_values_that_are_not_objects(self) -> None:
+    def test_retired_validation_operation_ignores_result_values_that_are_not_objects(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1795,13 +2319,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             after = project_state.load_state(root)
 
-        self.assertEqual("validation_results_unmatched", result["status"])
-        self.assertEqual([], result["validation_diagnostic"]["matched_keys"])
-        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["invalid_value_keys"])
+        self.assert_validation_operation_retired(result)
         assert after is not None
         self.assertEqual(before["meta"]["revision"], after["meta"]["revision"])
 
-    def test_helper_valid_top_level_binding_keyed_validation_marks_service_passed(self) -> None:
+    def test_retired_validation_operation_ignores_complete_agent_working_report(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1826,24 +2348,51 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 validation_results={
                     "context7:canonical": {
                         "status": "passed",
-                        "target_client_visible": True,
-                        "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
+                        "target_client": "codex",
+                        "safe_probe_result": "passed",
+                        "safe_probe_id": "resolve-library-id",
+                        "tool_name": "context7_context7-local-resolve-library-id",
+                        "result_summary": "resolved the python library id through context7",
                     }
                 },
             )
+            after = project_state.load_state(root)
+
+        self.assert_validation_operation_retired(result)
+        assert after is not None
+        self.assertNotEqual("passed", after["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+
+    def test_retired_validation_operation_does_not_mark_service_passed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_codex_config_write(root, selected, existing_text="")
+            (root / ".codex").mkdir()
+            (root / ".codex/config.toml").write_text(config_plan["next_text"], encoding="utf-8")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="pending_choice"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+            record_codex_new_session(root)
+
+            result = helper.record_project_init_validation(
+                project_root=root,
+                validation_mode="validate_now",
+                validation_results={"context7:canonical": context7_safe_probe_validation()},
+            )
             written = project_state.load_state(root)
 
-        self.assertEqual("validation_recorded", result["status"])
-        self.assertEqual("initialized", result["project_status"])
-        self.assertEqual(["context7:canonical"], result["validation_diagnostic"]["matched_keys"])
-        expected_shape = result["expected_validation_results_shape"]["context7:canonical"]
-        self.assertEqual("target_client_safe_probe_result", expected_shape["proof_kind"])
-        self.assertEqual("passed", expected_shape["safe_probe_result"])
-        self.assertEqual("resolve-library-id", expected_shape["safe_probe_id"])
+        self.assert_validation_operation_retired(result)
         assert written is not None
-        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
 
-    def test_helper_mixed_validation_results_preserve_partial_pending_behavior(self) -> None:
+    def test_retired_validation_operation_ignores_mixed_results(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github"), service_descriptor("web-search")]
@@ -1866,11 +2415,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 project_root=root,
                 validation_mode="validate_now",
                 validation_results={
-                    "context7:canonical": {
-                        "status": "passed",
-                        "target_client_visible": True,
-                        "verification_trace_refs": ["contextforge://control-plane/traces/context7-target-client"],
-                    },
+                    "context7:canonical": context7_safe_probe_validation(),
                     "github:canonical": {
                         "status": "skipped",
                         "skipped_reason": "credentials unavailable in this client turn",
@@ -1883,14 +2428,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             written = project_state.load_state(root)
 
-        self.assertEqual("validation_recorded", result["status"])
-        self.assertEqual("validation_results only matched a subset of selected services", result["warning"])
-        self.assertEqual(["unselected:canonical"], result["validation_diagnostic"]["unmatched_keys"])
-        self.assertEqual(["web-search:canonical"], result["validation_diagnostic"]["missing_keys"])
+        self.assert_validation_operation_retired(result)
         assert written is not None
         self.assertEqual("in_progress", written["status"])
-        self.assertEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
-        self.assertEqual("skipped", written["services"]["github:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("passed", written["services"]["context7:canonical"]["verification_layers"]["target_client"]["status"])
+        self.assertNotEqual("skipped", written["services"]["github:canonical"]["verification_layers"]["target_client"]["status"])
         self.assertEqual("pending", written["services"]["web-search:canonical"]["verification_layers"]["target_client"]["status"])
 
     def test_contextforge_helper_mcp_exposes_readiness_tool(self) -> None:
@@ -1901,19 +2443,972 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("available", result["helper"]["status"])
         self.assertEqual("codex", result["root_attestation"]["client_type"])
 
-    def test_contextforge_helper_validation_guidance_exposes_safe_probe_shape(self) -> None:
-        helper_doc = contextforge_helper_mcp.record_project_init_validation.__doc__ or ""
+    def test_contextforge_helper_mcp_reports_initialized_tool_availability_read_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            full_report = contextforge_helper_mcp.project_tool_availability(str(root), client_type="opencode")
+            result = contextforge_helper_mcp.get_project_tool_availability(str(root), client_type="opencode")
+
+        self.assertEqual([], full_report["available_tools"])
+        self.assertEqual(["context7-local-resolve-library-id", "context7-local-query-docs"], full_report["project_tool_policies"][0]["tool_policy_names"])
+        self.assertEqual("reload_required", full_report["project_services"][0]["target_client_projection_status"])
+        self.assertFalse(full_report["project_services"][0]["available_to_target_client"])
+        self.assertTrue(result["ok"])
+        self.assertEqual("available_tools_report", result["status"])
+        self.assertIn("assistant_visible_response", result)
+        self.assertEqual(result["assistant_visible_response"], result["message"])
+        self.assertTrue(result["copy_as_complete_visible_response"])
+        self.assertTrue(result["do_not_summarize"])
+        self.assertNotIn("available_tools", result)
+        self.assertNotIn("state_revision", result)
+        self.assertEqual(
+            (
+                f"ContextForge state for {root} is initialized at revision 1. "
+                "Project services present: context7:canonical. "
+                "Configured/imported-tool policy for this client: no currently available target-client tools in this session. "
+                "Missing target-client projections: none recorded. "
+                "Skipped or unavailable services: none reported. "
+                "MCP runtime diagnostics: context7:canonical: reload_pending_before_mcp_startup. "
+                "client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven. "
+                "This is a read-only project-state readback; interactive proof is not claimed by this readback. "
+                "Note: After approved OpenCode project-local MCP config changes, start a new OpenCode session from the project root before relying on the newly installed tools. "
+                "OpenCode discovers project-local MCP servers and loads the user-home ContextForge plugin when a session starts."
+            ),
+            result["assistant_visible_response"],
+        )
+        self.assertIn("no project-init proposal, approval, or apply", result["non_actions"])
+
+    def test_opencode_readback_distinguishes_mcp_startup_failure_from_reload_pending(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            state["services"]["context7:canonical"]["target_clients"]["opencode"]["mcp_runtime_diagnostics"] = {
+                "attempted": True,
+                "startup_status": "failed",
+                "auth_status": "not_checked",
+                "transport_status": "not_checked",
+                "tool_listing_status": "not_checked",
+                "error_class": "process_exit",
+                "evidence_ref": "docker/client-harness/evidence/opencode-redacted-startup.log",
+            }
+            project_state.write_state_atomic(root, state)
+
+            availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="opencode")
+            capabilities = contextforge_helper_mcp.project_capability_summary(str(root), client_type="opencode")
+            readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="opencode")
+
+        diagnostic = availability["mcp_runtime_diagnostics"][0]
+        self.assertEqual("mcp_server_startup_failed", diagnostic["classification"])
+        self.assertTrue(diagnostic["attempted"])
+        self.assertTrue(diagnostic["secret_values_redacted"])
+        self.assertEqual("not_claimed", diagnostic["validation_proof"])
+        self.assertEqual("process_exit", diagnostic["error_class"])
+        self.assertFalse(availability["project_services"][0]["available_to_target_client"])
+        self.assertEqual([], availability["available_tools"])
+        self.assertIn("do not ask for another reload", availability["assistant_visible_response"])
+        self.assertNotIn("start a new OpenCode session", availability["assistant_visible_response"])
+        self.assertIn("mcp_server_startup_failed", capabilities["assistant_visible_response"])
+        self.assertIn("do not ask for another reload", capabilities["assistant_visible_response"])
+        self.assertEqual(
+            "mcp_server_startup_failed",
+            readback["target_client_services"][0]["mcp_runtime_diagnostic"]["classification"],
+        )
+        self.assertFalse(readback["target_client_services"][0]["available_to_target_client"])
+        self.assertEqual(
+            "mcp_server_startup_failed",
+            readback["target_client_services"][0]["readiness_layers"]["mcp_runtime"],
+        )
+        self.assertIn("MCP runtime mcp_server_startup_failed", readback["assistant_visible_response"])
+        self.assertIn("do not ask for another reload", readback["assistant_visible_response"])
+        self.assertIn("no validation, tool probe, backend mutation, or registry mutation", readback["non_actions"])
+
+    def test_opencode_readback_classifies_auth_and_transport_errors_before_reload_pending(self) -> None:
+        cases = [
+            (
+                {"error_message": "ContextForge returned HTTP 401 unauthorized"},
+                "contextforge_auth_failed",
+                "failed",
+                "not_observed",
+            ),
+            (
+                {"mcp_error_class": "unauthorized"},
+                "contextforge_auth_failed",
+                "failed",
+                "not_observed",
+            ),
+            (
+                {"stderr": "connect ECONNREFUSED 127.0.0.1:4445"},
+                "contextforge_transport_failed",
+                "not_observed",
+                "failed",
+            ),
+            (
+                {"transport_error": "connection_refused"},
+                "contextforge_transport_failed",
+                "not_observed",
+                "failed",
+            ),
+        ]
+        for diagnostics, classification, auth_status, transport_status in cases:
+            with self.subTest(diagnostics=diagnostics):
+                with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+                    root = Path(tmp).resolve()
+                    selected = [service_descriptor("context7")]
+                    config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+                    state = project_state.apply_project_init_activation_to_state(
+                        project_state.default_state(root),
+                        selected,
+                        target_client="opencode",
+                        client_config_plan=config_plan,
+                        validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                        validation_results={},
+                        consent_receipt_refs=CONSENT_REFS,
+                    )
+                    state["services"]["context7:canonical"]["target_clients"]["opencode"]["mcp_runtime_diagnostics"] = diagnostics
+                    project_state.write_state_atomic(root, state)
+
+                    availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="opencode")
+                    readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="opencode")
+
+                diagnostic = availability["mcp_runtime_diagnostics"][0]
+                self.assertEqual(classification, diagnostic["classification"])
+                self.assertTrue(diagnostic["attempted"])
+                self.assertEqual(auth_status, diagnostic["auth_status"])
+                self.assertEqual(transport_status, diagnostic["transport_status"])
+                self.assertFalse(availability["project_services"][0]["available_to_target_client"])
+                self.assertEqual([], availability["available_tools"])
+                self.assertFalse(readback["target_client_services"][0]["available_to_target_client"])
+                self.assertIn("do not ask for another reload", availability["assistant_visible_response"])
+                self.assertIn(classification, readback["assistant_visible_response"])
+                self.assertIn("do not ask for another reload", readback["assistant_visible_response"])
+
+    def test_contextforge_helper_mcp_reports_missing_target_client_projection_without_available_tools(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7"), service_descriptor("github")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="opencode")
+            client_caps = contextforge_helper_mcp.list_available_capabilities(str(root), client_type="opencode")
+            readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="opencode")
+            capabilities = contextforge_helper_mcp.project_capability_summary(str(root), client_type="opencode")
+
+        expected_actions = [
+            {
+            "action": "align_target_client_to_existing_project_service",
+            "target_client": "opencode",
+                "service_binding": service_binding,
+            "boundary": (
+                "Align/import opencode to the existing project service instance; "
+                "do not create a new project service instance unless explicitly approved."
+            ),
+            }
+            for service_binding in ["context7:canonical", "github:canonical"]
+        ]
+        self.assertEqual("available_tools_report", availability["status"])
+        self.assertEqual("alignment_import_offer", client_caps["status"])
+        self.assertIn("alignment_import_offer", client_caps)
+        self.assertEqual("align-existing-project-services", client_caps["next_turn"]["question_id"])
+        self.assertEqual(2, len(client_caps["available_services"]))
+        self.assertEqual(
+            ["context7:canonical", "github:canonical"],
+            client_caps["alignment_import_offer"]["project_service_bindings"],
+        )
+        self.assertEqual(
+            {"context7:canonical", "github:canonical"},
+            {item["service_binding"] for item in client_caps["alignment_import_offer"]["missing_target_client_projection"]},
+        )
+        self.assertEqual("present", client_caps["available_services"][0]["project_service_state"])
+        self.assertEqual("missing", client_caps["available_services"][0]["target_client_projection_status"])
+        self.assertEqual({"status": "not_recorded"}, client_caps["available_services"][0]["target_client_state"])
+        self.assertFalse(client_caps["available_services"][0]["available_to_target_client"])
+        self.assertEqual("Project services are already present. Import this project's existing ContextForge services for OpenCode?", client_caps["next_turn"]["prompt"])
+        self.assertIn("ContextForge state for", client_caps["assistant_visible_response"])
+        self.assertIn("already contains project services", client_caps["assistant_visible_response"])
+        self.assertIn("Missing target-client projections for OpenCode", client_caps["assistant_visible_response"])
+
+        self.assertEqual([], readback["imported_tools"])
+        self.assertEqual(expected_actions, readback["missing_target_client_projection"])
+        self.assertEqual("missing", readback["target_client_services"][0]["target_client_projection_status"])
+        self.assertEqual("not_claimed", readback["target_client_services"][0]["target_client_visibility_status"])
+        self.assertEqual("not_recorded", readback["target_client_services"][0]["target_client_proof_status"])
+        self.assertEqual(expected_actions[0], readback["target_client_services"][0]["recommended_action"])
+        self.assertIn("Project tool policy: context7:canonical: context7-local-resolve-library-id, context7-local-query-docs", readback["assistant_visible_response"])
+        self.assertIn("Configured/imported-tool policy for this client: none reported.", readback["assistant_visible_response"])
+        self.assertIn("projection missing; client state not_recorded", readback["assistant_visible_response"])
+
+        self.assertEqual([], capabilities["available_now"])
+        self.assertEqual(expected_actions, capabilities["missing_target_client_projection"])
+        self.assertEqual("context7:canonical", capabilities["project_services"][0]["service_binding"])
+        self.assertIn("Configured in current project state for opencode: none reported.", capabilities["assistant_visible_response"])
+        self.assertIn("Missing target-client projections: context7:canonical", capabilities["assistant_visible_response"])
+
+    def test_target_client_projection_status_vocabulary_keeps_readiness_layers_separate(self) -> None:
+        cases = [
+            (
+                "blocked",
+                {"status": "blocked", "validation_status": "blocked", "reload_status": "not_required"},
+                "blocked",
+                False,
+            ),
+            (
+                "stale",
+                {"status": "stale", "validation_status": "installed", "reload_status": "not_required"},
+                "stale",
+                False,
+            ),
+            (
+                "partial",
+                {"status": "partial", "validation_status": "mixed", "reload_status": "not_required"},
+                "partial",
+                False,
+            ),
+            (
+                "validation_pending",
+                {"status": "validation_pending", "validation_status": "pending", "reload_status": "not_required"},
+                "validation_pending",
+                False,
+            ),
+            (
+                "skipped",
+                {"status": "installed", "validation_status": "skipped", "reload_status": "not_required"},
+                "skipped",
+                False,
+            ),
+            (
+                "recorded_fallback",
+                {"status": "project_local_config_planned", "validation_status": "unknown", "reload_status": "not_required"},
+                "recorded",
+                False,
+            ),
+            (
+                "imported",
+                {"status": "installed", "validation_status": "installed", "reload_status": "not_required"},
+                "imported",
+                True,
+            ),
+            (
+                "reload_required",
+                {"status": "installed", "validation_status": "installed", "reload_status": "pending_reload"},
+                "reload_required",
+                False,
+            ),
+            (
+                "verified",
+                {
+                    "status": "verified",
+                    "validation_status": "passed",
+                    "reload_status": "not_required",
+                    "target_client_visible": True,
+                    "proof_ref": "run/evidence/context7-codex-proof.json",
+                },
+                "verified",
+                True,
+            ),
+        ]
+        for label, target_state, expected_projection, expected_available in cases:
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+                    root = Path(tmp).resolve()
+                    selected = [service_descriptor("context7")]
+                    config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="codex")
+                    state = project_state.apply_project_init_activation_to_state(
+                        project_state.default_state(root),
+                        selected,
+                        target_client="codex",
+                        client_config_plan=config_plan,
+                        validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="codex"),
+                        validation_results={},
+                        consent_receipt_refs=CONSENT_REFS,
+                    )
+                    job_id = state["project_init"]["current_job_id"]
+                    if expected_projection != "reload_required":
+                        state["project_init"]["activation_jobs"][job_id]["x_client_reload_ack"] = {
+                            "client_type": "codex",
+                            "job_id": job_id,
+                            "acknowledged_at": "2026-06-20T00:00:00Z",
+                        }
+                        state["project_init"]["activation_jobs"][job_id]["x_client_reload_fsm"] = {
+                            "client_type": "codex",
+                            "job_id": job_id,
+                            "state": "reload_acknowledged",
+                        }
+                    state["services"]["context7:canonical"]["target_clients"]["codex"].update(target_state)
+                    project_state.write_state_atomic(root, state)
+
+                    availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="codex")
+                    readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="codex")
+
+                self.assertEqual(expected_projection, availability["project_services"][0]["target_client_projection_status"])
+                self.assertEqual(expected_available, availability["project_services"][0]["available_to_target_client"])
+                self.assertEqual(expected_projection, readback["target_client_services"][0]["target_client_projection_status"])
+                self.assertEqual(expected_available, readback["target_client_services"][0]["available_to_target_client"])
+                if expected_available:
+                    self.assertEqual(["context7:canonical"], [item["service_binding"] for item in availability["available_tools"]])
+                else:
+                    self.assertEqual([], availability["available_tools"])
+
+    def test_alignment_import_apply_records_opencode_projection_without_mutating_pi_projection(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7"), service_descriptor("github")]
+            pi_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            pi_validation_plan = binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi")
+            base_state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=pi_plan,
+                validation_plan=pi_validation_plan,
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, base_state)
+
+            availability = helper.list_available_capabilities(project_root=root, client_type="opencode")
+            apply_result = binding.apply_project_init_service_activation(
+                root,
+                selected,
+                validation_mode="installed",
+                approval_scope=binding.PROJECT_INIT_APPROVAL_SCOPE,
+                target_client="opencode",
+                consent_receipt_refs=CONSENT_REFS,
+                dry_run=True,
+            )
+
+        self.assertEqual("alignment_import_offer", availability["status"])
+        self.assertEqual("align-existing-project-services", availability["next_turn"]["question_id"])
+        self.assertEqual(["context7:canonical", "github:canonical"], availability["alignment_import_offer"]["project_service_bindings"])
+        planned = apply_result["planned_state"]
+        self.assertEqual({"context7:canonical", "github:canonical"}, set(planned["services"]))
+        self.assertEqual(
+            base_state["services"]["context7:canonical"]["x_service_identity"]["id"],
+            planned["services"]["context7:canonical"]["x_service_identity"]["id"],
+        )
+        self.assertEqual(
+            base_state["services"]["github:canonical"]["x_service_identity"]["id"],
+            planned["services"]["github:canonical"]["x_service_identity"]["id"],
+        )
+        self.assertEqual(
+            base_state["services"]["context7:canonical"]["target_clients"]["pi"],
+            planned["services"]["context7:canonical"]["target_clients"]["pi"],
+        )
+        self.assertEqual(
+            base_state["services"]["github:canonical"]["target_clients"]["pi"],
+            planned["services"]["github:canonical"]["target_clients"]["pi"],
+        )
+        self.assertEqual("project_local_opencode_config_planned", planned["services"]["context7:canonical"]["target_clients"]["opencode"]["status"])
+        self.assertEqual("installed", planned["services"]["context7:canonical"]["target_clients"]["opencode"]["validation_status"])
+        self.assertEqual("project_local_opencode_config_planned", planned["services"]["github:canonical"]["target_clients"]["opencode"]["status"])
+        self.assertEqual("installed", planned["services"]["github:canonical"]["target_clients"]["opencode"]["validation_status"])
+        self.assertEqual("installed", planned["project_init"]["client_states"]["opencode"]["status"])
+        self.assertEqual(["context7:canonical", "github:canonical"], planned["project_init"]["client_states"]["opencode"]["selected_service_bindings"])
+        self.assertNotIn("opencode", base_state["services"]["context7:canonical"]["target_clients"])
+        self.assertNotIn("opencode", base_state["services"]["github:canonical"]["target_clients"])
+
+    def test_alignment_import_continuation_turn_builds_opencode_approval_package(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "context7"}) + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                offer = contextforge_helper_mcp.list_available_capabilities(str(root), client_type="opencode")
+                proposal = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="opencode")
+
+        self.assertTrue(offer["ok"], offer)
+        self.assertEqual("alignment_import_offer", offer["status"])
+        self.assertEqual(["context7:canonical"], offer["alignment_import_offer"]["project_service_bindings"])
+        self.assertEqual("align-existing-project-services", offer["next_turn"]["question_id"])
+        self.assertTrue(proposal["ok"], proposal)
+        self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
+        self.assertIn("Plan ready for context7:canonical", proposal["assistant_visible_response"])
+        self.assertIn("opencode.json", proposal["assistant_visible_response"])
+        self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
+        self.assertIs(proposal["copy_as_complete_visible_response"], True)
+        self.assertIs(proposal["do_not_summarize"], True)
+
+    def test_alignment_import_offer_reports_unavailable_project_services_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7"), service_descriptor("github")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            state["services"]["github:canonical"]["provision_status"] = "failed"
+            state["services"]["github:canonical"]["x_reason"] = "credential not configured"
+            project_state.write_state_atomic(root, state)
+
+            offer = helper.list_available_capabilities(project_root=root, client_type="opencode")
+
+        self.assertEqual("alignment_import_offer", offer["status"])
+        self.assertEqual(["context7:canonical"], offer["alignment_import_offer"]["project_service_bindings"])
+        self.assertEqual(1, offer["alignment_import_offer"]["service_count"])
+        self.assertEqual(1, offer["alignment_import_offer"]["unavailable_service_count"])
+        self.assertEqual(
+            [
+                {
+                    "service_binding": "github:canonical",
+                    "status": "failed",
+                    "reason": "credential not configured",
+                    "alignment_status": "blocked",
+                }
+            ],
+            offer["alignment_import_offer"]["unavailable_project_services"],
+        )
+        self.assertEqual(["context7:canonical"], [service["service_binding"] for service in offer["available_services"]])
+        self.assertEqual(["context7:canonical", "none"], [choice["id"] for choice in offer["next_turn"]["choices"]])
+        self.assertIn("Some project services cannot be imported", offer["assistant_visible_response"])
+        self.assertIn("github:canonical: failed (credential not configured)", offer["assistant_visible_response"])
+        self.assertIn("Import this project's existing ContextForge services for OpenCode?", offer["assistant_visible_response"])
+
+    def test_alignment_import_offer_does_not_fall_back_to_generic_menu_when_all_project_services_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7"), service_descriptor("github")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            for binding_id, reason in {
+                "context7:canonical": "server not running",
+                "github:canonical": "credential not configured",
+            }.items():
+                state["services"][binding_id]["provision_status"] = "failed"
+                state["services"][binding_id]["x_reason"] = reason
+            project_state.write_state_atomic(root, state)
+
+            offer = helper.list_available_capabilities(project_root=root, client_type="opencode")
+
+        self.assertEqual("alignment_import_offer", offer["status"])
+        self.assertEqual([], offer["available_services"])
+        self.assertEqual([], offer["alignment_import_offer"]["project_service_bindings"])
+        self.assertEqual([], offer["alignment_import_offer"]["missing_target_client_projection"])
+        self.assertEqual(0, offer["alignment_import_offer"]["service_count"])
+        self.assertEqual(2, offer["alignment_import_offer"]["unavailable_service_count"])
+        self.assertEqual(
+            {"context7:canonical", "github:canonical"},
+            {item["service_binding"] for item in offer["alignment_import_offer"]["unavailable_project_services"]},
+        )
+        self.assertEqual("align-existing-project-services", offer["next_turn"]["question_id"])
+        self.assertEqual(["none"], [choice["id"] for choice in offer["next_turn"]["choices"]])
+        self.assertIn("already contains project services: context7:canonical, github:canonical", offer["assistant_visible_response"])
+        self.assertIn("Importable or repairable target-client projections for OpenCode: none currently importable.", offer["assistant_visible_response"])
+        self.assertIn("Some project services cannot be imported", offer["assistant_visible_response"])
+        self.assertNotEqual("select-services", offer["next_turn"]["question_id"])
+
+    def test_alignment_import_offer_represents_non_current_target_client_projection(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7"), service_descriptor("github")]
+            pi_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=pi_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            state["services"]["github:canonical"]["target_clients"]["opencode"] = {
+                "client_type": "opencode",
+                "status": "partial",
+                "validation_status": "mixed",
+                "reload_status": "not_required",
+            }
+            project_state.write_state_atomic(root, state)
+
+            offer = helper.list_available_capabilities(project_root=root, client_type="opencode")
+
+        self.assertEqual("alignment_import_offer", offer["status"])
+        self.assertEqual(["context7:canonical", "github:canonical"], offer["alignment_import_offer"]["project_service_bindings"])
+        self.assertEqual(
+            ["context7:canonical", "github:canonical", "none"],
+            [choice["id"] for choice in offer["next_turn"]["choices"]],
+        )
+        self.assertEqual(
+            [{"action": "align_target_client_to_existing_project_service", "target_client": "opencode", "service_binding": "context7:canonical", "target_client_projection_status": "missing", "boundary": "Align/import opencode to the existing project service instance; do not create a new project service instance unless explicitly approved."}],
+            offer["alignment_import_offer"]["missing_target_client_projection"],
+        )
+        self.assertEqual(
+            [{"action": "align_target_client_to_existing_project_service", "target_client": "opencode", "service_binding": "github:canonical", "target_client_projection_status": "partial", "boundary": "Align/import opencode to the existing project service instance; do not create a new project service instance unless explicitly approved."}],
+            offer["alignment_import_offer"]["non_current_target_client_projection"],
+        )
+        by_binding = {service["service_binding"]: service for service in offer["available_services"]}
+        self.assertEqual("missing", by_binding["context7:canonical"]["target_client_projection_status"])
+        self.assertEqual("partial", by_binding["github:canonical"]["target_client_projection_status"])
+        self.assertEqual("Repair this project's existing github projection for opencode without provisioning a new project service instance.", by_binding["github:canonical"]["user_visible_effect"])
+
+    def test_contextforge_helper_mcp_reports_project_capability_summary_read_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            skipped = json.loads(json.dumps(state["services"]["context7:canonical"]))
+            skipped["service_family"] = "web-search"
+            skipped["service_binding"] = "web-search:credential_scoped"
+            skipped["provision_status"] = "failed"
+            skipped["x_reason"] = "credential not configured"
+            skipped["x_service_identity_id"] = "contextforge-service-web-search-unavailable"
+            skipped["x_service_identity"]["id"] = "contextforge-service-web-search-unavailable"
+            state["services"]["web-search:credential_scoped"] = skipped
+            project_state.write_state_atomic(root, state)
+
+            full_report = contextforge_helper_mcp.project_capability_summary(str(root), client_type="opencode")
+            result = contextforge_helper_mcp.get_project_capability_summary(str(root), client_type="opencode")
+
+        self.assertEqual([], full_report["available_now"])
+        self.assertEqual("context7:canonical", full_report["project_services"][0]["service_binding"])
+        self.assertEqual("reload_required", full_report["project_services"][0]["target_client_projection_status"])
+        self.assertFalse(full_report["project_services"][0]["available_to_target_client"])
+        self.assertTrue(full_report["known_unavailable"])
+        self.assertTrue(full_report["onboarding_needed"])
+        self.assertTrue(result["ok"])
+        self.assertEqual("project_capability_summary", result["status"])
+        self.assertIn("assistant_visible_response", result)
+        self.assertEqual(result["assistant_visible_response"], result["message"])
+        self.assertTrue(result["copy_as_complete_visible_response"])
+        self.assertTrue(result["do_not_summarize"])
+        self.assertNotIn("available_now", result)
+        self.assertNotIn("onboarding_needed", result)
+        visible = result["assistant_visible_response"]
+        self.assertIn("Configured in current project state for opencode: none reported.", visible)
+        self.assertIn("Project services present:", visible)
+        self.assertIn("Known but unavailable:", visible)
+        self.assertIn("Could be onboarded with approval:", visible)
+        self.assertIn("Important client/session boundary for opencode:", visible)
+        self.assertIn("context7:canonical", visible)
+        self.assertIn("web-search:credential_scoped", visible)
+        self.assertIn("no service onboarding", result["non_actions"])
+
+    def test_contextforge_helper_mcp_reports_project_state_readback_read_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="opencode",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="opencode"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            full_report = contextforge_helper_mcp.project_state_readback(str(root), client_type="opencode")
+            result = contextforge_helper_mcp.get_project_state_readback(str(root), client_type="opencode")
+
+        self.assertTrue(full_report["ok"])
+        self.assertEqual("project_state_readback", full_report["status"])
+        self.assertEqual("initialized", full_report["state_status"])
+        self.assertEqual(["context7:canonical"], full_report["selected_service_bindings"])
+        self.assertEqual([], full_report["imported_tools"])
+        self.assertEqual(["context7-local-resolve-library-id", "context7-local-query-docs"], full_report["project_tool_policies"][0]["tool_policy_names"])
+        self.assertEqual("reload_required", full_report["target_client_services"][0]["target_client_projection_status"])
+        self.assertFalse(full_report["target_client_services"][0]["available_to_target_client"])
+        self.assertEqual("not_claimed_by_readback", full_report["target_client_services"][0]["readiness_layers"]["interactive_proof"])
+        self.assertIn("interactive proof is not claimed", full_report["assistant_visible_response"])
+        self.assertTrue(result["ok"])
+        self.assertEqual("project_state_readback", result["status"])
+        self.assertIn("assistant_visible_response", result)
+        self.assertEqual(result["assistant_visible_response"], result["message"])
+        self.assertTrue(result["copy_as_complete_visible_response"])
+        self.assertTrue(result["do_not_summarize"])
+        self.assertNotIn("target_client_services", result)
+        self.assertNotIn("state_revision", result)
+        visible = result["assistant_visible_response"]
+        self.assertIn(str(root), visible)
+        self.assertIn("revision", visible)
+        self.assertIn("context7:canonical", visible)
+        self.assertIn("Configured/imported-tool policy", visible)
+        self.assertIn("client-visible", visible)
+        self.assertIn("not proven by this readback", visible)
+        self.assertIn("target-client-visible=false states remain unproven", visible)
+        self.assertIn("interactive proof is not claimed", visible)
+        self.assertIn("no claim of interactive proof", result["non_actions"])
+
+    def test_contextforge_helper_mcp_default_client_type_can_be_set_by_env(self) -> None:
+        self.assertEqual(
+            "codex",
+            inspect.signature(contextforge_helper_mcp.list_available_capabilities).parameters["client_type"].default,
+        )
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(REPO_ROOT / "scripts")
+        env["CONTEXTFORGE_HELPER_DEFAULT_CLIENT_TYPE"] = "opencode"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import inspect, contextforge_helper_mcp; "
+                    "print(inspect.signature(contextforge_helper_mcp.list_available_capabilities)"
+                    ".parameters['client_type'].default)"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=20,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("opencode", result.stdout.strip())
+
+    def test_contextforge_helper_mcp_approval_guard_requires_latest_user_approval_text(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            challenge = proposal["approval_challenge"]
+            guarded_env = {
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1",
+                "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source),
+            }
+
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "Activate context7:canonical only."}) + "\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, guarded_env):
+                denied = contextforge_helper_mcp.cf_project_init_approve(
+                    str(root),
+                    challenge["challenge_id"],
+                    challenge["plan_digest"],
+                )
+
+            self.assertFalse(denied["ok"])
+            self.assertEqual("PermissionError", denied["error"]["type"])
+
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": "1"}) + "\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, guarded_env):
+                numeric_denied = contextforge_helper_mcp.cf_project_init_approve(
+                    str(root),
+                    challenge["challenge_id"],
+                    challenge["plan_digest"],
+                )
+
+            self.assertFalse(numeric_denied["ok"])
+            self.assertEqual("PermissionError", numeric_denied["error"]["type"])
+
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": "do not approve this plan"}) + "\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, guarded_env):
+                negated_denied = contextforge_helper_mcp.cf_project_init_approve(
+                    str(root),
+                    challenge["challenge_id"],
+                    challenge["plan_digest"],
+                )
+
+            self.assertFalse(negated_denied["ok"])
+            self.assertEqual("PermissionError", negated_denied["error"]["type"])
+
+    def test_contextforge_helper_mcp_approval_guard_accepts_approval_text(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            challenge = proposal["approval_challenge"]
+            guarded_env = {
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1",
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_RELOAD_TEXT": "1",
+                "CONTEXTFORGE_HELPER_REQUIRE_USER_VALIDATION_TEXT": "1",
+                "CONTEXTFORGE_HELPER_RECORD_RELOAD_ON_VALIDATION_REQUEST": "1",
+                "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source),
+            }
+
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "Approve this exact ContextForge activation plan."}) + "\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, guarded_env):
+                approved = contextforge_helper_mcp.cf_project_init_approve(
+                    str(root),
+                    challenge["challenge_id"],
+                    challenge["plan_digest"],
+                )
+
+            self.assertTrue(approved["ok"])
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root))
+            self.assertTrue(applied["ok"])
+
+            self.assertEqual("opencode-project-init-installed", applied["next_turn"]["question_id"])
+            self.assertIn("new session", applied["next_turn"]["prompt"].lower())
+
+    def test_opencode_continue_recovers_recorded_cwd_when_model_supplies_root_slash(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "1"}) + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                proposal = contextforge_helper_mcp.cf_project_init_continue(
+                    "/",
+                    client_type="opencode",
+                )
+
+            self.assertTrue(proposal["ok"], proposal)
+            self.assertEqual(str(root), proposal["project_root"])
+            self.assertIn("assistant_visible_response", proposal)
+            self.assertIn("context7:canonical", proposal["assistant_visible_response"])
+            self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
+
+    def test_opencode_continue_accepts_natural_service_selection(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "context7"}) + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                single_proposal = contextforge_helper_mcp.cf_project_init_continue(
+                    str(root),
+                    client_type="opencode",
+                )
+
+            self.assertTrue(single_proposal["ok"], single_proposal)
+            self.assertEqual(["context7:canonical"], single_proposal["selected_service_bindings"])
+
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "context7, mentality, and ssh-tmux"}) + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                proposal = contextforge_helper_mcp.cf_project_init_continue(
+                    str(root),
+                    client_type="opencode",
+                )
+
+            self.assertTrue(proposal["ok"], proposal)
+            self.assertEqual(
+                ["context7:canonical", "mentality:static_repo_local", "ssh-tmux:session_scoped"],
+                proposal["selected_service_bindings"],
+            )
+            self.assertIn("assistant_visible_response", proposal)
+            self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
+
+    def test_pi_continue_accepts_recorded_natural_service_selection(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "pi-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "context7"}) + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                proposal = contextforge_helper_mcp.cf_project_init_continue(
+                    str(root),
+                    client_type="pi",
+                )
+
+            self.assertTrue(proposal["ok"], proposal)
+            self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
+            self.assertIn("assistant_visible_response", proposal)
+            self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
+
+    def test_pi_continue_maps_pending_serena_numeric_defer_to_non_serena_plan(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "pi-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                approval_source.write_text(json.dumps({"cwd": str(root), "text": "context7 and serena"}) + "\n", encoding="utf-8")
+                language_turn = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="pi")
+                pending_after_language_turn = contextforge_helper_mcp._pending_project_init_input(str(root))
+                approval_source.write_text(json.dumps({"cwd": str(root), "text": "3"}) + "\n", encoding="utf-8")
+                proposal = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="pi")
+                cached_plan = contextforge_helper_mcp._matching_cached_plan(str(root), None, None)
+                pending_input = contextforge_helper_mcp._pending_project_init_input(str(root))
+
+        self.assertTrue(language_turn["ok"], language_turn)
+        self.assertEqual("needs_input", language_turn["status"])
+        self.assertEqual("language", pending_after_language_turn["input_name"])
+        self.assertIn("context7:canonical", pending_after_language_turn["selected_services"])
+        self.assertTrue(any(str(item).startswith("serena:") for item in pending_after_language_turn["selected_services"]))
+        self.assertTrue(proposal["ok"], proposal)
+        self.assertEqual("project_init", proposal["workflow"])
+        self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
+        self.assertNotIn("serena:", " ".join(proposal["selected_service_bindings"]))
+        self.assertEqual("approve-project-init-plan", cached_plan["next_turn"]["question_id"])
+        self.assertEqual(["context7:canonical"], [service["service_binding"] for service in cached_plan["selected_services"]])
+        self.assertIsNone(pending_input)
+
+    def test_opencode_continue_preserves_all_services_selection_through_language_input(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                approval_source.write_text(json.dumps({"cwd": str(root), "text": "all services"}) + "\n", encoding="utf-8")
+                language_turn = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="opencode")
+                approval_source.write_text(json.dumps({"cwd": str(root), "text": "python"}) + "\n", encoding="utf-8")
+                proposal = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="opencode")
+
+            self.assertTrue(language_turn["ok"], language_turn)
+            self.assertEqual("needs_input", language_turn["status"])
+            self.assertIn("Which language", language_turn["assistant_visible_response"])
+            self.assertTrue(proposal["ok"], proposal)
+            self.assertEqual("project_init", proposal["workflow"])
+            self.assertEqual(9, len(proposal["selected_service_bindings"]))
+            self.assertIn("serena:", " ".join(proposal["selected_service_bindings"]))
+            self.assertIn("language=python", proposal["assistant_visible_response"])
+            self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
+
+    def test_contextforge_helper_public_apply_message_lists_installed_bindings(self) -> None:
+        public = contextforge_helper_mcp.client_visible_project_init_apply_payload(
+            {
+                "ok": True,
+                "installation_status": "installed",
+                "installed_service_bindings": ["context7:canonical", "serena:abc123"],
+                "next_turn": {
+                    "prompt": "ContextForge tools are installed for this project. Start a new session from this project root for the tools to register."
+                },
+            }
+        )
+
+        self.assertIn("context7:canonical, serena:abc123", public["message"])
+        self.assertIn("Start a new session from this project root", public["message"])
+
+    def test_contextforge_helper_can_omit_next_turn_from_codex_plan_payload(self) -> None:
+        public = contextforge_helper_mcp.client_visible_project_init_plan_payload(
+            {
+                "ok": True,
+                "workflow": "project_init",
+                "selected_services": [service_descriptor("context7")],
+                "required_inputs": {"serena:abc123": {"language": "python"}},
+                "plan_summary": {
+                    "project_local_writes": ["/workspace/.codex/config.toml"],
+                    "bindings": [{"service_binding": "context7:canonical"}],
+                },
+                "next_turn": {"prompt": "Approve the listed project-local ContextForge activation effects?"},
+            },
+            include_next_turn=False,
+        )
+
+        self.assertIn("Plan ready for context7:canonical", public["assistant_visible_response"])
+        self.assertIn("serena:abc123 language=python", public["assistant_visible_response"])
+        self.assertNotIn("next_turn", public)
+
+    def test_contextforge_helper_install_guidance_stops_after_reload_instruction(self) -> None:
         plan_doc = (
             REPO_ROOT / "docs/initiatives/contextforge-control-plane/contextforge-helper-project-init-plan.md"
         ).read_text(encoding="utf-8")
 
-        for text in (helper_doc, plan_doc):
-            with self.subTest(surface=text[:40]):
-                self.assertIn("target_client_safe_probe_result", text)
-                self.assertIn("safe_probe_result", text)
-                self.assertIn("safe_probe_id", text)
-                self.assertIn("resolve-library-id", text)
-                self.assertIn("contextforge://control-plane/traces/context7:canonical-target-client", text)
+        self.assertIn("selected ContextForge tools are installed", plan_doc)
+        self.assertIn("new session or reload", plan_doc)
+        self.assertIn("Stop there", plan_doc)
+        self.assertNotIn("ACTUAL_TARGET_CLIENT_TOOL_NAME", plan_doc)
+        self.assertNotIn("validation_results", plan_doc)
 
     def test_contextforge_helper_mcp_binds_approval_event_without_agent_supplied_ref(self) -> None:
         approval_params = set(inspect.signature(contextforge_helper_mcp.approve_project_init_plan).parameters)
@@ -1983,7 +3478,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             ) as fake_approve, mock.patch.object(
                 helper,
                 "apply_project_init_recovery",
-                return_value={"ok": True, "next_turn": {"question_id": "codex-client-reload-before-validation"}, "client_reload_requirement": {"command": "start_new_session"}},
+                return_value={"ok": True, "next_turn": {"question_id": "codex-project-init-installed"}, "client_reload_requirement": {"command": "start_new_session"}},
                 create=True,
             ) as fake_apply:
 
@@ -2047,7 +3542,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(approval["ok"])
         self.assertEqual("allow", approval["decision"])
         self.assertTrue(applied["ok"])
-        self.assertEqual("codex-client-reload-before-validation", applied["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", applied["next_turn"]["question_id"])
         self.assertEqual("start_new_session", applied["client_reload_requirement"]["command"])
 
     def test_contextforge_helper_mcp_cached_id_tools_survive_short_lived_processes(self) -> None:
@@ -2081,17 +3576,172 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(approval["ok"])
         self.assertEqual("allow", approval["decision"])
         self.assertTrue(applied["ok"])
-        self.assertEqual("codex-client-reload-before-validation", applied["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", applied["next_turn"]["question_id"])
         self.assertEqual("start_new_session", applied["client_reload_requirement"]["command"])
+
+    def test_pi_project_init_cli_id_digest_tools_survive_separate_processes(self) -> None:
+        def run_cli(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+            env = dict(os.environ)
+            env["PYTHONPATH"] = str(REPO_ROOT / "scripts")
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "pi_project_init_helper_cli.py"),
+                    "--operation",
+                    operation,
+                    "--payload-json",
+                    json.dumps(payload),
+                ],
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                timeout=30,
+            )
+            try:
+                parsed = json.loads(completed.stdout)
+            except json.JSONDecodeError as exc:
+                self.fail(f"{operation} returned non-JSON stdout={completed.stdout!r} stderr={completed.stderr!r}: {exc}")
+            self.assertEqual(0, completed.returncode, f"{operation} stderr={completed.stderr} stdout={completed.stdout}")
+            return parsed
+
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._PENDING_CHALLENGES.clear()
+            helper._LOCAL_APPROVAL_EVENTS.clear()
+
+            proposal = run_cli(
+                "propose_project_init",
+                {"project_root": str(root), "client_type": "pi", "selected_services": [service_descriptor("context7")]},
+            )
+            challenge = proposal["approval_challenge"]
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._PENDING_CHALLENGES.clear()
+            helper._LOCAL_APPROVAL_EVENTS.clear()
+
+            approval = run_cli(
+                "cf_project_init_approve",
+                {
+                    "project_root": str(root),
+                    "client_type": "pi",
+                    "challenge_id": challenge["challenge_id"],
+                    "plan_digest": proposal["plan_digest"],
+                },
+            )
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._APPROVED_RECEIPT_IDS_BY_PLAN.clear()
+
+            applied = run_cli(
+                "cf_project_init_apply",
+                {"project_root": str(root), "client_type": "pi", "dry_run": True},
+            )
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+
+        self.assertTrue(proposal["ok"])
+        self.assertTrue(approval["ok"])
+        self.assertEqual("allow", approval["decision"])
+        self.assertTrue(applied["ok"], applied.get("error"))
+        self.assertEqual("pi-project-init-installed", applied["next_turn"]["question_id"])
+        self.assertEqual("/reload", applied["client_reload_requirement"]["command"])
+
+    def test_contextforge_helper_mcp_apply_requires_cached_approval_receipts(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="pi",
+            )
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root), dry_run=True)
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+
+        self.assertTrue(proposal["ok"])
+        self.assertFalse(applied["ok"])
+        self.assertEqual("ValueError", applied["error"]["type"])
+        self.assertIn("approve the plan before calling cf_project_init_apply", applied["error"]["message"])
+
+    def test_contextforge_helper_mcp_apply_prefers_cached_full_receipts_over_lossy_replay(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            challenge = proposal["approval_challenge"]
+            approval = contextforge_helper_mcp.cf_project_init_approve(
+                str(root),
+                challenge["challenge_id"],
+                proposal["plan_digest"],
+            )
+            lossy_receipts = json.loads(json.dumps(approval["receipts"]))
+            for receipt in lossy_receipts:
+                receipt.pop("plan_presented_digest", None)
+
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._APPROVED_RECEIPT_IDS_BY_PLAN.clear()
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root), receipts=lossy_receipts, dry_run=True)
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+
+        self.assertTrue(proposal["ok"])
+        self.assertTrue(approval["ok"])
+        self.assertEqual("allow", approval["decision"])
+        self.assertTrue(applied["ok"], applied.get("error"))
+        self.assertEqual("opencode-project-init-installed", applied["next_turn"]["question_id"])
+
+    def test_contextforge_helper_mcp_apply_rejects_caller_supplied_receipt_replay_without_cached_receipts(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            challenge = proposal["approval_challenge"]
+            approval = contextforge_helper_mcp.cf_project_init_approve(
+                str(root),
+                challenge["challenge_id"],
+                proposal["plan_digest"],
+            )
+
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            helper._APPROVED_RECEIPT_IDS_BY_PLAN.clear()
+            contextforge_helper_mcp._write_durable_cache(str(root), {"plan": proposal})
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root), receipts=approval["receipts"], dry_run=True)
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+
+        self.assertTrue(proposal["ok"])
+        self.assertTrue(approval["ok"])
+        self.assertFalse(applied["ok"])
+        self.assertEqual("ValueError", applied["error"]["type"])
+        self.assertIn("cached project-init receipts", applied["error"]["message"])
 
     def test_contextforge_helper_mcp_accepts_service_ids_and_expands_descriptors(self) -> None:
         with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
             root = Path(tmp).resolve()
             instances = root / "instances"
-            for service, server, scope_type in (
-                ("context7", "context7_local_server", "shared_canonical"),
-                ("mentality", "mentality_server", "caller_supplied_local_repo"),
-                ("playwright", "playwright_server", "isolated_browser_runtime"),
+            for service, server, scope_type, extra in (
+                ("context7", "context7_local_server", "shared_canonical", {}),
+                ("mentality", "mentality_server", "caller_supplied_local_repo", {}),
+                ("playwright", "playwright_server", "isolated_browser_runtime", {}),
+                ("github", "github_server", "github_account_and_request_repo", {"service_binding": "github:canonical"}),
             ):
                 instance = instances / service
                 instance.mkdir(parents=True)
@@ -2102,6 +3752,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                             "name": service,
                             "slug": service,
                             "service": service,
+                            **extra,
                             "contextforge": {"virtual_server": {"name": server}, "gateway": {"name": "contextforge"}},
                             "backend": {"transport": "stdio"},
                             "scope": {"scope_type": scope_type},
@@ -2112,11 +3763,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
             proposal = contextforge_helper_mcp.propose_project_init(
                 str(root),
-                ["context7:canonical", {"id": "mentality:static_repo_local"}, "playwright"],
+                ["context7:canonical", {"id": "mentality:static_repo_local"}, "playwright", "github"],
                 contextforge_servers=[
                     {"name": "context7_local_server", "id": "vs-context7"},
                     {"name": "mentality_server", "id": "vs-mentality"},
                     {"name": "playwright_server", "id": "vs-playwright"},
+                    {"name": "github_server", "id": "vs-github"},
                 ],
                 server_instances_root=str(instances),
                 inputs={},
@@ -2124,9 +3776,13 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         self.assertTrue(proposal["ok"])
         self.assertEqual(
-            {"context7:canonical", "mentality:static_repo_local", "playwright:session_scoped"},
+            {"context7:canonical", "mentality:static_repo_local", "playwright:session_scoped", "github:canonical"},
             {service["service_binding"] for service in proposal["selected_services"]},
         )
+        github = next(service for service in proposal["selected_services"] if service["service_family"] == "github")
+        self.assertEqual("github:canonical", github["service_binding"])
+        self.assertEqual("credential_scoped", github["instantiation_class"])
+        self.assertEqual("credential-scoped hosted binding", github["scope_label"])
         self.assertNotIn("service_provision", proposal["required_consent_classes"])
         self.assertEqual({"shared_canonical"}, {service["activation_class"] for service in proposal["selected_services"]})
 
@@ -2204,6 +3860,27 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("service_provision", proposal["required_consent_classes"])
         self.assertEqual({"language": "typescript"}, proposal["required_inputs"][f"serena:{identity.hash}"])
 
+    def test_helper_accepts_pi_scalar_serena_language_input_shapes(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            identity = common.project_identity(root)
+            selected = ["context7:canonical", f"serena:{identity.hash}"]
+            direct = helper.propose_project_init(
+                project_root=root,
+                selected_services=selected,
+                inputs={f"serena:{identity.hash}": "python"},
+            )
+            suffixed = helper.propose_project_init(
+                project_root=root,
+                selected_services=selected,
+                inputs={f"serena:{identity.hash}-language": "python"},
+            )
+
+        self.assertNotEqual("needs_input", direct.get("status"))
+        self.assertNotEqual("needs_input", suffixed.get("status"))
+        self.assertEqual({"language": "python"}, direct["required_inputs"][f"serena:{identity.hash}"])
+        self.assertEqual({"language": "python"}, suffixed["required_inputs"][f"serena:{identity.hash}"])
+
     def test_helper_applies_serena_provisioning_and_wrapper_as_one_initialization(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -2264,7 +3941,79 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("contextforge_mcp_wrapper.py", config_text)
             step_types = [step["operation_type"] for step in applied["job"]["step_statuses"]]
             self.assertLess(step_types.index("provision_project_scoped_serena"), step_types.index("write_managed_client_config"))
-            self.assertEqual("codex-client-reload-before-validation", applied["next_turn"]["question_id"])
+            self.assertEqual("codex-project-init-installed", applied["next_turn"]["question_id"])
+
+    def test_helper_passes_no_systemd_mode_to_serena_manager_when_env_enabled(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            identity = common.project_identity(root)
+            manifest = {
+                "instance_slug": identity.instance_slug,
+                "server_name": identity.server_name,
+                "canonical_project_root": str(root),
+                "port": 9110,
+                "_manifest_path": str(REPO_ROOT / "server-instances" / identity.instance_slug / "instance.json"),
+            }
+            create_args: list[Any] = []
+
+            def fake_create(args: Any) -> int:
+                create_args.append(args)
+                return 0
+
+            with mock.patch.object(serena_manager, "existing_manifest_for_project", side_effect=[None, manifest]), mock.patch.object(
+                serena_manager,
+                "create",
+                side_effect=fake_create,
+            ), mock.patch.dict(os.environ, {"CONTEXTFORGE_SERENA_NO_SYSTEMD": "1"}):
+                result = helper._run_serena_project_provisioning(
+                    root,
+                    {"service_binding": f"serena:{identity.hash}", "virtual_server": identity.server_name},
+                    language="python",
+                    client_type="opencode",
+                )
+
+        self.assertTrue(create_args)
+        self.assertTrue(create_args[0].no_systemd)
+        self.assertEqual("completed", result["status"])
+        self.assertEqual(identity.instance_slug, result["instance_slug"])
+
+    def test_helper_passes_no_systemd_mode_to_serena_manager_when_systemctl_missing(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            identity = common.project_identity(root)
+            manifest = {
+                "instance_slug": identity.instance_slug,
+                "server_name": identity.server_name,
+                "canonical_project_root": str(root),
+                "port": 9110,
+                "_manifest_path": str(REPO_ROOT / "server-instances" / identity.instance_slug / "instance.json"),
+            }
+            create_args: list[Any] = []
+
+            def fake_create(args: Any) -> int:
+                create_args.append(args)
+                return 0
+
+            with mock.patch.object(serena_manager, "existing_manifest_for_project", side_effect=[None, manifest]), mock.patch.object(
+                serena_manager,
+                "create",
+                side_effect=fake_create,
+            ), mock.patch.object(helper.shutil, "which", return_value=None), mock.patch.dict(
+                os.environ,
+                {"CONTEXTFORGE_SERENA_NO_SYSTEMD": ""},
+                clear=False,
+            ):
+                result = helper._run_serena_project_provisioning(
+                    root,
+                    {"service_binding": f"serena:{identity.hash}", "virtual_server": identity.server_name},
+                    language="python",
+                    client_type="codex",
+                )
+
+        self.assertTrue(create_args)
+        self.assertTrue(create_args[0].no_systemd)
+        self.assertEqual("completed", result["status"])
+        self.assertEqual(identity.instance_slug, result["instance_slug"])
 
     def test_helper_serena_repeated_init_converges_without_duplicate_wrapper_or_service_entries(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2312,57 +4061,22 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                     receipts=first_approval["receipts"],
                 )
 
-            self.assertEqual("codex-client-reload-before-validation", first_apply["next_turn"]["question_id"])
-            self.assertEqual("client_reload_recorded", record_codex_new_session(root)["status"])
-            self.assertEqual(
-                "validation_recorded",
-                helper.record_project_init_validation(
-                    project_root=root,
-                    validation_mode="validate_now",
-                    validation_results={
-                        first_binding: {
-                            "status": "passed",
-                            "target_client_visible": True,
-                            "verification_trace_refs": ["contextforge://control-plane/traces/serena-target-client"],
-                        }
-                    },
-                )["status"],
-            )
+            self.assertEqual("codex-project-init-installed", first_apply["next_turn"]["question_id"])
+            first_written = project_state.load_state(root)
+            assert first_written is not None
+            self.assertEqual("initialized", first_written["status"])
 
             second_plan = helper.propose_project_init(
                 project_root=root,
                 selected_services=["serena"],
                 inputs={"language": "python"},
             )
-            second_binding = str(second_plan["selected_services"][0]["service_binding"])
-            second_approval = helper.approve_project_init_plan(
-                project_root=root,
-                plan=second_plan,
-                approval={
-                    "decision": "approve",
-                    "challenge_id": second_plan["approval_challenge"]["challenge_id"],
-                    "plan_digest": second_plan["plan_digest"],
-                },
-                local_approval_event_ref=helper.record_local_approval_event(
-                    project_root=root,
-                    plan=second_plan,
-                    issuer_token=helper._LOCAL_APPROVAL_ISSUER_TOKEN,
-                    channel="interactive_user",
-                )["event_ref"],
-            )
-
-            with mock.patch.object(helper, "_run_serena_project_provisioning", side_effect=fake_provision):
-                second_apply = helper.apply_approved_project_init(
-                    project_root=root,
-                    plan=second_plan,
-                    receipts=second_approval["receipts"],
-                )
-
             config_text = (root / ".codex" / "config.toml").read_text(encoding="utf-8")
             state = project_state.load_state(root)
 
-        self.assertEqual(first_binding, second_binding)
-        self.assertEqual("codex-client-reload-before-validation", second_apply["next_turn"]["question_id"])
+        self.assertIn(second_plan["status"], {"client_reload_required", "installed_reload_required"})
+        self.assertEqual([first_binding], second_plan["current_job"]["selected_service_bindings"])
+        self.assertEqual("codex-project-init-installed", second_plan["next_turn"]["question_id"])
         self.assertEqual(1, config_text.count("[mcp_servers.serena]"))
         self.assertEqual(1, len(state["services"]))
         self.assertEqual("serena", state["services"][next(iter(state["services"]))]["service_family"])
@@ -2463,12 +4177,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 dry_run=True,
             )
             self.assertTrue(result["dry_run"])
-            self.assertEqual("codex-client-reload-before-validation", result["next_turn"]["question_id"])
+            self.assertEqual("codex-project-init-installed", result["next_turn"]["question_id"])
             self.assertEqual("start_new_session", result["client_reload_requirement"]["command"])
-            self.assertIn("Codex launches configured MCP servers", result["next_turn"]["prompt"])
+            self.assertIn("tools are installed", result["next_turn"]["prompt"])
             self.assertFalse((root / ".codex/config.toml").exists())
             job = result["planned_state"]["project_init"]["activation_jobs"][result["planned_state"]["project_init"]["current_job_id"]]
-            self.assertEqual("applied_validation_choice_pending", job["status"])
+            self.assertEqual("installed", job["status"])
             self.assertTrue(job["consent_receipt_refs"])
             project_state.validate_state(result["planned_state"])
 
@@ -2618,6 +4332,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(["mentality:canonical"], [service["service_binding"] for service in proposal["skipped_services"]])
         self.assertEqual("approve-project-init-plan", proposal["next_turn"]["question_id"])
+        self.assertIn("selection numbers are not accepted", proposal["next_turn"]["allowed_response_shape"])
+        self.assertTrue(all("number" not in choice for choice in proposal["next_turn"]["choices"]))
+        self.assertTrue(all("number" not in option for option in proposal["next_turn"]["response_form"]["options"]))
 
     def test_helper_keep_existing_conflict_blocks_without_approval(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2953,7 +4670,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("project_init_recovery_applied", recovery["status"])
         self.assertEqual("resume-approved-project-init-apply", recovery["next_turn"]["question_id"])
         self.assertTrue(resumed["ok"])
-        self.assertEqual("codex-client-reload-before-validation", resumed["next_turn"]["question_id"])
+        self.assertEqual("codex-project-init-installed", resumed["next_turn"]["question_id"])
         self.assertIn("[mcp_servers.serena]", config_text)
         self.assertIn("contextforge_mcp_wrapper.py", config_text)
         self.assertNotIn('command = "serena"', config_text)
@@ -2978,19 +4695,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Which ContextForge services should I activate for this project?", text)
         self.assertIn("discovered shared canonical services and project-scoped options", text)
         self.assertIn("Serena is one project-scoped option in this menu, not the whole flow", text)
-        self.assertIn("Choose 1 to validate now", text)
+        self.assertIn("After approved apply, report success clearly and succinctly", text)
         self.assertIn("No user-global config/trust/extension changes", text)
         self.assertIn("for Codex this is project-local .codex/config.toml", text)
         self.assertIn("for Pi this is .project/context_forge_state.json records", text)
         self.assertIn("hidden or structured prompt/context injection", text)
+        self.assertIn("Do not narrate helper/tool/cache/payload mechanics", text)
+        self.assertIn("copy that value as the complete visible reply and stop", text)
         self.assertIn("input-triggered hidden message", text)
         self.assertIn("cf_project_init_prompt and cf_contextforge_pi_readback are diagnostic only", text)
-        self.assertIn("cf_contextforge_pi_validate for validate-now", text)
-        self.assertIn("Do not call unlisted or unavailable validation tool names", text)
-        self.assertIn("validation tool call is missing, not found, unavailable, or returns an error", text)
-        self.assertIn("Skipped-service follow-up", text)
-        self.assertIn("Do not substitute built-in web search, direct shell commands, direct SSH/tmux", text)
-        self.assertIn("tool exists", text)
+        self.assertIn("After approved apply", text)
+        self.assertIn("selected ContextForge tools are installed", text)
+        self.assertIn("must start a new session or reload", text)
+        self.assertIn("Stop there", text)
+        self.assertNotIn("Do not substitute built-in web search, direct shell commands, direct SSH/tmux", text)
+        self.assertNotIn("validate_now", text)
         self.assertIn("call cf_project_init_approve with the exact challenge id and plan digest", text)
         self.assertIn("call cf_project_init_apply using the cached plan and receipts", text)
         self.assertIn("status=config_conflict with an embedded recovery_plan", text)
@@ -2999,19 +4718,17 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Do not call apply_project_init_recovery with only plan_id, plan_digest, or receipt ids", text)
         self.assertIn("complete helper-returned recovery plan object and full receipt objects", text)
         self.assertIn("keep them together in the helper recovery approval/apply path", text)
-        self.assertIn("Never choose service selections, approval, reload acknowledgement, validation", text)
+        self.assertIn("Never choose service selections or approval", text)
         self.assertIn("If the user echoes your question, asks you to provide the selection numbers", text)
         self.assertIn("Do not invoke project-init helper scripts or Python modules through shell", text)
         self.assertIn("helper cache is missing or stale", text)
         self.assertIn("do not silently replace the challenge id", text)
         self.assertIn("prefer those cached id/digest tools over reconstructing a full plan object", text)
-        self.assertIn("first call cf_project_init_record_client_reload", text)
-        self.assertIn("honor that choice after recording the reload acknowledgement instead of asking again", text)
-        self.assertIn("after the reload or new session, resume project init", text)
+        self.assertIn("Stop there", text)
         self.assertIn("Codex launches configured MCP servers and exposes their tools when a session starts", text)
         self.assertIn("/mcp is a status view, not an in-place MCP tool reload", text)
-        self.assertIn("start a new Codex session from the project root before target-client-visible validation", text)
-        self.assertIn("the Pi agent must issue /reload before validation", text)
+        self.assertIn("start a new Codex session from the project root after installation", text)
+        self.assertIn("the Pi agent must issue /reload after an approved global extension install or upgrade", text)
         self.assertIn("pi.registerTool()", text)
 
     def test_cli_dry_run_uses_scoped_approval_and_selected_services(self) -> None:

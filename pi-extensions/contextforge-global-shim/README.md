@@ -7,7 +7,7 @@ This directory is source only. Project-init does not install or mutate
 `~/.pi/agent/extensions` during normal service activation. Installation or
 upgrade of the global Pi extension is a separate explicit approval path.
 After any approved install or upgrade, the Pi agent must issue `/reload` before
-validation or other reliance on newly installed or changed extension tools.
+relying on newly installed or changed extension tools.
 
 Runtime model:
 
@@ -19,10 +19,12 @@ Runtime model:
   message with the helper-discovered initialization menu before ordinary work.
 - The `cf_project_init_prompt` tool is diagnostic only.
 - `cf_project_init_*` helper tool calls use empty custom renderers so their
-  model-visible JSON results do not fill the user's terminal.
+  JSON results do not fill the user's terminal, and project-init results are
+  narrowed before they reach the model-visible transcript.
 - The shim caches the latest exact project-init proposal, approval receipts, and
-  apply result for the current Pi session. Approval can therefore use only the
-  user-visible challenge id and plan digest; apply can then use cached receipts.
+  apply result for the current Pi session. Approval can therefore use plain
+  user approval while the shim supplies helper-owned cached details internally;
+  apply can then use cached receipts.
 - On session startup, the extension reads
   `.project/context_forge_state.json` from the current project root.
 - Services under `target_clients.pi` are imported through the ContextForge
@@ -41,8 +43,8 @@ Runtime model:
   approved service. This gives Pi the same guidance surface Codex receives from
   MCP prompts/resources without flooding Pi's tool list.
 - The Pi-visible `cf_contextforge_pi_readback` tool reports imported services,
-  tool names, prompt names, resource URIs, skips, and errors for project-init
-  validation and adapter diagnostics.
+  tool names, prompt names, resource URIs, skips, and errors for installation
+  and adapter diagnostics.
 - Child wrapper stderr is not mirrored into the Pi terminal during normal
   startup; bounded stderr tails are retained only for tool/readback errors.
 

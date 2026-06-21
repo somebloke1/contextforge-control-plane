@@ -417,12 +417,12 @@ The Exa Search ContextForge service now points at the local server-instances/exa
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/legacy-controlplane-archive
+- Repository: /home/dgk/workspace/cf-controlplane
 - Created: 2026-05-28
-- Updated: 2026-05-28
+- Updated: 2026-06-20
 - Tags: contextforge,prompts,resources,tool-guidance,api
 
-For each active canonical MCP tool, register one succinct reusable prompt and one more comprehensive documentation resource through the ContextForge API, then associate both with the tool's canonical virtual server. The live registry now has 80 tools, 80 prompts, and 80 resources across mentality, ssh-tmux, context7, playwright, exa-search, OpenZeppelin Solidity Contracts, GitHub, and web-search. MCP client readback through the ContextForge stdio wrappers should confirm each virtual server exposes matching tool/resource/prompt counts after service additions.
+For each active canonical MCP tool, register one succinct reusable prompt and one more comprehensive documentation resource through the ContextForge API, then associate both with the tool's canonical virtual server. Historical live registry proof covered 80 tools, 80 prompts, and 80 resources across mentality, ssh-tmux, context7, playwright, exa-search, OpenZeppelin Solidity Contracts, GitHub, and web-search. The current scripts/register_tool_guidance.py inventory defines 81 prompt/resource guidance entries across those canonical services; refreshed authenticated full-pagination API readback and MCP client readback are required before claiming current live 81/81 parity after service additions.
 <!-- governance-crud:end id=dec-20260528-0031 -->
 
 <!-- governance-crud:start id=dec-20260528-0032 -->
@@ -927,3 +927,16 @@ For issue #41, the first mutable integration path is the isolated ContextForge d
 
 For Pi client validation, use the existing TypeScript global shim path under `pi-extensions/contextforge-global-shim` as the first validation route because Pi is not a native MCP client and the shim already maps ContextForge virtual-server tools into Pi-native extension tools. A direct ContextForge API adapter remains an option only if it proves simpler and does not introduce new token, secret, or global Pi mutation boundaries. Pi global install/upgrade and `/reload` remain explicit human approval boundaries.
 <!-- governance-crud:end id=dec-20260617-0005 -->
+
+<!-- governance-crud:start id=dec-20260619-0001 -->
+## dec-20260619-0001: Keep deterministic reset separate from semantic validation
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-19
+- Updated: 2026-06-19
+- Tags: validation,idempotency,agents,testing,architecture
+
+Deterministic state setup and semantic agent validation are separate responsibilities. Evidence preservation, target-client reset, workspace fixture creation, fixed postcondition checks, and verifier invocation must be implemented as idempotent commands or scripts with stable, repeatable outcomes. Agents and humans must not be asked to infer residue deltas or decide whether cleanup is clean enough; that creates a second non-deterministic validation problem. Reserve high-dimensional language-model judgment for the semantic work: conducting the code-assistant dialogue, observing real assistant/tool behavior, evaluating protocol adherence against the full use-case story, and writing the interaction narrative from evidence. Validation gates must not invert these responsibilities by using brittle pattern matching for semantic dialogue success while relying on non-deterministic model judgment for simple state reset.
+<!-- governance-crud:end id=dec-20260619-0001 -->

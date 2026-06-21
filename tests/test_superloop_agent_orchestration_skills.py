@@ -196,6 +196,9 @@ class SuperLoopAgentOrchestrationSkillTests(unittest.TestCase):
             "codex-agent:<worker-agent-id>",
             "codex-agent:<parent-agent-id>/<child-agent-id>",
             "Do not use rotating Codex",
+            "Do not encode semantic pass/fail or readiness",
+            "regexes, keyword searches, or string parsing",
+            "not an oracle for generated prose",
         ]:
             self.assertIn(text, self.project)
 

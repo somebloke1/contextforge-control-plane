@@ -70,7 +70,9 @@ ContextForge-exposed Context7 tools.
 - Allowed tool names: `context7-local-resolve-library-id` and
   `context7-local-query-docs`.
 - Default payload: call `context7-local-resolve-library-id` with
-  `{"libraryName": "python"}` or an equivalent harmless library lookup.
+  `{"libraryName": "python", "query": "standard library documentation lookup"}`
+  or an equivalent harmless library lookup. The current Context7 schema
+  requires both `libraryName` and `query`.
 - Accepted proof kinds: `target_client_safe_probe_result` or
   `pi_safe_probe_result`.
 - Required successful result shape: `status: passed`,

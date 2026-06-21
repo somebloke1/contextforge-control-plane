@@ -14,14 +14,24 @@ if [[ ! -f env/local-llama.env ]]; then
   scripts/make-local-llama-env.sh
 fi
 
-PYTHON="${PYTHON:-${REPO_ROOT}/.venv/bin/python}"
+if [[ -z "${PYTHON:-}" ]]; then
+  if [[ -x "${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python" ]]; then
+    PYTHON="${REPO_ROOT}/run/test-venvs/project-init-workflow/bin/python"
+  elif [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+    PYTHON="${REPO_ROOT}/.venv/bin/python"
+  else
+    PYTHON="python3"
+  fi
+fi
 CONTEXTFORGE_HOST_BASE_URL="${CONTEXTFORGE_HOST_BASE_URL:-http://127.0.0.1:4445}"
 CONTEXTFORGE_CONTAINER_BASE_URL="${CONTEXTFORGE_CONTAINER_BASE_URL:-http://host.docker.internal:4445}"
 CONTEXTFORGE_DEV_ENV_FILE="${CONTEXTFORGE_DEV_ENV_FILE:-${REPO_ROOT}/docker/contextforge-harness/env/contextforge.env}"
 CONTEXTFORGE_DEV_SERVER_NAME="${CONTEXTFORGE_DEV_SERVER_NAME:-mentality_dev_docker_server}"
 EVIDENCE_FILE="evidence/pi-contextforge-dev-smoke.txt"
+REDACTOR="${REPO_ROOT}/docker/client-harness/scripts/redact-contextforge-secrets.py"
 
 TOKEN_ID=""
+TOKEN_ENV_FILE=""
 
 create_payload="$(
   PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" - "${REPO_ROOT}" "${CONTEXTFORGE_HOST_BASE_URL}" "${CONTEXTFORGE_DEV_ENV_FILE}" "${CONTEXTFORGE_DEV_SERVER_NAME}" <<'PY'
@@ -83,7 +93,20 @@ probe.revoke_probe_token(base_url, admin_token, token_id)
 PY
   printf 'probe_token_revoked=%s\n' "${TOKEN_ID}" | tee -a "${EVIDENCE_FILE}"
 }
-trap revoke_probe_token EXIT
+cleanup() {
+  revoke_probe_token
+  if [[ -n "${TOKEN_ENV_FILE}" ]]; then
+    rm -f "${TOKEN_ENV_FILE}"
+  fi
+}
+trap cleanup EXIT
+TOKEN_ENV_FILE="$(mktemp)"
+chmod 0600 "${TOKEN_ENV_FILE}"
+{
+  printf 'CONTEXTFORGE_BASE_URL=%s\n' "${CONTEXTFORGE_CONTAINER_BASE_URL}"
+  printf 'CONTEXTFORGE_SERVER_ID=%s\n' "${SERVER_ID}"
+  printf 'CONTEXTFORGE_BEARER_TOKEN=%s\n' "${ACCESS_TOKEN}"
+} > "${TOKEN_ENV_FILE}"
 
 PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" - "${ROOT}/workspace/.project/context_forge_state.json" "${SERVER_ID}" <<'PY'
 import json
@@ -133,15 +156,13 @@ PY
   printf 'server_id=%s\n' "${SERVER_ID}"
   printf 'probe_token_id=%s\n' "${TOKEN_ID}"
   printf 'project_root=/workspace\n'
-  printf 'pi_tool=cf_contextforge_pi_validate\n'
+  printf 'pi_tool=cf_contextforge_pi_readback\n'
 } | tee "${EVIDENCE_FILE}"
 
 docker compose -f compose.yml run --rm --no-deps \
+  --env-file "${TOKEN_ENV_FILE}" \
   -v "${REPO_ROOT}:/repo:ro" \
   -e NODE_PATH=/usr/lib/node_modules/@earendil-works/pi-coding-agent/node_modules:/usr/lib/node_modules \
-  -e CONTEXTFORGE_BASE_URL="${CONTEXTFORGE_CONTAINER_BASE_URL}" \
-  -e CONTEXTFORGE_SERVER_ID="${SERVER_ID}" \
-  -e CONTEXTFORGE_BEARER_TOKEN="${ACCESS_TOKEN}" \
   -e CONTEXTFORGE_CONFIG_ENV=/tmp/missing-contextforge.env \
   -e CONTEXTFORGE_TOKEN_CACHE=/tmp/contextforge-wrapper-token.local.json \
   -e CONTEXTFORGE_TOKEN_LOCK=/tmp/contextforge-wrapper-token.local.json.lock \
@@ -170,19 +191,19 @@ PY
       --no-session \
       --no-builtin-tools \
       --no-context-files \
-      --tools cf_contextforge_pi_validate \
+      --tools cf_contextforge_pi_readback \
       --provider local-llama-qwen \
       --model qwen3.6-a3b \
-      -p "Use the cf_contextforge_pi_validate tool for projectRoot /workspace. Return the tool JSON result verbatim."
-  ' | tee -a "${EVIDENCE_FILE}"
+      -p "Use the cf_contextforge_pi_readback tool for projectRoot /workspace. Return the tool JSON result verbatim."
+  ' | CONTEXTFORGE_REDACT_VALUES="${ACCESS_TOKEN:-}" PYTHONDONTWRITEBYTECODE=1 "${PYTHON}" "${REDACTOR}" | tee -a "${EVIDENCE_FILE}"
 
-if ! grep -q 'pi_validation_complete' "${EVIDENCE_FILE}"; then
-  printf 'pi_validation_status=missing_pi_validation_complete\n' | tee -a "${EVIDENCE_FILE}"
+if ! grep -q 'mentality:dev_docker' "${EVIDENCE_FILE}"; then
+  printf 'pi_readback_status=missing_mentality_service\n' | tee -a "${EVIDENCE_FILE}"
   exit 1
 fi
-if ! grep -q '"passed"' "${EVIDENCE_FILE}"; then
-  printf 'pi_validation_status=missing_passed_probe\n' | tee -a "${EVIDENCE_FILE}"
+if ! grep -q 'cf_mentality' "${EVIDENCE_FILE}"; then
+  printf 'pi_readback_status=missing_mentality_pi_tool\n' | tee -a "${EVIDENCE_FILE}"
   exit 1
 fi
 
-printf 'pi_validation_status=passed\n' | tee -a "${EVIDENCE_FILE}"
+printf 'pi_readback_status=passed\n' | tee -a "${EVIDENCE_FILE}"

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Code Assistant Dialogue Validation"
+  short_description: "Validate real assistant CLI dialogues"
+  default_prompt: "Use $code-assistant-dialogue-validation to run an end-to-end client dialogue validation."
+policy:
+  allow_implicit_invocation: true

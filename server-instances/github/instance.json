@@ -1,6 +1,7 @@
 {
   "name": "github",
   "slug": "github",
+  "service_binding": "github:canonical",
   "client": "canonical",
   "source": "deduplicated from the OpenCode github MCP entry using @modelcontextprotocol/server-github and gh auth token",
   "config_path": null,

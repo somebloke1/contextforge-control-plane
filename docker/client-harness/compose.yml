@@ -32,9 +32,19 @@ x-opencode-contextforge-baseline: &opencode-contextforge-baseline
     CONTEXTFORGE_OPENCODE_CONFIG_TARGET: /home/agent/.config/opencode/opencode.json
     CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE: /config/opencode/plugins/contextforge-project-init.js
     CONTEXTFORGE_OPENCODE_PLUGIN_TARGET: /home/agent/.config/opencode/plugins/contextforge-project-init.js
+    CONTEXTFORGE_OPENCODE_RULES_SOURCE: /config/opencode/AGENTS.md
+    CONTEXTFORGE_OPENCODE_RULES_TARGET: /home/agent/.config/opencode/AGENTS.md
     CONTEXTFORGE_OPENCODE_HOOK: /repo/scripts/opencode_project_init_hook.py
     CONTEXTFORGE_OPENCODE_HOOK_PYTHON: /opt/contextforge-helper-venv/bin/python
-    CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /tmp/contextforge-client-harness-runtime/project-init
+    CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON: /opt/contextforge-helper-venv/bin/python
+    CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT: /repo/scripts/contextforge_mcp_wrapper.py
+    CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV: /run/contextforge-client-scoped/contextforge.env
+    CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL: http://host.docker.internal:4445
+    CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
+    CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
+    CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init
+    CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH: /home/agent/.local/state/contextforge-client-harness-runtime/project-init/opencode-latest-user-message.json
+    CONTEXTFORGE_SERENA_NO_SYSTEMD: "1"
     CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python
     CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py
     CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
@@ -61,6 +71,15 @@ x-pi-contextforge-baseline: &pi-contextforge-baseline
     CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT: /workspace
     CONTEXTFORGE_PI_SHIM_PYTHON: /opt/contextforge-wrapper-venv/bin/python
     CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py
+    CONTEXTFORGE_CONFIG_ENV: /run/contextforge-client-scoped/contextforge.env
+    CONTEXTFORGE_BASE_URL: http://host.docker.internal:4445
+    CONTEXTFORGE_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
+    CONTEXTFORGE_TOKEN_LOCK: /tmp/contextforge-wrapper-token.local.json.lock
+    CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
+    CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init
+    CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH: /home/agent/.local/state/contextforge-client-harness-runtime/project-init/pi-latest-user-message.json
+    CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT: "1"
+    CONTEXTFORGE_SERENA_NO_SYSTEMD: "1"
     CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
 
 services:
@@ -79,15 +98,73 @@ services:
       context: ./codex-cli
       args:
         BASE_IMAGE: contextforge-client-base:bookworm
+        MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"
         CODEX_CLI_VERSION: "${CODEX_CLI_VERSION:-latest}"
+    environment:
+      CODEX_HOME: /home/agent/.codex
+      CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python
+      CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py
+      CONTEXTFORGE_HELPER_DEFAULT_CLIENT_TYPE: codex
+      CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT: "1"
+      CONTEXTFORGE_CODEX_WRAPPER_PYTHON: /opt/contextforge-helper-venv/bin/python
+      CONTEXTFORGE_CODEX_WRAPPER_SCRIPT: /repo/scripts/contextforge_mcp_wrapper.py
+      CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV: /run/contextforge-client-scoped/contextforge.env
+      CONTEXTFORGE_CODEX_WRAPPER_BASE_URL: http://host.docker.internal:4445
+      CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
+      CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
+      CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init
+      CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH: /home/agent/.local/state/contextforge-client-harness-runtime/project-init/codex-latest-user-message.json
+      CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
+      OPENAI_API_KEY: ""
+      CODEX_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      GOOGLE_API_KEY: ""
+      GEMINI_API_KEY: ""
+      PERPLEXITY_API_KEY: ""
+      EXA_API_KEY: ""
+      CONTEXT7_API_KEY: ""
     volumes:
       - codex-cli-home:/home/agent
+      - ../..:/repo:ro
+      - ../../server-instances:/repo/server-instances:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
 
   codex-cli-authenticated:
     <<: *client-common
     image: contextforge-client-codex-cli:authenticated
+    environment:
+      CODEX_HOME: /home/agent/.codex
+      CONTEXTFORGE_HELPER_PYTHON: /opt/contextforge-helper-venv/bin/python
+      CONTEXTFORGE_HELPER_SCRIPT: /repo/scripts/contextforge_helper_mcp.py
+      CONTEXTFORGE_HELPER_DEFAULT_CLIENT_TYPE: codex
+      CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT: "1"
+      CONTEXTFORGE_CODEX_WRAPPER_PYTHON: /opt/contextforge-helper-venv/bin/python
+      CONTEXTFORGE_CODEX_WRAPPER_SCRIPT: /repo/scripts/contextforge_mcp_wrapper.py
+      CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV: /run/contextforge-client-scoped/contextforge.env
+      CONTEXTFORGE_CODEX_WRAPPER_BASE_URL: http://host.docker.internal:4445
+      CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
+      CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
+      CONTEXTFORGE_PROJECT_INIT_RUN_ROOT: /home/agent/.local/state/contextforge-client-harness-runtime/project-init
+      CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH: /home/agent/.local/state/contextforge-client-harness-runtime/project-init/codex-latest-user-message.json
+      CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS: /workspace
+      OPENAI_API_KEY: ""
+      CODEX_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      GOOGLE_API_KEY: ""
+      GEMINI_API_KEY: ""
+      PERPLEXITY_API_KEY: ""
+      EXA_API_KEY: ""
+      CONTEXT7_API_KEY: ""
+    volumes:
+      - ../..:/repo:ro
+      - ../../server-instances:/repo/server-instances:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
+      - ./workspace:/workspace
+      - ./evidence:/evidence
 
   claude-code:
     <<: *client-common
@@ -132,7 +209,9 @@ services:
     volumes:
       - opencode-home:/home/agent
       - ../..:/repo:ro
+      - ../../server-instances:/repo/server-instances:ro
       - ./config/opencode:/config/opencode:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
 
@@ -141,7 +220,9 @@ services:
     volumes:
       - opencode-home:/home/agent
       - ../..:/repo:ro
+      - ../../server-instances:/repo/server-instances:ro
       - ./config/opencode:/config/opencode:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./evidence:/evidence
     tmpfs:
       - /workspace:uid=1000,gid=1000,mode=0755
@@ -174,7 +255,9 @@ services:
     volumes:
       - pi-home:/home/agent
       - ../..:/repo:ro
+      - ../../server-instances:/repo/server-instances:ro
       - ./config/pi:/config/pi:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
 
@@ -183,7 +266,9 @@ services:
     volumes:
       - pi-home:/home/agent
       - ../..:/repo:ro
+      - ../../server-instances:/repo/server-instances:ro
       - ./config/pi:/config/pi:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./evidence:/evidence
     tmpfs:
       - /workspace:uid=1000,gid=1000,mode=0755

@@ -1,0 +1,298 @@
+{
+  "schema": "contextforge://control-plane/service-readiness-matrix/v1",
+  "issues": {
+    "umbrella": 247,
+    "taxonomy": 270,
+    "matrix": 259,
+    "first_single_service": 260
+  },
+  "taxonomy_doc": "docs/contextforge-service-localization-taxonomy.md",
+  "taxonomy_contract": "docs/contextforge-service-localization-taxonomy.json",
+  "safe_probe_catalog": "docs/safe-client-visible-validation-probes.md",
+  "matrix_semantics": {
+    "safe_probe_status": "probe_policy_or_probe_shape_only_not_service_readiness",
+    "current_slice": "current_branch_readiness_focus_only_not_umbrella_acceptance",
+    "active_service_readiness": "requires owner_issue evidence or explicit blocked/non-action result",
+    "slice_progress": "controller progress ledger; does not replace per-issue evidence or accepted package reports"
+  },
+  "slice_progress": {
+    "current_slice_field_note": "current_slice identifies the initial Context7 single-service slice used to open #247 decomposition; it is not the live controller queue pointer after later slices are accepted.",
+    "accepted_source_lifecycle_slices": [
+      "context7",
+      "mentality",
+      "openzeppelin-solidity-contracts",
+      "ssh-tmux",
+      "playwright",
+      "exa-search",
+      "github",
+      "web-search",
+      "serena"
+    ],
+    "accepted_selection_shape_slices": [
+      "single_service",
+      "curated_multi_service",
+      "all_services"
+    ],
+    "active_next_recommended_service": null,
+    "active_next_recommended_issue": 247,
+    "ordering_reason": "All per-service source lifecycle slices in the current helper-offered service set are accepted, and #269 selection-shape validation for single-service, curated multi-service, and all-services apply/readback behavior is accepted. The next target is #247 umbrella acceptance, which must still preserve post-refresh target-client visibility and actual tool-use boundaries."
+  },
+  "not_service_options": [
+    {
+      "id": "none",
+      "label": "None",
+      "taxonomy_type": "not_a_service",
+      "owner_issue": 248,
+      "readiness_rule": "Record decline, defer, or skip choice only; do not create service binding, backend, gateway, validation probe, or project service record."
+    }
+  ],
+  "services": [
+    {
+      "service": "context7",
+      "display_name": "context7",
+      "service_binding": "context7:canonical",
+      "taxonomy_type": "shared_canonical",
+      "owner_issue": 260,
+      "source_paths": [
+        "server-instances/context7/instance.json",
+        "server-instances/context7/README.md",
+        "docs/safe-client-visible-validation-probes.md"
+      ],
+      "instantiation_path": "Bind project-local client state/config to existing ContextForge virtual server context7_local_server; do not create per-project backend, gateway, bridge, port, service unit, or server-instance directory.",
+      "pi_visibility_expectation": "Project state records the selected service so the global Pi shim can import the existing ContextForge virtual server.",
+      "opencode_visibility_expectation": "Project-local opencode.json records the selected MCP binding while the user-home OpenCode bootstrap plugin remains separate.",
+      "safe_probe_status": "known_safe_probe",
+      "safe_probe": {
+        "tool_name_hint": "context7-local-resolve-library-id",
+        "arguments": {
+          "libraryName": "python",
+          "query": "standard library documentation lookup"
+        },
+        "required_layers": [
+          "target_client_list_tools",
+          "target_client_call_tool"
+        ]
+      },
+      "blockers_or_non_actions": [
+        "no user-global client config mutation",
+        "no ContextForge registry or catalog mutation",
+        "no backend install or restart",
+        "no secret or token material write",
+        "dev-only CONTEXT7_API_KEY may live only in ignored local env files after explicit operator approval; do not print or commit it"
+      ],
+      "current_slice": true
+    },
+    {
+      "service": "exa-search",
+      "display_name": "exa-search",
+      "service_binding": "exa-search:credential_scoped",
+      "taxonomy_type": "credential_scoped",
+      "owner_issue": 261,
+      "source_paths": [
+        "server-instances/exa-search/instance.json",
+        "server-instances/exa-search/README.md",
+        "docs/safe-client-visible-validation-probes.md"
+      ],
+      "instantiation_path": "Bind only after provider credential, quota, cost, and redaction boundaries are explicit.",
+      "pi_visibility_expectation": "Pi may import the selected ContextForge service after project state binding, but runtime proof remains conditional.",
+      "opencode_visibility_expectation": "OpenCode may bind the selected MCP entry after project-local apply, but runtime proof remains conditional.",
+      "safe_probe_status": "conditional_probe",
+      "safe_probe": {
+        "tool_name_hint": "exa search tool",
+        "arguments": "bounded low-cost harmless query after credential approval"
+      },
+      "blockers_or_non_actions": [
+        "do not write or expose API keys",
+        "do not run broad internet probes",
+        "do not claim readiness from provider availability alone"
+      ],
+      "current_slice": false
+    },
+    {
+      "service": "github",
+      "display_name": "github",
+      "service_binding": "github:canonical",
+      "taxonomy_type": "credential_scoped",
+      "owner_issue": 262,
+      "source_paths": [
+        "server-instances/github/instance.json",
+        "server-instances/github/README.md",
+        "docs/safe-client-visible-validation-probes.md"
+      ],
+      "instantiation_path": "Bind only with explicit GitHub account/token boundary and read-only proof semantics.",
+      "pi_visibility_expectation": "Pi visibility is a selected service binding plus read-only GitHub tool proof when credentials are scoped.",
+      "opencode_visibility_expectation": "OpenCode visibility is a selected project-local MCP binding plus read-only GitHub tool proof when credentials are scoped.",
+      "safe_probe_status": "conditional_probe",
+      "safe_probe": {
+        "tool_name_hint": "read-only GitHub metadata tool",
+        "arguments": "viewer, rate-limit, repository, or issue metadata readback"
+      },
+      "blockers_or_non_actions": [
+        "no issue, PR, comment, label, branch, or repository mutation",
+        "no token material in records",
+        "do not use local gh auth alone as target-client proof"
+      ],
+      "current_slice": false
+    },
+    {
+      "service": "mentality",
+      "display_name": "mentality",
+      "service_binding": "mentality:static_repo_local",
+      "taxonomy_type": "repo_local_static",
+      "owner_issue": 263,
+      "source_paths": [
+        "server-instances/mentality/instance.json",
+        "server-instances/mentality/README.md",
+        "scripts/governance_mcp.py"
+      ],
+      "instantiation_path": "Reuse repo-local governance MCP behavior through ContextForge binding; do not duplicate governance state.",
+      "pi_visibility_expectation": "Pi can expose read-only governance list/read tools after project state binding.",
+      "opencode_visibility_expectation": "OpenCode can expose read-only governance list/read tools after project-local config binding.",
+      "safe_probe_status": "known_safe_probe",
+      "safe_probe": {
+        "tool_name_hint": "mentality-governance-list",
+        "arguments": {
+          "repo": "PROJECT_ROOT",
+          "ledger": "decisions"
+        }
+      },
+      "blockers_or_non_actions": [
+        "no DECISIONS.md, ABEYANT_INTENTIONS.md, or OPEN_QUESTIONS.md mutation",
+        "do not treat local file reads as target-client proof"
+      ],
+      "current_slice": false
+    },
+    {
+      "service": "openzeppelin-solidity-contracts",
+      "display_name": "openzeppelin-solidity-contracts",
+      "service_binding": "openzeppelin-solidity-contracts:canonical",
+      "taxonomy_type": "shared_canonical",
+      "owner_issue": 264,
+      "source_paths": [
+        "server-instances/openzeppelin-solidity-contracts/instance.json",
+        "server-instances/openzeppelin-solidity-contracts/README.md",
+        "docs/safe-client-visible-validation-probes.md"
+      ],
+      "instantiation_path": "Bind to the existing remote native ContextForge service; do not create local project or deployment state.",
+      "pi_visibility_expectation": "Pi can expose the selected remote template service after project state binding.",
+      "opencode_visibility_expectation": "OpenCode can expose the selected remote template service after project-local config binding.",
+      "safe_probe_status": "known_safe_probe",
+      "safe_probe": {
+        "tool_name_hint": "openzeppelin-solidity-contracts-solidity-erc20",
+        "arguments": "fixed harmless ERC-20 preview payload from the safe probe catalog"
+      },
+      "blockers_or_non_actions": [
+        "no deployment, wallet, RPC, private-key, or project file write",
+        "do not make security or audit claims from generated code"
+      ],
+      "current_slice": false
+    },
+    {
+      "service": "playwright",
+      "display_name": "playwright",
+      "service_binding": "playwright:session_scoped",
+      "taxonomy_type": "session_scoped",
+      "owner_issue": 265,
+      "source_paths": [
+        "server-instances/playwright/instance.json",
+        "server-instances/playwright/README.md",
+        "docs/safe-client-visible-validation-probes.md"
+      ],
+      "instantiation_path": "Bind to an isolated browser runtime only under controlled fixture-page validation.",
+      "pi_visibility_expectation": "Pi can expose Playwright tools after project state binding, but safe proof needs a controlled fixture page.",
+      "opencode_visibility_expectation": "OpenCode can expose Playwright tools after project-local config binding, but safe proof needs a controlled fixture page.",
+      "safe_probe_status": "conditional_probe",
+      "safe_probe": {
+        "tool_name_hint": "browser snapshot or title readback",
+        "arguments": "controlled fixture page only"
+      },
+      "blockers_or_non_actions": [
+        "no arbitrary browsing",
+        "no unsafe code execution",
+        "no screenshots of unknown pages",
+        "no host browser/global config mutation"
+      ],
+      "current_slice": false
+    },
+    {
+      "service": "ssh-tmux",
+      "display_name": "ssh-tmux",
+      "service_binding": "ssh-tmux:session_scoped",
+      "taxonomy_type": "session_scoped",
+      "owner_issue": 266,
+      "source_paths": [
+        "server-instances/ssh-tmux/instance.json",
+        "server-instances/ssh-tmux/README.md",
+        "docs/safe-client-visible-validation-probes.md"
+      ],
+      "instantiation_path": "Bind existing session visibility only; do not open sessions or send commands during ordinary validation.",
+      "pi_visibility_expectation": "Pi can expose read-only session listing after project state binding when a safe session boundary exists.",
+      "opencode_visibility_expectation": "OpenCode can expose read-only session listing after project-local config binding when a safe session boundary exists.",
+      "safe_probe_status": "known_safe_probe",
+      "safe_probe": {
+        "tool_name_hint": "ssh-tmux-list-sessions",
+        "arguments": {}
+      },
+      "blockers_or_non_actions": [
+        "no opening sessions",
+        "no command or key sending",
+        "no remote file mutation",
+        "no cleanup or close operations"
+      ],
+      "current_slice": false
+    },
+    {
+      "service": "web-search",
+      "display_name": "web-search",
+      "service_binding": "web-search:credential_scoped",
+      "taxonomy_type": "credential_scoped",
+      "owner_issue": 267,
+      "source_paths": [
+        "server-instances/web-search/instance.json",
+        "server-instances/web-search/README.md",
+        "docs/safe-client-visible-validation-probes.md"
+      ],
+      "instantiation_path": "Bind only after provider credential, quota, cost, and redaction boundaries are explicit.",
+      "pi_visibility_expectation": "Pi may import the selected ContextForge service after project state binding, but runtime proof remains conditional.",
+      "opencode_visibility_expectation": "OpenCode may bind the selected MCP entry after project-local apply, but runtime proof remains conditional.",
+      "safe_probe_status": "conditional_probe",
+      "safe_probe": {
+        "tool_name_hint": "web-search query or fetch tool",
+        "arguments": "bounded low-cost harmless query after credential approval"
+      },
+      "blockers_or_non_actions": [
+        "do not write or expose provider credentials",
+        "do not substitute built-in web search or direct provider calls",
+        "do not run broad internet probes"
+      ],
+      "current_slice": false
+    },
+    {
+      "service": "serena",
+      "display_name": "serena",
+      "service_binding_pattern": "serena:<project-root-hash-prefix>",
+      "taxonomy_type": "project_scoped",
+      "owner_issue": 268,
+      "source_paths": [
+        "server-instances/serena-cf-controlplane-d46fe58a2a20/instance.json",
+        "server-instances/serena-cf-controlplane-d46fe58a2a20/README.md",
+        "scripts/manage_serena_project_instance.py"
+      ],
+      "instantiation_path": "Bind only to an approved project-scoped Serena instance; provisioning, language choice, and LSP state remain explicit boundaries.",
+      "pi_visibility_expectation": "Pi can expose the selected project Serena service only after project instance readiness and project state binding.",
+      "opencode_visibility_expectation": "OpenCode can expose the selected project Serena service only after project instance readiness and project-local config binding.",
+      "safe_probe_status": "conditional_probe",
+      "safe_probe": {
+        "tool_name_hint": "Serena read-only status or language/profile metadata",
+        "arguments": "selected project instance only"
+      },
+      "blockers_or_non_actions": [
+        "no Serena provisioning in this taxonomy/matrix slice",
+        "no LSP writes",
+        "no global config mutation",
+        "no broad project scan as validation proof"
+      ],
+      "current_slice": false
+    }
+  ]
+}

@@ -536,6 +536,7 @@
             "activation_pending",
             "reload_required",
             "validation_pending",
+            "installed",
             "presumed_working",
             "verified",
             "disabled",
@@ -565,6 +566,7 @@
           "enum": [
             "not_started",
             "pending",
+            "installed",
             "passed",
             "presumed_working",
             "skipped",
@@ -578,6 +580,9 @@
             "not_required",
             "required",
             "acknowledged",
+            "pending_reload",
+            "reload_observed",
+            "reload_acknowledged",
             "unknown"
           ]
         },
@@ -634,6 +639,7 @@
             "applying",
             "applied_validation_choice_pending",
             "validation_pending",
+            "installed",
             "verified",
             "presumed_working",
             "failed",
@@ -772,6 +778,7 @@
           "type": "string",
           "enum": [
             "pending_choice",
+            "installed",
             "validate_now",
             "presume_working"
           ]
@@ -781,6 +788,7 @@
           "enum": [
             "pending_user_choice",
             "pending",
+            "installed",
             "passed",
             "failed",
             "skipped",

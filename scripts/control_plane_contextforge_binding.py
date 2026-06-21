@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
 import argparse
 from collections.abc import Iterable, Mapping, Sequence
@@ -72,13 +73,25 @@ REQUIRED_CLIENT_BINDING_TRACE_LAYERS = (
     "redaction",
 )
 PROJECT_INIT_OWNER_MARKER = "# contextforge-project-init-owner = \"ContextForge\""
+PROJECT_INIT_OWNER_ENV = "CONTEXTFORGE_PROJECT_INIT_OWNER"
+PROJECT_INIT_OWNER_VALUE = "ContextForge"
 PROJECT_INIT_BINDING_MARKER = "# contextforge-project-init-service-binding = \"{service_binding}\""
 PROJECT_INIT_SERVER_MARKER = "# contextforge-project-init-virtual-server = \"{virtual_server}\""
-VALIDATION_MODES = frozenset({"pending_choice", "validate_now", "presume_working"})
+VALIDATION_MODES = frozenset({"installed", "pending_choice", "validate_now", "presume_working"})
 PROJECT_INIT_APPROVAL_SCOPE = "project-local-client-config-and-state"
 PI_SHIM_SURFACE = "global Pi extension + .project/context_forge_state.json"
 OPENCODE_CONFIG_SURFACE = "opencode.json"
 OPENCODE_GLOBAL_TRIGGER_SURFACE = "~/.config/opencode/plugins/contextforge-project-init.js"
+OPENCODE_WRAPPER_PYTHON_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON"
+OPENCODE_WRAPPER_SCRIPT_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT"
+OPENCODE_WRAPPER_CONFIG_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV"
+OPENCODE_WRAPPER_BASE_URL_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL"
+OPENCODE_WRAPPER_TOKEN_CACHE_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE"
+CODEX_WRAPPER_PYTHON_ENV = "CONTEXTFORGE_CODEX_WRAPPER_PYTHON"
+CODEX_WRAPPER_SCRIPT_ENV = "CONTEXTFORGE_CODEX_WRAPPER_SCRIPT"
+CODEX_WRAPPER_CONFIG_ENV = "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV"
+CODEX_WRAPPER_BASE_URL_ENV = "CONTEXTFORGE_CODEX_WRAPPER_BASE_URL"
+CODEX_WRAPPER_TOKEN_CACHE_ENV = "CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE"
 PROJECT_INIT_CLIENT_ADAPTERS: dict[str, dict[str, Any]] = {
     "codex": {
         "client_type": "codex",
@@ -203,15 +216,32 @@ def build_project_init_codex_binding_block(service: Mapping[str, Any]) -> str:
     service_binding = str(service.get("service_binding") or service.get("service_family") or alias)
     _require("codex_alias", alias)
     _require("virtual_server", virtual_server)
+    wrapper_python = os.environ.get(CODEX_WRAPPER_PYTHON_ENV) or str(PYTHON_PATH)
+    wrapper_script = os.environ.get(CODEX_WRAPPER_SCRIPT_ENV) or str(WRAPPER_PATH)
+    environment = {
+        "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
+        "MCP_WRAPPER_LOG_LEVEL": "INFO",
+    }
+    config_env = os.environ.get(CODEX_WRAPPER_CONFIG_ENV)
+    if config_env:
+        environment["CONTEXTFORGE_CONFIG_ENV"] = config_env
+    base_url = os.environ.get(CODEX_WRAPPER_BASE_URL_ENV)
+    if base_url:
+        environment["CONTEXTFORGE_BASE_URL"] = base_url
+    token_cache = os.environ.get(CODEX_WRAPPER_TOKEN_CACHE_ENV)
+    if token_cache:
+        environment["CONTEXTFORGE_TOKEN_CACHE"] = token_cache
+        environment["CONTEXTFORGE_TOKEN_LOCK"] = f"{token_cache}.lock"
+    env_parts = ", ".join(f'{key} = "{value}"' for key, value in environment.items())
     return (
         f"{PROJECT_INIT_OWNER_MARKER}\n"
         f"{PROJECT_INIT_BINDING_MARKER.format(service_binding=service_binding)}\n"
         f"{PROJECT_INIT_SERVER_MARKER.format(virtual_server=virtual_server)}\n"
         f"[mcp_servers.{alias}]\n"
-        f"command = \"{PYTHON_PATH}\"\n"
-        f"args = [\"{WRAPPER_PATH}\", \"{virtual_server}\"]\n"
+        f"command = \"{wrapper_python}\"\n"
+        f"args = [\"{wrapper_script}\", \"{virtual_server}\"]\n"
         f"cwd = \"{REPO_ROOT}\"\n"
-        "env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = \"300\", MCP_WRAPPER_LOG_LEVEL = \"INFO\" }\n"
+        f"env = {{ {env_parts} }}\n"
         "startup_timeout_ms = 60000\n"
         "tool_timeout_ms = 120000\n"
     )
@@ -426,6 +456,7 @@ def build_project_init_gemini_binding_entry(service: Mapping[str, Any]) -> dict[
         "args": [str(WRAPPER_PATH), virtual_server],
         "cwd": str(REPO_ROOT),
         "env": {
+            PROJECT_INIT_OWNER_ENV: PROJECT_INIT_OWNER_VALUE,
             "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
             "MCP_WRAPPER_LOG_LEVEL": "INFO",
         },
@@ -640,14 +671,28 @@ def build_project_init_opencode_binding_entry(service: Mapping[str, Any]) -> dic
 
     virtual_server = str(service.get("virtual_server") or "")
     _require("virtual_server", virtual_server)
+    wrapper_python = os.environ.get(OPENCODE_WRAPPER_PYTHON_ENV) or str(PYTHON_PATH)
+    wrapper_script = os.environ.get(OPENCODE_WRAPPER_SCRIPT_ENV) or str(WRAPPER_PATH)
+    environment = {
+        PROJECT_INIT_OWNER_ENV: PROJECT_INIT_OWNER_VALUE,
+        "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
+        "MCP_WRAPPER_LOG_LEVEL": "INFO",
+    }
+    config_env = os.environ.get(OPENCODE_WRAPPER_CONFIG_ENV)
+    if config_env:
+        environment["CONTEXTFORGE_CONFIG_ENV"] = config_env
+    base_url = os.environ.get(OPENCODE_WRAPPER_BASE_URL_ENV)
+    if base_url:
+        environment["CONTEXTFORGE_BASE_URL"] = base_url
+    token_cache = os.environ.get(OPENCODE_WRAPPER_TOKEN_CACHE_ENV)
+    if token_cache:
+        environment["CONTEXTFORGE_TOKEN_CACHE"] = token_cache
+        environment["CONTEXTFORGE_TOKEN_LOCK"] = f"{token_cache}.lock"
     return {
         "type": "local",
-        "command": [str(PYTHON_PATH), str(WRAPPER_PATH), virtual_server],
+        "command": [wrapper_python, wrapper_script, virtual_server],
         "enabled": True,
-        "environment": {
-            "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
-            "MCP_WRAPPER_LOG_LEVEL": "INFO",
-        },
+        "environment": environment,
     }
 
 
@@ -934,14 +979,16 @@ def build_project_init_validation_plan(
                 "service_family": service.get("service_family"),
                 "target_client": target_client,
                 "mode": validation_mode,
-                "required_proof": (
+                "required_proof": "not_required" if validation_mode == "installed" else (
                     "target_client_visible_mcp"
                     if validation_mode == "validate_now"
                     else ("user_validation_choice" if validation_mode == "pending_choice" else "deferred")
                 ),
                 "safe_default": _json_copy(policy),
                 "status": (
-                    "pending_target_client_probe"
+                    "installed_reload_required"
+                    if validation_mode == "installed"
+                    else "pending_target_client_probe"
                     if validation_mode == "validate_now"
                     else ("pending_user_validation_choice" if validation_mode == "pending_choice" else "presumed_working_without_probe")
                 ),
@@ -954,10 +1001,10 @@ def build_project_init_validation_plan(
         "service_plans": service_plans,
         "asks_user_choice": True,
         "non_actions": [
-            "does not use backend health alone as target-client proof",
-            "does not call mutating tools during default validation",
-            "does not mark target-client verification passed when validation is presumed",
-            "does not mark target-client verification passed before validation choice",
+            "does not run post-install target-client validation",
+            "does not call mutating tools during project initialization",
+            "does not mark target-client verification passed during installation",
+            "requires a new client session or reload before newly installed tools are visible",
         ],
     }
 

@@ -27,3 +27,7 @@ Runtime endpoints:
 
 Register it only with the ContextForge development Docker gateway, not the
 legacy/live host gateway.
+
+The sibling `context7-transceiver` image fronts the canonical Context7 stdio
+backend on port `9203`. It receives `CONTEXT7_API_KEY` only at container
+runtime and must be registered only with the isolated development gateway.

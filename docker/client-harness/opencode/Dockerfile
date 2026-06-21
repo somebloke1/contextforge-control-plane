@@ -20,6 +20,9 @@ USER agent
 
 ENV OPENCODE_CONFIG_DIR=/home/agent/.config/opencode
 ENV CONTEXTFORGE_HELPER_PYTHON=/opt/contextforge-helper-venv/bin/python
+ENV CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON=/opt/contextforge-helper-venv/bin/python
+ENV CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT=/repo/scripts/contextforge_mcp_wrapper.py
+ENV CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE=/tmp/contextforge-wrapper-token.local.json
 
 ENTRYPOINT ["/usr/local/bin/contextforge-opencode-entrypoint"]
 CMD ["opencode", "--version"]

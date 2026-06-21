@@ -24,8 +24,8 @@ Out of scope for this baseline:
 - Host Pi install, host Pi reload, or user-global Pi extension mutation.
 - Host user-global OpenCode config or plugin mutation.
 - Legacy/live ContextForge registry, token, service, or process mutation.
-- Runtime Docker rebuild/run proof. That remains a separately approved
-  validation slice.
+- Runtime Docker rebuild/run proof. That remains a separately approved runtime
+  evidence pass.
 
 ## Current Evidence
 
@@ -34,9 +34,9 @@ paths:
 
 - `docker/client-harness/scripts/smoke-pi-contextforge-dev.sh` loads
   `pi-extensions/contextforge-global-shim/index.ts` with an explicit
-  `--extension` flag for one validation run.
+  `--extension` flag for one readback run.
 - `docker/client-harness/scripts/smoke-opencode-contextforge-dev.sh` runs
-  `opencode mcp add` against the development gateway for one validation run.
+  `opencode mcp add` against the development gateway for one runtime check.
 - `docker/client-harness/config/pi/AGENTS.md` only gives Qwen smoke guidance.
 - `docker/client-harness/config/opencode/opencode.json` defines the Qwen
   provider/model and the harness-owned `contextforge-helper` local MCP entry,
@@ -56,6 +56,8 @@ Harness-owned baseline entrypoints:
 
 - `docker/client-harness/scripts/start-pi-contextforge-baseline.sh`
 - `docker/client-harness/config/pi/start-contextforge-baseline.sh`
+- `docker/client-harness/pi/pi-wrapper.sh`
+- `docker/client-harness/pi/contextforge-pi-bootstrap.sh`
 - `docker/client-harness/scripts/start-opencode-contextforge-baseline.sh`
 - `docker/client-harness/config/opencode/start-contextforge-baseline.sh`
 - `docker/client-harness/config/opencode/plugins/contextforge-project-init.js`
@@ -70,9 +72,17 @@ MCP-aware client does. The sustainable baseline route is:
 - expose the `cf_project_init_*` bootstrap tools and ContextForge startup
   guidance during the client session;
 - keep wrapper runtime and token cache inside the container;
-- point only at the ContextForge development Docker surface when runtime
-  validation is separately approved;
+- point only at the ContextForge development Docker surface when runtime checks
+  are separately approved;
 - avoid host Pi installs, host `/reload`, or host/global Pi state mutation.
+
+The persistent Pi Compose service must also support the common interactive
+debugging path `docker compose -f docker/client-harness/compose.yml run pi bash`
+followed by a bare `pi` command. The image-level wrapper at `/usr/local/bin/pi`
+seeds the same container-local `models.json`, AGENTS guidance, and shim files
+before delegating to the real npm Pi binary at `/usr/bin/pi`, and defaults that
+bare session to `local-llama-qwen/qwen3.6-a3b` unless the command explicitly
+selects another provider or model.
   Container-local writes under `/home/agent/.pi/agent/extensions` are harness
   setup, not project-init approval/apply writes.
 
@@ -104,13 +114,13 @@ project-local after helper approval/apply. The sustainable baseline route is:
   instead of the host `.venv`;
 - reuse the project-local hook behavior implemented by
   `scripts/opencode_project_init_hook.py`;
-- use the `chat.message` OpenCode plugin hook as the first-prompt trigger,
+- use the OpenCode messages transform plugin hook as the first-prompt trigger,
   not `experimental.chat.system.transform` as the primary init path;
 - keep hook runtime state under writable container-local runtime paths, not
   under the read-only `/repo` mount;
 - keep any generated client state inside the OpenCode client container volume;
-- point only at the ContextForge development Docker surface when runtime
-  validation is separately approved;
+- point only at the ContextForge development Docker surface when runtime checks
+  are separately approved;
 - avoid host user-global OpenCode config or plugin writes.
 
 The existing smoke script may keep its temporary `opencode mcp add` proof.
@@ -121,12 +131,12 @@ does not depend on that one-shot command and does not create project-local
 `.opencode/plugins` in a fresh workspace. Approved selected MCP services remain
 project-local in `opencode.json` plus `.project/context_forge_state.json`.
 
-## Runtime Validation Boundary
+## Runtime Evidence Boundary
 
 Source/test changes may define and statically check the baseline contract.
-They must not claim runtime completion until a separately approved validation
-slice rebuilds/runs the Pi and OpenCode containers and collects evidence from
-actual ad hoc client sessions.
+They must not claim runtime completion until a separately approved evidence pass
+rebuilds/runs the Pi and OpenCode containers and collects evidence from actual
+ad hoc client sessions.
 
 Runtime evidence should identify the exercised surface explicitly:
 

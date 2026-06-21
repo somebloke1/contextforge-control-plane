@@ -40,6 +40,14 @@ At worker maintenance:
 The worker must not use its formal goal to expand scope, claim global project
 completion, close the controller's goal, or bypass the controller's authority.
 
+When the assigned scope touches model-dependent output, deterministic evidence
+may check structure but not meaning. Do not use matched strings, regexes,
+keyword searches, or string parsing as a test, gate, score criterion, or
+acceptance oracle for free-form generated prose. The only exception is declared
+structured model output such as JSON, where deterministic checks may verify
+parseability, schema shape, required fields, and enum/value structure, and only
+when paired with non-deterministic evaluator review.
+
 ## Worker Identity
 
 Use stable run IDs, not rotating Codex display names.
@@ -67,8 +75,11 @@ best available dispatcher/thread ID and mark the field
 4. Define local acceptance criteria for the assigned scope.
 5. Execute the bounded task.
 6. Verify with concrete commands, probes, readbacks, or file evidence.
-7. Report outcome, evidence, changed files, non-actions, and residual risk.
-8. Stop at integration, authority, approval, or scope boundaries.
+7. Record any reflective-learning ideas discovered during the work without
+   expanding the lease.
+8. Report outcome, evidence, changed files, non-actions, residual risk, and
+   reflective-learning notes.
+9. Stop at integration, authority, approval, or scope boundaries.
 
 ## Worker Authority
 
@@ -141,6 +152,11 @@ Worker report:
 - evidence:
 - non-actions:
 - residual risk:
+- reflective learning:
+  - incorporate_now:
+  - promote_regression:
+  - defer_with_owner:
+  - reject_with_rationale:
 - stop condition reached:
 - requested controller action:
 ```

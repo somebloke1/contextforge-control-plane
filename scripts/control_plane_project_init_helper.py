@@ -6,7 +6,10 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
+import re
 import secrets
+import shutil
 from argparse import Namespace
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import redirect_stdout
@@ -43,6 +46,17 @@ HELPER_READY_STATES = frozenset(
 )
 MUTATING_CONSENT_CLASSES = ("project_local_config_write", "project_state_write", "service_provision")
 PROJECT_LOCAL_CONSENT_CLASSES = ("project_local_config_write", "project_state_write")
+PROJECT_RESET_PROFILES = frozenset({"project_init_base"})
+
+
+def _env_truthy(name: str) -> bool:
+    return str(os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _serena_no_systemd_requested_or_required() -> bool:
+    return _env_truthy("CONTEXTFORGE_SERENA_NO_SYSTEMD") or shutil.which("systemctl") is None
+
+
 PI_PROJECT_LOCAL_CONSENT_CLASSES = ("project_state_write",)
 SUPPORTED_CLIENTS = frozenset({"codex", "gemini", "opencode", "pi"})
 _PENDING_CHALLENGES: dict[str, dict[str, Any]] = {}
@@ -60,6 +74,14 @@ def now_timestamp() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _stamp() -> str:
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _reset_id() -> str:
+    return f"reset-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}-{secrets.token_hex(4)}"
+
+
 def next_turn(
     *,
     question_id: str,
@@ -67,106 +89,70 @@ def next_turn(
     choices: Sequence[Mapping[str, Any]],
     allowed_response_shape: str,
     selection_mode: str = "single",
+    accept_selection_numbers: bool = True,
 ) -> dict[str, Any]:
     numbered_choices = [
         {"number": index, **dict(choice)}
         for index, choice in enumerate(choices, start=1)
     ]
+    rendered_choices = numbered_choices if accept_selection_numbers else [dict(choice) for choice in choices]
+    respond_with = "selection number or option id" if accept_selection_numbers else "option id or explicit approval/decline text"
+    allowed = (
+        f"{allowed_response_shape}; selection number(s) are accepted"
+        if accept_selection_numbers
+        else f"{allowed_response_shape}; selection numbers are not accepted for approval"
+    )
     return {
         "question_id": question_id,
         "prompt": prompt,
-        "choices": numbered_choices,
+        "choices": rendered_choices,
         "response_form": {
             "type": "multi_select" if selection_mode == "multi" else "single_select",
-            "options": numbered_choices,
-            "respond_with": "selection number or option id",
+            "options": rendered_choices,
+            "respond_with": respond_with,
         },
-        "allowed_response_shape": f"{allowed_response_shape}; selection number(s) are accepted",
+        "allowed_response_shape": allowed,
         "must_stop": True,
     }
 
 
 def validation_choice_turn() -> dict[str, Any]:
-    return next_turn(
-        question_id="validation-choice",
-        prompt='Choose 1 to validate now, or choose 2 to skip validation and record the services as presumed working without marking them verified.',
-        choices=[
-            {"id": "validate_now", "label": "Validate", "effect": "Run non-destructive target-client-visible MCP probes."},
-            {"id": "presume_working", "label": "Skip validation", "effect": "Record presumed working without marking target-client verification passed."},
-        ],
-        allowed_response_shape='choose 1 or reply "validate"; choose 2 or reply "skip validation"',
-    )
+    return installation_complete_turn(client_type="codex", reload_requirement=None)
 
 
-def client_reload_before_validation_turn(reload_requirement: Mapping[str, Any]) -> dict[str, Any]:
-    client_type = str(reload_requirement.get("client_type") or "client")
-    command = str(reload_requirement.get("command") or "reload")
-    if client_type == "codex":
-        return next_turn(
-            question_id="codex-client-reload-before-validation",
-            prompt=(
-                "Start a new Codex session from this project root before validating ContextForge service functionality. "
-                "Codex launches configured MCP servers and exposes their tools when a session starts; /mcp is only a status view and does not reload MCP tools in-place. "
-                'In the new session, resume project init and choose 1 or reply "validate" to run validation; choose 2 or reply "skip validation" to record presumed working without verification.'
-            ),
-            choices=[
-                {
-                    "id": "start_new_codex_session",
-                    "label": "Start new session",
-                    "effect": "Open a new Codex session from the project root so newly configured MCP tools are loaded before validation.",
-                }
-            ],
-            allowed_response_shape='start a new Codex session from this project root, then resume project init and choose 1 or reply "validate"; choose 2 or reply "skip validation" in the new session',
-        )
-    if client_type == "gemini":
-        return next_turn(
-            question_id="gemini-client-reload-before-validation",
-            prompt=(
-                "Start a new Gemini CLI session from this project root before validating ContextForge service functionality. "
-                "Gemini CLI discovers configured MCP servers when a session starts. "
-                'In the new session, resume project init and choose 1 or reply "validate" to run validation; choose 2 or reply "skip validation" to record presumed working without verification.'
-            ),
-            choices=[
-                {
-                    "id": "start_new_gemini_session",
-                    "label": "Start new session",
-                    "effect": "Open a new Gemini CLI session from the project root so newly configured MCP tools are loaded before validation.",
-                }
-            ],
-            allowed_response_shape='start a new Gemini CLI session from this project root, then resume project init and choose 1 or reply "validate"; choose 2 or reply "skip validation" in the new session',
-        )
-    if client_type == "opencode":
-        return next_turn(
-            question_id="opencode-client-reload-before-validation",
-            prompt=(
-                "Start a new OpenCode session from this project root before validating ContextForge service functionality. "
-                "OpenCode discovers configured MCP servers and loads user-home plugins when a session starts. "
-                'In the new session, resume project init and choose 1 or reply "validate" to run validation; choose 2 or reply "skip validation" to record presumed working without verification.'
-            ),
-            choices=[
-                {
-                    "id": "start_new_opencode_session",
-                    "label": "Start new session",
-                    "effect": "Open a new OpenCode session from the project root so newly configured MCP tools and user-home plugin context are loaded before validation.",
-                }
-            ],
-            allowed_response_shape='start a new OpenCode session from this project root, then resume project init and choose 1 or reply "validate"; choose 2 or reply "skip validation" in the new session',
-        )
-    label_client = "Pi" if client_type == "pi" else client_type
+def installation_complete_turn(*, client_type: str, reload_requirement: Mapping[str, Any] | None) -> dict[str, Any]:
+    command = str((reload_requirement or {}).get("command") or "start_new_session")
+    if client_type in {"codex", "opencode"}:
+        prompt = "ContextForge tools are installed for this project. Start a new session from this project root for the tools to register."
+        label = "Start new session"
+        effect = "Load the newly installed project-local ContextForge tools."
+        allowed = "start a new session from this project root"
+    elif client_type == "gemini":
+        prompt = "ContextForge tools are installed for this project. Start a new Gemini CLI session from this project root for the tools to register."
+        label = "Start new session"
+        effect = "Load the newly installed project-local ContextForge tools."
+        allowed = "start a new Gemini CLI session from this project root"
+    elif client_type == "pi":
+        prompt = "ContextForge tools are installed for this project. Run /reload in Pi for the tools to register."
+        label = "Reload Pi"
+        effect = "Load the newly installed ContextForge extension tools."
+        allowed = "run /reload in Pi"
+    else:
+        prompt = f"ContextForge tools are installed for this project. Reload {client_type} for the tools to register."
+        label = "Reload"
+        effect = "Load the newly installed ContextForge tools."
+        allowed = f"reload {client_type}"
     return next_turn(
-        question_id=f"{client_type}-client-reload-before-validation",
-        prompt=(
-            f"Issue {command} in {label_client} before validating ContextForge service functionality. "
-            'After the reload, resume project init and choose 1 or reply "validate" to run validation; choose 2 or reply "skip validation" to record presumed working without verification.'
-        ),
+        question_id=f"{client_type}-project-init-installed",
+        prompt=prompt,
         choices=[
             {
-                "id": "issue_reload",
-                "label": f"Issue {command}",
-                "effect": "Reload the client so newly installed or changed extension/plugin tools are active before validation.",
+                "id": command,
+                "label": label,
+                "effect": effect,
             }
         ],
-        allowed_response_shape=f'issue {command}, then resume project init and choose 1 or reply "validate"; choose 2 or reply "skip validation" in the reloaded client',
+        allowed_response_shape=allowed,
     )
 
 
@@ -205,18 +191,379 @@ def config_recovery_approval_turn(*, client_type: str = "codex") -> dict[str, An
             {"id": "decline", "label": "Decline", "effect": "No config, project state, services, trust, or catalog changes."},
         ],
         allowed_response_shape="approve or decline the exact recovery challenge id and plan digest",
+        accept_selection_numbers=False,
     )
+
+
+def reset_current_project(
+    *,
+    project_root: str | Path,
+    client_type: str = "codex",
+    profile: str = "project_init_base",
+    preserve_evidence: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reset helper-owned project-init state for one project root."""
+
+    if profile not in PROJECT_RESET_PROFILES:
+        raise ProjectInitHelperError(f"unsupported project reset profile: {profile}")
+    if client_type not in SUPPORTED_CLIENTS:
+        raise ProjectInitHelperError(f"unsupported client_type: {client_type}")
+    root = project_state.validate_project_root(project_root, require_workspace=True)
+    state_path = project_state.project_state_path(root)
+    reset_id = _reset_id()
+    evidence_dir = root / project_state.STATE_DIR_NAME / "contextforge-reset-evidence" / reset_id
+
+    state = None
+    state_error: str | None = None
+    if state_path.exists():
+        try:
+            state = project_state.load_state(root)
+        except Exception as exc:
+            state_error = f"{exc.__class__.__name__}: {exc}"
+
+    services = _project_init_services_from_state(state if isinstance(state, Mapping) else {})
+    actions: list[dict[str, Any]] = []
+    refusals: list[dict[str, Any]] = []
+    preserved: list[dict[str, Any]] = []
+
+    def preserve(path: Path, label: str) -> None:
+        if not preserve_evidence or not path.exists():
+            return
+        target = evidence_dir / label
+        if not dry_run:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(path.read_bytes())
+        preserved.append({"path": str(path), "evidence_path": str(target), "dry_run": dry_run})
+
+    preserve(state_path, "before/project_state/context_forge_state.json")
+    if state_path.exists():
+        actions.append({"surface": str(state_path), "operation": "remove_project_init_state", "dry_run": dry_run})
+        if not dry_run:
+            state_path.unlink()
+
+    for result in (
+        _reset_codex_project_config(root, services, preserve=preserve, dry_run=dry_run),
+        _reset_json_mcp_project_config(
+            services,
+            config_path=root / "opencode.json",
+            mcp_key="mcp",
+            entry_builder=binding.build_project_init_opencode_binding_entry,
+            entry_matches=binding._opencode_managed_entry_matches,
+            preserve=preserve,
+            dry_run=dry_run,
+        ),
+        _reset_json_mcp_project_config(
+            services,
+            config_path=root / ".gemini" / "settings.json",
+            mcp_key="mcpServers",
+            entry_builder=binding.build_project_init_gemini_binding_entry,
+            entry_matches=binding._gemini_managed_entry_matches,
+            preserve=preserve,
+            dry_run=dry_run,
+        ),
+    ):
+        actions.extend(result.get("actions", []))
+        refusals.extend(result.get("refusals", []))
+
+    manifest = {
+        "reset_id": reset_id,
+        "profile": profile,
+        "project_root": str(root),
+        "client_type": client_type,
+        "dry_run": dry_run,
+        "services_considered": [
+            {
+                key: service.get(key)
+                for key in ("service_family", "service_binding", "codex_alias", "virtual_server")
+                if service.get(key) is not None
+            }
+            for service in services
+        ],
+        "state_error": state_error,
+        "actions": actions,
+        "refusals": refusals,
+        "preserved": preserved,
+        "non_actions": [
+            "does not remove Docker containers or volumes",
+            "does not mutate user-global client config, trust, extensions, or authentication",
+            "does not remove ContextForge token caches or secret material",
+            "does not mutate ContextForge registry, service catalog, or backend services",
+            "does not mutate git state",
+            "does not remove unmanaged project-local MCP entries",
+        ],
+    }
+    manifest["postcondition"] = _project_reset_postcondition(root)
+    manifest["status"] = "reset" if manifest["postcondition"] else "needs_attention"
+    action_count = len(actions)
+    refusal_count = len(refusals)
+    if dry_run:
+        visible_status = "Project reset dry run complete"
+    elif manifest["postcondition"]:
+        visible_status = "Project reset complete"
+    else:
+        visible_status = "Project reset needs attention"
+    evidence_note = f" Evidence preserved at {evidence_dir}." if preserve_evidence else ""
+    manifest["assistant_visible_response"] = (
+        f"{visible_status} for {root}. "
+        f"Helper-owned project-init state and client bindings reset with {action_count} action(s) "
+        f"and {refusal_count} refusal(s).{evidence_note} "
+        "No Docker, user-global client config, authentication, token cache, ContextForge registry, backend service, or git state was reset."
+    )
+    manifest["evidence_dir"] = str(evidence_dir) if preserve_evidence else None
+    if preserve_evidence and not dry_run:
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        (evidence_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return manifest
+
+
+def _project_init_services_from_state(state: Mapping[str, Any]) -> list[dict[str, Any]]:
+    project_init = state.get("project_init") if isinstance(state.get("project_init"), Mapping) else {}
+    services_by_binding: dict[str, dict[str, Any]] = {}
+    activation_jobs = project_init.get("activation_jobs") if isinstance(project_init.get("activation_jobs"), Mapping) else {}
+    for job in activation_jobs.values():
+        if not isinstance(job, Mapping):
+            continue
+        for binding_name in [str(item) for item in job.get("selected_service_bindings") or [] if item]:
+            alias = normalize_codex_alias(binding_name.split(":", 1)[0])
+            services_by_binding.setdefault(
+                binding_name,
+                {
+                    "service_family": alias,
+                    "canonical_service": alias,
+                    "service_binding": binding_name,
+                    "codex_alias": alias,
+                },
+            )
+    state_services = project_init.get("services") if isinstance(project_init.get("services"), Mapping) else {}
+    for service in state_services.values():
+        if not isinstance(service, Mapping):
+            continue
+        binding_name = str(service.get("service_binding") or service.get("service_family") or "")
+        if not binding_name:
+            continue
+        record = services_by_binding.setdefault(binding_name, dict(service))
+        record.update({key: value for key, value in service.items() if value is not None})
+    client_states = project_init.get("client_states") if isinstance(project_init.get("client_states"), Mapping) else {}
+    for client_state in client_states.values():
+        if not isinstance(client_state, Mapping):
+            continue
+        projections = client_state.get("services") if isinstance(client_state.get("services"), Mapping) else {}
+        for service_binding, projection in projections.items():
+            if not isinstance(projection, Mapping):
+                continue
+            binding_name = str(service_binding)
+            alias = normalize_codex_alias(binding_name.split(":", 1)[0])
+            record = services_by_binding.setdefault(
+                binding_name,
+                {
+                    "service_family": alias,
+                    "canonical_service": alias,
+                    "service_binding": binding_name,
+                    "codex_alias": alias,
+                },
+            )
+            if projection.get("alias"):
+                record["codex_alias"] = str(projection["alias"])
+            if projection.get("virtual_server"):
+                record["virtual_server"] = str(projection["virtual_server"])
+    return [
+        service
+        for service in services_by_binding.values()
+        if service.get("service_binding") and service.get("codex_alias")
+    ]
+
+
+def _reset_codex_project_config(
+    root: Path,
+    services: Sequence[Mapping[str, Any]],
+    *,
+    preserve,
+    dry_run: bool,
+) -> dict[str, list[dict[str, Any]]]:
+    config_path = root / ".codex" / "config.toml"
+    if not config_path.exists():
+        return {"actions": [], "refusals": []}
+    text = config_path.read_text(encoding="utf-8")
+    output = text
+    actions: list[dict[str, Any]] = []
+    refusals: list[dict[str, Any]] = []
+    aliases = sorted({normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or "")) for service in services if service.get("codex_alias") or service.get("service_family")})
+    removed_aliases: set[str] = set()
+    for alias in aliases:
+        section_re = binding._codex_section_re(alias)
+        match = section_re.search(output)
+        if not match:
+            continue
+        block = match.group(0)
+        if binding.PROJECT_INIT_OWNER_MARKER not in block:
+            refusals.append({"surface": str(config_path), "alias": alias, "reason": "unmanaged_codex_mcp_block_preserved"})
+            continue
+        output = output[: match.start()] + output[match.end() :]
+        removed_aliases.add(alias)
+        actions.append({"surface": str(config_path), "alias": alias, "operation": "remove_owned_codex_mcp_block", "dry_run": dry_run})
+    section_re = re.compile(r"(?ms)^(?:# contextforge-project-init-[^\n]*\n)*\[mcp_servers\.([^\]]+)\]\n.*?(?=^(?:# contextforge-project-init-[^\n]*\n)*\[|\Z)")
+    while True:
+        orphan = None
+        for match in section_re.finditer(output):
+            block = match.group(0)
+            alias = normalize_codex_alias(match.group(1))
+            if alias in removed_aliases:
+                continue
+            if binding.PROJECT_INIT_OWNER_MARKER in block:
+                orphan = match
+                break
+        if orphan is None:
+            break
+        alias = normalize_codex_alias(orphan.group(1))
+        output = output[: orphan.start()] + output[orphan.end() :]
+        removed_aliases.add(alias)
+        actions.append({"surface": str(config_path), "alias": alias, "operation": "remove_orphaned_owned_codex_mcp_block", "dry_run": dry_run})
+    if output != text:
+        preserve(config_path, "before/codex/config.toml")
+        if not dry_run:
+            if output.strip():
+                config_path.write_text(output.strip() + "\n", encoding="utf-8")
+            else:
+                config_path.unlink()
+    return {"actions": actions, "refusals": refusals}
+
+
+def _reset_json_mcp_project_config(
+    services: Sequence[Mapping[str, Any]],
+    *,
+    config_path: Path,
+    mcp_key: str,
+    entry_builder,
+    entry_matches,
+    preserve,
+    dry_run: bool,
+) -> dict[str, list[dict[str, Any]]]:
+    if not config_path.exists():
+        return {"actions": [], "refusals": []}
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return {"actions": [], "refusals": [{"surface": str(config_path), "reason": "invalid_json_preserved", "message": str(exc)}]}
+    if not isinstance(config, dict):
+        return {"actions": [], "refusals": [{"surface": str(config_path), "reason": "non_object_json_preserved"}]}
+    mcp_servers = config.get(mcp_key)
+    if mcp_servers is None:
+        return {"actions": [], "refusals": []}
+    if not isinstance(mcp_servers, dict):
+        return {"actions": [], "refusals": [{"surface": str(config_path), "reason": f"invalid_{mcp_key}_object_preserved"}]}
+    output = json.loads(json.dumps(config))
+    output_servers = output.get(mcp_key)
+    assert isinstance(output_servers, dict)
+    actions: list[dict[str, Any]] = []
+    refusals: list[dict[str, Any]] = []
+    removed_aliases: set[str] = set()
+    for service in services:
+        alias = normalize_codex_alias(str(service.get("codex_alias") or service.get("service_family") or ""))
+        if not alias or alias not in output_servers:
+            continue
+        existing = output_servers.get(alias)
+        expected = entry_builder(service) if service.get("virtual_server") else None
+        if (expected is not None and entry_matches(existing, expected)) or _json_mcp_entry_is_contextforge_owned(existing):
+            del output_servers[alias]
+            removed_aliases.add(alias)
+            actions.append({"surface": str(config_path), "alias": alias, "operation": "remove_owned_json_mcp_entry", "dry_run": dry_run})
+        else:
+            refusals.append({"surface": str(config_path), "alias": alias, "reason": "unmanaged_or_drifted_json_mcp_entry_preserved"})
+    for alias, existing in list(output_servers.items()):
+        normalized_alias = normalize_codex_alias(str(alias))
+        if normalized_alias in removed_aliases:
+            continue
+        if _json_mcp_entry_is_contextforge_owned(existing):
+            del output_servers[alias]
+            actions.append(
+                {
+                    "surface": str(config_path),
+                    "alias": str(alias),
+                    "operation": "remove_orphaned_contextforge_json_mcp_entry",
+                    "dry_run": dry_run,
+                }
+            )
+        elif _json_mcp_entry_uses_contextforge_wrapper(existing):
+            refusals.append(
+                {
+                    "surface": str(config_path),
+                    "alias": str(alias),
+                    "reason": "unmanaged_wrapper_json_mcp_entry_preserved",
+                }
+            )
+    if actions:
+        preserve(config_path, f"before/{config_path.name}")
+        if not output_servers:
+            output.pop(mcp_key, None)
+        if not dry_run:
+            config_path.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"actions": actions, "refusals": refusals}
+
+
+def _json_mcp_entry_is_contextforge_owned(existing: Any) -> bool:
+    if not isinstance(existing, Mapping):
+        return False
+    if not _json_mcp_entry_has_project_init_owner_marker(existing):
+        return False
+    return _json_mcp_entry_uses_contextforge_wrapper(existing)
+
+
+def _json_mcp_entry_uses_contextforge_wrapper(existing: Any) -> bool:
+    if not isinstance(existing, Mapping):
+        return False
+    command = existing.get("command")
+    args = existing.get("args")
+    if isinstance(command, list):
+        command_parts = [str(item) for item in command]
+        return any(part.endswith("contextforge_mcp_wrapper.py") for part in command_parts)
+    if isinstance(args, list):
+        arg_parts = [str(item) for item in args]
+        return any(part.endswith("contextforge_mcp_wrapper.py") for part in arg_parts)
+    return False
+
+
+def _json_mcp_entry_has_project_init_owner_marker(existing: Mapping[str, Any]) -> bool:
+    env = existing.get("environment")
+    if not isinstance(env, Mapping):
+        env = existing.get("env")
+    return isinstance(env, Mapping) and str(env.get(binding.PROJECT_INIT_OWNER_ENV) or "") == binding.PROJECT_INIT_OWNER_VALUE
+
+
+def _project_reset_postcondition(root: Path) -> bool:
+    if project_state.project_state_path(root).exists():
+        return False
+    codex_path = root / ".codex" / "config.toml"
+    if codex_path.exists() and binding.PROJECT_INIT_OWNER_MARKER in codex_path.read_text(encoding="utf-8"):
+        return False
+    for config_path, mcp_key in (
+        (root / "opencode.json", "mcp"),
+        (root / ".gemini" / "settings.json", "mcpServers"),
+    ):
+        if not config_path.exists():
+            continue
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        servers = config.get(mcp_key) if isinstance(config, Mapping) else None
+        if not isinstance(servers, Mapping):
+            continue
+        for entry in servers.values():
+            if _json_mcp_entry_is_contextforge_owned(entry):
+                return False
+    return True
 
 
 def state_repair_turn(*, client_type: str = "codex") -> dict[str, Any]:
     return next_turn(
         question_id="repair-project-init-state",
-        prompt="Project-init state is missing durable validation metadata, but existing ContextForge service records match this project. Repair the state and resume validation?",
+        prompt="Project-init state is missing durable install metadata, but existing ContextForge service records match this project. Repair the state?",
         choices=[
             {
                 "id": "repair_project_init_state",
                 "label": "Repair state",
-                "effect": "Add only missing project-init validation metadata and preserve existing service and config evidence.",
+                "effect": "Add only missing project-init install metadata and preserve existing service and config evidence.",
             },
             {"id": "restart_selection", "label": "Restart selection", "effect": "Start a new service-selection plan instead of repairing existing records."},
         ],
@@ -310,6 +657,7 @@ def list_available_capabilities(
     contextforge_servers: Iterable[dict[str, Any]] | None = None,
     server_instances_root: str | Path | None = None,
 ) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
     readiness = helper_readiness(project_root=project_root, client_type=client_type)
     inspection = project_state.inspect_project_init_state(project_root, require_workspace=True)
     if inspection.get("lifecycle_status") == "invalid_repairable":
@@ -317,7 +665,7 @@ def list_available_capabilities(
             "client_type": client_type,
             "root_attestation": readiness["root_attestation"],
             "status": "state_repair_required",
-            "resume_reason": "project state has existing ContextForge service records but is missing project-init validation metadata",
+            "resume_reason": "project state has existing ContextForge service records but is missing project-init install metadata",
             "project_state_inspection": inspection,
             "next_turn": state_repair_turn(client_type=client_type),
             "non_actions": [
@@ -333,6 +681,19 @@ def list_available_capabilities(
             "root_attestation": readiness["root_attestation"],
             **resume,
         }
+    existing_state: dict[str, Any] | None = None
+    try:
+        existing_state = project_state.load_state(root)
+    except Exception:
+        existing_state = None
+    if isinstance(existing_state, Mapping):
+        alignment_offer = _alignment_import_offer(root, existing_state, client_type=client_type)
+        if alignment_offer is not None:
+            return {
+                "client_type": client_type,
+                "root_attestation": readiness["root_attestation"],
+                **alignment_offer,
+            }
     services = discover_contextforge_hosted_services(
         project_root=project_root,
         contextforge_servers=contextforge_servers,
@@ -367,6 +728,201 @@ def list_available_capabilities(
     }
 
 
+def _alignment_import_offer(
+    root: Path,
+    state: Mapping[str, Any],
+    *,
+    client_type: str,
+) -> dict[str, Any] | None:
+    services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
+    alignment_services: list[dict[str, Any]] = []
+    missing_actions: list[dict[str, Any]] = []
+    non_current_actions: list[dict[str, Any]] = []
+    unavailable_project_services: list[dict[str, Any]] = []
+    for binding_id, service_value in services.items():
+        if not isinstance(service_value, Mapping):
+            continue
+        service = dict(service_value)
+        service.setdefault("service_binding", str(binding_id))
+        service_binding = str(service.get("service_binding") or binding_id)
+        unavailable_summary = _service_skipped_or_unavailable_summary(service)
+        if unavailable_summary:
+            unavailable_project_services.append(unavailable_summary)
+            continue
+        target_clients = service.get("target_clients") if isinstance(service.get("target_clients"), Mapping) else {}
+        target_client_state = target_clients.get(client_type) if isinstance(target_clients, Mapping) else None
+        if isinstance(target_client_state, Mapping):
+            projection_status = _alignment_projection_status(target_client_state)
+            if projection_status in {"imported", "verified", "recorded"}:
+                continue
+        else:
+            projection_status = "missing"
+        candidate = _candidate(service, client_type=client_type)
+        candidate["project_service_state"] = "present"
+        candidate["target_client_projection_status"] = projection_status
+        candidate["target_client_state"] = dict(target_client_state) if isinstance(target_client_state, Mapping) else {"status": "not_recorded"}
+        candidate["available_to_target_client"] = False
+        if projection_status == "missing":
+            candidate["user_visible_effect"] = (
+                f"Import this project's existing {candidate['display_name']} binding for {client_type} "
+                "without provisioning a new project service instance."
+            )
+            candidate["recommended_action"] = _projection_alignment_action(service_binding, client_type, projection_status)
+            missing_actions.append(candidate["recommended_action"])
+        else:
+            candidate["user_visible_effect"] = (
+                f"Repair this project's existing {candidate['display_name']} projection for {client_type} "
+                "without provisioning a new project service instance."
+            )
+            candidate["recommended_action"] = _projection_alignment_action(service_binding, client_type, projection_status)
+            non_current_actions.append(candidate["recommended_action"])
+        alignment_services.append(candidate)
+
+    if not alignment_services and not unavailable_project_services:
+        return None
+    project_service_bindings = [str(service["service_binding"]) for service in alignment_services]
+    unavailable_bindings = [str(item["service_binding"]) for item in unavailable_project_services if str(item.get("service_binding") or "")]
+    project_service_text = ", ".join(project_service_bindings + unavailable_bindings)
+    importable_text = ", ".join(project_service_bindings) if project_service_bindings else "none currently importable"
+    missing_text = ", ".join(str(item["service_binding"]) for item in missing_actions) if missing_actions else "none"
+    non_current_text = ", ".join(str(item["service_binding"]) for item in non_current_actions) if non_current_actions else "none"
+    prompt_client = {
+        "codex": "Codex",
+        "gemini": "Gemini",
+        "opencode": "OpenCode",
+        "pi": "Pi",
+    }.get(client_type, client_type)
+    return {
+        "status": "alignment_import_offer",
+        "alignment_import_offer": {
+            "mode": "alignment_import",
+            "source": "project_state",
+            "target_client": client_type,
+            "project_root": str(root),
+            "project_service_bindings": project_service_bindings,
+            "missing_target_client_projection": missing_actions,
+            "non_current_target_client_projection": non_current_actions,
+            "unavailable_project_services": unavailable_project_services,
+            "service_count": len(alignment_services),
+            "unavailable_service_count": len(unavailable_project_services),
+        },
+        "available_services": alignment_services,
+        "assistant_visible_response": (
+            f"ContextForge state for {str(root)} already contains project services: {project_service_text}. "
+            f"Missing target-client projections for {prompt_client}: {missing_text}. "
+            f"Non-current target-client projections for {prompt_client}: {non_current_text}. "
+            f"Importable or repairable target-client projections for {prompt_client}: {importable_text}. "
+            f"{_alignment_unavailable_visible_text(unavailable_project_services)}"
+            "This is a read-only alignment/import offer; no project service instance is duplicated or provisioned here. "
+            f"Import this project's existing ContextForge services for {prompt_client}?"
+        ),
+        "next_turn": next_turn(
+            question_id="align-existing-project-services",
+            prompt=(
+                f"Project services are already present. Import this project's existing ContextForge services for {prompt_client}?"
+            ),
+            choices=[
+                {
+                    "id": service["service_binding"],
+                    "label": service["display_name"],
+                    "activation_class": service["activation_class"],
+                    "effect": service["user_visible_effect"],
+                }
+                for service in alignment_services
+            ]
+            + [{"id": "none", "label": "None", "effect": "Record no service alignment."}],
+            allowed_response_shape="list service ids, selection numbers, or choose none",
+            selection_mode="multi",
+        ),
+        "non_actions": [
+            "discovery is read-only",
+            "project service identities are not duplicated for client aliases",
+            "no backend installation, registry mutation, or global trust change",
+        ],
+    }
+
+
+def _service_skipped_or_unavailable(service: Mapping[str, Any]) -> bool:
+    return bool(_service_skipped_or_unavailable_summary(service))
+
+
+def _service_skipped_or_unavailable_summary(service: Mapping[str, Any]) -> dict[str, str] | None:
+    service_binding = str(service.get("service_binding") or service.get("id") or "unknown")
+    status = str(service.get("status") or "")
+    if status in {"declined", "deferred", "disabled", "blocked", "unavailable"}:
+        return {
+            "service_binding": service_binding,
+            "status": status,
+            "reason": str(service.get("skipped_reason") or service.get("reason") or service.get("x_reason") or f"service is {status}"),
+            "alignment_status": "blocked",
+        }
+    provision_status = str(service.get("provision_status") or "")
+    if provision_status in {"skipped", "unavailable", "missing", "blocked", "failed"}:
+        return {
+            "service_binding": service_binding,
+            "status": provision_status,
+            "reason": str(service.get("skipped_reason") or service.get("reason") or service.get("x_reason") or f"service provisioning is {provision_status}"),
+            "alignment_status": "blocked",
+        }
+    lifecycle = service.get("lifecycle") if isinstance(service.get("lifecycle"), Mapping) else {}
+    lifecycle_status = str(lifecycle.get("status") or "")
+    if lifecycle_status in {"declined", "deferred", "disabled", "blocked", "unavailable"}:
+        return {
+            "service_binding": service_binding,
+            "status": lifecycle_status,
+            "reason": str(lifecycle.get("reason") or service.get("reason") or service.get("x_reason") or f"service lifecycle is {lifecycle_status}"),
+            "alignment_status": "blocked",
+        }
+    return None
+
+
+def _alignment_unavailable_visible_text(unavailable_project_services: Sequence[Mapping[str, Any]]) -> str:
+    if not unavailable_project_services:
+        return ""
+    details = "; ".join(
+        f"{item.get('service_binding')}: {item.get('status')} ({item.get('reason')})"
+        for item in unavailable_project_services
+    )
+    return (
+        "Some project services cannot be imported for this client in the current plan: "
+        f"{details}. "
+    )
+
+
+def _alignment_projection_status(target_client_state: Mapping[str, Any]) -> str:
+    status = str(target_client_state.get("status") or "")
+    validation_status = str(target_client_state.get("validation_status") or "")
+    reload_status = str(target_client_state.get("reload_status") or "")
+    if status in {"blocked", "failed"} or validation_status == "blocked":
+        return "blocked"
+    if status == "stale":
+        return "stale"
+    if status == "partial" or validation_status == "mixed":
+        return "partial"
+    if reload_status in {"pending_reload", "reload_required"}:
+        return "reload_required"
+    if status == "validation_pending" or validation_status == "pending":
+        return "validation_pending"
+    if status == "verified" or validation_status == "passed":
+        return "verified"
+    if status in {"installed", "project_local_opencode_config_planned", "project_local_codex_config_planned", "project_local_gemini_config_planned"}:
+        return "imported"
+    return "recorded"
+
+
+def _projection_alignment_action(service_binding: str, client_type: str, projection_status: str) -> dict[str, str]:
+    return {
+        "action": "align_target_client_to_existing_project_service",
+        "target_client": client_type,
+        "service_binding": service_binding,
+        "target_client_projection_status": projection_status,
+        "boundary": (
+            f"Align/import {client_type} to the existing project service instance; "
+            "do not create a new project service instance unless explicitly approved."
+        ),
+    }
+
+
 def propose_project_init(
     *,
     project_root: str | Path,
@@ -397,7 +953,7 @@ def propose_project_init(
             return {
                 "root_attestation": _root_attestation(root, client_type=client_type),
                 "status": "state_repair_required",
-                "resume_reason": "project state has existing ContextForge service records but is missing project-init validation metadata",
+                "resume_reason": "project state has existing ContextForge service records but is missing project-init install metadata",
                 "project_state_inspection": inspection,
                 "next_turn": state_repair_turn(client_type=client_type),
                 "non_actions": [
@@ -498,6 +1054,7 @@ def propose_project_init(
         client_type=client_type,
         state_snapshot=state_snapshot,
     )
+    required_inputs = _normalized_required_inputs(inputs or {}, services)
     plan_seed = {
         "schema_uri": HELPER_PLAN_SCHEMA_URI,
         "workflow": "project_init",
@@ -505,7 +1062,7 @@ def propose_project_init(
         "project_root": str(root),
         "project_root_hash": project_state.project_root_hash(root),
         "selected_services": services,
-        "required_inputs": dict(inputs or {}),
+        "required_inputs": required_inputs,
         "required_consent_classes": _required_consent_classes(services, client_type=client_type),
         "skipped_services": skipped_services,
         "stale_plan_inputs": _stale_plan_inputs(
@@ -520,7 +1077,7 @@ def propose_project_init(
         ),
         "config_plan": {key: value for key, value in config_plan.items() if key != "next_text"},
         "plan_summary": plan_summary,
-        "validation_mode": "pending_choice",
+        "installation_mode": "install_only",
         "non_actions": [
             "no user-global config or trust mutation",
             "no ContextForge registry or catalog mutation",
@@ -543,10 +1100,11 @@ def propose_project_init(
         question_id="approve-project-init-plan",
         prompt="Approve the listed project-local ContextForge activation effects?",
         choices=[
-            {"id": "approve", "label": "Approve", "effect": "Issue scoped consent receipts for the exact plan digest."},
+            {"id": "approve", "label": "Approve", "effect": "Issue scoped consent receipts for the listed project-local effects."},
             {"id": "decline", "label": "Decline", "effect": "No config, project state, services, trust, or catalog changes."},
         ],
-        allowed_response_shape="approve or decline the exact challenge id and plan digest",
+        allowed_response_shape="reply approve or decline",
+        accept_selection_numbers=False,
     )
     return plan
 
@@ -676,7 +1234,7 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
         state = project_state.load_state(root)
     except Exception:
         return None
-    if not isinstance(state, Mapping) or state.get("status") != "in_progress":
+    if not isinstance(state, Mapping) or state.get("status") not in {"in_progress", "initialized"}:
         return None
     project_init = state.get("project_init") if isinstance(state.get("project_init"), Mapping) else {}
     jobs = project_init.get("activation_jobs") if isinstance(project_init.get("activation_jobs"), Mapping) else {}
@@ -684,7 +1242,7 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
     job = jobs.get(current_job_id) if current_job_id else None
     if not isinstance(job, Mapping):
         return None
-    pending_statuses = {"applied_validation_choice_pending", "validation_choice_pending"}
+    resumable_statuses = {"applied_validation_choice_pending", "validation_choice_pending", "installed"}
     has_pending_records = any(
         isinstance(record, Mapping) and record.get("status") == "pending_user_choice"
         for record in (job.get("validation_records") or {}).values()
@@ -694,7 +1252,7 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
         for record in (job.get("validation_records") or {}).values()
     )
     if (
-        job.get("status") not in pending_statuses
+        job.get("status") not in resumable_statuses
         and job.get("recovery_state") != "local_written_validation_pending"
         and not has_pending_records
         and not (job.get("status") == "validation_pending" and has_incomplete_validation_records)
@@ -713,7 +1271,7 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
             "config_repair": repair_status,
             "next_turn": config_repair_turn(client_type=client_type),
             "non_actions": [
-                _repair_validation_block_label(client_type),
+                _repair_project_init_block_label(client_type),
                 "do not edit target-client activation state directly outside contextforge-helper repair",
                 "do not mutate user-global config or trust",
             ],
@@ -722,24 +1280,26 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
     if reload_requirement and reload_requirement.get("blocks_validation_until_done") and not _job_reload_acknowledged(job, reload_requirement):
         return {
             "status": "client_reload_required",
-            "resume_reason": "project activation was applied, but this target client must reload before validation can run",
+            "resume_reason": "project activation was applied, and this target client must reload before installed tools register",
             "current_job": _job_resume_summary(job, selected_ids, selected_bindings=selected_bindings),
             "client_reload_requirement": reload_requirement,
-            "next_turn": client_reload_before_validation_turn(reload_requirement),
+            "next_turn": installation_complete_turn(client_type=client_type, reload_requirement=reload_requirement),
             "non_actions": [
                 _validation_not_recorded_label(client_type),
-                "do not validate before the reload is acknowledged",
+                "do not call further project-init tools after apply succeeds",
                 "do not mutate user-global config or trust",
             ],
         }
+    if _job_reload_acknowledged(job, reload_requirement or {}):
+        return None
     return {
-        "status": "resume_validation",
-        "resume_reason": "project init already wrote project-local config and state; validation choice is still pending",
+        "status": "installed_reload_required",
+        "resume_reason": "project init already wrote project-local config and state; selected tools are installed",
         "current_job": _job_resume_summary(job, selected_ids, selected_bindings=selected_bindings),
-        "next_turn": validation_choice_turn(),
+        "next_turn": installation_complete_turn(client_type=client_type, reload_requirement=client_reload_requirement(client_type, event="project_activation_apply")),
         "non_actions": [
             "do not restart project-init service selection",
-            "do not rewrite project-local client config before resolving validation choice",
+            "do not call further project-init tools after apply succeeds",
             "do not mutate user-global config or trust",
         ],
     }
@@ -749,23 +1309,43 @@ def record_project_init_client_reload(
     *,
     project_root: str | Path,
     client_type: str = "pi",
+    validation_mode: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
+    if validation_mode is not None:
+        raise ProjectInitHelperError(
+            "project-init reload acknowledgement is install-only; "
+            "do not request post-install validation or service probing from reload acknowledgement"
+        )
     root = project_state.validate_project_root(project_root, require_workspace=True)
     state, job, selected = _pending_validation_state_job(root, client_type=client_type)
+    selected_bindings = _job_selected_service_bindings(job)
     reload_requirement = client_reload_requirement(client_type, event="project_activation_apply")
     if not reload_requirement or not reload_requirement.get("blocks_validation_until_done"):
-        return {
+        result = {
             "status": "reload_not_required",
             "client_type": client_type,
-            "current_job": _job_resume_summary(job, selected, selected_bindings=_job_selected_service_bindings(job)),
-            "next_turn": validation_choice_turn(),
+            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
         }
+        return result
     updated_job = json.loads(json.dumps(job))
+    acknowledged_at = now_timestamp()
     updated_job["x_client_reload_ack"] = {
         "client_type": client_type,
         "command": reload_requirement.get("command"),
-        "acknowledged_at": now_timestamp(),
+        "acknowledged_at": acknowledged_at,
+        "acknowledged_by": "control_plane_project_init_helper",
+    }
+    prior_fsm = job.get("x_client_reload_fsm") if isinstance(job.get("x_client_reload_fsm"), Mapping) else {}
+    updated_job["x_client_reload_fsm"] = {
+        "state": "reload_acknowledged",
+        "previous_state": str(prior_fsm.get("state") or "pending_reload"),
+        "client_type": client_type,
+        "job_id": str(updated_job.get("job_id") or ""),
+        "plan_id": str(updated_job.get("plan_id") or ""),
+        "command": reload_requirement.get("command"),
+        "local_client_config_digest": updated_job.get("local_client_config_digest"),
+        "acknowledged_at": acknowledged_at,
         "acknowledged_by": "control_plane_project_init_helper",
     }
     next_state = json.loads(json.dumps(state))
@@ -774,13 +1354,13 @@ def record_project_init_client_reload(
     client_state.update(
         {
             "client_type": client_type,
-            "status": "validation_pending",
+            "status": "installed",
             "current_job_id": str(updated_job["job_id"]),
             "selected_service_ids": [str(item) for item in updated_job.get("selected_service_ids") or [] if item],
             "selected_service_bindings": [str(item) for item in updated_job.get("selected_service_bindings") or [] if item],
-            "validation_status": "pending",
-            "reload_status": "acknowledged",
-            "updated_at": updated_job["x_client_reload_ack"]["acknowledged_at"],
+            "validation_status": "installed",
+            "reload_status": "reload_acknowledged",
+            "updated_at": acknowledged_at,
             "last_plan_id": updated_job.get("plan_id"),
             "local_client_config_digest": updated_job.get("local_client_config_digest"),
         }
@@ -799,7 +1379,6 @@ def record_project_init_client_reload(
         "status": "client_reload_recorded_dry_run" if dry_run else "client_reload_recorded",
         "client_type": client_type,
         "current_job": _job_resume_summary(updated_job, selected, selected_bindings=_job_selected_service_bindings(updated_job)),
-        "next_turn": validation_choice_turn(),
         "non_actions": [
             _validation_not_recorded_label(client_type),
             "no project-local client config write",
@@ -811,6 +1390,19 @@ def record_project_init_client_reload(
         written = project_state.write_state_atomic(root, next_state, updated_by="control_plane_project_init_helper")
         result["state_revision"] = written["meta"]["revision"]
     return result
+
+
+def _post_reload_validation_continuation(
+    root: Path,
+    state: Mapping[str, Any],
+    job: Mapping[str, Any],
+    selected: Sequence[str],
+    *,
+    selected_bindings: Sequence[str],
+    client_type: str,
+    validation_mode: str | None,
+) -> dict[str, Any]:
+    return {}
 
 
 def repair_pending_project_init_config(
@@ -825,12 +1417,12 @@ def repair_pending_project_init_config(
     inspection = project_state.inspect_project_init_state(root, require_workspace=True)
     if inspection.get("lifecycle_status") == "invalid_repairable":
         return repair_missing_project_init_state(project_root=root, client_type=client_type, dry_run=dry_run)
-    state, job, selected = _pending_validation_state_job(root, client_type=client_type)
+    state, job, selected = _current_project_init_state_job(root, client_type=client_type)
     selected_bindings = _job_selected_service_bindings(job)
     if not selected:
-        raise ProjectInitHelperError("pending validation job has no selected service ids")
+        raise ProjectInitHelperError("current project-init job has no selected service ids")
     if not job.get("consent_receipt_refs"):
-        raise ProjectInitHelperError("pending validation job has no prior scoped consent receipt refs")
+        raise ProjectInitHelperError("current project-init job has no prior scoped consent receipt refs")
     services = _services_from_state_or_catalog(root, state, selected, selected_bindings=selected_bindings, client_type=client_type)
     config_plan = _client_activation_plan(root, services, client_type=client_type, existing_state=state)
     if config_plan.get("decision") == "block":
@@ -842,7 +1434,10 @@ def repair_pending_project_init_config(
         "client_type": client_type,
         "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
         "config_plan": {key: value for key, value in config_plan.items() if key != "next_text"},
-        "next_turn": validation_choice_turn(),
+        "next_turn": installation_complete_turn(
+            client_type=client_type,
+            reload_requirement=client_reload_requirement(client_type, event="project_activation_apply"),
+        ),
         "non_actions": [
             _no_user_global_mutation_label(client_type),
             "no ContextForge registry or catalog mutation",
@@ -865,14 +1460,14 @@ def repair_pending_project_init_config(
                 "idempotency_key": f"repair-{client_type}-activation-" + str(job.get("plan_id") or job.get("job_id")),
                 "pre_digest": config_plan.get("before_digest"),
                 "post_digest": config_plan.get("after_digest"),
-                "recovery_state": None,
+                "recovery_state": "none",
             }
         )
-        job["recovery_state"] = "local_written_validation_pending"
+        job["recovery_state"] = "none"
         if client_type == "pi":
             validation_plan = binding.build_project_init_validation_plan(
                 services,
-                validation_mode="pending_choice",
+                validation_mode="installed",
                 target_client=client_type,
             )
             state = project_state.apply_project_init_activation_to_state(
@@ -933,7 +1528,7 @@ def repair_missing_project_init_state(
                 "job_id": job_id,
                 "plan_id": plan_id,
                 "plan_digest": stable_digest({"plan_id": plan_id, "services": selected_ids, "repair": "missing_project_init"}),
-                "status": "applied_validation_choice_pending",
+                "status": "installed",
                 "client_type": client_type,
                 "selected_service_ids": selected_ids,
                 "selected_service_bindings": selected_bindings,
@@ -967,20 +1562,8 @@ def repair_missing_project_init_state(
                 },
                 "consent_receipt_refs": ["run/project-init-repair/imported-existing-state.json"],
                 "local_client_config_digest": config_plan.get("before_digest"),
-                "validation_records": {
-                    service["service_identity_id"]: {
-                        "mode": "pending_choice",
-                        "status": "pending_user_choice",
-                        "target_client_visible": False,
-                        "proof_ref": None,
-                        "skipped_reason": None,
-                        "safe_probe_id": None,
-                        "x_service_identity_id": service["service_identity_id"],
-                        "x_service_binding": service["service_binding"],
-                    }
-                    for service in services
-                },
-                "recovery_state": "local_written_validation_pending",
+                "validation_records": {},
+                "recovery_state": "none",
                 "non_actions": [
                     "preserved existing service records",
                     "did not overwrite unmanaged target-client config",
@@ -991,28 +1574,11 @@ def repair_missing_project_init_state(
                 "x_repair_kind": "missing_project_init",
             }
         },
-        "x_hook_prompt_state": project_state.HOOK_PROMPT_ACTIVE,
+        "x_hook_prompt_state": project_state.HOOK_PROMPT_COMPLETED_UNVERIFIED,
     }
     repaired.setdefault("migration", project_state.default_migration())
     repaired["migration"].setdefault("client_config_migrations", {})
     _record_repaired_client_config_evidence(repaired, root, client_type=client_type, config_plan=config_plan)
-    project_state._upsert_open_item(
-        repaired,
-        {
-            "id": "project-init-validation",
-            "type": "verification",
-            "severity": "warning",
-            "blocks_initialized": False,
-            "resource": "target-client-visible MCP proof",
-            "created_at": now,
-            "resolution_state": "open",
-            "detail": {
-                "validation_mode": "pending_choice",
-                "reason": "project-init metadata was repaired from existing service records and still needs target-client validation or presumed-working confirmation",
-                "accepted_state": "bindings imported but not verified as working",
-            },
-        },
-    )
     project_state.validate_state(repaired)
     result = {
         "status": "state_repair_dry_run" if dry_run else "state_repaired",
@@ -1053,102 +1619,24 @@ def record_project_init_validation(
     client_type: str = "codex",
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    if validation_mode not in {"validate_now", "presume_working"}:
-        raise ProjectInitHelperError("validation_mode must be validate_now or presume_working")
-    root = project_state.validate_project_root(project_root, require_workspace=True)
-    state, job, selected = _pending_validation_state_job(root, client_type=client_type)
-    selected_bindings = _job_selected_service_bindings(job)
-    repair_status = _pending_job_config_repair_status(root, state, job, selected, selected_bindings=selected_bindings, client_type=client_type)
-    if repair_status.get("repair_required"):
-        return {
-            "status": "config_repair_required",
-            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
-            "config_repair": repair_status,
-            "next_turn": config_repair_turn(client_type=client_type),
-            "non_actions": [
-                _validation_not_recorded_label(client_type),
-                "repair must use contextforge-helper before validation completion",
-            ],
-        }
-    reload_requirement = client_reload_requirement(client_type, event="project_activation_apply")
-    if reload_requirement and reload_requirement.get("blocks_validation_until_done") and not _job_reload_acknowledged(job, reload_requirement):
-        return {
-            "status": "client_reload_required",
-            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
-            "client_reload_requirement": reload_requirement,
-            "next_turn": client_reload_before_validation_turn(reload_requirement),
-            "non_actions": [
-                _validation_not_recorded_label(client_type),
-                "do not validate before the reload is acknowledged",
-            ],
-        }
-    services = _services_from_state_or_catalog(root, state, selected, selected_bindings=selected_bindings, client_type=client_type)
-    config_plan = _client_activation_plan(root, services, client_type=client_type, existing_state=state)
-    validation_plan = binding.build_project_init_validation_plan(services, validation_mode=validation_mode, target_client=client_type)
-    validation_results_dict = dict(validation_results or {})
-    validation_diagnostic = _validation_results_diagnostic(services, validation_results_dict)
-    if (
-        validation_mode == "validate_now"
-        and validation_results_dict
-        and not validation_diagnostic["matched_keys"]
-    ):
-        return {
-            "status": "validation_results_unmatched",
-            "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
-            "validation_diagnostic": validation_diagnostic,
-            "expected_validation_results_shape": _expected_validation_results_shape(services),
-            "non_actions": [
-                _validation_not_recorded_label(client_type),
-                "validation_results must be a top-level object keyed by selected service binding, normalized binding key, or service identity id",
-            ],
-        }
-    activation_job = dict(job)
-    activation_job["selected_service_ids"] = [str(service.get("service_identity_id")) for service in services]
-    activation_job["selected_service_bindings"] = [str(service.get("service_binding")) for service in services]
-    if (
-        config_plan.get("before_digest") == config_plan.get("after_digest")
-        and activation_job.get("local_client_config_digest") != config_plan.get("after_digest")
-    ):
-        activation_job["local_client_config_digest"] = config_plan.get("after_digest")
-    next_state = project_state.apply_project_init_activation_to_state(
-        state,
-        services,
-        target_client=client_type,
-        client_config_plan=config_plan,
-        validation_plan=validation_plan,
-        validation_results=validation_results_dict,
-        activation_job=activation_job,
-        consent_receipt_refs=list(job.get("consent_receipt_refs") or []),
-        updated_by="control_plane_project_init_helper",
-    )
-    result = {
-        "status": "validation_recorded_dry_run" if dry_run else "validation_recorded",
-        "project_status": next_state.get("status"),
-        "current_job_id": next_state.get("project_init", {}).get("current_job_id"),
-        "service_statuses": {
-            key: {
-                "target_client": value.get("verification_layers", {}).get("target_client", {}),
-                "provision_status": value.get("provision_status"),
-            }
-            for key, value in (next_state.get("services") or {}).items()
-            if key in {project_state._state_map_key(binding_id) for binding_id in selected_bindings}
-        },
+    return {
+        "ok": False,
+        "status": "project_init_validation_retired",
+        "project_root": str(project_root),
+        "client_type": client_type,
+        "message": (
+            "Project init is install-only. Do not record post-install validation, "
+            "do not request service probes, and do not ask the user to choose validation. "
+            "If tools were installed, tell the user a new session or reload is required before they register."
+        ),
         "non_actions": [
+            "no project-init validation recorded",
+            "no target-client service probe requested",
             "no project-local client config write",
             _no_user_global_mutation_label(client_type),
             "no ContextForge registry or catalog mutation",
         ],
-        "validation_diagnostic": validation_diagnostic,
-        "expected_validation_results_shape": _expected_validation_results_shape(services),
     }
-    if validation_mode == "validate_now" and (
-        validation_diagnostic["missing_keys"] or validation_diagnostic["unmatched_keys"]
-    ):
-        result["warning"] = "validation_results only matched a subset of selected services"
-    if not dry_run:
-        written = project_state.write_state_atomic(root, next_state, updated_by="control_plane_project_init_helper")
-        result["state_revision"] = written["meta"]["revision"]
-    return result
 
 
 def _validation_results_diagnostic(services: Sequence[Mapping[str, Any]], validation_results: Mapping[str, Any]) -> dict[str, Any]:
@@ -1187,21 +1675,149 @@ def _validation_results_diagnostic(services: Sequence[Mapping[str, Any]], valida
     }
 
 
-def _expected_validation_results_shape(services: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def _validation_report_diagnostic(
+    services: Sequence[Mapping[str, Any]],
+    validation_results: Mapping[str, Any],
+    *,
+    client_type: str,
+) -> dict[str, Any]:
+    insufficient_keys: list[str] = []
+    missing_fields_by_key: dict[str, list[str]] = {}
+    invalid_fields_by_key: dict[str, list[str]] = {}
+    for service in services:
+        binding_id = str(service.get("service_binding") or service.get("service_family") or "")
+        service_identity_id = str(service.get("service_identity_id") or "")
+        result_key = next(
+            (
+                key
+                for key in (binding_id, project_state._state_map_key(binding_id), service_identity_id)
+                if key and isinstance(validation_results.get(key), Mapping)
+            ),
+            None,
+        )
+        if not result_key:
+            continue
+        result = validation_results.get(result_key)
+        if not isinstance(result, Mapping):
+            continue
+        service_family = str(service.get("service_family") or binding_id.split(":", 1)[0] or "")
+        missing, invalid = _safe_probe_proof_gaps(service_family, result, client_type=client_type)
+        if missing or invalid:
+            insufficient_keys.append(result_key)
+            if missing:
+                missing_fields_by_key[result_key] = missing
+            if invalid:
+                invalid_fields_by_key[result_key] = invalid
+    return {
+        "insufficient_keys": insufficient_keys,
+        "missing_fields_by_key": missing_fields_by_key,
+        "invalid_fields_by_key": invalid_fields_by_key,
+    }
+
+
+def _safe_probe_proof_gaps(service_family: str, result: Mapping[str, Any], *, client_type: str) -> tuple[list[str], list[str]]:
+    contract = safe_probe_contract(service_family)
+    if not contract:
+        return [], []
+    if result.get("status") == "skipped":
+        return ([] if result.get("skipped_reason") else ["skipped_reason"]), []
+    missing: list[str] = []
+    invalid: list[str] = []
+    for field in (
+        "status",
+        "target_client",
+        "safe_probe_result",
+        "safe_probe_id",
+        "tool_name",
+        "result_summary",
+    ):
+        value = result.get(field)
+        if value is None or value == "" or value == []:
+            missing.append(field)
+
+    if result.get("target_client") not in {client_type, None}:
+        invalid.append("target_client")
+    accepted_proof_kinds = {str(item) for item in contract.get("accepted_proof_kinds") or []}
+    if result.get("proof_kind") and result.get("proof_kind") not in accepted_proof_kinds:
+        invalid.append("proof_kind")
+    safe_operations = {str(item) for item in safe_validation_policy(service_family).get("safe_operations") or []}
+    if result.get("safe_probe_id") not in safe_operations:
+        invalid.append("safe_probe_id")
+    allowed_tools = [str(item) for item in contract.get("allowed_tool_name_patterns") or []]
+    tool_name = str(result.get("tool_name") or "")
+    if allowed_tools and not any(pattern and pattern in tool_name for pattern in allowed_tools):
+        invalid.append("tool_name")
+    if result.get("status") not in {"passed", "verified"}:
+        invalid.append("status")
+    if result.get("safe_probe_result") != "passed":
+        invalid.append("safe_probe_result")
+    if "target_client_visible" in result and result.get("target_client_visible") is not True:
+        invalid.append("target_client_visible")
+    return list(dict.fromkeys(missing)), list(dict.fromkeys(invalid))
+
+
+def _normalize_validation_results_for_recording(
+    services: Sequence[Mapping[str, Any]],
+    validation_results: Mapping[str, Any],
+    *,
+    client_type: str,
+) -> dict[str, Any]:
+    normalized = {
+        str(key): (dict(value) if isinstance(value, Mapping) else value)
+        for key, value in validation_results.items()
+    }
+    for service in services:
+        binding_id = str(service.get("service_binding") or service.get("service_family") or "")
+        service_identity_id = str(service.get("service_identity_id") or "")
+        result_key = next(
+            (
+                key
+                for key in (binding_id, project_state._state_map_key(binding_id), service_identity_id)
+                if key and isinstance(normalized.get(key), Mapping)
+            ),
+            None,
+        )
+        if not result_key:
+            continue
+        result = dict(normalized[result_key])
+        if result.get("status") in {"passed", "verified"} and result.get("safe_probe_result") == "passed":
+            result.setdefault("target_client", client_type)
+            result.setdefault("target_client_visible", True)
+            result.setdefault(
+                "proof_kind",
+                "pi_safe_probe_result" if client_type == "pi" else "target_client_safe_probe_result",
+            )
+            result.setdefault(
+                "verification_trace_refs",
+                [f"contextforge://control-plane/traces/{project_state._state_map_key(binding_id)}-{client_type}-reported-working"],
+            )
+        normalized[result_key] = result
+    return normalized
+
+
+def _expected_validation_results_shape(services: Sequence[Mapping[str, Any]], *, target_client: str) -> dict[str, Any]:
     service = services[0] if services else {}
     binding_id = str(service.get("service_binding") or "context7:canonical")
     service_family = str(service.get("service_family") or binding_id.split(":", 1)[0] or "context7")
-    trace_ref = f"contextforge://control-plane/traces/{project_state._state_map_key(binding_id)}-target-client"
     contract = safe_probe_contract(service_family)
     contract_shape = contract.get("validation_result_shape") if isinstance(contract.get("validation_result_shape"), Mapping) else {}
     if contract_shape:
-        shape = dict(contract_shape)
-        shape["verification_trace_refs"] = [trace_ref]
+        shape = {
+            key: value
+            for key, value in dict(contract_shape).items()
+            if key not in {"target_client_visible", "proof_kind", "verification_trace_refs"}
+        }
+        shape["tool_name"] = str((contract.get("default_probe") or {}).get("tool_name_hint") or "")
+        shape["target_client"] = target_client
+        shape["result_summary"] = "brief summary of the actual target-client tool output"
     else:
         shape = {
             "status": "passed",
-            "target_client_visible": True,
-            "verification_trace_refs": [trace_ref],
+            "target_client": target_client,
+            "tool_name": "target-client-visible safe probe tool name",
+            "safe_probe_result": "passed",
+            "safe_probe_id": "list-tools",
+            "result_summary": "brief summary of the actual target-client tool output",
         }
     return {
         binding_id: shape,
@@ -1209,6 +1825,14 @@ def _expected_validation_results_shape(services: Sequence[Mapping[str, Any]]) ->
 
 
 def _pending_validation_state_job(root: Path, *, client_type: str) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    state, job, selected = _current_project_init_state_job(root, client_type=client_type)
+    pending = pending_validation_resume(project_root=root, client_type=client_type)
+    if pending is None:
+        raise ProjectInitHelperError("current project-init job is not pending validation")
+    return state, job, selected
+
+
+def _current_project_init_state_job(root: Path, *, client_type: str) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
     state = project_state.load_state(root)
     if not isinstance(state, Mapping):
         raise ProjectInitHelperError("project state is missing")
@@ -1221,9 +1845,6 @@ def _pending_validation_state_job(root: Path, *, client_type: str) -> tuple[dict
     if str(job.get("client_type") or client_type) != client_type:
         raise ProjectInitHelperError("current project-init job client_type does not match")
     selected = _job_selected_service_ids(job)
-    pending = pending_validation_resume(project_root=root, client_type=client_type)
-    if pending is None:
-        raise ProjectInitHelperError("current project-init job is not pending validation")
     return dict(state), dict(job), selected
 
 
@@ -1239,6 +1860,14 @@ def _job_selected_service_bindings(job: Mapping[str, Any]) -> list[str]:
 
 
 def _job_reload_acknowledged(job: Mapping[str, Any], reload_requirement: Mapping[str, Any]) -> bool:
+    fsm = job.get("x_client_reload_fsm") if isinstance(job.get("x_client_reload_fsm"), Mapping) else {}
+    if (
+        str(fsm.get("state") or "") == "reload_acknowledged"
+        and str(fsm.get("client_type") or "") == str(reload_requirement.get("client_type") or "")
+        and str(fsm.get("command") or "") == str(reload_requirement.get("command") or "")
+        and bool(fsm.get("acknowledged_at"))
+    ):
+        return True
     ack = job.get("x_client_reload_ack") if isinstance(job.get("x_client_reload_ack"), Mapping) else {}
     return (
         str(ack.get("client_type") or "") == str(reload_requirement.get("client_type") or "")
@@ -1258,6 +1887,7 @@ def _job_resume_summary(job: Mapping[str, Any], selected_service_ids: Sequence[s
         "selected_service_bindings": list(selected_bindings if selected_bindings is not None else _job_selected_service_bindings(job)),
         "local_client_config_digest": job.get("local_client_config_digest"),
         "client_reload_acknowledged": bool(job.get("x_client_reload_ack")),
+        "client_reload_fsm": dict(job.get("x_client_reload_fsm") or {}) if isinstance(job.get("x_client_reload_fsm"), Mapping) else None,
     }
 
 
@@ -1663,6 +2293,7 @@ def apply_approved_project_init(
         plan=plan,
         skip_service_bindings=recovery_ensured_bindings,
     )
+    services = _services_with_project_scoped_provisioning_results(services, provisioning_results)
     activation_config_plan = _client_activation_plan(
         root,
         services,
@@ -1691,7 +2322,7 @@ def apply_approved_project_init(
     result = binding.apply_project_init_service_activation(
         root,
         services,
-        validation_mode="pending_choice",
+        validation_mode="installed",
         approval_scope=binding.PROJECT_INIT_APPROVAL_SCOPE,
         target_client=client_type,
         activation_job=job,
@@ -1712,12 +2343,103 @@ def apply_approved_project_init(
         result["state_revision"] = written_state["meta"]["revision"]
     result["job"] = job
     reload_requirement = client_reload_requirement(client_type, event="project_activation_apply")
-    if reload_requirement and reload_requirement.get("blocks_validation_until_done"):
+    result["installation_status"] = "installed"
+    result["installed_service_bindings"] = [str(service.get("service_binding") or "") for service in services]
+    result["message"] = "ContextForge tools are installed for this project. A new session or reload is required before the tools register in the client."
+    if reload_requirement:
         result["client_reload_requirement"] = reload_requirement
-        result["next_turn"] = client_reload_before_validation_turn(reload_requirement)
-    else:
-        result["next_turn"] = validation_choice_turn()
+    result["next_turn"] = installation_complete_turn(client_type=client_type, reload_requirement=reload_requirement)
     return result
+
+
+def record_project_init_service_decision(
+    *,
+    project_root: str | Path,
+    selected_services: Sequence[Mapping[str, Any] | str],
+    decision_state: str,
+    client_type: str = "codex",
+    source_plan_id: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
+    if decision_state not in {"declined", "deferred"}:
+        raise ProjectInitHelperError(f"unsupported project-init decision state: {decision_state}")
+    current_state = project_state.read_or_default(root)
+    services = _resolve_selected_services(
+        root,
+        selected_services,
+        client_type=client_type,
+    )
+    next_state = project_state.apply_project_init_decisions_to_state(
+        current_state,
+        [dict(service) for service in services],
+        decision_state=decision_state,
+        target_client=client_type,
+        source_plan_id=source_plan_id,
+        updated_by="control_plane_project_init_helper",
+    )
+    written_state = next_state
+    if not dry_run:
+        written_state = project_state.write_state_atomic(
+            root,
+            next_state,
+            updated_by="control_plane_project_init_helper",
+        )
+    bindings = [str(service.get("service_binding") or "") for service in services]
+    state_word = "declined" if decision_state == "declined" else "deferred"
+    service_text = ", ".join(bindings)
+    return {
+        "ok": True,
+        "status": f"service_{state_word}",
+        "project_root": str(root),
+        "client_type": client_type,
+        "decision_state": decision_state,
+        "selected_service_bindings": bindings,
+        "state_revision": written_state["meta"]["revision"],
+        "dry_run": dry_run,
+        "assistant_visible_response": (
+            f"Recorded {state_word} for {service_text} in this project's ContextForge state. "
+            "It was not installed or imported as an active client tool. "
+            "You can continue with any already available ContextForge capabilities or choose other services later."
+        ),
+        "non_actions": [
+            "no active service import",
+            _no_user_global_mutation_label(client_type),
+            "no project-local client config write",
+            "no ContextForge registry or catalog mutation",
+            "no backend install or restart",
+            "no secret or token material write",
+        ],
+    }
+
+
+def _services_with_project_scoped_provisioning_results(
+    services: Sequence[Mapping[str, Any]],
+    provisioning_results: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    by_binding = {
+        str(result.get("service_binding") or ""): result
+        for result in provisioning_results
+        if isinstance(result, Mapping) and result.get("service_binding")
+    }
+    enriched: list[dict[str, Any]] = []
+    for service in services:
+        service_copy = dict(service)
+        result = by_binding.get(str(service_copy.get("service_binding") or ""))
+        if result and str(result.get("status") or "") == "completed":
+            service_copy["provision_status"] = "created"
+            provisioning = dict(service_copy.get("provisioning") or {})
+            provisioning["provision_status"] = "created"
+            provisioning["status"] = "completed"
+            provisioning["result"] = {
+                key: result.get(key)
+                for key in ("operation_type", "language", "instance_slug", "server_name", "manifest_path", "contextforge_server_id")
+                if result.get(key) is not None
+            }
+            service_copy["provisioning"] = provisioning
+            service_copy["contextforge_readback_status"] = "provisioned_pending_readback"
+        enriched.append(service_copy)
+    return enriched
 
 
 def _apply_project_scoped_provisioning(
@@ -1773,6 +2495,7 @@ def _run_serena_project_provisioning(
         require_workspace=True,
         replace_existing_serena_config=False,
         language=language,
+        no_systemd=_serena_no_systemd_requested_or_required(),
         verify=False,
         app_server=False,
         write_codex_config=False,
@@ -1811,7 +2534,15 @@ def _compact_json_stdout(text: str) -> dict[str, Any] | str:
     if isinstance(parsed, dict):
         return {
             key: parsed.get(key)
-            for key in ("project_root", "instance_slug", "server_name", "port", "selected_language", "language_source")
+            for key in (
+                "project_root",
+                "instance_slug",
+                "server_name",
+                "port",
+                "selected_language",
+                "language_source",
+                "provisioning_mode",
+            )
             if key in parsed
         }
     return stripped[-4000:]
@@ -2404,20 +3135,20 @@ def _repair_resume_reason(client_type: str) -> str:
     return "project init selected services and recorded state, but project-local Codex config is missing approved bindings"
 
 
-def _repair_validation_block_label(client_type: str) -> str:
+def _repair_project_init_block_label(client_type: str) -> str:
     if client_type == "pi":
-        return "do not validate services until project-state Pi shim metadata matches the approved job"
+        return "do not continue project init until project-state Pi shim metadata matches the approved job"
     if client_type == "gemini":
-        return "do not validate services until project-local Gemini settings match the approved job"
+        return "do not continue project init until project-local Gemini settings match the approved job"
     if client_type == "opencode":
-        return "do not validate services until project-local OpenCode config matches the approved job"
-    return "do not validate services until project-local config matches the approved job"
+        return "do not continue project init until project-local OpenCode config matches the approved job"
+    return "do not continue project init until project-local config matches the approved job"
 
 
 def _validation_not_recorded_label(client_type: str) -> str:
     if client_type == "pi":
-        return "validation results were not recorded because Pi shim activation metadata is out of sync"
-    return "validation results were not recorded because project-local config is out of sync"
+        return "install status was not advanced because Pi shim activation metadata is out of sync"
+    return "install status was not advanced because project-local config is out of sync"
 
 
 def _resolve_selected_services(
@@ -2570,15 +3301,35 @@ def _service_input_value(inputs: Mapping[str, Any], service: Mapping[str, Any], 
     if binding and ":" in binding:
         candidates.append(binding.split(":", 1)[0])
 
-    dotted_keys = [f"{candidate}.{input_name}" for candidate in candidates if candidate]
-    for key in dotted_keys:
+    input_keys = [
+        key
+        for candidate in candidates
+        if candidate
+        for key in (f"{candidate}.{input_name}", f"{candidate}-{input_name}", f"{candidate}_{input_name}")
+    ]
+    for key in input_keys:
         if inputs.get(key):
             return inputs.get(key)
     for key in candidates:
         nested = inputs.get(key)
         if isinstance(nested, Mapping) and nested.get(input_name):
             return nested.get(input_name)
+        if nested and input_name == "language":
+            return nested
     return inputs.get(input_name)
+
+
+def _normalized_required_inputs(inputs: Mapping[str, Any], services: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    normalized = dict(inputs or {})
+    for service in services:
+        if service["activation_class"] != "client_local_project_scoped":
+            continue
+        if not str(service["service_family"]).startswith("serena"):
+            continue
+        language = _service_input_value(inputs, service, "language")
+        if language:
+            normalized[str(service["service_binding"])] = {"language": str(language)}
+    return normalized
 
 
 def _required_consent_classes(services: Sequence[Mapping[str, Any]], *, client_type: str) -> list[str]:
@@ -2834,7 +3585,7 @@ def _activation_job_from_plan(
         "job_id": "job-" + str(plan.get("plan_id")),
         "plan_id": str(plan.get("plan_id")),
         "plan_digest": str(plan.get("plan_digest")),
-        "status": "applied_validation_choice_pending",
+        "status": "installed",
         "client_type": client_type,
         "selected_service_ids": [str(service.get("service_identity_id")) for service in plan.get("selected_services") or []],
         "selected_service_bindings": [str(service.get("service_binding")) for service in plan.get("selected_services") or []],
@@ -2863,7 +3614,7 @@ def _activation_job_from_plan(
         "consent_receipt_refs": refs,
         "local_client_config_digest": effective_config_plan.get("after_digest"),
         "validation_records": {},
-        "recovery_state": "local_written_validation_pending",
+        "recovery_state": "none",
         "non_actions": list(plan.get("non_actions") or []),
     }
 
