@@ -185,3 +185,10 @@ context, and is registered through `http://playwright-transceiver:9204/mcp`
 only after direct reachability evidence. Do not fall back to the host-loopback
 `127.0.0.1:9104` live surface for Docker successor parity; the successor must
 not inherit host browser or session residue.
+
+Session-scoped services also require stateful gateway ingress. The Docker
+harness sets `USE_STATEFUL_SESSIONS=true` and `GUNICORN_WORKERS=1` so the
+downstream `Mcp-Session-Id` can bind to one process-local upstream MCP session
+across a multi-tool workflow. Do not raise gateway worker count for
+session-scoped parity unless a deliberate session-affinity backend is added and
+verified.

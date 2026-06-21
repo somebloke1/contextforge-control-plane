@@ -273,6 +273,13 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("SSRF_ALLOW_PRIVATE_NETWORKS=true", env_example)
         self.assertIn("REQUIRE_USER_IN_DB=false", env_example)
 
+    def test_gateway_preserves_stateful_virtual_mcp_sessions(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+
+        self.assertIn('GUNICORN_WORKERS: "1"', compose)
+        self.assertIn('USE_STATEFUL_SESSIONS: "true"', compose)
+        self.assertIn('MCP_GET_STREAM_ENABLED: "true"', compose)
+
     def test_dev_harness_has_env_auth_preflight(self) -> None:
         source = (ROOT / "docker/contextforge-harness/scripts/ensure-env-auth.sh").read_text(encoding="utf-8")
         readme = (ROOT / "docker/contextforge-harness/README.md").read_text(encoding="utf-8")

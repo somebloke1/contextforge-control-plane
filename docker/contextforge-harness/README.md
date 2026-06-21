@@ -149,6 +149,13 @@ browser context so stateful multi-tool workflows survive the ContextForge proxy
 without sharing host browser/session state or writing a persistent browser
 profile.
 
+The harness gateway enables stateful Streamable HTTP sessions and runs a single
+Gunicorn worker. Both are intentional: ContextForge binds upstream MCP client
+state to the downstream `Mcp-Session-Id`, and the current upstream-session
+registry is process-local unless a separate session-affinity backend is
+configured. Without those settings, stateful workflows can degrade into
+per-call upstream sessions.
+
 ```sh
 docker compose -f compose.yml up -d --build contextforge-gateway playwright-transceiver
 python ../../scripts/plan_contextforge_docker_migration.py

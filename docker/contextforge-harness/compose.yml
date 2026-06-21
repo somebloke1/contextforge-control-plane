@@ -5,6 +5,10 @@ services:
     image: ghcr.io/ibm/mcp-context-forge:v1.0.3
     env_file:
       - ./env/contextforge.env
+    environment:
+      GUNICORN_WORKERS: "1"
+      USE_STATEFUL_SESSIONS: "true"
+      MCP_GET_STREAM_ENABLED: "true"
     ports:
       - "0.0.0.0:4445:4444"
     extra_hosts:
