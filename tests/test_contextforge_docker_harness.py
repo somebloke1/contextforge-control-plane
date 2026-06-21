@@ -770,7 +770,8 @@ print(json.dumps(outputs))
         self.assertIn('source = Path("/config/pi/models.json")', bootstrap)
         self.assertIn('provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]', bootstrap)
         self.assertIn('provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]', bootstrap)
-        self.assertIn('provider["compat"]["openRouterRouting"]["only"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]', bootstrap)
+        self.assertIn('os.environ.get("OPENROUTER_PROVIDER_ROUTES", "")', bootstrap)
+        self.assertIn('provider["compat"].pop("openRouterRouting", None)', bootstrap)
         self.assertIn("Refusing unsafe CONTEXTFORGE_PI_SHIM_INSTALL_DIR", bootstrap)
         self.assertNotIn("/home/dgk/.pi", dockerfile + wrapper + bootstrap)
 
@@ -785,6 +786,7 @@ print(json.dumps(outputs))
         self.assertIn("OPENROUTER_API_KEY=replace-with-openrouter-secret", env_example)
         self.assertIn("CONTEXTFORGE_TEST_MODEL=google/gemini-2.5-flash-lite", env_example)
         self.assertIn("CONTEXTFORGE_TEST_PROVIDER_ROUTE=google-ai-studio", env_example)
+        self.assertIn("OPENROUTER_PROVIDER_ROUTES=google-ai-studio", env_example)
         self.assertIn("OPENROUTER_STICKY_KEY=contextforge-semantic-test", env_example)
         self.assertIn("OPENROUTER_STICKY_EPOCH_SECONDS=7200", env_example)
 
@@ -813,7 +815,7 @@ print(json.dumps(outputs))
             opencode_renderer,
         )
         self.assertIn(
-            'route = os.environ.get("OPENROUTER_PROVIDER_ROUTE", "google-ai-studio")',
+            'os.environ.get("OPENROUTER_PROVIDER_ROUTES", "")',
             opencode_renderer,
         )
         self.assertIn(
@@ -821,12 +823,52 @@ print(json.dumps(outputs))
             opencode_renderer,
         )
         self.assertNotIn("setCacheKey", opencode_renderer)
-        self.assertIn('"only": [route]', opencode_renderer)
-        self.assertIn('"order": [route]', opencode_renderer)
+        self.assertIn('"only": routes', opencode_renderer)
+        self.assertIn('"order": routes', opencode_renderer)
         self.assertIn('"allow_fallbacks": False', opencode_renderer)
         self.assertIn('"x-session-id": effective_sticky_key()', opencode_renderer)
         self.assertIn('data["openrouter"] = {"type": "api", "key": os.environ["OPENROUTER_API_KEY"]}', opencode_renderer)
         self.assertIn("target.chmod(0o600)", opencode_renderer)
+
+    def test_semantic_model_profiles_are_provider_abstract_and_run_scoped(self) -> None:
+        profiles_doc = json.loads((ROOT / "docker/client-harness/semantic-model-profiles.json").read_text(encoding="utf-8"))
+        runner = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py").read_text(encoding="utf-8")
+        models = {profile["model"]: profile for profile in profiles_doc["profiles"]}
+
+        self.assertEqual("per_test_run", profiles_doc["selection_scope"])
+        self.assertEqual("random", profiles_doc["default_selection_mode"])
+        self.assertIn("google/gemini-2.5-flash-lite", models)
+        self.assertIn("google/gemma-4-26b-a4b-it", models)
+        self.assertIn("nvidia/nemotron-3-super-120b-a12b:free", models)
+        self.assertIn("xiaomi/mimo-v2.5", models)
+        self.assertIn("openrouter/owl-alpha", models)
+        self.assertIn("qwen/qwen3-coder-next", models)
+        self.assertIn("tencent/hy3-preview", models)
+        self.assertIn("deepseek/deepseek-v4-flash", models)
+        self.assertNotIn("google/gemini-2.5-flash", models)
+        self.assertNotIn("google/gemini-2.5-pro", models)
+        self.assertNotIn("qwen3.6-a3b", models)
+        self.assertEqual(["google-ai-studio"], models["google/gemini-2.5-flash-lite"]["route_preferences"])
+        self.assertEqual([], models["qwen/qwen3-coder-next"]["route_preferences"])
+        for profile in profiles_doc["profiles"]:
+            self.assertIn("provider_kind", profile)
+            self.assertIn("api_key_env", profile)
+            self.assertIn("base_url_env", profile)
+            self.assertGreaterEqual(profile["context_window"], 262144)
+            self.assertIsInstance(profile["route_preferences"], list)
+
+        self.assertIn("--semantic-model-profile", runner)
+        self.assertIn('if selector == "random"', runner)
+        self.assertIn("random.choices", runner)
+        self.assertIn("MIN_SEMANTIC_CONTEXT_WINDOW = 262144", runner)
+        self.assertIn("profile_context_window(profile) >= MIN_SEMANTIC_CONTEXT_WINDOW", runner)
+        self.assertIn("route_preferences(profile)", runner)
+        self.assertIn('env["OPENROUTER_PROVIDER_ROUTE"] = ""', runner)
+        self.assertIn('"selection_scope": "per_test_run"', runner)
+        self.assertIn('"minimum_context_window"', runner)
+        self.assertIn('"api_key_present"', runner)
+        self.assertIn('launch_command.extend(["-e", key])', runner)
+        self.assertNotIn('launch_command.extend(["-e", f"{key}={os.environ[key]}"])', runner)
 
     def test_opencode_renderer_normalizes_accidental_home_marker_in_model_env(self) -> None:
         renderer_path = ROOT / "docker/client-harness/opencode/render-config.py"
@@ -1364,7 +1406,8 @@ print(json.dumps(outputs))
         skill_line_wrapped = " ".join(skill.split())
         method_line_wrapped = " ".join(method.split())
 
-        self.assertIn("Determine the configured provider/model first", skill_line_wrapped)
+        self.assertIn("Determine the selected provider/model profile first", skill_line_wrapped)
+        self.assertIn("Randomize profiles per test run, not per inference", skill_line_wrapped)
         self.assertIn("Only run local-model/GPU stewardship checks", skill_line_wrapped)
         self.assertIn("Only check local model servers, `nvidia-smi`, or `ollama ps`", method_line_wrapped)
         self.assertIn("when that profile is actually hosted by the local model stack", method_line_wrapped)

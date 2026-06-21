@@ -28,10 +28,14 @@ it directly from `env/semantic-model.env.example`:
 scripts/make-semantic-model-env.sh
 ```
 
-The default semantic-test profile uses OpenRouter with
-`google/gemini-2.5-flash-lite` routed through `google-ai-studio`. The only
-required secret for that profile is `OPENROUTER_API_KEY`. The generated local
-env file is written with mode `0600` semantics through `umask 077`.
+Semantic-test runs choose one provider-agnostic model profile per run from
+`semantic-model-profiles.json` unless `--semantic-model-profile env` or a
+specific profile id is supplied. Profiles can name any supported provider kind,
+model id, provider-specific key env, base URL env, client support set, and
+route-preference list. The current profile pool is OpenRouter-backed and uses
+`OPENROUTER_API_KEY`; Google profiles prefer `google-ai-studio`, while empty
+route lists leave routing to OpenRouter. The generated local env file is
+written with mode `0600` semantics through `umask 077`.
 
 `OPENROUTER_STICKY_KEY` is a non-secret cache-affinity key. It is passed as the
 OpenRouter `x-session-id` header where the client config surface supports model
@@ -88,27 +92,29 @@ This validates that all five client commands launch.
 
 ## Semantic Model Probe
 
-Pi and OpenCode semantic-test paths read their provider/model defaults from
-`env/semantic-model.env`:
+Pi and OpenCode semantic-test paths read provider/model defaults and available
+provider secrets from `env/semantic-model.env`:
 
 ```sh
 scripts/probe-semantic-model.sh
 ```
 
-By default the containers reach OpenRouter through:
+By default the env file can reach OpenRouter through:
 
 ```text
 https://openrouter.ai/api/v1
 ```
 
-and use model id:
+and begins with model id:
 
 ```text
 google/gemini-2.5-flash-lite
 ```
 
-This probe only checks endpoint/model visibility. Agent-level response probes
-are run with:
+Each comprehensive runner invocation records the selected semantic profile in
+the evidence summary. Random profile selection is per test run, not per
+inference, so one transcript has a stable model identity. This probe only
+checks endpoint/model visibility. Agent-level response probes are run with:
 
 ```sh
 scripts/smoke-agents.sh
