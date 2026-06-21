@@ -578,11 +578,8 @@
           "type": "string",
           "enum": [
             "not_required",
-            "required",
-            "acknowledged",
-            "pending_reload",
-            "reload_observed",
-            "reload_acknowledged",
+            "reload_required",
+            "tools_registered_observed",
             "unknown"
           ]
         },

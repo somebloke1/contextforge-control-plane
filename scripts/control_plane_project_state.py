@@ -85,6 +85,16 @@ CLIENTS_REQUIRING_PROJECT_RELOAD = frozenset({"codex", "gemini", "opencode", "pi
 PROJECT_SCOPED_INSTANTIATION_CLASSES = frozenset({"instance_per_project", "project_scoped_shared_backend"})
 PROVISION_STATUSES = frozenset({"none", "pending", "created", "degraded", "failed", "removed", "verified"})
 SERVICE_LIFECYCLE_ACTIVATIONS = frozenset({"project_scoped_service_provision", "shared_contextforge_service"})
+RELOAD_REQUIRED_LEGACY_STATUSES = frozenset(
+    {
+        "required",
+        "pending_reload",
+        "reload_observed",
+        "acknowledged",
+        "reload_acknowledged",
+        "reload_required",
+    }
+)
 
 
 class ProjectStateError(Exception):
@@ -572,9 +582,7 @@ def _normalize_client_state_record(
     validation_status = str(record.get("validation_status") or fallback.get("validation_status") or "not_started")
     if validation_status not in {"not_started", "pending", "installed", "passed", "presumed_working", "skipped", "mixed", "blocked"}:
         validation_status = "pending"
-    reload_status = str(record.get("reload_status") or fallback.get("reload_status") or "unknown")
-    if reload_status not in {"not_required", "required", "acknowledged", "pending_reload", "reload_observed", "reload_acknowledged", "unknown"}:
-        reload_status = "unknown"
+    reload_status = _canonical_reload_status(str(record.get("reload_status") or fallback.get("reload_status") or "unknown"))
     return {
         "client_type": client_type,
         "status": status,
@@ -628,6 +636,16 @@ def _aggregate_client_validation_status(statuses: list[str]) -> str:
     return "mixed"
 
 
+def _canonical_reload_status(value: str) -> str:
+    if value == "not_required":
+        return "not_required"
+    if value == "tools_registered_observed":
+        return "tools_registered_observed"
+    if value in RELOAD_REQUIRED_LEGACY_STATUSES:
+        return "reload_required"
+    return "unknown"
+
+
 def _client_lifecycle_status_from_validation(validation_status: str) -> str:
     if validation_status == "passed":
         return "verified"
@@ -643,17 +661,24 @@ def _client_lifecycle_status_from_validation(validation_status: str) -> str:
 def _client_reload_status_from_job(client_type: str, job: dict[str, Any]) -> str:
     if client_type not in CLIENTS_REQUIRING_PROJECT_RELOAD:
         return "not_required"
+    validation_records = job.get("validation_records") if isinstance(job.get("validation_records"), dict) else {}
+    if any(
+        isinstance(record, dict)
+        and str(record.get("status") or "") in {"passed", "verified"}
+        and record.get("target_client_visible") is True
+        for record in validation_records.values()
+    ):
+        return "tools_registered_observed"
     fsm = job.get("x_client_reload_fsm") if isinstance(job.get("x_client_reload_fsm"), dict) else {}
     if str(fsm.get("client_type") or "") == client_type:
         state = str(fsm.get("state") or "")
-        if state in {"pending_reload", "reload_observed", "reload_acknowledged"}:
-            return state
-    ack = job.get("x_client_reload_ack") if isinstance(job.get("x_client_reload_ack"), dict) else {}
-    if str(ack.get("client_type") or "") == client_type and bool(ack.get("acknowledged_at")):
-        return "reload_acknowledged"
+        if state == "tools_registered_observed" and bool(fsm.get("observed_at") or fsm.get("proof_ref")):
+            return "tools_registered_observed"
+        if state:
+            return _canonical_reload_status(state)
     if job.get("status") in {"verified", "presumed_working"}:
         return "unknown"
-    return "pending_reload"
+    return "reload_required"
 
 
 def _client_lifecycle_status_from_job(job: dict[str, Any], *, validation_status: str, reload_status: str) -> str:
@@ -663,12 +688,12 @@ def _client_lifecycle_status_from_job(job: dict[str, Any], *, validation_status:
         return "verified"
     if job_status == "presumed_working" or validation_status == "presumed_working":
         return "presumed_working"
+    if reload_status == "reload_required":
+        return "reload_required"
     if job_status == "installed" or validation_status == "installed":
         return "installed"
     if job_status in {"failed", "fresh_approval_required", "manual_recovery"} or recovery_state in {"manual_recovery", "fresh_approval_required"}:
         return "blocked"
-    if reload_status in {"required", "pending_reload", "reload_observed"}:
-        return "reload_required"
     return "validation_pending"
 
 
@@ -1618,7 +1643,7 @@ def _activation_job_record(
         result["x_client_reload_fsm"] = json.loads(json.dumps(record["x_client_reload_fsm"]))
     elif target_client in CLIENTS_REQUIRING_PROJECT_RELOAD and status in {"applied_validation_choice_pending", "validation_pending"}:
         result["x_client_reload_fsm"] = {
-            "state": "pending_reload",
+            "state": "reload_required",
             "client_type": target_client,
             "job_id": job_id,
             "plan_id": result["plan_id"],

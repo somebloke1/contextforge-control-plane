@@ -276,6 +276,17 @@ Installation completion contract:
 - The assistant stops after reporting the installed/reload-required result.
   Stop there.
 
+Reload state is a three-value contract, not a boolean:
+
+- `not_required`: no project-init reload is pending for this client.
+- `reload_required`: installation applied, but the current target-client session
+  has not reloaded and installed tools must not be claimed callable. The user
+  is told clearly that a reload or new session is required, then reminded only
+  when showing intent to use a reload-dependent tool.
+- `tools_registered_observed`: post-reload or new-session target-client
+  readback shows the installed tools. Only this state can support claims that
+  the tools are callable. No user acknowledgement is required or recorded.
+
 Authority precedence:
 
 - ContextForge catalog/descriptors: service identity authority.

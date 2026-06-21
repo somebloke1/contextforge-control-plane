@@ -1277,7 +1277,7 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
             ],
         }
     reload_requirement = client_reload_requirement(client_type, event="project_activation_apply")
-    if reload_requirement and reload_requirement.get("blocks_validation_until_done") and not _job_reload_acknowledged(job, reload_requirement):
+    if reload_requirement and reload_requirement.get("blocks_validation_until_done") and not _job_tools_registered_observed(job):
         return {
             "status": "client_reload_required",
             "resume_reason": "project activation was applied, and this target client must reload before installed tools register",
@@ -1290,7 +1290,7 @@ def pending_validation_resume(*, project_root: str | Path, client_type: str = "c
                 "do not mutate user-global config or trust",
             ],
         }
-    if _job_reload_acknowledged(job, reload_requirement or {}):
+    if _job_tools_registered_observed(job):
         return None
     return {
         "status": "installed_reload_required",
@@ -1314,8 +1314,8 @@ def record_project_init_client_reload(
 ) -> dict[str, Any]:
     if validation_mode is not None:
         raise ProjectInitHelperError(
-            "project-init reload acknowledgement is install-only; "
-            "do not request post-install validation or service probing from reload acknowledgement"
+            "project-init reload reporting is install-only and non-authoritative; "
+            "do not request post-install validation or service probing from reload reports"
         )
     root = project_state.validate_project_root(project_root, require_workspace=True)
     state, job, selected = _pending_validation_state_job(root, client_type=client_type)
@@ -1328,67 +1328,23 @@ def record_project_init_client_reload(
             "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
         }
         return result
-    updated_job = json.loads(json.dumps(job))
-    acknowledged_at = now_timestamp()
-    updated_job["x_client_reload_ack"] = {
-        "client_type": client_type,
-        "command": reload_requirement.get("command"),
-        "acknowledged_at": acknowledged_at,
-        "acknowledged_by": "control_plane_project_init_helper",
-    }
-    prior_fsm = job.get("x_client_reload_fsm") if isinstance(job.get("x_client_reload_fsm"), Mapping) else {}
-    updated_job["x_client_reload_fsm"] = {
-        "state": "reload_acknowledged",
-        "previous_state": str(prior_fsm.get("state") or "pending_reload"),
-        "client_type": client_type,
-        "job_id": str(updated_job.get("job_id") or ""),
-        "plan_id": str(updated_job.get("plan_id") or ""),
-        "command": reload_requirement.get("command"),
-        "local_client_config_digest": updated_job.get("local_client_config_digest"),
-        "acknowledged_at": acknowledged_at,
-        "acknowledged_by": "control_plane_project_init_helper",
-    }
-    next_state = json.loads(json.dumps(state))
-    next_state["project_init"]["activation_jobs"][str(updated_job["job_id"])] = updated_job
-    client_state = dict(project_state.project_init_client_state(next_state, client_type) or {})
-    client_state.update(
-        {
-            "client_type": client_type,
-            "status": "installed",
-            "current_job_id": str(updated_job["job_id"]),
-            "selected_service_ids": [str(item) for item in updated_job.get("selected_service_ids") or [] if item],
-            "selected_service_bindings": [str(item) for item in updated_job.get("selected_service_bindings") or [] if item],
-            "validation_status": "installed",
-            "reload_status": "reload_acknowledged",
-            "updated_at": acknowledged_at,
-            "last_plan_id": updated_job.get("plan_id"),
-            "local_client_config_digest": updated_job.get("local_client_config_digest"),
-        }
-    )
-    if not client_state.get("activation_surface"):
-        if client_type == "codex":
-            client_state["activation_surface"] = ".codex/config.toml"
-        elif client_type == "gemini":
-            client_state["activation_surface"] = ".gemini/settings.json"
-        elif client_type == "opencode":
-            client_state["activation_surface"] = "opencode.json"
-        elif client_type == "pi":
-            client_state["activation_surface"] = "contextforge-global-shim"
-    next_state["project_init"].setdefault("client_states", {})[client_type] = client_state
     result = {
-        "status": "client_reload_recorded_dry_run" if dry_run else "client_reload_recorded",
+        "status": "client_reload_report_ignored",
         "client_type": client_type,
-        "current_job": _job_resume_summary(updated_job, selected, selected_bindings=_job_selected_service_bindings(updated_job)),
+        "current_job": _job_resume_summary(job, selected, selected_bindings=selected_bindings),
+        "reload_state": "reload_required",
+        "message": (
+            "Reload reports are not recorded as proof. The project remains at "
+            "reload_required until a post-reload target-client tool readback proves the tools registered."
+        ),
         "non_actions": [
             _validation_not_recorded_label(client_type),
+            "no reload acknowledgement state write",
             "no project-local client config write",
             _no_user_global_mutation_label(client_type),
             "no ContextForge registry or catalog mutation",
         ],
     }
-    if not dry_run:
-        written = project_state.write_state_atomic(root, next_state, updated_by="control_plane_project_init_helper")
-        result["state_revision"] = written["meta"]["revision"]
     return result
 
 
@@ -1859,20 +1815,16 @@ def _job_selected_service_bindings(job: Mapping[str, Any]) -> list[str]:
     return [str(binding_id) for binding_id in job.get("selected_service_bindings") or [] if binding_id]
 
 
-def _job_reload_acknowledged(job: Mapping[str, Any], reload_requirement: Mapping[str, Any]) -> bool:
+def _job_tools_registered_observed(job: Mapping[str, Any]) -> bool:
     fsm = job.get("x_client_reload_fsm") if isinstance(job.get("x_client_reload_fsm"), Mapping) else {}
-    if (
-        str(fsm.get("state") or "") == "reload_acknowledged"
-        and str(fsm.get("client_type") or "") == str(reload_requirement.get("client_type") or "")
-        and str(fsm.get("command") or "") == str(reload_requirement.get("command") or "")
-        and bool(fsm.get("acknowledged_at"))
-    ):
+    if str(fsm.get("state") or "") == "tools_registered_observed" and bool(fsm.get("observed_at") or fsm.get("proof_ref")):
         return True
-    ack = job.get("x_client_reload_ack") if isinstance(job.get("x_client_reload_ack"), Mapping) else {}
-    return (
-        str(ack.get("client_type") or "") == str(reload_requirement.get("client_type") or "")
-        and str(ack.get("command") or "") == str(reload_requirement.get("command") or "")
-        and bool(ack.get("acknowledged_at"))
+    validation_records = job.get("validation_records") if isinstance(job.get("validation_records"), Mapping) else {}
+    return any(
+        isinstance(record, Mapping)
+        and str(record.get("status") or "") in {"passed", "verified"}
+        and record.get("target_client_visible") is True
+        for record in validation_records.values()
     )
 
 
@@ -1886,7 +1838,6 @@ def _job_resume_summary(job: Mapping[str, Any], selected_service_ids: Sequence[s
         "selected_service_ids": list(selected_service_ids),
         "selected_service_bindings": list(selected_bindings if selected_bindings is not None else _job_selected_service_bindings(job)),
         "local_client_config_digest": job.get("local_client_config_digest"),
-        "client_reload_acknowledged": bool(job.get("x_client_reload_ack")),
         "client_reload_fsm": dict(job.get("x_client_reload_fsm") or {}) if isinstance(job.get("x_client_reload_fsm"), Mapping) else None,
     }
 

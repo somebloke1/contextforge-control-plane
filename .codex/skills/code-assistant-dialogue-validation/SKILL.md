@@ -118,6 +118,12 @@ for evaluating whether Pi/OpenCode behaved naturally, whether prompts were too
 coached, whether hidden instructions leaked, or whether the interaction should
 pass.
 
+For semantic harnesses that split the tested assistant from the evaluator,
+`gpt-5.4-mini` is acceptable for the tested assistant role when that is the
+client/model under test or a cost-bounded dialogue probe. The evaluator role is
+not a mini-model role: use `gpt-5.5` for pass/fail semantic judgment, narrative
+quality assessment, overclaim detection, and requirement-gap analysis.
+
 Expect raw CLI/JSON streams to become large. Preserve the raw stream as an
 evidence artifact, then use targeted readbacks to extract live values such as
 challenge ids, plan digests, and job ids. Do not truncate

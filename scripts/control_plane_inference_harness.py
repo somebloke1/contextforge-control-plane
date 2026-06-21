@@ -117,20 +117,29 @@ class CodexExecRunner:
         self,
         command_prefix: tuple[str, ...] = ("codex", "exec", "--ephemeral", "--sandbox", "read-only"),
         evaluator_output_schema_path: Path = DEFAULT_EVALUATOR_OUTPUT_SCHEMA_PATH,
+        role_model_overrides: dict[str, str] | None = None,
     ) -> None:
         self.command_prefix = command_prefix
         self.evaluator_output_schema_path = evaluator_output_schema_path
+        self.role_model_overrides = dict(role_model_overrides or {})
 
     def run(self, request: HeadlessCommandRequest) -> HeadlessCommandResult:
         with tempfile.TemporaryDirectory(prefix="cfcp-inference-") as temp_dir:
             output_path = Path(temp_dir) / "last-message.txt"
             command_parts = [
                 *self.command_prefix,
+            ]
+            role_model = self.role_model_overrides.get(request.role)
+            if role_model:
+                command_parts.extend(["--model", role_model])
+            command_parts.extend(
+                [
                 "--cd",
                 str(REPO_ROOT),
                 "--output-last-message",
                 str(output_path),
-            ]
+                ]
+            )
             if request.role == "evaluator":
                 schema_path = self._write_evaluator_output_schema(request.output_schema)
                 command_parts.extend(["--output-schema", str(schema_path)])
@@ -283,15 +292,23 @@ def run_inference_cases(
     *,
     runner: HeadlessCommandRunner | None = None,
     codex_model: str | None = None,
+    tested_codex_model: str | None = None,
+    evaluator_codex_model: str | None = None,
     run_id: str = DEFAULT_RUN_ID,
     timestamp: str = STAMP,
     model_designation: str = DEFAULT_MODEL_DESIGNATION,
 ) -> dict[str, Any]:
     validate_inference_cases(cases, requirements=requirements)
     command_prefix = ("codex", "exec", "--ephemeral", "--sandbox", "read-only")
+    role_model_overrides: dict[str, str] = {}
     if codex_model:
-        command_prefix = (*command_prefix, "--model", codex_model)
-    actual_runner = runner if runner is not None else CodexExecRunner(command_prefix=command_prefix)
+        role_model_overrides["tested_assistant"] = codex_model
+        role_model_overrides["evaluator"] = codex_model
+    if tested_codex_model:
+        role_model_overrides["tested_assistant"] = tested_codex_model
+    if evaluator_codex_model:
+        role_model_overrides["evaluator"] = evaluator_codex_model
+    actual_runner = runner if runner is not None else CodexExecRunner(command_prefix=command_prefix, role_model_overrides=role_model_overrides)
     requirement_map = {item["requirement_id"]: item for item in requirements["requirements"]}
     results = [
         _run_case(
@@ -545,7 +562,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--codex-model",
         default=None,
-        help="Explicit model argument passed to codex exec with --model for live tested-assistant/evaluator runs.",
+        help="Compatibility model argument passed to codex exec with --model for both live tested-assistant and evaluator runs.",
+    )
+    parser.add_argument(
+        "--tested-codex-model",
+        default=None,
+        help="Explicit model argument passed to codex exec with --model for live tested-assistant runs.",
+    )
+    parser.add_argument(
+        "--evaluator-codex-model",
+        default=None,
+        help="Explicit model argument passed to codex exec with --model for live evaluator runs.",
     )
     args = parser.parse_args(argv)
 
@@ -559,6 +586,8 @@ def main(argv: list[str] | None = None) -> int:
         requirements,
         cases,
         codex_model=args.codex_model,
+        tested_codex_model=args.tested_codex_model,
+        evaluator_codex_model=args.evaluator_codex_model,
         run_id=args.run_id,
         timestamp=args.timestamp,
         model_designation=args.model_designation,
