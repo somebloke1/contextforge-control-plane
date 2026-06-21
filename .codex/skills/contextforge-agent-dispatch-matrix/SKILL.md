@@ -5,76 +5,82 @@ description: Symbolic advisory model-selection and dispatch-card policy for Cont
 
 # ContextForge Agent Dispatch Matrix
 
-Read `../SHARED_SYMBOL_SCHEME.md` for shared notation. This skill owns model
-policy and dispatch-card shape; it does not replace SuperLoop controller
-authority, worker leases, GitHub Project coordination, worktree discipline, or
-final acceptance.
+Read `../SHARED_SYMBOL_SCHEME.md` for shared notation. This skill owns `M`
+policy and `DC`; it does not replace `SO`, `L`, `GP`, worktree discipline, goal
+maintenance, or controller-owned acceptance.
+
+## Inner Scheme
+
+- `PE` = policy entitlement check: user/developer/system instructions + live
+  tool availability + spawn constraints + explicit approvals.
+- `SE` = Spark-eligible class.
+- `CO` = controller-only decision class.
+- `FC` = fork constraint.
+- `MC` = model choice.
 
 ## Authority
 
 ```text
-DM owns {model_choice, dispatch_card_schema, spark_boundary, fork_rule}
-DM does not own sequencing, runtime entitlement, acceptance, or roadmap claims
+DM owns {MC, DC schema, SE, CO, FC}
+DM ⊥ SO
+DM ∉ runtime entitlement
+PE ⊗ DM → safe MC
+preferred(M) unavailable → strongest_safe_available(M) ∨ keep_local
 ```
 
-Read `references/dispatch-card.md` when a lease needs the full dispatch-card
-schema, Spark/controller-only classes, or examples.
+Read `references/dispatch-card.md` for `DC`, `SE`, `CO`, and examples.
 
 ## Model Rule
 
 ```text
-gpt-5.5 ⇐ architecture ∨ semantic_dialogue_judgment ∨ requirement_refinement
-          ∨ runtime_adjacent ∨ security/trust ∨ cross_slice_risk
-          ∨ final_readiness
+M55 ⇐ architecture ∨ semantic_acceptance ∨ runtime_adjacent
+      ∨ security/trust ∨ cross_slice_risk ∨ final_readiness
 
-gpt-5.4-mini ⇐ routine_implementation ∨ moderate_source_tests
-               ∨ config_docs_mapping ∨ repetitive_verification
+M54m ⇐ routine_implementation ∨ moderate_source_tests
+       ∨ config_docs_mapping ∨ repetitive_verification
 
-gpt-5.3-codex-spark ⇐ extraction ∨ source_mapping ∨ checklist_verification
-                      ∨ metadata_audit ∨ tiny_mechanical_patch
+Sp ⇐ extraction ∨ source_mapping ∨ checklist_verification
+     ∨ metadata_audit ∨ tiny_mechanical_patch
 ```
 
-Spark may extract evidence, map files, identify transcript fragments, or make
-tiny mechanical patches. Spark must not own multi-turn client dialogue
-evaluation, target-client readiness judgment, new acceptance criteria,
-requirement refinement decisions, final readiness, security/trust decisions, or
-runtime/global/client mutation.
-
-Practical axiom: Spark is optimized for code and textual artifacts, not
-social/inferential interaction with other agents. Do not assign Spark to steer,
-interview, evaluate, or repair live Pi/OpenCode/Codex/Gemini behavior. Use it
-only on the artifacts those sessions produce, under a controller or semantic
-evaluator that owns the judgment.
-
-Evaluation axiom: deterministic tools may check structure but not meaning for
-model-dependent outputs. A work unit is not Spark-eligible if its pass/fail,
-score, readiness, or acceptance depends on matched strings, regexes, keyword
-searches, or string parsing over free-form generated prose. The only permitted
-deterministic exception is declared structured model output such as JSON:
-parseability, schema shape, required fields, and enum/value structure may be
-checked by code, but must be paired with non-deterministic evaluator review.
+```text
+Sp ✗ {
+  architecture,
+  target_client_validation_judgment,
+  final_readiness,
+  runtime/service/systemd/Docker/global-client mutation,
+  ContextForge registry mutation,
+  governance ledger mutation,
+  PR merge/closure,
+  security/auth/trust/remote-exposure decisions
+}
+```
 
 ## Fork Rule
 
 ```text
 fork_context=true ⇔ child inherits same {model, agent_type, reasoning_effort}
-change({model, agent_type, reasoning_effort}) → fork_context=false + explicit context
-Spark default → fork_context=false unless parent is already Spark with no setting change
+Δ{model, agent_type, reasoning_effort} → fork_context=false + explicit context
+Sp default → fork_context=false unless parent already Sp and Δsettings=none
 ```
 
 ## Dispatch Rule
 
 ```text
-SO selects candidate task → classify → dispatch card
+SO selects candidate T → DM(T) → DC
 
-If task is semantic-ambiguous, approval-gated, destructive, global, runtime
-mutating, or the immediate blocker for the controller's next useful step:
-  keep local unless the user explicitly authorizes another workflow.
+If semantic_ambiguous(T) ∨ approval_gated(T) ∨ immediate_blocker(T):
+  keep_local(SO) unless user explicitly authorizes alternate workflow.
 ```
 
 ## Controller Integration
 
-Workers and reviewers return evidence. The controller checks model choice,
-fork rule, task class, forbidden actions, and report evidence before accepting
-or integrating output. A fast response is not a substitute for the correct
-model lane.
+```text
+SO records DC fields in L, including selected_model
+WK returns DC fields in report, including selected_model
+SO checks {selected_model, MC, FC, SE/CO} coherence before ✓
+```
+
+Fidelity: symbolic form preserves model policy, advisory authority, fork
+constraints, dispatch-card observability, and Spark boundaries. Losses: prose
+examples moved to `references/dispatch-card.md`.

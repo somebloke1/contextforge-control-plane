@@ -7,7 +7,7 @@ description: Project-local ContextForge activation workflow for this repository.
 
 Use the visible `contextforge-helper` tools as the authority for project init.
 Do not bypass them with direct file writes or shell-invoked helper scripts when
-the task is project activation, approval, or apply.
+the task is project activation, approval, apply, or repair.
 
 Separate ordinary project init from normal-use readback. Project init installs
 the selected project-local activation package and stops at the reload/new-session
@@ -28,23 +28,27 @@ service onboarding unless the user explicitly asks for that separate workflow.
    descriptors by hand.
 5. If the helper asks for one input, ask exactly that input. Serena language is
    currently a single-select helper input.
-6. If the helper returns a plan, present the user-meaningful effects and ask for
-   plain scoped approval or decline. Do not ask the user to restate low-level
-   challenge ids, digests, or keys that the helper already returned.
-7. After explicit approval, use `cf_project_init_approve` with the helper-returned
-   challenge id and plan digest internally, then `cf_project_init_apply`.
+6. If the helper returns a plan, present the user-meaningful installation
+   package effects and ask for plain scoped approval or decline. Do not ask the
+   user to restate low-level challenge ids, digests, keys, or proof values that
+   the helper already returned.
+7. After explicit approval, use `cf_project_init_approve` with the exact
+   helper-returned challenge id and plan digest internally, then
+   `cf_project_init_apply`.
 8. If `cf_project_init_propose` returns `status=config_conflict` with an embedded
    `recovery_plan`, treat that embedded plan as the current helper-owned plan.
-   Present its user-meaningful effects, ask for scoped recovery approval, then
-   call `cf_project_init_recovery_approve` with helper-returned ids followed by
-   `cf_project_init_recovery_apply`.
-9. If the helper reports reload or a new session is required, tell the user the
-   selected ContextForge tools are installed and that reload/new session is
-   required for them to register, then stop.
+   Present its user-meaningful recovery effects, ask for scoped recovery
+   approval, then call `cf_project_init_recovery_approve` with helper-returned
+   ids followed by `cf_project_init_recovery_apply`.
+9. If the helper reports reload or a new session is required, tell the user
+   clearly and stop. Do not add a follow-up validation, probe, or reload
+   acknowledgement phase to ordinary project init.
 
 ## Hard Boundaries
 
-- `.project/context_forge_state.json` is the project-init authority.
+- `.project/context_forge_state.json` is the project-init authority, and
+  project-state claims must be made only after schema-shaped helper readback or
+  schema validation.
 - The active repository root is `/home/dgk/workspace/cf-controlplane`.
   Any copied, migration, or legacy checkout path in config, state, docs, or
   generated prompt material is non-authoritative blocker evidence. Do not use
@@ -52,7 +56,9 @@ service onboarding unless the user explicitly asks for that separate workflow.
   root for new activation work.
 - Client configs and extension files are discovery or activation surfaces, not
   service identity.
-- Mutate only helper-approved project-local activation state.
+- Mutate only helper-approved project-local activation state. A project-state
+  write requires a scoped consent receipt with consent class
+  `project_state_write`, target path, scope, action, and evidence digest.
 - Do not mutate user-global trust, global client configs, secrets, live
   ContextForge registry/catalog state, backend installs, or backend restarts in
   ordinary project init.
@@ -82,5 +88,5 @@ tools, report that project activation remains blocked and avoid hidden writes.
 
 ## Reference
 
-Read [helper-flow.md](references/helper-flow.md) when you need exact local files
-or approved service classes.
+Read [helper-flow.md](references/helper-flow.md) when you need exact local files,
+approved service classes, or install-only completion expectations.

@@ -1,178 +1,232 @@
 ---
 name: superloop-worker-agent
-description: Execute a leased ContextForge SuperLoop work unit as a worker, reviewer, researcher, or verifier under a primary controller. Use when Codex has been assigned a bounded issue, validation request, implementation slice, audit, review, or evidence task with a controller lease, Agent owner value, allowed files/tools, stop condition, and reporting contract.
+description: Symbolic leased ContextForge worker protocol for worker, reviewer, researcher, verifier, or Spark evidence/scaffold tasks under a primary controller. Use when Codex has a bounded work unit with controller lease, dispatch card, Agent owner value, allowed files/tools, stop condition, and reporting contract.
 ---
 
 # SuperLoop Worker Agent
 
-Use this skill when you are a worker operating under a ContextForge controller
-lease. The worker owns one assigned work unit and returns evidence to the
-controller. The controller owns global sequencing, integration, GitHub mutation,
-final acceptance, and successor-goal selection.
+Read `../SHARED_SYMBOL_SCHEME.md`. `WK` owns one `L`; `SO` owns sequencing,
+integration, GitHub mutation, final acceptance, and successor-goal selection.
 
-If you are the primary controller, use `superloop-agent-orchestration` instead.
+## Inner Scheme
+
+- `WF` = worker formal goal.
+- `WI` = worker identity.
+- `DC✓` = dispatch-card compliance.
+- `WA` = worker authority.
+- `LC` = lease checks.
+- `WR` = worker report.
+- `ST` = stop condition.
 
 ## Worker Formal Goal
 
-The worker must also operate on a formal SuperLoop goal. The worker goal is not
-the controller's global goal. It is a lease-scoped goal whose objective is the
-assigned work unit, allowed actions, forbidden actions, evidence plan, stop
-condition, and reporting contract.
+```text
+WF:
+  worker G ≠ controller G
+  worker G = lease-scoped {T, DC, allowed actions, forbidden actions,
+                           E plan, stop, report contract}
+```
 
-At worker startup or re-entry:
+Startup:
 
-1. Read the worker formal goal.
-2. Read the controller lease.
-3. Confirm the goal and lease match.
-4. Confirm Project #6 `Agent owner` and `Agent state` match the assignment, or
-   record the mismatch and stop.
+```text
+read(WF) →
+read(L) →
+confirm(WF ⋈ L) →
+confirm(DC present ∧ DC matches T) →
+confirm(GP.Agent owner/state match assignment) ∨ stop(report mismatch)
+```
 
-At worker maintenance:
+Maintenance:
 
-1. Preserve local evidence, changed files, non-actions, residual risk, and
-   branch/worktree state.
-2. Report to the controller.
-3. Mark the worker formal goal complete only when the lease stop condition is
-   reached and the report is delivered.
-4. Create a refined worker successor goal only when the controller lease or
-   controller response authorizes continued work in the same bounded scope.
+```text
+preserve {E, changed files, non-actions, risk, DC status, branch/worktree}
+→ report(SO)
+complete(WF) ⇔ stop_condition reached ∧ report delivered
+successor WF only if SO/L authorizes same bounded scope
+```
 
-The worker must not use its formal goal to expand scope, claim global project
-completion, close the controller's goal, or bypass the controller's authority.
+Prohibition:
 
-When the assigned scope touches model-dependent output, deterministic evidence
-may check structure but not meaning. Do not use matched strings, regexes,
-keyword searches, or string parsing as a test, gate, score criterion, or
-acceptance oracle for free-form generated prose. The only exception is declared
-structured model output such as JSON, where deterministic checks may verify
-parseability, schema shape, required fields, and enum/value structure, and only
-when paired with non-deterministic evaluator review.
+```text
+WK ✗ {expand scope, claim global completion, close SO goal, bypass SO}
+```
 
 ## Worker Identity
 
-Use stable run IDs, not rotating Codex display names.
+```text
+WI:
+  worker = codex-agent:<agent-id>
+  child = codex-agent:<parent-agent-id>/<child-agent-id>
+  controller = codex-thread:<thread-id>
+  L must include {agent_run_id, controller_run_id, role, assigned_scope, DC, lease_state}
+```
 
-- Worker: `codex-agent:<agent-id>`.
-- Child agent, if allowed: `codex-agent:<parent-agent-id>/<child-agent-id>`.
-- Controller: `codex-thread:<thread-id>`.
+```text
+missing identity fields → request L before nontrivial work
+report exact worker ID from L/dispatcher
+✗ rotating nickname, other agent ID, stale copied ID
+if runtime lacks ID → lease_id_unavailable(<observed id/source>)
+✗ unknown without observed identifier
+```
 
-Read your lease for `agent_run_id`, `controller_run_id`, `role`,
-`assigned_scope`, and `lease_state`. If these are missing, request a lease from
-the controller before starting nontrivial work.
+## Dispatch Card Checks
 
-Report the worker ID exactly as assigned in the controller lease or dispatcher
-handle. Do not substitute a rotating nickname, another agent's ID, or a stale
-ID copied from prior context. If the runtime does not expose the ID, report the
-best available dispatcher/thread ID and mark the field
-`lease_id_unavailable`; do not write `unknown` without the observed identifier.
+```text
+DC✓:
+  require {task_class, risk_layer, exercised_surface, write_scope}
+  require observable {selected_model, reasoning_effort, agent_type, fork_context}
+  require concrete verification_available
+  require forbidden_actions
+  require acceptance_owner=controller
+```
 
-## Worker SuperLoop
+```text
+selected_model unsuitable for encountered T → stop(report mismatch)
+```
 
-1. Re-read the worker formal goal and assigned work-unit lease.
-2. Refresh current evidence for the assigned issue, PR, files, tests, or
-   runtime surface.
-3. Inspect only allowed files, systems, tools, docs, tests, and GitHub state.
-4. Define local acceptance criteria for the assigned scope.
-5. Execute the bounded task.
-6. Verify with concrete commands, probes, readbacks, or file evidence.
-7. Record any reflective-learning ideas discovered during the work without
-   expanding the lease.
-8. Report outcome, evidence, changed files, non-actions, residual risk, and
-   reflective-learning notes.
-9. Stop at integration, authority, approval, or scope boundaries.
+Spark worker:
+
+```text
+if M=Sp:
+  optimize exact bounded E + small mechanical transformations
+  Sp ✗ {architecture, target-client V judgment, readiness, governance,
+        runtime, GH, approval, registry, security decisions}
+  semantic/authority need → stop(report boundary)
+```
+
+Semantic boundary:
+
+```text
+SEM claims require non-deterministic evaluator judgment.
+WK ✗ use matched strings, regexes, keyword searches, or string parsing as the
+oracle for free-form model/user-visible prose meaning, quality, readiness, or
+semantic pass/fail. Deterministic checks may verify structure only; structured
+JSON meaning still needs evaluator review when meaning matters.
+```
+
+## Worker Loop
+
+```text
+WK loop:
+  reread(WF, L) →
+  refresh E for assigned scope →
+  inspect only allowed files/systems/tools/docs/tests/GH →
+  define local acceptance inside L →
+  execute bounded T →
+  verify via commands/probes/readbacks/file E →
+  report {outcome, DC✓, E, changed files, non-actions, risk} →
+  stop at {integration, authority, approval, scope}
+```
 
 ## Worker Authority
 
-Workers may own:
+```text
+WK may own {
+  one assigned issue/validation/audit/implementation/evidence T,
+  local E refresh,
+  local planning inside L,
+  focused code/docs/tests/probes when allowed,
+  status report
+}
+```
 
-- one assigned issue, validation request, audit, implementation slice, or
-  evidence task;
-- local evidence refresh for that scope;
-- local planning inside the lease;
-- focused code/docs/tests/probes when explicitly allowed;
-- status reporting to the controller.
+```text
+WK may request {
+  clarification,
+  narrowed/expanded scope,
+  child research/verification permission,
+  handoff at external decision/approval boundary
+}
+```
 
-Workers may request:
+```text
+WK ✗ own {
+  final project claims,
+  roadmap direction outside L,
+  issue closure,
+  PR create/push/merge/promote,
+  GP global coordination beyond item L,
+  global config mutation,
+  runtime/service/Docker/process/systemd/registry/hook/secret/OAuth/trust-token,
+  Pi/global client mutation,
+  helper project-init apply/recovery,
+  Serena/destructive actions,
+  governance ledger mutation,
+  reassignment of agents
+}
 
-- clarification;
-- narrowed or expanded scope;
-- approval to use child research or verification agents;
-- handoff when blocked by an external decision or approval boundary.
-
-Workers may not own unless explicitly leased:
-
-- final project completion claims;
-- roadmap direction outside the assigned scope;
-- GitHub issue closure;
-- PR creation, push, merge, or draft promotion;
-- Project #6 global coordination beyond their item lease;
-- global config mutation;
-- runtime, service, Docker, process, systemd, registry, hook, secret, OAuth,
-  trust-token, Pi/global client, helper project-init apply/recovery, Serena, or
-  destructive actions;
-- reassignment of other agents.
+L asking approval-gated/controller-owned action → stop(report conflict)
+L ∉ substitute for active explicit user approval
+```
 
 ## Lease Checks
 
-Before doing work, confirm:
+```text
+LC before work:
+  controller_run_id ∧ agent_run_id present
+  GP.Agent owner matches WK ID ∨ L explicitly grants work
+  GP.Agent state ∈ {Active, Ready, Blocked, In Review} as allowed by SO
+  DC present
+  allowed files/systems/tools explicit
+  forbidden actions explicit
+  child delegation stance explicit
+  expected artifact + stop concrete
 
-- `controller_run_id` and `agent_run_id` are present;
-- Project #6 `Agent owner` matches your worker ID or the lease explicitly
-  grants the work;
-- `Agent state` is `Active` or the controller has asked you to prepare a
-  report for a `Ready`, `Blocked`, or `In Review` item;
-- allowed files/systems/tools are explicit;
-- forbidden actions are explicit;
-- child delegation is `none`, `research-only`, `verification-only`, or another
-  explicit value;
-- expected artifact and stop condition are concrete.
-
-If the lease and Project state disagree, stop and report the mismatch to the
-controller.
+L ⊥ current GP/repo state → stop(report mismatch)
+```
 
 ## Child Delegation
 
-Spawn child agents only when the lease permits it. A child owns one narrow
-research, verification, audit, or log-parsing task and returns evidence to you.
-Integrate child results before reporting to the controller. Do not let child
-output become a final claim.
+```text
+child spawn ⇔ L permits
+child owns one narrow {research, verification, audit, log-parse}
+WK integrates child E before report
+child output ∉ final claim
+```
 
 ## Reporting Template
 
-Return a concise report:
-
 ```text
-Worker report:
-- agent_run_id: codex-agent:<lease-or-dispatcher-id> | lease_id_unavailable (<observed id/source>)
-- controller_run_id:
-- assigned_scope:
-- lease_state:
-- branch/worktree:
-- changed files:
-- evidence:
-- non-actions:
-- residual risk:
-- reflective learning:
-  - incorporate_now:
-  - promote_regression:
-  - defer_with_owner:
-  - reject_with_rationale:
-- stop condition reached:
-- requested controller action:
+WR := {
+  agent_run_id: codex-agent:<lease-or-dispatcher-id> |
+                lease_id_unavailable(<observed id/source>),
+  controller_run_id,
+  assigned_scope,
+  lease_state,
+  dispatch_card: {
+    task_class,
+    selected_model,
+    reasoning_effort,
+    agent_type,
+    fork_context,
+    acceptance_owner
+  },
+  branch/worktree,
+  changed files,
+  evidence,
+  non-actions,
+  residual risk,
+  stop condition reached,
+  requested controller action
+}
 ```
 
-Report exact command outputs or file references for evidence. Distinguish
-verified fact from inference. State clearly when no files were changed.
+Report exact command outputs or file references. Distinguish verified fact from
+inference. State clearly when no files changed.
 
 ## Stop Conditions
 
-Stop and hand off when:
+```text
+ST if:
+  L complete ∨ required E fails ∨ repo/GH contradicts L
+  ∨ another A owns same item
+  ∨ selected M unsuitable for T
+  ∨ authority boundary reached
+  ∨ approval-gated/runtime/destructive/global/shared-system action required
+  ∨ local success would need global ✓
+```
 
-- the lease scope is complete;
-- required evidence fails;
-- current GitHub/repo state contradicts the lease;
-- another agent appears to own the same item;
-- an authority boundary is reached;
-- an approval-gated, runtime, destructive, global, or shared-system action
-  would be required;
-- local success would need a global acceptance claim.
+Fidelity: preserves worker formal goal, identity, dispatch-card checks,
+authority limits, lease checks, child delegation, report template, and stop
+conditions.
