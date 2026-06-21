@@ -37,6 +37,10 @@ and reconciled before 4444 is retired.
   `generated/contextforge-284-4445-post-guidance-readback-20260621.local.json`
   and
   `generated/contextforge-284-docker-migration-plan-post-guidance-20260621.local.json`
+- 4445 Docker upstream reachability probe:
+  `generated/contextforge-284-docker-upstream-reachability-20260621.local.json`
+- 4445 boundary-guard no-op apply proof:
+  `generated/contextforge-284-blocked-apply-guard-20260621.local.json`
 - Token values were used only in memory and were not written to the artifacts.
 - The initial readbacks and dry-runs performed no registry, service, prompt,
   resource, tool, or server mutation. The safe-service apply intentionally
@@ -295,6 +299,34 @@ Host-gateway projections in the Docker migration plan should be treated as
 explicit interim migration projections unless a later architecture decision
 promotes one to durable successor topology.
 
+## Docker Upstream Reachability Guard
+
+The controller added a non-mutating Docker-upstream reachability probe,
+`scripts/probe_contextforge_docker_upstreams.py`, that executes from inside the
+4445 ContextForge container and checks the target URLs from the Docker
+successor migration plan. The live probe found:
+
+- reachable from the 4445 container: `context7`, `mentality`, and
+  `openzeppelin-solidity-contracts`;
+- unreachable from the 4445 container: `exa-search`, `github`, `playwright`,
+  `serena-cf-controlplane-d46fe58a2a20`, `ssh-tmux`, and `web-search`;
+- the host-gateway projected services failed with connection refused from
+  `host.docker.internal:910x`, even though the corresponding host processes are
+  listening on `127.0.0.1:910x`.
+
+That evidence means host-gateway projection is not currently a valid successor
+runtime topology for the remaining host-local services. The next implementation
+slice must either create Docker-reachable sidecar/transceiver services or make
+an explicit, safer host-binding architecture decision before registering those
+services on 4445.
+
+`scripts/apply_contextforge_registry_recreation.py` now guards this boundary:
+services marked approval-blocked in the Docker migration plan are skipped during
+`--apply` unless the controller passes an explicit
+`--boundary-approved-service <slug>` flag. A no-op apply attempt for
+`ssh-tmux` produced zero registry/API calls, did not read env values, and
+recorded `mutation_performed=false`.
+
 ## Controller Disposition
 
 #284 should remain Active or In Review only after explicit controller
@@ -306,6 +338,6 @@ evidence and partial safe-service apply evidence. Because 4444 is scheduled for
 decommissioning, 4445 parity is not optional cleanup; it is the next required
 migration-readiness slice before any claim that the replacement ContextForge
 surface preserves the canonical service and guidance set. Remaining work:
-boundary decisions for credential/session/project-scoped services, guidance
-replay for those services after registration, cleanup of stale dev bootstrap
-residue, and a final parity readback.
+Docker-reachable topology for the remaining credential/session/project-scoped
+services, guidance replay for those services after registration, cleanup of
+stale dev bootstrap residue, and a final parity readback.

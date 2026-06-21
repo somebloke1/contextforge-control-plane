@@ -31,6 +31,10 @@ def write_manifest(root: Path, slug: str, tools: list[str]) -> None:
 
 
 def write_docker_plan(root: Path, slug: str, target_url: str) -> Path:
+    return write_docker_plan_multi(root, [(slug, target_url, True)])
+
+
+def write_docker_plan_multi(root: Path, services: list[tuple[str, str, bool]]) -> Path:
     path = root / "docker-plan.json"
     path.write_text(
         json.dumps(
@@ -42,11 +46,12 @@ def write_docker_plan(root: Path, slug: str, target_url: str) -> Path:
                         "slug": slug,
                         "target_upstream_url": target_url,
                         "locality": "host_gateway_projection",
-                        "approval_state": "blocked_pending_review",
-                        "approval_blocked": True,
+                        "approval_state": "blocked_pending_review" if blocked else "approved_for_test",
+                        "approval_blocked": blocked,
                         "docker_projection_required": True,
                         "unsafe_to_reuse_live_default": True,
                     }
+                    for slug, target_url, blocked in services
                 ],
             }
         ),
@@ -204,13 +209,121 @@ class ApplyRegistryRecreationTests(unittest.TestCase):
             )
             client.tools.append({"id": "tool-existing", "name": "example-tool", "gateway_id": "gateway-existing"})
 
-            result = apply_helper.run(apply=True, manifests_root=root, docker_migration_plan=docker_plan, client=client)
+            result = apply_helper.run(
+                apply=True,
+                manifests_root=root,
+                docker_migration_plan=docker_plan,
+                client=client,
+                boundary_approved_slugs={"mentality"},
+            )
 
         self.assertEqual("updated_from_url_match", result["services"][0]["gateway"]["action"])
         self.assertEqual("created", result["services"][0]["server"]["action"])
         gateway_put = next(body for method, path, body in client.requests if method == "PUT" and path == "/gateways/gateway-existing")
         self.assertEqual("mentality", gateway_put["name"])
         self.assertEqual("http://mentality-transceiver:9201/mcp", gateway_put["url"])
+
+    def test_apply_skips_docker_approval_blocked_services_without_boundary_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, "mentality", ["example-tool"])
+            docker_plan = write_docker_plan(root, "mentality", "http://mentality-transceiver:9201/mcp")
+            client = FakeClient()
+
+            result = apply_helper.run(apply=True, manifests_root=root, docker_migration_plan=docker_plan, client=client)
+
+        self.assertFalse(result["mutation_performed"])
+        self.assertTrue(result["apply_requested"])
+        self.assertEqual([], result["services"])
+        self.assertEqual("mentality", result["skipped_services"][0]["slug"])
+        self.assertEqual("approval_blocked", result["skipped_services"][0]["reason"])
+        self.assertEqual([], client.requests)
+        self.assertIn("no ContextForge API calls", result["non_actions"])
+
+    def test_apply_does_not_login_when_all_requested_services_are_blocked(self) -> None:
+        calls: list[str] = []
+        original = apply_helper.load_target_client
+
+        def fake_load_target_client(base_url: str, env_file: Path):
+            calls.append(base_url)
+            raise AssertionError("target client should not load for a no-op blocked apply")
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                write_manifest(root, "mentality", ["example-tool"])
+                docker_plan = write_docker_plan(root, "mentality", "http://mentality-transceiver:9201/mcp")
+                apply_helper.load_target_client = fake_load_target_client  # type: ignore[assignment]
+
+                result = apply_helper.run(
+                    apply=True,
+                    manifests_root=root,
+                    docker_migration_plan=docker_plan,
+                    base_url="http://127.0.0.1:4445",
+                    env_file=Path("not-read.env"),
+                )
+        finally:
+            apply_helper.load_target_client = original  # type: ignore[assignment]
+
+        self.assertEqual([], calls)
+        self.assertFalse(result["mutation_performed"])
+        self.assertEqual([], result["services"])
+        self.assertEqual("approval_blocked", result["skipped_services"][0]["reason"])
+
+    def test_apply_allows_explicitly_boundary_approved_service(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, "mentality", ["example-tool"])
+            docker_plan = write_docker_plan(root, "mentality", "http://mentality-transceiver:9201/mcp")
+            client = FakeClient()
+
+            result = apply_helper.run(
+                apply=True,
+                manifests_root=root,
+                docker_migration_plan=docker_plan,
+                client=client,
+                boundary_approved_slugs={"mentality"},
+            )
+
+        self.assertEqual("mentality", result["services"][0]["slug"])
+        self.assertEqual([], result["skipped_services"])
+
+    def test_include_helper_services_allows_explicit_helper_backed_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, "github", ["github-search-repositories"])
+            docker_plan = write_docker_plan(root, "github", "http://host.docker.internal:9106/mcp")
+
+            without_helpers = apply_helper.run(
+                apply=False,
+                manifests_root=root,
+                docker_migration_plan=docker_plan,
+                slugs={"github"},
+            )
+            with_helpers = apply_helper.run(
+                apply=False,
+                manifests_root=root,
+                docker_migration_plan=docker_plan,
+                slugs={"github"},
+                include_helper_services=True,
+            )
+
+        self.assertEqual([], without_helpers["services"])
+        self.assertEqual("github", with_helpers["services"][0]["slug"])
+
+    def test_apply_filters_refreshed_tools_to_manifest_expected_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, "mentality", ["expected-tool"])
+            client = FakeClient()
+            client.gateways.append({"id": "gateway-existing", "name": "mentality", "url": "old"})
+            client.tools.append({"id": "tool-expected", "name": "expected-tool", "gateway_id": "gateway-existing"})
+            client.tools.append({"id": "tool-extra", "name": "extra-tool", "gateway_id": "gateway-existing"})
+
+            result = apply_helper.run(apply=True, manifests_root=root, client=client)
+
+        self.assertEqual(["expected-tool"], result["services"][0]["tool_names"])
+        self.assertEqual(1, result["services"][0]["tool_count"])
 
     def test_target_login_prefers_harness_login_endpoint(self) -> None:
         calls: list[str] = []

@@ -151,7 +151,13 @@ work, and do not revive post-install validation to close them.
   project-init guidance helpers exist. The repo-only drift has been reconciled:
   ssh-tmux now records 9 expected tools including
   `ssh-tmux-cleanup-dead-sessions`, and the planner no longer describes
-  target-aware `register_tool_guidance.py` as unsafe due hardcoded IDs.
+  target-aware `register_tool_guidance.py` as unsafe due to hardcoded IDs.
+  A live Docker-container-origin upstream probe now shows that the remaining
+  host-gateway projected services are not reachable from the 4445 ContextForge
+  container because their host processes listen on `127.0.0.1:910x`; the
+  apply helper now skips approval-blocked Docker-plan services during
+  `--apply` unless the controller passes an explicit
+  `--boundary-approved-service <slug>` flag.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
@@ -182,9 +188,10 @@ target is PR/Project hygiene:
   `scripts/plan_contextforge_docker_migration.py` and the targetable dry-run
   path in `scripts/apply_contextforge_registry_recreation.py`: do not apply
   live-surface `127.0.0.1:910x` registry recreation defaults directly to 4445,
-  decide the credential/session/project-scoped service boundaries, replay
-  prompts/resources for those services after registration, clean up transitional
-  Docker bootstrap residue, and require explicit parity reconciliation against
-  the 4444 legacy baseline before replacement-readiness is claimed. Treat
-  host-gateway projections as interim migration projections unless a later
-  architecture decision promotes one to durable successor topology.
+  first establish Docker-reachable topology for the remaining
+  credential/session/project-scoped services, replay prompts/resources for
+  those services after registration, clean up transitional Docker bootstrap
+  residue, and require explicit parity reconciliation against the 4444 legacy
+  baseline before replacement-readiness is claimed. Treat host-gateway
+  projections as interim migration projections unless a later architecture
+  decision promotes one to durable successor topology.

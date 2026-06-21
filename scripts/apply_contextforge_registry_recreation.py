@@ -240,6 +240,27 @@ def apply_docker_profile(plan: dict[str, Any], profile_path: Path | None) -> dic
     return plan
 
 
+def _expected_tool_names(service: dict[str, Any]) -> set[str]:
+    return {
+        str(tool)
+        for tool in service.get("export_dependency_tool_names") or service.get("expected_tool_names") or []
+        if isinstance(tool, str)
+    }
+
+
+def _filter_expected_tools(service: dict[str, Any], tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    expected_names = _expected_tool_names(service)
+    if not expected_names:
+        return tools
+    observed_by_name = {str(tool.get("name")): tool for tool in tools if isinstance(tool.get("name"), str)}
+    missing = sorted(expected_names - set(observed_by_name))
+    if missing:
+        raise RuntimeError(
+            f"gateway {service['gateway_name']} did not expose expected tools after refresh: {', '.join(missing)}"
+        )
+    return [observed_by_name[name] for name in sorted(expected_names)]
+
+
 def apply_service(service: dict[str, Any], client: ContextForgeClient, *, wait_attempts: int = 12) -> dict[str, Any]:
     gateway_name = service["gateway_name"]
     gateway_body = gateway_payload(service)
@@ -260,9 +281,9 @@ def apply_service(service: dict[str, Any], client: ContextForgeClient, *, wait_a
     client.request("POST", f"/gateways/{gateway_id}/tools/refresh")
     tools: list[dict[str, Any]] = []
     for attempt in range(wait_attempts):
-        tools = sorted(
+        tools = _filter_expected_tools(
+            service,
             [tool for tool in client.items("/tools?include_inactive=true&limit=1000") if tool_gateway_id(tool) == gateway_id],
-            key=lambda tool: str(tool.get("name", "")),
         )
         if tools:
             break
@@ -299,15 +320,84 @@ def apply_service(service: dict[str, Any], client: ContextForgeClient, *, wait_a
     }
 
 
-def eligible_services(plan: dict[str, Any], requested_slugs: set[str] | None = None) -> list[dict[str, Any]]:
+def _has_blocking_boundary(service: dict[str, Any]) -> bool:
+    profile = service.get("docker_successor_profile")
+    return isinstance(profile, dict) and bool(profile.get("approval_blocked"))
+
+
+def _selection_candidates(
+    plan: dict[str, Any],
+    *,
+    include_helper_services: bool,
+) -> list[dict[str, Any]]:
+    allowed = {"needs_manifest_driven_api_recreation"}
+    if include_helper_services:
+        allowed.update({"covered_by_existing_helper", "serena_project_specific_plan_required"})
+    return [service for service in plan["services"] if service["classification"] in allowed]
+
+
+def eligible_services(
+    plan: dict[str, Any],
+    requested_slugs: set[str] | None = None,
+    *,
+    include_helper_services: bool = False,
+    apply: bool = False,
+    boundary_approved_slugs: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    boundary_approved_slugs = boundary_approved_slugs or set()
     services = [
         service
-        for service in plan["services"]
-        if service["classification"] == "needs_manifest_driven_api_recreation"
+        for service in _selection_candidates(plan, include_helper_services=include_helper_services)
     ]
     if requested_slugs:
         services = [service for service in services if service["slug"] in requested_slugs]
+    if apply:
+        services = [
+            service
+            for service in services
+            if not _has_blocking_boundary(service) or service["slug"] in boundary_approved_slugs
+        ]
     return services
+
+
+def skipped_services(
+    plan: dict[str, Any],
+    requested_slugs: set[str] | None = None,
+    *,
+    include_helper_services: bool = False,
+    apply: bool = False,
+    boundary_approved_slugs: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    boundary_approved_slugs = boundary_approved_slugs or set()
+    selected = set(
+        service["slug"]
+        for service in eligible_services(
+            plan,
+            requested_slugs,
+            include_helper_services=include_helper_services,
+            apply=apply,
+            boundary_approved_slugs=boundary_approved_slugs,
+        )
+    )
+    skipped: list[dict[str, Any]] = []
+    candidates = _selection_candidates(plan, include_helper_services=include_helper_services)
+    if requested_slugs:
+        candidates = [service for service in candidates if service["slug"] in requested_slugs]
+    for service in candidates:
+        if service["slug"] in selected:
+            continue
+        reason = "approval_blocked"
+        if not apply:
+            reason = "not_selected"
+        skipped.append(
+            {
+                "slug": service["slug"],
+                "classification": service["classification"],
+                "reason": reason,
+                "docker_successor_profile": service.get("docker_successor_profile"),
+            }
+        )
+    return skipped
 
 
 def run(
@@ -320,15 +410,48 @@ def run(
     client: ContextForgeClient | None = None,
     base_url: str | None = None,
     env_file: Path | None = None,
+    include_helper_services: bool = False,
+    boundary_approved_slugs: set[str] | None = None,
 ) -> dict[str, Any]:
     plan = apply_docker_profile(
         planner.build_plan(manifests_root=manifests_root, export_path=export_path),
         docker_migration_plan,
     )
-    services = eligible_services(plan, slugs)
-    if apply and client is None:
+    boundary_approved_slugs = boundary_approved_slugs or set()
+    services = eligible_services(
+        plan,
+        slugs,
+        include_helper_services=include_helper_services,
+        apply=apply,
+        boundary_approved_slugs=boundary_approved_slugs,
+    )
+    skipped = skipped_services(
+        plan,
+        slugs,
+        include_helper_services=include_helper_services,
+        apply=apply,
+        boundary_approved_slugs=boundary_approved_slugs,
+    )
+    if apply and services and client is None:
         client = load_target_client(base_url, env_file) if base_url and env_file else load_default_client()
     results = [apply_service(service, client) if apply and client else plan_service(service) for service in services]
+    mutation_performed = any(bool(result.get("mutation_performed")) for result in results)
+    non_actions = []
+    if not apply:
+        non_actions = [
+            "dry-run; no ContextForge API calls",
+            "dry-run; no database reads or writes",
+            "dry-run; no service, process, systemd, Docker, or client mutation",
+            "dry-run; no env-file contents read",
+        ]
+    elif not mutation_performed:
+        non_actions = [
+            "apply requested but no eligible services after boundary policy filtering",
+            "no ContextForge API calls",
+            "no database reads or writes",
+            "no service, process, systemd, Docker, or client mutation",
+            "no env-file contents read",
+        ]
     return {
         "schema_uri": SCHEMA_URI,
         "registry_mutation_discipline": registry_discipline.registry_mutation_discipline(
@@ -339,7 +462,7 @@ def run(
                 {"entity": "server", "operation": "upsert_associations", "authority": "server name + refreshed tool names"},
             ],
         ),
-        "mutation_performed": apply,
+        "mutation_performed": mutation_performed,
         "apply_requested": apply,
         "target": {
             "base_url": base_url or gateway.GATEWAY_BASE,
@@ -348,15 +471,9 @@ def run(
             "docker_migration_plan": str(docker_migration_plan) if docker_migration_plan else None,
         },
         "service_count": len(results),
+        "skipped_services": skipped,
         "services": results,
-        "non_actions": []
-        if apply
-        else [
-            "dry-run; no ContextForge API calls",
-            "dry-run; no database reads or writes",
-            "dry-run; no service, process, systemd, Docker, or client mutation",
-            "dry-run; no env-file contents read",
-        ],
+        "non_actions": non_actions,
     }
 
 
@@ -366,6 +483,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--export-json", type=Path)
     parser.add_argument("--docker-migration-plan", type=Path)
     parser.add_argument("--service", action="append", dest="services", help="Limit to one service slug; repeatable.")
+    parser.add_argument(
+        "--include-helper-services",
+        action="store_true",
+        help="Include services historically covered by one-off helpers when explicitly targeting a successor surface.",
+    )
+    parser.add_argument(
+        "--boundary-approved-service",
+        action="append",
+        dest="boundary_approved_services",
+        help="Allow one approval-blocked service slug during --apply after the controller records the boundary decision.",
+    )
     parser.add_argument("--base-url", help="Target ContextForge base URL for --apply; omit to use wrapper defaults.")
     parser.add_argument("--env-file", type=Path, help="Target env file for --apply; omit to use wrapper defaults.")
     parser.add_argument("--apply", action="store_true", help="Call ContextForge APIs. Omit for dry-run planning.")
@@ -382,6 +510,8 @@ def main(argv: list[str] | None = None) -> int:
         slugs=set(args.services or []),
         base_url=args.base_url,
         env_file=args.env_file,
+        include_helper_services=args.include_helper_services,
+        boundary_approved_slugs=set(args.boundary_approved_services or []),
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
