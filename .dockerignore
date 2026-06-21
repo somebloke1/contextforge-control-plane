@@ -11,6 +11,7 @@ __pycache__/
 
 node_modules/
 docker/client-harness/env/local-llama.env
+docker/client-harness/env/semantic-model.env
 docker/client-harness/evidence/
 docker/client-harness/workspace/*
 docker/contextforge-harness/env/contextforge.env

@@ -1,6 +1,8 @@
 # Pi Container Harness
 
-Use the configured `local-llama-qwen/qwen3.6-a3b` model for local smoke tests.
+Use the configured semantic-test model profile for local smoke tests. Do not
+hard-code provider/model ids in prompts or commands; use
+`CONTEXTFORGE_PI_DEFAULT_PROVIDER` and `CONTEXTFORGE_PI_DEFAULT_MODEL`.
 Avoid file mutation unless the smoke command explicitly asks for it.
 
 When diagnosing ContextForge configuration or authentication inside this

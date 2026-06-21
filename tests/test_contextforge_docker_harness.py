@@ -228,7 +228,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
 
         for pattern in [
             ".venv/",
-            "docker/client-harness/env/local-llama.env",
+            "docker/client-harness/env/semantic-model.env",
             "docker/contextforge-harness/env/contextforge.env",
             "docker/contextforge-harness/evidence/",
             "config/contextforge.env",
@@ -676,18 +676,73 @@ print(json.dumps(outputs))
 
         self.assertIn("COPY --chown=agent:agent pi-wrapper.sh /usr/local/bin/pi", dockerfile)
         self.assertIn(": \"${CONTEXTFORGE_PI_REAL_BIN:=/usr/bin/pi}\"", wrapper)
-        self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=local-llama-qwen}\"", wrapper)
-        self.assertIn(": \"${LOCAL_LLAMA_MODEL:=qwen3.6-a3b}\"", wrapper)
+        self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=openrouter-gemini-flash-lite}\"", wrapper)
+        self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_MODEL:=${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}}\"", wrapper)
         self.assertIn(". /usr/local/bin/contextforge-pi-bootstrap", wrapper)
         self.assertIn("default_args+=(--provider \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER}\")", wrapper)
-        self.assertIn("default_args+=(--model \"${LOCAL_LLAMA_MODEL}\")", wrapper)
+        self.assertIn("default_args+=(--model \"${CONTEXTFORGE_PI_DEFAULT_MODEL}\")", wrapper)
         self.assertIn("exec \"${CONTEXTFORGE_PI_REAL_BIN}\"", wrapper)
         self.assertIn('cp /config/pi/AGENTS.md "${PI_CODING_AGENT_DIR}/AGENTS.md"', bootstrap)
         self.assertIn('source = Path("/config/pi/models.json")', bootstrap)
-        self.assertIn('provider["baseUrl"] = os.environ["LOCAL_LLAMA_BASE_URL"]', bootstrap)
-        self.assertIn('provider["apiKey"] = os.environ["LOCAL_LLAMA_KEY"]', bootstrap)
+        self.assertIn('provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]', bootstrap)
+        self.assertIn('provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]', bootstrap)
+        self.assertIn('provider["compat"]["openRouterRouting"]["only"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]', bootstrap)
         self.assertIn("Refusing unsafe CONTEXTFORGE_PI_SHIM_INSTALL_DIR", bootstrap)
         self.assertNotIn("/home/dgk/.pi", dockerfile + wrapper + bootstrap)
+
+    def test_pi_and_opencode_default_to_openrouter_semantic_model_profile(self) -> None:
+        pi_models = json.loads((ROOT / "docker/client-harness/config/pi/models.json").read_text(encoding="utf-8"))
+        opencode_config = json.loads((ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8"))
+        compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
+        opencode_entrypoint = (ROOT / "docker/client-harness/opencode/entrypoint.sh").read_text(encoding="utf-8")
+        env_example = (ROOT / "docker/client-harness/env/semantic-model.env.example").read_text(encoding="utf-8")
+
+        self.assertIn("./env/semantic-model.env", compose)
+        self.assertIn("OPENROUTER_API_KEY=replace-with-openrouter-secret", env_example)
+        self.assertIn("CONTEXTFORGE_TEST_MODEL=google/gemini-2.5-flash-lite", env_example)
+        self.assertIn("CONTEXTFORGE_TEST_PROVIDER_ROUTE=google-ai-studio", env_example)
+        self.assertIn("OPENROUTER_STICKY_KEY=contextforge-semantic-test", env_example)
+        self.assertIn("OPENROUTER_STICKY_EPOCH_SECONDS=7200", env_example)
+
+        pi_provider = pi_models["providers"]["openrouter-gemini-flash-lite"]
+        self.assertEqual("$OPENROUTER_BASE_URL", pi_provider["baseUrl"])
+        self.assertEqual("$OPENROUTER_API_KEY", pi_provider["apiKey"])
+        self.assertEqual("$OPENROUTER_STICKY_KEY", pi_provider["headers"]["x-session-id"])
+        self.assertNotIn("cacheControlFormat", pi_provider["compat"])
+        self.assertEqual(["google-ai-studio"], pi_provider["compat"]["openRouterRouting"]["only"])
+        self.assertEqual(["google-ai-studio"], pi_provider["compat"]["openRouterRouting"]["order"])
+        self.assertFalse(pi_provider["compat"]["openRouterRouting"]["allow_fallbacks"])
+        self.assertEqual("google/gemini-2.5-flash-lite", pi_provider["models"][0]["id"])
+
+        self.assertEqual("{env:CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}", opencode_config["model"])
+        openrouter_provider = opencode_config["provider"]["openrouter"]
+        self.assertNotIn("options", openrouter_provider)
+        self.assertEqual({}, openrouter_provider["models"])
+        opencode_dockerfile = (ROOT / "docker/client-harness/opencode/Dockerfile").read_text(encoding="utf-8")
+        opencode_renderer = (ROOT / "docker/client-harness/opencode/render-config.py").read_text(encoding="utf-8")
+        self.assertIn("contextforge-opencode-render-config", opencode_dockerfile)
+        self.assertNotIn("contextforge-opencode-real", opencode_dockerfile)
+        self.assertIn("OPENROUTER_STICKY_EPOCH_SECONDS", opencode_renderer)
+        self.assertIn('return f"{base}-e{bucket}"', opencode_renderer)
+        self.assertIn(
+            'model_id = os.environ.get("OPENROUTER_OPENCODE_MODEL", "~google/gemini-2.5-flash-lite")',
+            opencode_renderer,
+        )
+        self.assertIn(
+            'route = os.environ.get("OPENROUTER_PROVIDER_ROUTE", "google-ai-studio")',
+            opencode_renderer,
+        )
+        self.assertIn(
+            'data["model"] = os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL", f"openrouter/{model_id}")',
+            opencode_renderer,
+        )
+        self.assertNotIn("setCacheKey", opencode_renderer)
+        self.assertIn('"only": [route]', opencode_renderer)
+        self.assertIn('"order": [route]', opencode_renderer)
+        self.assertIn('"allow_fallbacks": False', opencode_renderer)
+        self.assertIn('"x-session-id": effective_sticky_key()', opencode_renderer)
+        self.assertIn('data["openrouter"] = {"type": "api", "key": os.environ["OPENROUTER_API_KEY"]}', opencode_renderer)
+        self.assertIn("target.chmod(0o600)", opencode_renderer)
 
     def test_opencode_image_provisions_container_local_contextforge_helper_runtime(self) -> None:
         dockerfile = (ROOT / "docker/client-harness/opencode/Dockerfile").read_text(encoding="utf-8")
@@ -804,7 +859,7 @@ print(json.dumps(outputs))
 
         self.assertIn("Pi client Docker", contract)
         self.assertIn("OpenCode client Docker", contract)
-        self.assertIn("local llama.cpp Qwen model path", contract)
+        self.assertIn("generated semantic-test model profile", contract)
         self.assertIn("ContextForge development Docker surface", contract)
         self.assertIn("Codex CLI, Claude Code, and Gemini CLI client expansion", contract)
         self.assertIn("Host Pi install, host Pi reload, or user-global Pi extension mutation", contract)
@@ -952,8 +1007,8 @@ print(json.dumps(outputs))
         self.assertIn("cp -R \"$(dirname \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\")\" \"${CONTEXTFORGE_PI_SHIM_INSTALL_DIR}\"", combined)
         self.assertIn("contextforge-root.json", combined)
         self.assertNotIn("--extension \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\"", combined)
-        self.assertIn("--provider local-llama-qwen", container_launcher)
-        self.assertIn("--model qwen3.6-a3b", container_launcher)
+        self.assertIn('--provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:-openrouter-gemini-flash-lite}"', container_launcher)
+        self.assertIn('--model "${CONTEXTFORGE_PI_DEFAULT_MODEL:-${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}}"', container_launcher)
         self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON:=/opt/contextforge-wrapper-venv/bin/python", combined)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WRAPPER:=/repo/scripts/contextforge_mcp_wrapper.py", combined)
         self.assertIn("CONTEXTFORGE_CONFIG_ENV:=/run/contextforge-client-scoped/contextforge.env", combined)
@@ -1089,7 +1144,7 @@ print(json.dumps(outputs))
         self.assertIn("Runtime Evidence Boundary", contract)
         self.assertIn("Pi ad hoc session lists or can invoke", contract)
         self.assertIn("OpenCode ad hoc session receives project-init helper/hook context", contract)
-        self.assertIn("Both clients continue using the local llama.cpp Qwen model path", contract)
+        self.assertIn("Both clients continue using the configured semantic-test model profile", contract)
 
     def test_use_case_13_package_runner_and_verifier_define_controlled_dev_validation(self) -> None:
         package = (ROOT / "docs/use-cases/use-case-13/package.md").read_text(encoding="utf-8")
@@ -1131,7 +1186,7 @@ print(json.dumps(outputs))
         self.assertIn("facilitates; code-assistant runtimes", readme)
         self.assertIn("not as", readme)
         self.assertIn("surfaces owned by this control plane", readme)
-        self.assertIn("local-Qwen install/readback samples", readme)
+        self.assertIn("semantic-test install/readback samples", readme)
         self.assertIn("thin consumers", readme)
         self.assertIn("less-mediated model behavior", readme)
         self.assertIn("multi-session persistence in `/workspace`", readme)
@@ -1168,10 +1223,10 @@ print(json.dumps(outputs))
         readme = (ROOT / "docker/client-harness/README.md").read_text(encoding="utf-8")
 
         self.assertIn("client_model_identity.py", probe)
-        self.assertIn("--expected-model-id \"${LOCAL_LLAMA_MODEL}\"", probe)
+        self.assertIn("--expected-model-id \"${OPENROUTER_MODEL}\"", probe)
         self.assertIn("--fail-on-stale", probe)
-        self.assertIn("evidence/pi-llama-model-identity.json", probe)
-        self.assertIn("evidence/opencode-llama-model-identity.json", probe)
+        self.assertIn("evidence/pi-semantic-model-identity.json", probe)
+        self.assertIn("evidence/opencode-semantic-model-identity.json", probe)
         self.assertIn("exact advertised model identity reports", readme)
         self.assertIn("current`, `stale`, or `unverified`", readme)
 

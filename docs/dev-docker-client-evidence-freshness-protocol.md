@@ -68,7 +68,7 @@ Raw refresh outputs stay local and ignored by default:
 - `docker/contextforge-harness/evidence/`
 - `docker/client-harness/evidence/`
 - `docker/contextforge-harness/env/contextforge.env`
-- `docker/client-harness/env/local-llama.env`
+- `docker/client-harness/env/semantic-model.env`
 - token caches, runtime logs, container volumes, and generated state under
   ignored `run/` or harness-local paths.
 

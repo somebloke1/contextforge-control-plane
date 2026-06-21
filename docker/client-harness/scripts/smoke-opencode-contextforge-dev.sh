@@ -10,8 +10,8 @@ if [[ ! -w evidence ]]; then
   docker compose -f compose.yml run --rm --no-deps -u root opencode \
     chown -R "$(id -u):$(id -g)" /evidence
 fi
-if [[ ! -f env/local-llama.env ]]; then
-  scripts/make-local-llama-env.sh
+if [[ ! -f env/semantic-model.env ]]; then
+  scripts/make-semantic-model-env.sh
 fi
 
 if [[ -z "${PYTHON:-}" ]]; then

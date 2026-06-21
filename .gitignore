@@ -89,7 +89,9 @@ Thumbs.db
 # Local disposable client-container harness state
 !docker/client-harness/env/
 !docker/client-harness/env/local-llama.env.example
+!docker/client-harness/env/semantic-model.env.example
 docker/client-harness/env/local-llama.env
+docker/client-harness/env/semantic-model.env
 !docker/client-harness/client-scoped/
 !docker/client-harness/client-scoped/contextforge.env.example
 docker/client-harness/client-scoped/contextforge.env

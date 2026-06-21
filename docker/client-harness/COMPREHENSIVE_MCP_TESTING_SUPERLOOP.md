@@ -1,9 +1,9 @@
 # Comprehensive MCP Testing SuperLoop
 
 This package coordinates comprehensive MCP service testing through actual Pi
-and OpenCode qwen-backed client sessions. It is separate from the use-case
-lifecycle gates: those prove project-init behavior; this proves post-activation
-MCP tool behavior as seen by real clients.
+and OpenCode client sessions using the configured semantic model profile. It is
+separate from the use-case lifecycle gates: those prove project-init behavior;
+this proves post-activation MCP tool behavior as seen by real clients.
 
 ## Issue Map
 
@@ -27,9 +27,9 @@ For each service and each target client:
 1. Start from a dedicated testing branch/worktree.
 2. Reset only the target client with the idempotent harness reset script.
 3. Use a persistent non-ephemeral Pi or OpenCode container.
-4. Use the configured qwen model and record the actual emitted model string.
+4. Use the configured semantic test model and record the actual emitted model string.
 5. Activate only the service under test unless the slice explicitly requires a
-   dependency; do not spend qwen context on an all-service tool universe.
+   dependency; do not spend model context on an all-service tool universe.
 6. Start a fresh post-activation client session.
 7. Run one small semantic behavior bundle at a time. The prompt should be an
    ordinary user task that naturally requires the selected service, not a
@@ -45,9 +45,9 @@ For each service and each target client:
 11. Remediate, retest, and loop until the service/client slice passes or a
     blocker is explicitly owned.
 
-## Qwen Context Discipline
+## Semantic Model Context Discipline
 
-Pi and OpenCode qwen sessions are limited to a 128k context window. The testing
+Pi and OpenCode semantic-test sessions have finite context windows. The testing
 process must not spend that window on all-service activation residue, long
 instructions, or giant one-turn tool reports.
 
@@ -57,7 +57,7 @@ instructions, or giant one-turn tool reports.
 - For services with many tools or diverse behaviors, split testing into
   bounded chunks and use fresh post-activation sessions where needed. Preserve
   full specified stories in the package, but do not run them as one monolithic
-  qwen conversation.
+  conversation.
 - Preserve raw evidence to files, but feed evaluators targeted readbacks rather
   than entire raw JSON streams.
 - Treat timeout after a large prompt or large tool universe as a runner/package
@@ -72,7 +72,7 @@ Route to #316 unless evidence isolates the defect to one service:
 - reload/new-session behavior;
 - tool trace visibility or excessive low-level user-visible noise;
 - reset/idempotency defects;
-- shared Pi/OpenCode qwen configuration failures;
+- shared Pi/OpenCode semantic model configuration failures;
 - deterministic verifier limitations.
 
 Route to the service issue when evidence isolates the failure to:

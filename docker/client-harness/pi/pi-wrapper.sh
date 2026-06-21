@@ -2,8 +2,8 @@
 set -euo pipefail
 
 : "${CONTEXTFORGE_PI_REAL_BIN:=/usr/bin/pi}"
-: "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=local-llama-qwen}"
-: "${LOCAL_LLAMA_MODEL:=qwen3.6-a3b}"
+: "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=openrouter-gemini-flash-lite}"
+: "${CONTEXTFORGE_PI_DEFAULT_MODEL:=${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}}"
 
 # shellcheck source=/usr/local/bin/contextforge-pi-bootstrap
 . /usr/local/bin/contextforge-pi-bootstrap
@@ -45,7 +45,7 @@ if [[ "${skip_defaults}" == false ]]; then
     default_args+=(--provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER}")
   fi
   if [[ "${has_model}" == false ]]; then
-    default_args+=(--model "${LOCAL_LLAMA_MODEL}")
+    default_args+=(--model "${CONTEXTFORGE_PI_DEFAULT_MODEL}")
   fi
 fi
 
