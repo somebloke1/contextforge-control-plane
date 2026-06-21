@@ -459,12 +459,39 @@ def _tool_policy_status_for_service(service: Mapping[str, Any], tool_names: list
     return "known" if tool_names else "not_recorded"
 
 
-def _target_client_projection_status(target_client_state: Mapping[str, Any]) -> str:
+def _target_client_projection_status(
+    target_client_state: Mapping[str, Any],
+    session_boundary: Mapping[str, Any] | None = None,
+) -> str:
     status = str(target_client_state.get("status") or "not_recorded")
-    if status == "not_recorded":
+    validation_status = str(target_client_state.get("validation_status") or "")
+    reload_status = str(target_client_state.get("reload_status") or "")
+    session_boundary = session_boundary or {}
+    if status in {"not_recorded", "uninitialized"}:
         return "missing"
-    if status == "blocked":
+    if status in {"blocked", "failed"} or validation_status == "blocked":
         return "blocked"
+    if status in {"stale", "stale_projection"} or target_client_state.get("stale") is True:
+        return "stale"
+    if status in {"partial", "partial_projection"} or validation_status == "mixed":
+        return "partial"
+    if (
+        status == "reload_required"
+        or reload_status in {"required", "pending_reload", "reload_observed"}
+        or session_boundary.get("requires_reload") is True
+    ):
+        return "reload_required"
+    if status in {"activation_pending", "validation_pending"} or validation_status in {"not_started", "pending"}:
+        return "validation_pending"
+    if (
+        status == "verified"
+        or validation_status == "passed"
+        or bool(target_client_state.get("proof_ref"))
+        or target_client_state.get("target_client_visible") is True
+    ):
+        return "verified"
+    if status in {"installed", "presumed_working"} or validation_status in {"installed", "presumed_working"}:
+        return "imported"
     return "recorded"
 
 
@@ -482,6 +509,10 @@ def _target_client_proof_status(target_client_state: Mapping[str, Any]) -> str:
     if target_client_state.get("proof_ref"):
         return "proof_ref_recorded"
     return "not_claimed_by_readback"
+
+
+def _projection_status_allows_target_client_availability(status: str) -> bool:
+    return status in {"imported", "verified", "recorded"}
 
 
 def _normalize_mcp_status(value: Any) -> str:
@@ -749,11 +780,15 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
             continue
         tool_names = _tool_names_for_service(service_family)
         target_client_state = _client_state_for_service(service, client_type)
-        projection_status = _target_client_projection_status(target_client_state)
+        projection_status = _target_client_projection_status(target_client_state, session_boundary)
         tool_policy_status = _tool_policy_status_for_service(service, tool_names)
         mcp_diagnostic = _target_client_mcp_runtime_diagnostic(target_client_state, session_boundary)
         runtime_blocks_availability = _mcp_runtime_diagnostic_blocks_availability(mcp_diagnostic)
-        available_to_target_client = bool(projection_status == "recorded" and tool_names and not runtime_blocks_availability)
+        available_to_target_client = bool(
+            _projection_status_allows_target_client_availability(projection_status)
+            and tool_names
+            and not runtime_blocks_availability
+        )
         mcp_runtime_diagnostics.append({"service_binding": service_binding, **mcp_diagnostic})
         availability_item = {
             "service_binding": service_binding,
@@ -804,17 +839,21 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
         if not skipped
         else "; ".join(f"{item['service_binding']}: {item['status']} ({item['reason']})" for item in skipped)
     )
-    tool_text = (
-        "; ".join(
-            f"{item['service_binding']} exposes {', '.join(item['tool_names'])}"
-            for item in available_tools
-        )
-        or "no target-client projection/import recorded for the approved project services"
-    )
     project_service_text = (
         ", ".join(item["service_binding"] for item in project_services)
         or "none recorded"
     )
+    if available_tools:
+        tool_text = "; ".join(
+            f"{item['service_binding']} exposes {', '.join(item['tool_names'])}"
+            for item in available_tools
+        )
+    elif project_services and len(missing_target_client_projection) == len(project_services):
+        tool_text = "no target-client projection/import recorded for the approved project services"
+    elif project_services:
+        tool_text = "no currently available target-client tools in this session"
+    else:
+        tool_text = "none reported"
     missing_projection_text = (
         "; ".join(
             f"{item['service_binding']}: align/import existing project service instance for {client_type}; do not create a new project service instance without explicit approval"
@@ -1083,11 +1122,16 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
         service_family = _service_family_from_state(service_binding, service)
         tool_names = _tool_names_for_service(service_family)
         target_client_state = _client_state_for_service(service, client_type)
-        projection_status = _target_client_projection_status(target_client_state)
+        projection_status = _target_client_projection_status(target_client_state, session_boundary)
         tool_policy_status = _tool_policy_status_for_service(service, tool_names)
         target_client_user_state = _target_client_user_state(target_client_state, session_boundary)
         mcp_diagnostic = _target_client_mcp_runtime_diagnostic(target_client_state, session_boundary)
         runtime_blocks_availability = _mcp_runtime_diagnostic_blocks_availability(mcp_diagnostic)
+        available_to_target_client = bool(
+            _projection_status_allows_target_client_availability(projection_status)
+            and tool_names
+            and not runtime_blocks_availability
+        )
         mcp_runtime_diagnostics.append({"service_binding": service_binding, **mcp_diagnostic})
         readback_item = {
             "service_binding": service_binding,
@@ -1104,7 +1148,7 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
             "target_client_visibility_status": _target_client_visibility_status(target_client_state),
             "target_client_proof_status": _target_client_proof_status(target_client_state),
             "mcp_runtime_diagnostic": mcp_diagnostic,
-            "available_to_target_client": bool(projection_status == "recorded" and tool_names and not runtime_blocks_availability),
+            "available_to_target_client": available_to_target_client,
             "readiness_layers": {
                 "source_ready": "present_in_project_state",
                 "backend_ready": _layer_status(service, "backend", "upstream_backend", "service_backend"),

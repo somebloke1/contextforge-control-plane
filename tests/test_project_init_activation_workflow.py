@@ -2422,7 +2422,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             full_report = contextforge_helper_mcp.project_tool_availability(str(root), client_type="opencode")
             result = contextforge_helper_mcp.get_project_tool_availability(str(root), client_type="opencode")
 
-        self.assertEqual(["context7-local-resolve-library-id", "context7-local-query-docs"], full_report["available_tools"][0]["tool_names"])
+        self.assertEqual([], full_report["available_tools"])
+        self.assertEqual(["context7-local-resolve-library-id", "context7-local-query-docs"], full_report["project_tool_policies"][0]["tool_policy_names"])
+        self.assertEqual("reload_required", full_report["project_services"][0]["target_client_projection_status"])
+        self.assertFalse(full_report["project_services"][0]["available_to_target_client"])
         self.assertTrue(result["ok"])
         self.assertEqual("available_tools_report", result["status"])
         self.assertIn("assistant_visible_response", result)
@@ -2435,8 +2438,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             (
                 f"ContextForge state for {root} is initialized at revision 1. "
                 "Project services present: context7:canonical. "
-                "Configured/imported-tool policy for this client: context7:canonical exposes "
-                "context7-local-resolve-library-id, context7-local-query-docs. "
+                "Configured/imported-tool policy for this client: no currently available target-client tools in this session. "
                 "Missing target-client projections: none recorded. "
                 "Skipped or unavailable services: none reported. "
                 "MCP runtime diagnostics: context7:canonical: reload_pending_before_mcp_startup. "
@@ -2634,6 +2636,99 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Configured in current project state for opencode: none reported.", capabilities["assistant_visible_response"])
         self.assertIn("Missing target-client projections: context7:canonical", capabilities["assistant_visible_response"])
 
+    def test_target_client_projection_status_vocabulary_keeps_readiness_layers_separate(self) -> None:
+        cases = [
+            (
+                "blocked",
+                {"status": "blocked", "validation_status": "blocked", "reload_status": "not_required"},
+                "blocked",
+                False,
+            ),
+            (
+                "stale",
+                {"status": "stale", "validation_status": "installed", "reload_status": "not_required"},
+                "stale",
+                False,
+            ),
+            (
+                "partial",
+                {"status": "partial", "validation_status": "mixed", "reload_status": "not_required"},
+                "partial",
+                False,
+            ),
+            (
+                "validation_pending",
+                {"status": "validation_pending", "validation_status": "pending", "reload_status": "not_required"},
+                "validation_pending",
+                False,
+            ),
+            (
+                "imported",
+                {"status": "installed", "validation_status": "installed", "reload_status": "not_required"},
+                "imported",
+                True,
+            ),
+            (
+                "reload_required",
+                {"status": "installed", "validation_status": "installed", "reload_status": "pending_reload"},
+                "reload_required",
+                False,
+            ),
+            (
+                "verified",
+                {
+                    "status": "verified",
+                    "validation_status": "passed",
+                    "reload_status": "not_required",
+                    "target_client_visible": True,
+                    "proof_ref": "run/evidence/context7-codex-proof.json",
+                },
+                "verified",
+                True,
+            ),
+        ]
+        for label, target_state, expected_projection, expected_available in cases:
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+                    root = Path(tmp).resolve()
+                    selected = [service_descriptor("context7")]
+                    config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="codex")
+                    state = project_state.apply_project_init_activation_to_state(
+                        project_state.default_state(root),
+                        selected,
+                        target_client="codex",
+                        client_config_plan=config_plan,
+                        validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="codex"),
+                        validation_results={},
+                        consent_receipt_refs=CONSENT_REFS,
+                    )
+                    job_id = state["project_init"]["current_job_id"]
+                    if expected_projection != "reload_required":
+                        state["project_init"]["activation_jobs"][job_id]["x_client_reload_ack"] = {
+                            "client_type": "codex",
+                            "job_id": job_id,
+                            "acknowledged_at": "2026-06-20T00:00:00Z",
+                        }
+                        state["project_init"]["activation_jobs"][job_id]["x_client_reload_fsm"] = {
+                            "client_type": "codex",
+                            "job_id": job_id,
+                            "state": "reload_acknowledged",
+                        }
+                    state["services"]["context7:canonical"]["target_clients"]["codex"].update(target_state)
+                    project_state.write_state_atomic(root, state)
+
+                    availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="codex")
+                    readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="codex")
+
+                self.assertEqual(expected_projection, availability["project_services"][0]["target_client_projection_status"])
+                self.assertEqual(expected_available, availability["project_services"][0]["available_to_target_client"])
+                self.assertEqual(expected_projection, readback["target_client_services"][0]["target_client_projection_status"])
+                self.assertEqual(expected_available, readback["target_client_services"][0]["available_to_target_client"])
+                if expected_available:
+                    self.assertEqual(["context7:canonical"], [item["service_binding"] for item in availability["available_tools"]])
+                else:
+                    self.assertEqual([], availability["available_tools"])
+
     def test_alignment_import_apply_records_opencode_projection_without_mutating_pi_projection(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -2756,7 +2851,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             full_report = contextforge_helper_mcp.project_capability_summary(str(root), client_type="opencode")
             result = contextforge_helper_mcp.get_project_capability_summary(str(root), client_type="opencode")
 
-        self.assertTrue(full_report["available_now"])
+        self.assertEqual([], full_report["available_now"])
+        self.assertEqual("context7:canonical", full_report["project_services"][0]["service_binding"])
+        self.assertEqual("reload_required", full_report["project_services"][0]["target_client_projection_status"])
+        self.assertFalse(full_report["project_services"][0]["available_to_target_client"])
         self.assertTrue(full_report["known_unavailable"])
         self.assertTrue(full_report["onboarding_needed"])
         self.assertTrue(result["ok"])
@@ -2768,7 +2866,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("available_now", result)
         self.assertNotIn("onboarding_needed", result)
         visible = result["assistant_visible_response"]
-        self.assertIn("Configured in current project state for opencode:", visible)
+        self.assertIn("Configured in current project state for opencode: none reported.", visible)
+        self.assertIn("Project services present:", visible)
         self.assertIn("Known but unavailable:", visible)
         self.assertIn("Could be onboarded with approval:", visible)
         self.assertIn("Important client/session boundary for opencode:", visible)
@@ -2799,7 +2898,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("project_state_readback", full_report["status"])
         self.assertEqual("initialized", full_report["state_status"])
         self.assertEqual(["context7:canonical"], full_report["selected_service_bindings"])
-        self.assertEqual(["context7-local-resolve-library-id", "context7-local-query-docs"], full_report["imported_tools"][0]["tool_names"])
+        self.assertEqual([], full_report["imported_tools"])
+        self.assertEqual(["context7-local-resolve-library-id", "context7-local-query-docs"], full_report["project_tool_policies"][0]["tool_policy_names"])
+        self.assertEqual("reload_required", full_report["target_client_services"][0]["target_client_projection_status"])
+        self.assertFalse(full_report["target_client_services"][0]["available_to_target_client"])
         self.assertEqual("not_claimed_by_readback", full_report["target_client_services"][0]["readiness_layers"]["interactive_proof"])
         self.assertIn("interactive proof is not claimed", full_report["assistant_visible_response"])
         self.assertTrue(result["ok"])

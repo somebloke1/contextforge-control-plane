@@ -113,3 +113,39 @@ This acceptance does not claim automatic cross-client alignment, target-client
 visibility, interactive tool proof, global client mutation, live ContextForge
 registry mutation, duplicate service provisioning, or readiness-report
 completion.
+
+## Controller Refinement - 2026-06-20T19:50-05:00
+
+After PR #271 review-wave integration, the controller tightened the DTO
+vocabulary so target-client projection state is no longer a coarse
+recorded/missing flag. Structured readbacks now distinguish:
+
+- `missing`;
+- `blocked`;
+- `stale`;
+- `partial`;
+- `validation_pending`;
+- `reload_required`;
+- `imported`;
+- `verified`.
+
+`available_to_target_client` is now true only for imported, verified, or
+otherwise recorded projections with known tool policy and no blocking runtime
+diagnostic. Pending reload, missing projection, blocked, stale, partial, and
+validation-pending states do not populate current-session `available_tools`.
+Project-global tool policy remains available separately through
+`project_tool_policies`.
+
+Additional verification:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python -m unittest tests.test_project_init_activation_workflow tests.test_project_init_scripts tests.test_use_case1_e2e_gate -v
+```
+
+Result: 263 tests OK.
+
+```text
+PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python -m unittest tests.test_project_init_activation_workflow tests.test_project_init_scripts tests.test_contextforge_docker_harness tests.test_use_case1_e2e_gate tests.test_superloop_agent_orchestration_skills tests.test_contextforge_development_path_index -v
+```
+
+Result: 332 tests OK.
