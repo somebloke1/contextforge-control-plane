@@ -56,6 +56,15 @@ Before launching another qwen-backed client session, check for active runner/cli
 
 Use [method.md](references/method.md#active-session-stewardship) for the concrete preflight/readback commands and ownership rules.
 
+Before broad fan-out, maintain a one-line active-slice ledger in the issue
+comment, evidence summary, or controller notes: service, client, container,
+session ids, evidence root, start time, current state, and owner. Refresh that
+ledger before starting any new qwen-backed turn. If the only signal is resident
+GPU memory at 0% utilization, treat it as loaded-model residency, not a reason
+to kill or duplicate sessions. If a slice-owned container remains after the
+turn, either reuse it deliberately for readback or preserve evidence and reset
+it before the next attempt.
+
 ## Bypass Rule
 
 If the tested assistant writes scripts, runs `npx`, invokes upstream MCP packages directly, or manually drives JSON-RPC over stdio instead of using client-visible ContextForge tools, classify the run as not accepted. Preserve the output because it may prove the upstream service works, but triage the client-visible ContextForge exposure failure separately.

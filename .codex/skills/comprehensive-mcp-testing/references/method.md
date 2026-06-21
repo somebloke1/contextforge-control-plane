@@ -143,15 +143,29 @@ ps -u "$USER" -o pid,stat,cmd
 docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Command}}'
 ```
 
+Also read any active-slice ledger from the controlling issue comment,
+controller notes, or latest `run-summary.json`. The ledger must name, at
+minimum, the service, client, container, activation/test session ids, evidence
+root, start time, current state, and owner. Keep it terse enough to update
+often. Its purpose is not ceremony; it prevents the controller from launching a
+second qwen turn merely because the conversational context forgot the first.
+
 Interpretation rules:
 
 - GPU memory held by a local model server is not by itself proof of active
   inference. Treat nonzero `GPU-Util`, active client runner processes, growing
   transcript files, or a live command session as stronger evidence of an active
   test turn.
+- A model server such as `llama-server` holding many GiB with `GPU-Util` near
+  0% is usually resident/idle model state. Do not kill it or declare a hung
+  slice from memory residency alone.
 - Running `cf-mcp-<service>-<client>-*` containers are slice ownership evidence.
   Reuse, inspect, or stop only containers whose names and evidence paths belong
   to the current comprehensive MCP testing loop.
+- If a slice-owned container is still running, inspect the corresponding
+  evidence root, command ledger, raw transcript mtimes, and runner process list
+  before deciding it is stale. Prefer attaching/readback to understand the
+  state over starting a duplicate session.
 - If ownership is unclear, do not kill model servers or client containers
   speculatively. Record the ambiguity and ask the SO, or isolate the next test
   with a new explicit container name and evidence directory only after resource
@@ -162,6 +176,21 @@ Interpretation rules:
 - If GPU utilization is pegged, defer new qwen-backed launches until the active
   owner is identified. A controller may continue deterministic repo/GitHub work
   while waiting.
+
+State transitions:
+
+- `planned`: issue/package exists, no runner launched.
+- `running`: runner/client command in progress or transcript still growing.
+- `awaiting-evaluator`: raw evidence exists and no client generation is active.
+- `stale-needs-preservation`: slice-owned container remains but no transcript
+  or process progress is visible.
+- `closed`: evidence preserved, token/cache cleanup recorded, and container
+  reset or intentionally retained with owner.
+
+Before fan-out, there should be no ambiguous `running` or
+`stale-needs-preservation` slice for the same client/service. If there is, do
+not dispatch another qwen-backed runner for that slice until the state is
+resolved.
 
 ## Controller Discipline
 
