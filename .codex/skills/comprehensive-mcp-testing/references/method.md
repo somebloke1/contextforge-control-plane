@@ -84,6 +84,19 @@ For every bundle, record the mapping:
 - semantic evaluator criteria;
 - defect routing target if the bundle fails.
 
+For every bundle, the evaluator must identify the actual route used. A
+plausible or correct answer is not accepted if the assistant substituted
+another channel, such as shell commands, web search, manual/OpenAI docs,
+memory-only response, direct upstream execution, or a different installed MCP
+service, when the bundle required the target ContextForge service. Treat this
+as wrong-route substitution and classify it as service guidance, client
+routing, or cross-MCP wrapper exposure depending on the evidence.
+
+Keep per-slice claim boundaries crisp. Visibility, configured/readback state,
+wrapper connection, safe tool call, ordinary semantic use, same-session
+continuity, reload/refresh behavior, and readiness are separate claims. A
+passing bundle proves only the layers it exercised and named.
+
 The runner may help create, execute, package, and index these bundles. It must
 not score the meaning of prose. Semantic evaluation belongs to the SO or a
 gpt-5.5/non-Spark evaluator.
@@ -206,6 +219,13 @@ A complete package includes:
 - runtime readback
 - evaluator narrative that describes the session step by step from the evaluator's perspective
 - issue triage recommendation with evidence paths
+
+Aggregate evidence packages must name exact source artifacts by slice id,
+client, service, timestamp, and path. Do not use broad globs, newest-file
+selection, or inferred timestamp matching as acceptance evidence for readiness
+or handoff artifacts. If an aggregate report consumes prior evidence, include
+the exact manifest used and let deterministic verification check manifest
+completeness only, not semantic adequacy.
 
 The runner does not decide semantic pass/fail. The evaluator narrative is part of the signal.
 

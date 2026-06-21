@@ -96,6 +96,11 @@ it before the next attempt.
 
 If the tested assistant writes scripts, runs `npx`, invokes upstream MCP packages directly, or manually drives JSON-RPC over stdio instead of using client-visible ContextForge tools, classify the run as not accepted. Preserve the output because it may prove the upstream service works, but triage the client-visible ContextForge exposure failure separately.
 
+Also classify the run as not accepted when the assistant answers through a
+non-target route, including shell commands, web search, manual/OpenAI docs,
+memory, direct upstream execution, or another MCP service, instead of the
+ContextForge-installed service under test.
+
 ## Delegation
 
 Use gpt-5.5/non-Spark agents for semantic evaluation of model-agent interactions. Use Spark only for bounded mechanical tasks such as summarizing command ledgers, checking links, drafting issue index text, or patching obvious repetitive documentation.
