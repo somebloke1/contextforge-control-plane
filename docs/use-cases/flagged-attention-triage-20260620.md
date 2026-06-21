@@ -66,19 +66,25 @@ project init.
 
 Disposition:
 
-- #279 had a local fix under the old strict-validation contract and remains in
-  review historically.
-- #272, #273, #274, #275, and #276 should not be implemented by reviving
-  post-install validation. They should be resolved by the broader removal or
-  quarantine of client-visible project-init validation machinery, while keeping
-  legitimate test/evidence validation and service-onboarding proof planning.
-- Source still contains validation-named state and helper surfaces, so these
-  issues are not safe to close as obsolete without a focused removal/quarantine
-  pass.
+- #275 and #279 already had install-only quarantine comments.
+- #272, #273, #274, and #276 now have disposition comments tying them to the
+  install-only cleanup rather than stricter post-install validation.
+- `record_project_init_validation` now returns
+  `project_init_validation_retired` and records no project-init validation.
+- `record_project_init_client_reload` rejects `validation_mode` instead of
+  resuming a validation/probe continuation.
+- UC1 dialogue gates prohibit validation payloads, safe-probe fields, and
+  post-apply Context7 service calls in passing ordinary install evidence.
 
-Coordination disposition: promote one bounded cleanup pass if the next queue
-focus remains project-init simplification. Do not treat these as independent
-target-client validation feature work.
+Residual: deeper validation/proof data structures still exist for historical
+evidence, controlled-development, and future readiness/proof work. They should
+not be exposed as ordinary project-init. #274 also preserves a future
+service-output-quality concern if a separate proof workflow evaluates Context7
+documentation relevance.
+
+Coordination disposition: keep #272-#276 and #279 In Review pending PR #271
+review/merge. Do not treat them as independent target-client validation feature
+work, and do not revive post-install validation to close them.
 
 ## Category C: Remediated Or Packaged Follow-Ups Still Awaiting Review/Merge
 
