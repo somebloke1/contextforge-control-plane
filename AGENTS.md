@@ -31,6 +31,9 @@ Work toward a systemd-controlled ContextForge installation that:
 
 ## Python Environment
 
+- Every branch/worktree must have its own local `.venv`; no branch is left
+  without one. Create or repair it with `uv venv .venv` before branch-local
+  validation when it is absent.
 - The Python environment was created with `uv venv .venv`.
 - Use `uv pip install --python .venv/bin/python ...` for dependency
   installation with the currently installed `uv`.

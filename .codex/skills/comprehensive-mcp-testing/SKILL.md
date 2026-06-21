@@ -57,13 +57,15 @@ branch-local `.venv` exists but lacks pytest, run the applicable `unittest`,
 `py_compile`, skill validation, Node syntax check, or runner dry-run that
 matches the changed files.
 
+Every branch/worktree used for this testing loop must have its own local
+`.venv`; create or repair it with `uv venv .venv` if missing before validation.
 If a changed slice genuinely requires a dependency that the branch-local
-`.venv` lacks, create or reuse an ignored current-worktree test venv such as
-`run/test-venvs/<suite>/`. Never borrow a sibling checkout venv, and never
-claim validation is blocked solely because the root has no dependency manifest.
-If no executable validation is possible, record a concrete blocker with owner,
-issue/PR link, and the attempted fallback commands before making any readiness
-claim.
+`.venv` lacks, install it into that `.venv` or create/reuse an ignored
+current-worktree test venv such as `run/test-venvs/<suite>/`. Never borrow a
+sibling checkout venv, and never claim validation is blocked solely because the
+root has no dependency manifest. If no executable validation is possible,
+record a concrete blocker with owner, issue/PR link, and the attempted fallback
+commands before making any readiness claim.
 
 ## Qwen Discipline
 
