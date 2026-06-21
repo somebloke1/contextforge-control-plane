@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 FIRST_PROMPT = "look up the docs entry for opencode and tell me which result is best"
 FOLLOWUP_PROMPT = "using that result, what should I read about configuration?"
@@ -141,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         turns=turns,
     )
     metadata_path = output_root / f"{args.client}-metadata-{timestamp}.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    metadata_path.write_text(json.dumps(redact_value(metadata), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     verifier = uc3.run(
         [
             sys.executable,
@@ -161,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     verifier_json = uc3.parse_json_or_text(verifier["stdout"])
     verifier_path = output_root / f"{args.client}-verifier-{timestamp}.json"
-    verifier_path.write_text(json.dumps(verifier_json, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    verifier_path.write_text(json.dumps(redact_value(verifier_json), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     package_path = output_root / f"{args.client}-evaluation-package-{timestamp}.md"
     package_path.write_text(render_package(args.client, combined_path, verifier_path, verifier_json, generation_report, dialogue_summary), encoding="utf-8")
 
@@ -288,13 +290,13 @@ def render_combined(
             "## Command Ledger",
             "",
             "```json",
-            json.dumps(commands, indent=2, sort_keys=True),
+            json.dumps(redact_value(commands), indent=2, sort_keys=True),
             "```",
             "",
             "## Reset JSON",
             "",
             "```json",
-            json.dumps(reset_json, indent=2, sort_keys=True),
+            json.dumps(redact_value(reset_json), indent=2, sort_keys=True),
             "```",
             "",
             "## Setup Command",
@@ -318,13 +320,13 @@ def render_combined(
             "## Dialogue Summary",
             "",
             "```json",
-            json.dumps(dialogue_summary, indent=2, sort_keys=True),
+            json.dumps(redact_value(dialogue_summary), indent=2, sort_keys=True),
             "```",
             "",
             "## Generation Report",
             "",
             "```json",
-            json.dumps(generation_report, indent=2, sort_keys=True),
+            json.dumps(redact_value(generation_report), indent=2, sort_keys=True),
             "```",
             "",
         ]
@@ -362,19 +364,19 @@ def render_package(
         "## Deterministic Verifier",
         "",
         "```json",
-        json.dumps(verifier_json, indent=2, sort_keys=True),
+        json.dumps(redact_value(verifier_json), indent=2, sort_keys=True),
         "```",
         "",
         "## Generation Report",
         "",
         "```json",
-        json.dumps(generation_report, indent=2, sort_keys=True),
+        json.dumps(redact_value(generation_report), indent=2, sort_keys=True),
         "```",
         "",
         "## Dialogue Summary",
         "",
         "```json",
-        json.dumps(dialogue_summary, indent=2, sort_keys=True),
+        json.dumps(redact_value(dialogue_summary), indent=2, sort_keys=True),
         "```",
         "",
         "## Evaluator Instructions",

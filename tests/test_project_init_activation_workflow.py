@@ -1459,6 +1459,46 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertEqual(str(root), cli_result["project_root"])
             self.assertIn("assistant_visible_response", cli_result)
 
+    def test_project_reset_defaults_to_latest_user_message_cwd_before_process_cwd(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            state = project_state.default_state(root)
+            project_state.write_state_atomic(root, state)
+            approval_source = Path(run_tmp) / "latest-user-message.json"
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": "reset this project"}) + "\n", encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                mcp_result = contextforge_helper_mcp.cf_project_reset_current_project(
+                    client_type="codex",
+                    preserve_evidence=False,
+                )
+
+        self.assertTrue(mcp_result["ok"], mcp_result)
+        self.assertEqual("reset", mcp_result["status"])
+        self.assertEqual(str(root), mcp_result["project_root"])
+
+    def test_project_reset_refuses_unsafe_roots_on_reset_surface(self) -> None:
+        denied_result = contextforge_helper_mcp.cf_project_reset_current_project(
+            project_root=str(Path.home()),
+            client_type="codex",
+            preserve_evidence=False,
+        )
+        self.assertFalse(denied_result["ok"])
+        self.assertEqual("RootValidationError", denied_result["error"]["type"])
+
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            tmp_path = Path(tmp).resolve()
+            link = tmp_path / "escape-link"
+            link.symlink_to("/tmp")
+            symlink_result = contextforge_helper_mcp.cf_project_reset_current_project(
+                project_root=str(link),
+                client_type="codex",
+                preserve_evidence=False,
+            )
+
+        self.assertFalse(symlink_result["ok"])
+        self.assertEqual("RootValidationError", symlink_result["error"]["type"])
+
     def test_pi_reload_acknowledgement_changes_normal_readback_contract(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -2663,6 +2703,18 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 False,
             ),
             (
+                "skipped",
+                {"status": "installed", "validation_status": "skipped", "reload_status": "not_required"},
+                "skipped",
+                False,
+            ),
+            (
+                "recorded_fallback",
+                {"status": "project_local_config_planned", "validation_status": "unknown", "reload_status": "not_required"},
+                "recorded",
+                False,
+            ),
+            (
                 "imported",
                 {"status": "installed", "validation_status": "installed", "reload_status": "not_required"},
                 "imported",
@@ -2864,6 +2916,90 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Some project services cannot be imported", offer["assistant_visible_response"])
         self.assertIn("github:canonical: failed (credential not configured)", offer["assistant_visible_response"])
         self.assertIn("Import this project's existing ContextForge services for OpenCode?", offer["assistant_visible_response"])
+
+    def test_alignment_import_offer_does_not_fall_back_to_generic_menu_when_all_project_services_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7"), service_descriptor("github")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            for binding_id, reason in {
+                "context7:canonical": "server not running",
+                "github:canonical": "credential not configured",
+            }.items():
+                state["services"][binding_id]["provision_status"] = "failed"
+                state["services"][binding_id]["x_reason"] = reason
+            project_state.write_state_atomic(root, state)
+
+            offer = helper.list_available_capabilities(project_root=root, client_type="opencode")
+
+        self.assertEqual("alignment_import_offer", offer["status"])
+        self.assertEqual([], offer["available_services"])
+        self.assertEqual([], offer["alignment_import_offer"]["project_service_bindings"])
+        self.assertEqual([], offer["alignment_import_offer"]["missing_target_client_projection"])
+        self.assertEqual(0, offer["alignment_import_offer"]["service_count"])
+        self.assertEqual(2, offer["alignment_import_offer"]["unavailable_service_count"])
+        self.assertEqual(
+            {"context7:canonical", "github:canonical"},
+            {item["service_binding"] for item in offer["alignment_import_offer"]["unavailable_project_services"]},
+        )
+        self.assertEqual("align-existing-project-services", offer["next_turn"]["question_id"])
+        self.assertEqual(["none"], [choice["id"] for choice in offer["next_turn"]["choices"]])
+        self.assertIn("already contains project services: context7:canonical, github:canonical", offer["assistant_visible_response"])
+        self.assertIn("Importable or repairable target-client projections for OpenCode: none currently importable.", offer["assistant_visible_response"])
+        self.assertIn("Some project services cannot be imported", offer["assistant_visible_response"])
+        self.assertNotEqual("select-services", offer["next_turn"]["question_id"])
+
+    def test_alignment_import_offer_represents_non_current_target_client_projection(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7"), service_descriptor("github")]
+            pi_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=pi_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            state["services"]["github:canonical"]["target_clients"]["opencode"] = {
+                "client_type": "opencode",
+                "status": "partial",
+                "validation_status": "mixed",
+                "reload_status": "not_required",
+            }
+            project_state.write_state_atomic(root, state)
+
+            offer = helper.list_available_capabilities(project_root=root, client_type="opencode")
+
+        self.assertEqual("alignment_import_offer", offer["status"])
+        self.assertEqual(["context7:canonical", "github:canonical"], offer["alignment_import_offer"]["project_service_bindings"])
+        self.assertEqual(
+            ["context7:canonical", "github:canonical", "none"],
+            [choice["id"] for choice in offer["next_turn"]["choices"]],
+        )
+        self.assertEqual(
+            [{"action": "align_target_client_to_existing_project_service", "target_client": "opencode", "service_binding": "context7:canonical", "target_client_projection_status": "missing", "boundary": "Align/import opencode to the existing project service instance; do not create a new project service instance unless explicitly approved."}],
+            offer["alignment_import_offer"]["missing_target_client_projection"],
+        )
+        self.assertEqual(
+            [{"action": "align_target_client_to_existing_project_service", "target_client": "opencode", "service_binding": "github:canonical", "target_client_projection_status": "partial", "boundary": "Align/import opencode to the existing project service instance; do not create a new project service instance unless explicitly approved."}],
+            offer["alignment_import_offer"]["non_current_target_client_projection"],
+        )
+        by_binding = {service["service_binding"]: service for service in offer["available_services"]}
+        self.assertEqual("missing", by_binding["context7:canonical"]["target_client_projection_status"])
+        self.assertEqual("partial", by_binding["github:canonical"]["target_client_projection_status"])
+        self.assertEqual("Repair this project's existing github projection for opencode without provisioning a new project service instance.", by_binding["github:canonical"]["user_visible_effect"])
 
     def test_contextforge_helper_mcp_reports_project_capability_summary_read_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

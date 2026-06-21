@@ -737,6 +737,7 @@ def _alignment_import_offer(
     services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
     alignment_services: list[dict[str, Any]] = []
     missing_actions: list[dict[str, Any]] = []
+    non_current_actions: list[dict[str, Any]] = []
     unavailable_project_services: list[dict[str, Any]] = []
     for binding_id, service_value in services.items():
         if not isinstance(service_value, Mapping):
@@ -751,24 +752,40 @@ def _alignment_import_offer(
         target_clients = service.get("target_clients") if isinstance(service.get("target_clients"), Mapping) else {}
         target_client_state = target_clients.get(client_type) if isinstance(target_clients, Mapping) else None
         if isinstance(target_client_state, Mapping):
-            continue
+            projection_status = _alignment_projection_status(target_client_state)
+            if projection_status in {"imported", "verified", "recorded"}:
+                continue
+        else:
+            projection_status = "missing"
         candidate = _candidate(service, client_type=client_type)
         candidate["project_service_state"] = "present"
-        candidate["target_client_projection_status"] = "missing"
-        candidate["target_client_state"] = {"status": "not_recorded"}
+        candidate["target_client_projection_status"] = projection_status
+        candidate["target_client_state"] = dict(target_client_state) if isinstance(target_client_state, Mapping) else {"status": "not_recorded"}
         candidate["available_to_target_client"] = False
-        candidate["user_visible_effect"] = (
-            f"Import this project's existing {candidate['display_name']} binding for {client_type} "
-            "without provisioning a new project service instance."
-        )
-        candidate["recommended_action"] = _missing_projection_action(service_binding, client_type)
+        if projection_status == "missing":
+            candidate["user_visible_effect"] = (
+                f"Import this project's existing {candidate['display_name']} binding for {client_type} "
+                "without provisioning a new project service instance."
+            )
+            candidate["recommended_action"] = _projection_alignment_action(service_binding, client_type, projection_status)
+            missing_actions.append(candidate["recommended_action"])
+        else:
+            candidate["user_visible_effect"] = (
+                f"Repair this project's existing {candidate['display_name']} projection for {client_type} "
+                "without provisioning a new project service instance."
+            )
+            candidate["recommended_action"] = _projection_alignment_action(service_binding, client_type, projection_status)
+            non_current_actions.append(candidate["recommended_action"])
         alignment_services.append(candidate)
-        missing_actions.append(candidate["recommended_action"])
 
-    if not alignment_services:
+    if not alignment_services and not unavailable_project_services:
         return None
     project_service_bindings = [str(service["service_binding"]) for service in alignment_services]
-    project_service_text = ", ".join(project_service_bindings)
+    unavailable_bindings = [str(item["service_binding"]) for item in unavailable_project_services if str(item.get("service_binding") or "")]
+    project_service_text = ", ".join(project_service_bindings + unavailable_bindings)
+    importable_text = ", ".join(project_service_bindings) if project_service_bindings else "none currently importable"
+    missing_text = ", ".join(str(item["service_binding"]) for item in missing_actions) if missing_actions else "none"
+    non_current_text = ", ".join(str(item["service_binding"]) for item in non_current_actions) if non_current_actions else "none"
     prompt_client = {
         "codex": "Codex",
         "gemini": "Gemini",
@@ -784,6 +801,7 @@ def _alignment_import_offer(
             "project_root": str(root),
             "project_service_bindings": project_service_bindings,
             "missing_target_client_projection": missing_actions,
+            "non_current_target_client_projection": non_current_actions,
             "unavailable_project_services": unavailable_project_services,
             "service_count": len(alignment_services),
             "unavailable_service_count": len(unavailable_project_services),
@@ -791,7 +809,9 @@ def _alignment_import_offer(
         "available_services": alignment_services,
         "assistant_visible_response": (
             f"ContextForge state for {str(root)} already contains project services: {project_service_text}. "
-            f"Missing target-client projections for {prompt_client}: {project_service_text}. "
+            f"Missing target-client projections for {prompt_client}: {missing_text}. "
+            f"Non-current target-client projections for {prompt_client}: {non_current_text}. "
+            f"Importable or repairable target-client projections for {prompt_client}: {importable_text}. "
             f"{_alignment_unavailable_visible_text(unavailable_project_services)}"
             "This is a read-only alignment/import offer; no project service instance is duplicated or provisioned here. "
             f"Import this project's existing ContextForge services for {prompt_client}?"
@@ -869,11 +889,33 @@ def _alignment_unavailable_visible_text(unavailable_project_services: Sequence[M
     )
 
 
-def _missing_projection_action(service_binding: str, client_type: str) -> dict[str, str]:
+def _alignment_projection_status(target_client_state: Mapping[str, Any]) -> str:
+    status = str(target_client_state.get("status") or "")
+    validation_status = str(target_client_state.get("validation_status") or "")
+    reload_status = str(target_client_state.get("reload_status") or "")
+    if status in {"blocked", "failed"} or validation_status == "blocked":
+        return "blocked"
+    if status == "stale":
+        return "stale"
+    if status == "partial" or validation_status == "mixed":
+        return "partial"
+    if reload_status in {"pending_reload", "reload_required"}:
+        return "reload_required"
+    if status == "validation_pending" or validation_status == "pending":
+        return "validation_pending"
+    if status == "verified" or validation_status == "passed":
+        return "verified"
+    if status in {"installed", "project_local_opencode_config_planned", "project_local_codex_config_planned", "project_local_gemini_config_planned"}:
+        return "imported"
+    return "recorded"
+
+
+def _projection_alignment_action(service_binding: str, client_type: str, projection_status: str) -> dict[str, str]:
     return {
         "action": "align_target_client_to_existing_project_service",
         "target_client": client_type,
         "service_binding": service_binding,
+        "target_client_projection_status": projection_status,
         "boundary": (
             f"Align/import {client_type} to the existing project service instance; "
             "do not create a new project service instance unless explicitly approved."

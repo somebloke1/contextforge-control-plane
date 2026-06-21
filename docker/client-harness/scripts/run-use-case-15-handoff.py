@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 CLIENTS = ("pi", "opencode", "codex")
 FOLLOW_UP_ISSUES = ("285", "286", "287", "289", "280", "257")
@@ -203,13 +205,13 @@ def render_package(metadata: dict[str, Any], verifier: dict[str, Any]) -> str:
             "## Metadata",
             "",
             "```json",
-            json.dumps(metadata, indent=2, sort_keys=True),
+            json.dumps(redact_value(metadata), indent=2, sort_keys=True),
             "```",
             "",
             "## Verifier",
             "",
             "```json",
-            json.dumps(verifier, indent=2, sort_keys=True),
+            json.dumps(redact_value(verifier), indent=2, sort_keys=True),
             "```",
             "",
             "Evaluator: judge whether the handoff is clear, honest, and actionable without treating deterministic checks as prose judgment.",
@@ -249,11 +251,11 @@ def main(argv: list[str] | None = None) -> int:
         "handoff_report_path": str(handoff_path),
         "evaluation_package_path": str(package_path),
     }
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    metadata_path.write_text(json.dumps(redact_value(metadata), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     handoff_path.write_text(render_handoff(metadata), encoding="utf-8")
     package_path.write_text(render_package(metadata, {"ok": None, "status": "pending"}), encoding="utf-8")
     verifier = run_verifier(repo_root, python, metadata_path)
-    verifier_path.write_text(json.dumps(verifier, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    verifier_path.write_text(json.dumps(redact_value(verifier), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     package_path.write_text(render_package(metadata, verifier), encoding="utf-8")
     summary = {
         "ok": bool(verifier.get("ok")),

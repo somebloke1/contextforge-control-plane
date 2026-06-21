@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 FIRST_PROMPT = (
     "I want to add a new MCP service called calendar-notes. It would read project notes "
@@ -76,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     source_record_json = uc3.parse_json_or_text(source_record["stdout"])
     source_record_path = output_root / f"calendar-notes-source-record-{timestamp}.json"
-    source_record_path.write_text(json.dumps(source_record_json, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    source_record_path.write_text(json.dumps(redact_value(source_record_json), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     reset = uc3.run(
         [
@@ -175,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         turns=turns,
     )
     metadata_path = output_root / f"{args.client}-metadata-{timestamp}.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    metadata_path.write_text(json.dumps(redact_value(metadata), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     verifier = uc3.run(
         [
             sys.executable,
@@ -195,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     verifier_json = uc3.parse_json_or_text(verifier["stdout"])
     verifier_path = output_root / f"{args.client}-verifier-{timestamp}.json"
-    verifier_path.write_text(json.dumps(verifier_json, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    verifier_path.write_text(json.dumps(redact_value(verifier_json), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     package_path = output_root / f"{args.client}-evaluation-package-{timestamp}.md"
     package_path.write_text(
         render_package(args.client, combined_path, verifier_path, source_record_path, verifier_json, generation_report, dialogue_summary),
@@ -374,13 +376,13 @@ def render_combined(
             "## Command Ledger",
             "",
             "```json",
-            json.dumps(commands, indent=2, sort_keys=True),
+            json.dumps(redact_value(commands), indent=2, sort_keys=True),
             "```",
             "",
             "## Reset JSON",
             "",
             "```json",
-            json.dumps(reset_json, indent=2, sort_keys=True),
+            json.dumps(redact_value(reset_json), indent=2, sort_keys=True),
             "```",
             "",
             "## Source Onboarding Record Command",
@@ -392,7 +394,7 @@ def render_combined(
             f"Source onboarding record artifact: `{source_record_path}`",
             "",
             "```json",
-            json.dumps(source_record_json, indent=2, sort_keys=True),
+            json.dumps(redact_value(source_record_json), indent=2, sort_keys=True),
             "```",
             "",
             "## Setup Command",
@@ -416,13 +418,13 @@ def render_combined(
             "## Dialogue Summary",
             "",
             "```json",
-            json.dumps(dialogue_summary, indent=2, sort_keys=True),
+            json.dumps(redact_value(dialogue_summary), indent=2, sort_keys=True),
             "```",
             "",
             "## Generation Report",
             "",
             "```json",
-            json.dumps(generation_report, indent=2, sort_keys=True),
+            json.dumps(redact_value(generation_report), indent=2, sort_keys=True),
             "```",
             "",
         ]
@@ -462,19 +464,19 @@ def render_package(
         "## Deterministic Verifier",
         "",
         "```json",
-        json.dumps(verifier_json, indent=2, sort_keys=True),
+        json.dumps(redact_value(verifier_json), indent=2, sort_keys=True),
         "```",
         "",
         "## Generation Report",
         "",
         "```json",
-        json.dumps(generation_report, indent=2, sort_keys=True),
+        json.dumps(redact_value(generation_report), indent=2, sort_keys=True),
         "```",
         "",
         "## Dialogue Summary",
         "",
         "```json",
-        json.dumps(dialogue_summary, indent=2, sort_keys=True),
+        json.dumps(redact_value(dialogue_summary), indent=2, sort_keys=True),
         "```",
         "",
         "## Evaluator Instructions",
@@ -493,16 +495,16 @@ def uc_render(result: dict[str, Any]) -> str:
     command_text = result.get("command_text") or " ".join(str(part) for part in result.get("command", []))
     return "\n".join(
         [
-            f"COMMAND: {command_text}",
+            f"COMMAND: {redact_text(str(command_text))}",
             f"CWD: {result.get('cwd')}",
             f"RETURNCODE: {result.get('returncode')}",
             f"TIMEOUT: {str(bool(result.get('timeout'))).lower()}",
             "",
             "STDOUT:",
-            str(result.get("stdout") or ""),
+            redact_text(str(result.get("stdout") or "")),
             "",
             "STDERR:",
-            str(result.get("stderr") or ""),
+            redact_text(str(result.get("stderr") or "")),
             "",
         ]
     )

@@ -126,13 +126,16 @@ recorded/missing flag. Structured readbacks now distinguish:
 - `partial`;
 - `validation_pending`;
 - `reload_required`;
+- `skipped`;
 - `imported`;
 - `verified`.
 
-`available_to_target_client` is now true only for imported, verified, or
-otherwise recorded projections with known tool policy and no blocking runtime
-diagnostic. Pending reload, missing projection, blocked, stale, partial, and
-validation-pending states do not populate current-session `available_tools`.
+`available_to_target_client` is now true only for imported or verified
+projections with known tool policy and no blocking runtime diagnostic. Generic
+recorded fallback states and skipped validation states are not availability
+proof. Pending reload, missing projection, blocked, stale, partial,
+validation-pending, skipped, and recorded-fallback states do not populate
+current-session `available_tools`.
 Project-global tool policy remains available separately through
 `project_tool_policies`.
 

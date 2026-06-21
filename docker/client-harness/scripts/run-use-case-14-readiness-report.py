@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 CLIENTS = ("pi", "opencode", "codex")
 
@@ -244,13 +246,13 @@ def render_package(metadata: dict[str, Any], verifier: dict[str, Any], report_pa
             "## Metadata",
             "",
             "```json",
-            json.dumps(metadata, indent=2, sort_keys=True),
+            json.dumps(redact_value(metadata), indent=2, sort_keys=True),
             "```",
             "",
             "## Verifier",
             "",
             "```json",
-            json.dumps(verifier, indent=2, sort_keys=True),
+            json.dumps(redact_value(verifier), indent=2, sort_keys=True),
             "```",
             "",
             "## Evaluator Instructions",
@@ -330,9 +332,9 @@ def main(argv: list[str] | None = None) -> int:
         "readiness_report_path": str(report_path),
         "evaluation_package_path": str(package_path),
     }
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    metadata_path.write_text(json.dumps(redact_value(metadata), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     verifier_result = run_verifier(repo_root, python, metadata_path)
-    verifier_path.write_text(json.dumps(verifier_result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    verifier_path.write_text(json.dumps(redact_value(verifier_result), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     report_path.write_text(render_report(metadata), encoding="utf-8")
     package_path.write_text(render_package(metadata, verifier_result, report_path), encoding="utf-8")
 

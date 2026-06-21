@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 BASELINE_PROMPT = "what ContextForge state are you using right now?"
 REFRESH_PROMPT = "refresh ContextForge state"
@@ -165,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
         comparison=comparison,
     )
     metadata_path = output_root / f"{CLIENT_KEY}-metadata-{timestamp}.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    metadata_path.write_text(json.dumps(redact_value(metadata), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     verifier = uc3.run(
         [
             sys.executable,
@@ -183,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     verifier_json = uc3.parse_json_or_text(verifier["stdout"])
     verifier_path = output_root / f"{CLIENT_KEY}-verifier-{timestamp}.json"
-    verifier_path.write_text(json.dumps(verifier_json, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    verifier_path.write_text(json.dumps(redact_value(verifier_json), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     package_path = output_root / f"{CLIENT_KEY}-evaluation-package-{timestamp}.md"
     package_path.write_text(render_package(combined_path, verifier_path, verifier_json, generation_report, comparison), encoding="utf-8")
 
@@ -445,7 +447,7 @@ def render_combined(**kwargs: Any) -> str:
         ]
     )
     for item in kwargs["commands"]:
-        lines.append(f"- `{item['command_text']}` -> rc={item['returncode']} timeout={item['timeout']}")
+        lines.append(f"- `{redact_text(str(item['command_text']))}` -> rc={item['returncode']} timeout={item['timeout']}")
     for title, payload in (
         ("Generation Report", kwargs["generation_report"]),
         ("Structured Refresh Comparison", kwargs["comparison"]),
@@ -468,16 +470,16 @@ def render_combined(**kwargs: Any) -> str:
 def command_block(result: dict[str, Any]) -> str:
     return "\n".join(
         [
-            f"COMMAND: {result['command_text']}",
+            f"COMMAND: {redact_text(str(result['command_text']))}",
             f"CWD: {result['cwd']}",
             f"RETURNCODE: {result['returncode']}",
             f"TIMEOUT: {str(result['timeout']).lower()}",
             "",
             "STDOUT:",
-            str(result.get("stdout") or ""),
+            redact_text(str(result.get("stdout") or "")),
             "",
             "STDERR:",
-            str(result.get("stderr") or ""),
+            redact_text(str(result.get("stderr") or "")),
             "",
         ]
     )
@@ -502,13 +504,13 @@ def render_package(combined_path: Path, verifier_path: Path, verifier_json: Any,
             "## Structured Refresh Comparison",
             "",
             "```json",
-            json.dumps(comparison, indent=2, sort_keys=True),
+            json.dumps(redact_value(comparison), indent=2, sort_keys=True),
             "```",
             "",
             "## Generation Report",
             "",
             "```json",
-            json.dumps(generation_report, indent=2, sort_keys=True),
+            json.dumps(redact_value(generation_report), indent=2, sort_keys=True),
             "```",
             "",
             "Semantic evaluator must judge visible user-agent behavior first, then supporting traces.",

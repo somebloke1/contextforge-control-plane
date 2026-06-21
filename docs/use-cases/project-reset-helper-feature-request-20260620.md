@@ -74,15 +74,21 @@ MCP config entries for Codex, OpenCode, and Gemini while preserving unmanaged
 entries. It preserves before-reset evidence under
 `.project/contextforge-reset-evidence/<reset-id>/` when requested and returns a
 structured manifest with actions, refusals, non-actions, and postcondition.
+When no explicit project root is supplied through the MCP helper, reset uses
+the current session/user-message `cwd` signal before falling back to the helper
+process cwd.
 
 Current scope remains intentionally narrow:
 
 - removes `.project/context_forge_state.json`;
 - removes ContextForge-owned Codex MCP blocks from `.codex/config.toml`;
-- removes ContextForge wrapper-shaped OpenCode entries from `opencode.json`
-  only for aliases selected in project-init state;
-- removes ContextForge wrapper-shaped Gemini entries from
-  `.gemini/settings.json` only for aliases selected in project-init state;
+- removes ContextForge-owned OpenCode entries from `opencode.json` when they
+  are selected in project-init state or carry the project-init owner marker;
+- removes ContextForge-owned Gemini entries from `.gemini/settings.json` when
+  they are selected in project-init state or carry the project-init owner
+  marker;
+- preserves unmanaged wrapper-shaped JSON MCP entries and reports a refusal
+  instead of deleting them;
 - clears helper MCP durable project-init caches when invoked through the MCP
   wrapper.
 

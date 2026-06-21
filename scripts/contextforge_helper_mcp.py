@@ -471,6 +471,8 @@ def _target_client_projection_status(
         return "missing"
     if status in {"blocked", "failed"} or validation_status == "blocked":
         return "blocked"
+    if status == "skipped" or validation_status == "skipped":
+        return "skipped"
     if status in {"stale", "stale_projection"} or target_client_state.get("stale") is True:
         return "stale"
     if status in {"partial", "partial_projection"} or validation_status == "mixed":
@@ -512,7 +514,7 @@ def _target_client_proof_status(target_client_state: Mapping[str, Any]) -> str:
 
 
 def _projection_status_allows_target_client_availability(status: str) -> bool:
-    return status in {"imported", "verified", "recorded"}
+    return status in {"imported", "verified"}
 
 
 def _normalize_mcp_status(value: Any) -> str:
@@ -1343,6 +1345,16 @@ def _continuation_project_root(project_root: str, client_type: str) -> str:
     return project_root
 
 
+def _current_session_project_root(project_root: str) -> str:
+    supplied = str(project_root or "").strip()
+    if supplied and _cache_key(supplied) != _cache_key("/"):
+        return supplied
+    cwd = _read_latest_user_message_cwd().strip()
+    if cwd and _cache_key(cwd) != _cache_key("/"):
+        return cwd
+    return os.getcwd()
+
+
 def _require_latest_user_text(project_root: str, *, env_name: str, purpose: str, keywords: set[str]) -> None:
     if not _env_truthy(env_name):
         return
@@ -1722,10 +1734,11 @@ def cf_project_reset_current_project(
 ) -> dict[str, Any]:
     """Reset helper-owned project-init state for this project root only."""
     try:
+        resolved_root = _current_session_project_root(project_root)
         result = {
             "ok": True,
             **helper.reset_current_project(
-                project_root=project_root or os.getcwd(),
+                project_root=resolved_root,
                 client_type=client_type,
                 profile=profile,
                 preserve_evidence=preserve_evidence,
@@ -1733,7 +1746,7 @@ def cf_project_reset_current_project(
             ),
         }
         if not dry_run:
-            cache_root = str(result.get("project_root") or project_root or os.getcwd())
+            cache_root = str(result.get("project_root") or resolved_root)
             _clear_durable_cache(cache_root)
             _clear_durable_recovery_cache(cache_root)
             _clear_pending_project_init_input(cache_root)

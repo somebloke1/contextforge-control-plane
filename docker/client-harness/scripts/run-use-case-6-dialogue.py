@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 SHAPES: dict[str, dict[str, Any]] = {
     "decline": {
@@ -225,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         turns=turn_results,
     )
     metadata_path = output_root / f"{args.client}-{args.shape}-metadata-{timestamp}.json"
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    metadata_path.write_text(json.dumps(redact_value(metadata), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     verifier = uc1.run(
         [
             sys.executable,
@@ -247,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     verifier_json = uc1.parse_json_or_text(verifier["stdout"])
     verifier_path = output_root / f"{args.client}-{args.shape}-verifier-{timestamp}.json"
-    verifier_path.write_text(json.dumps(verifier_json, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    verifier_path.write_text(json.dumps(redact_value(verifier_json), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     package_path = output_root / f"{args.client}-{args.shape}-evaluation-package-{timestamp}.md"
     package_path.write_text(
         render_package(args.client, args.shape, shape, combined_path, verifier_path, verifier_json, generation_report, decision_state_readback),
@@ -379,11 +381,11 @@ def render_combined(
         "",
     ]
     for item in commands:
-        lines.append(f"- `{item['command_text']}` -> rc={item['returncode']} timeout={item['timeout']}")
+        lines.append(f"- `{redact_text(str(item['command_text']))}` -> rc={item['returncode']} timeout={item['timeout']}")
     lines.extend(uc1.render_dialogue_summary_markdown(dialogue_summary))
-    lines.extend(["", "## Generation Report", "", "```json", json.dumps(generation_report, indent=2, sort_keys=True), "```", ""])
-    lines.extend(["", "## Decision State Readback", "", "```json", json.dumps(decision_state_readback, indent=2, sort_keys=True), "```", ""])
-    lines.extend(["", "## Reset Readback", "", "```json", json.dumps(reset_json, indent=2, sort_keys=True), "```", ""])
+    lines.extend(["", "## Generation Report", "", "```json", json.dumps(redact_value(generation_report), indent=2, sort_keys=True), "```", ""])
+    lines.extend(["", "## Decision State Readback", "", "```json", json.dumps(redact_value(decision_state_readback), indent=2, sort_keys=True), "```", ""])
+    lines.extend(["", "## Reset Readback", "", "```json", json.dumps(redact_value(reset_json), indent=2, sort_keys=True), "```", ""])
     for label, value in (
         ("Reset Command Output", reset),
         ("Build Output", build_result),
@@ -497,7 +499,7 @@ def render_package(
     ]
     for item in shape["expected_story"]:
         lines.append(f"- {item}")
-    lines.extend(["", "## Structured State Readback", "", "```json", json.dumps(decision_state_readback, indent=2, sort_keys=True), "```", ""])
+    lines.extend(["", "## Structured State Readback", "", "```json", json.dumps(redact_value(decision_state_readback), indent=2, sort_keys=True), "```", ""])
     lines.extend(["## Scorecard", ""])
     for criterion, points, expected in SCORECARD:
         lines.append(f"- {criterion}: {points} pts - {expected}")
@@ -511,7 +513,7 @@ def render_package(
             "## Generation Report",
             "",
             "```json",
-            json.dumps(generation_report, indent=2, sort_keys=True),
+            json.dumps(redact_value(generation_report), indent=2, sort_keys=True),
             "```",
         ]
     )

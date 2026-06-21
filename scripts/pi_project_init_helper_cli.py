@@ -33,7 +33,7 @@ def _payload(raw: str | None) -> dict[str, Any]:
 
 
 def _project_root(data: Mapping[str, Any], *, default_to_cwd: bool = False) -> str:
-    value = data.get("project_root") or data.get("projectRoot")
+    value = data.get("project_root") or data.get("projectRoot") or data.get("cwd") or data.get("session_cwd") or data.get("sessionCwd")
     if not value:
         if default_to_cwd:
             return str(Path.cwd())

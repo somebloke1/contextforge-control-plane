@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from harness_redaction import redact_text, redact_value
+
 
 PROMPT = "what ContextForge state are you using right now?"
 
@@ -126,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     verifier_json = uc3.parse_json_or_text(verifier["stdout"])
     verifier_path = output_root / f"{args.client}-verifier-{timestamp}.json"
-    verifier_path.write_text(json.dumps(verifier_json, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    verifier_path.write_text(json.dumps(redact_value(verifier_json), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     package_path = output_root / f"{args.client}-evaluation-package-{timestamp}.md"
     package_path.write_text(render_package(args.client, combined_path, verifier_path, verifier_json, generation_report), encoding="utf-8")
     summary = {
@@ -181,9 +183,9 @@ def render_combined(
         "",
     ]
     for item in commands:
-        lines.append(f"- `{item['command_text']}` -> rc={item['returncode']} timeout={item['timeout']}")
-    lines.extend(["", "## Generation Report", "```json", json.dumps(generation_report, indent=2, sort_keys=True), "```", ""])
-    lines.extend(["", "## Reset Readback", "```json", json.dumps(reset_json, indent=2, sort_keys=True), "```", ""])
+        lines.append(f"- `{redact_text(str(item['command_text']))}` -> rc={item['returncode']} timeout={item['timeout']}")
+    lines.extend(["", "## Generation Report", "```json", json.dumps(redact_value(generation_report), indent=2, sort_keys=True), "```", ""])
+    lines.extend(["", "## Reset Readback", "```json", json.dumps(redact_value(reset_json), indent=2, sort_keys=True), "```", ""])
     for label, value in (("setup", setup), ("runtime", runtime), ("fixture", fixture), ("turn", turn)):
         lines.extend([f"## {label.title()} Output", "```text", uc3.command_block(value), "```", ""])
     return "\n".join(lines)
@@ -208,7 +210,7 @@ def render_package(client: str, combined_path: Path, verifier_path: Path, verifi
             "## Generation Report",
             "",
             "```json",
-            json.dumps(generation_report, indent=2, sort_keys=True),
+            json.dumps(redact_value(generation_report), indent=2, sort_keys=True),
             "```",
             "",
             "Semantic evaluator must judge visible user-agent behavior first, then tool traces.",

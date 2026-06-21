@@ -411,6 +411,74 @@ print(json.dumps(redact_value(payload), sort_keys=True))
             self.assertIn("redact_value(reset_json)", source)
             self.assertIn("\"commands\": redact_value(commands)", source)
 
+    def test_later_dialogue_runners_redact_custom_command_renderers(self) -> None:
+        script = r'''
+import importlib.util
+import json
+import os
+import sys
+from pathlib import Path
+
+root = Path("docker/client-harness/scripts")
+sys.path.insert(0, str(root.resolve()))
+os.environ["CONTEXTFORGE_REDACT_VALUES"] = "explicit-secret-value"
+
+def load(name):
+    path = root / name
+    spec = importlib.util.spec_from_file_location(name.replace("-", "_").replace(".py", ""), path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+payload = {
+    "command_text": "curl -H Authorization=Bearer bearer-secret-token CONTEXTFORGE_BEARER_TOKEN=explicit-secret-value",
+    "command": ["curl", "Authorization=Bearer", "bearer-secret-token"],
+    "cwd": "/workspace",
+    "returncode": 0,
+    "timeout": False,
+    "stdout": "{\"access_token\":\"json-secret-token\",\"credential_scope\":\"safe\"}",
+    "stderr": "MCP_BEARER_TOKEN=explicit-secret-value",
+}
+
+outputs = [
+    load("run-use-case-9-dialogue.py").command_block(payload),
+    load("run-use-case-10-dialogue.py").command_block(payload),
+    load("run-use-case-12-dialogue.py").uc_render(payload),
+]
+print(json.dumps(outputs))
+'''
+        result = subprocess.run(
+            ["python3", "-c", script],
+            cwd=ROOT,
+            text=True,
+            check=True,
+            capture_output=True,
+        )
+
+        output = result.stdout
+        self.assertIn("[REDACTED_CONTEXTFORGE_SECRET]", output)
+        self.assertNotIn("bearer-secret-token", output)
+        self.assertNotIn("explicit-secret-value", output)
+        self.assertNotIn("json-secret-token", output)
+        self.assertIn("credential_scope", output)
+
+    def test_later_dialogue_runners_route_persisted_json_through_redaction(self) -> None:
+        for script_name in [
+            "run-use-case-6-dialogue.py",
+            "run-use-case-7-dialogue.py",
+            "run-use-case-8-dialogue.py",
+            "run-use-case-9-dialogue.py",
+            "run-use-case-10-dialogue.py",
+            "run-use-case-11-dialogue.py",
+            "run-use-case-12-dialogue.py",
+            "run-use-case-14-readiness-report.py",
+            "run-use-case-15-handoff.py",
+        ]:
+            source = (ROOT / "docker/client-harness/scripts" / script_name).read_text(encoding="utf-8")
+            self.assertIn("from harness_redaction import", source, msg=script_name)
+            self.assertIn("redact_value(", source, msg=script_name)
+
     def test_source_evidence_runners_redact_metadata_and_command_streams(self) -> None:
         for path in sorted((ROOT / "docker/client-harness/scripts").glob("run-use-case-5[a-l]-*.py")):
             source = path.read_text(encoding="utf-8")
