@@ -5,7 +5,8 @@ Issue: #257.
 Status: accepted by controller on 2026-06-20 after handoff package
 materialization, structural verifier pass, source checks, remediation from an
 initial semantic failure, corrected issue readback, and non-Spark semantic
-review.
+review. Refreshed after the post-review-wave remediation package and refreshed
+UC14 readiness evidence on the latest PR #271 head.
 
 ## Accepted Scope
 
@@ -35,6 +36,26 @@ ContextForge mutation, and not host-Codex promotion.
   `docker/client-harness/evidence/use-case-15/use-case-15-evaluation-package-20260620T202021Z.md`
 - UC14 readiness input:
   `docker/client-harness/evidence/use-case-14/use-case-14-readiness-report-20260620T201054Z.md`
+
+Post-review-wave refresh evidence:
+
+- Runtime metadata:
+  `docker/client-harness/evidence/use-case-15/use-case-15-metadata-20260621T011720Z.json`
+- Runtime verifier:
+  `docker/client-harness/evidence/use-case-15/use-case-15-verifier-20260621T011720Z.json`
+- Generated handoff:
+  `docker/client-harness/evidence/use-case-15/use-case-15-handoff-20260621T011720Z.md`
+- Evaluation package:
+  `docker/client-harness/evidence/use-case-15/use-case-15-evaluation-package-20260621T011720Z.md`
+- UC14 readiness input:
+  `docker/client-harness/evidence/use-case-14/use-case-14-readiness-report-20260621T011316Z.md`
+- Non-Spark evaluator: Bohr
+  `codex-agent:019ee7c1-1c6b-7970-a6b8-11fdf9838cd2`.
+- Evaluator verdict: PASS, 93/100, no fatal overclaim. Residual risks are
+  nonblocking and remain visible: UC15 is not final release acceptance;
+  OpenCode/Codex UC13 dev surfaces remain list/config-readback only; credential
+  validity and provider behavior remain unproven; #285/#286/#287 own stronger
+  cross-client alignment/projection claims.
 
 ## Defect And Remediation
 
@@ -79,12 +100,33 @@ PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python \
 
 Result: `ok=true`.
 
+Post-review-wave refresh:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python \
+  docker/client-harness/scripts/run-use-case-15-handoff.py
+```
+
+Result: package assembled successfully with `ok=true`.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python \
+  docker/client-harness/scripts/verify-use-case-15-handoff-evidence.py \
+  --metadata \
+  docker/client-harness/evidence/use-case-15/use-case-15-metadata-20260621T011720Z.json
+```
+
+Result: `ok=true`.
+
 ```bash
 PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python \
   -m unittest tests.test_use_case1_e2e_gate -v
 ```
 
 Result: 30 tests passed.
+
+Post-review-wave refresh result: 43 tests passed across
+`tests.test_use_case1_e2e_gate` and `tests.test_contextforge_development_path_index`.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python \
@@ -95,6 +137,8 @@ PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python \
 ```
 
 Result: pass.
+
+Post-review-wave refresh result: pass.
 
 ```bash
 git diff --check
