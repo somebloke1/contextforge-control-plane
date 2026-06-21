@@ -321,6 +321,26 @@ worktrees as leased execution surfaces:
 - the controller verifies merge state, branch containment, and Project state
   before deleting branch refs.
 
+Run branch work as a tight branch -> develop -> merge cycle:
+
+1. Start each implementation or reconciliation branch from freshly fetched
+   current `origin/dev-root`; do not stack unrelated work on stale or already
+   merged branches.
+2. Keep the branch small enough that the controller can review the diff,
+   evidence, PR body, and issue/Project impact in one bounded pass.
+3. Push and open or update the PR as soon as the slice has local evidence,
+   even if the PR is draft; do not let unpushed local work become hidden queue
+   state.
+4. Promote, merge, defer, or close each PR promptly after controller review.
+   A draft PR is not a storage shelf; it needs an explicit next action,
+   blocker, or retirement rationale.
+5. After merge, refresh `dev-root`, reconcile dependent branches/PRs, retarget
+   or rebase only branches still worth preserving, and close or delete
+   superseded refs when authorized.
+6. Treat closed-unmerged and conflict-bearing branches as debt. Reopen/rework
+   them only when their value still exceeds the rebase/review cost; otherwise
+   record the retirement path and keep them out of the active queue.
+
 ## Acceptance Discipline
 
 The controller accepts a worker output only after checking:
