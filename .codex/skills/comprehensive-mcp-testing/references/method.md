@@ -101,6 +101,45 @@ The runner may help create, execute, package, and index these bundles. It must
 not score the meaning of prose. Semantic evaluation belongs to the SO or a
 gpt-5.5/non-Spark evaluator.
 
+## Qwen-Sized Evaluation Packets
+
+Build evaluator packets for qwen-limited tested-assistant sessions as compact
+indexes, not transcript dumps. Each packet should begin with a manifest that
+names the use case or service slice, client, model, session ids, terminal
+boundary, prompt count, generation count, raw artifact paths, verifier status,
+fatal criteria, and defect-routing target.
+
+Include a stepwise generation report for every model-dependent turn:
+
+- prompt or user-action summary;
+- raw artifact path;
+- return code and timeout status;
+- output size;
+- target-client session id or continuation id;
+- tool-call count when available;
+- model/client id and token usage when available;
+- whether the step is complete, interrupted, or continuation-safe.
+
+Give the semantic evaluator targeted excerpts and exact raw-transcript
+references for each disputed or decision-bearing step. Do not paste all raw
+transcripts, prior UC history, or multi-service logs into one prompt. The
+evaluator may request drill-down into named artifacts when the compact packet
+is insufficient, but the first-pass packet should fit one focused service,
+client, and behavior shape.
+
+The evaluator narrative must walk the session step by step from its own
+perspective: prompt, visible assistant reply, supporting tool evidence,
+observed route, outcome, defect class, and whether the transcript is complete
+enough for the claimed layer. This narrative is an additional signal for
+isolating failures in the tested client, test package, runner, environment, or
+evaluator instructions.
+
+Deterministic verifiers should declare their scope in the packet, for example
+`ok_scope: deterministic structure only` and
+`semantic_acceptance: requires_agent_evaluation`. They may check manifest
+shape, artifact existence, command status, and JSON structure, but not whether
+free-form prose means the interaction passed.
+
 ## Evaluation Boundary
 
 Allowed deterministic checks:

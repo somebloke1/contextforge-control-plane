@@ -16,6 +16,9 @@ the actual Pi/OpenCode client surface under test. Do not substitute one large
 happy-path transcript for coverage. Because qwen-backed tested assistants have
 a 128k context limit, split coverage into small, focused tests with compact
 prompts and isolated evidence packages.
+Package qwen evidence manifest-first: provide compact metadata, stepwise
+generation reports, targeted excerpts, and raw transcript paths instead of
+pasting large transcripts or multi-service histories into one prompt.
 
 ## Operating Loop
 
@@ -77,7 +80,7 @@ commands before making any readiness claim.
 
 ## Qwen Discipline
 
-Assume tested Pi/OpenCode qwen sessions have limited usable context. Activate only the target service for a service slice unless testing multi-service behavior. Avoid all-service activation, huge tool catalogs, and long prompt narratives. Split large services into smaller function groups if needed, but preserve full untruncated use-case stories in the package and evidence.
+Assume tested Pi/OpenCode qwen sessions have limited usable context. Activate only the target service for a service slice unless testing multi-service behavior. Avoid all-service activation, huge tool catalogs, and long prompt narratives. Split large services into smaller function groups if needed, but preserve full untruncated use-case stories in the package and evidence. Keep evaluator packets manifest-first with targeted excerpts and raw artifact references, not transcript dumps.
 
 Before launching another qwen-backed client session, check for active runner/client/model processes, existing evidence from the current slice, and target-client containers left from the prior run. Distinguish loaded-model memory residency from active generation: GPU memory held by `llama-server` with near-zero utilization is not the same signal as an in-flight tested-assistant turn. Do not stack duplicate sessions just because the controller lost conversational context. If GPU utilization is pegged, identify whether a known test slice is still running before dispatching more model work; stop only sessions owned by this testing loop or ask the SO when ownership is unclear.
 
