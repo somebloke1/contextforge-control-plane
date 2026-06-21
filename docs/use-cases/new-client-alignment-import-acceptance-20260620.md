@@ -9,6 +9,8 @@ Accepted boundary:
 
 - helper DTO and project-state behavior for a client with missing projection;
 - approval-gated alignment/import offer from existing project services;
+- explicit representation of project services that cannot currently be
+  imported for the target client;
 - apply-path proof that the new client projection is added without duplicating
   project service identities or mutating the existing client projection;
 - continuation-path proof that a natural client selection from the alignment
@@ -26,6 +28,13 @@ offer is project-state backed, names the existing project service bindings,
 marks B's projection as missing, and states that no new project service
 instance should be created.
 
+If part of the project service set is blocked or unavailable, the helper does
+not silently omit it from the alignment contract. Importable services remain
+available as choices, while blocked/unavailable project services are reported
+under `alignment_import_offer.unavailable_project_services` with bounded
+visible language explaining why they are not included in the current import
+plan.
+
 The read-only availability/readback helpers remain read-only. They report
 project service presence, project tool policy, and B's missing projection as
 separate facts; they do not claim target-client availability for B before B is
@@ -41,6 +50,8 @@ the queried client lacks projections for them, it returns:
 - `alignment_import_offer.mode: alignment_import`;
 - existing `project_service_bindings`;
 - missing target-client projection actions;
+- `unavailable_project_services` for blocked/skipped/unavailable project
+  services that are not offered as import choices;
 - `available_services` shaped as import choices for the missing client;
 - a `next_turn` asking whether to import the existing project services.
 
@@ -67,10 +78,10 @@ Result: 2 passed.
 Final expanded focused regression:
 
 ```text
-PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python -m unittest tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_contextforge_helper_mcp_reports_missing_target_client_projection_without_available_tools tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_alignment_import_apply_records_opencode_projection_without_mutating_pi_projection tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_alignment_import_continuation_turn_builds_opencode_approval_package -v
+PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python -m unittest tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_contextforge_helper_mcp_reports_missing_target_client_projection_without_available_tools tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_alignment_import_apply_records_opencode_projection_without_mutating_pi_projection tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_alignment_import_continuation_turn_builds_opencode_approval_package tests.test_project_init_activation_workflow.ProjectInitActivationWorkflowTests.test_alignment_import_offer_reports_unavailable_project_services_explicitly -v
 ```
 
-Result: 3 passed.
+Result: 4 passed.
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python -m unittest tests.test_project_init_activation_workflow -v

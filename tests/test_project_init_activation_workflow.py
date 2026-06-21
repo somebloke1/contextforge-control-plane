@@ -2824,6 +2824,47 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIs(proposal["copy_as_complete_visible_response"], True)
         self.assertIs(proposal["do_not_summarize"], True)
 
+    def test_alignment_import_offer_reports_unavailable_project_services_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7"), service_descriptor("github")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            state["services"]["github:canonical"]["provision_status"] = "failed"
+            state["services"]["github:canonical"]["x_reason"] = "credential not configured"
+            project_state.write_state_atomic(root, state)
+
+            offer = helper.list_available_capabilities(project_root=root, client_type="opencode")
+
+        self.assertEqual("alignment_import_offer", offer["status"])
+        self.assertEqual(["context7:canonical"], offer["alignment_import_offer"]["project_service_bindings"])
+        self.assertEqual(1, offer["alignment_import_offer"]["service_count"])
+        self.assertEqual(1, offer["alignment_import_offer"]["unavailable_service_count"])
+        self.assertEqual(
+            [
+                {
+                    "service_binding": "github:canonical",
+                    "status": "failed",
+                    "reason": "credential not configured",
+                    "alignment_status": "blocked",
+                }
+            ],
+            offer["alignment_import_offer"]["unavailable_project_services"],
+        )
+        self.assertEqual(["context7:canonical"], [service["service_binding"] for service in offer["available_services"]])
+        self.assertEqual(["context7:canonical", "none"], [choice["id"] for choice in offer["next_turn"]["choices"]])
+        self.assertIn("Some project services cannot be imported", offer["assistant_visible_response"])
+        self.assertIn("github:canonical: failed (credential not configured)", offer["assistant_visible_response"])
+        self.assertIn("Import this project's existing ContextForge services for OpenCode?", offer["assistant_visible_response"])
+
     def test_contextforge_helper_mcp_reports_project_capability_summary_read_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()

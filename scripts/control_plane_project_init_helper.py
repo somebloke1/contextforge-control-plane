@@ -737,13 +737,16 @@ def _alignment_import_offer(
     services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
     alignment_services: list[dict[str, Any]] = []
     missing_actions: list[dict[str, Any]] = []
+    unavailable_project_services: list[dict[str, Any]] = []
     for binding_id, service_value in services.items():
         if not isinstance(service_value, Mapping):
             continue
         service = dict(service_value)
         service.setdefault("service_binding", str(binding_id))
         service_binding = str(service.get("service_binding") or binding_id)
-        if _service_skipped_or_unavailable(service):
+        unavailable_summary = _service_skipped_or_unavailable_summary(service)
+        if unavailable_summary:
+            unavailable_project_services.append(unavailable_summary)
             continue
         target_clients = service.get("target_clients") if isinstance(service.get("target_clients"), Mapping) else {}
         target_client_state = target_clients.get(client_type) if isinstance(target_clients, Mapping) else None
@@ -781,12 +784,15 @@ def _alignment_import_offer(
             "project_root": str(root),
             "project_service_bindings": project_service_bindings,
             "missing_target_client_projection": missing_actions,
+            "unavailable_project_services": unavailable_project_services,
             "service_count": len(alignment_services),
+            "unavailable_service_count": len(unavailable_project_services),
         },
         "available_services": alignment_services,
         "assistant_visible_response": (
             f"ContextForge state for {str(root)} already contains project services: {project_service_text}. "
             f"Missing target-client projections for {prompt_client}: {project_service_text}. "
+            f"{_alignment_unavailable_visible_text(unavailable_project_services)}"
             "This is a read-only alignment/import offer; no project service instance is duplicated or provisioned here. "
             f"Import this project's existing ContextForge services for {prompt_client}?"
         ),
@@ -817,13 +823,50 @@ def _alignment_import_offer(
 
 
 def _service_skipped_or_unavailable(service: Mapping[str, Any]) -> bool:
+    return bool(_service_skipped_or_unavailable_summary(service))
+
+
+def _service_skipped_or_unavailable_summary(service: Mapping[str, Any]) -> dict[str, str] | None:
+    service_binding = str(service.get("service_binding") or service.get("id") or "unknown")
     status = str(service.get("status") or "")
     if status in {"declined", "deferred", "disabled", "blocked", "unavailable"}:
-        return True
+        return {
+            "service_binding": service_binding,
+            "status": status,
+            "reason": str(service.get("skipped_reason") or service.get("reason") or service.get("x_reason") or f"service is {status}"),
+            "alignment_status": "blocked",
+        }
+    provision_status = str(service.get("provision_status") or "")
+    if provision_status in {"skipped", "unavailable", "missing", "blocked", "failed"}:
+        return {
+            "service_binding": service_binding,
+            "status": provision_status,
+            "reason": str(service.get("skipped_reason") or service.get("reason") or service.get("x_reason") or f"service provisioning is {provision_status}"),
+            "alignment_status": "blocked",
+        }
     lifecycle = service.get("lifecycle") if isinstance(service.get("lifecycle"), Mapping) else {}
-    if str(lifecycle.get("status") or "") in {"declined", "deferred", "disabled", "blocked", "unavailable"}:
-        return True
-    return False
+    lifecycle_status = str(lifecycle.get("status") or "")
+    if lifecycle_status in {"declined", "deferred", "disabled", "blocked", "unavailable"}:
+        return {
+            "service_binding": service_binding,
+            "status": lifecycle_status,
+            "reason": str(lifecycle.get("reason") or service.get("reason") or service.get("x_reason") or f"service lifecycle is {lifecycle_status}"),
+            "alignment_status": "blocked",
+        }
+    return None
+
+
+def _alignment_unavailable_visible_text(unavailable_project_services: Sequence[Mapping[str, Any]]) -> str:
+    if not unavailable_project_services:
+        return ""
+    details = "; ".join(
+        f"{item.get('service_binding')}: {item.get('status')} ({item.get('reason')})"
+        for item in unavailable_project_services
+    )
+    return (
+        "Some project services cannot be imported for this client in the current plan: "
+        f"{details}. "
+    )
 
 
 def _missing_projection_action(service_binding: str, client_type: str) -> dict[str, str]:
