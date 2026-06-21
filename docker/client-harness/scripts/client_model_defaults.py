@@ -34,17 +34,15 @@ def ensure_semantic_model_env(
 
 
 def pi_command_prefix(session_id: str) -> str:
-    provider = "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:-openrouter-gemini-flash-lite}"
-    model = "${CONTEXTFORGE_PI_DEFAULT_MODEL:-${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}}"
     return (
         "cd /workspace && "
-        f'pi --provider "{provider}" --model "{model}" '
+        'pi --provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER}" --model "${CONTEXTFORGE_PI_DEFAULT_MODEL}" '
         f"--session-id {shlex.quote(session_id)} --mode json"
     )
 
 
 def opencode_model_arg() -> str:
-    return "${CONTEXTFORGE_OPENCODE_DEFAULT_MODEL:-openrouter/google/gemini-2.5-flash-lite}"
+    return "${CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}"
 
 
 def opencode_command_prefix(session_id: str | None = None, *, create_session: bool = False) -> str:

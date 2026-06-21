@@ -257,7 +257,11 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
         )
     if operation == "get_project_tool_availability":
         return _mcp_helper().client_visible_project_tool_availability_payload(
-            _mcp_helper().project_tool_availability(project_root=project_root, client_type=client_type)
+            _mcp_helper().project_tool_availability(
+                project_root=project_root,
+                client_type=client_type,
+                target_client_runtime=data.get("target_client_runtime") if isinstance(data.get("target_client_runtime"), Mapping) else None,
+            )
         )
     if operation == "get_project_capability_summary":
         return _mcp_helper().client_visible_project_capability_summary_payload(
