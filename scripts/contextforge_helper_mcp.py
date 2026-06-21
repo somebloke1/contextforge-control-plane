@@ -77,6 +77,21 @@ def _error(exc: Exception) -> dict[str, Any]:
     }
 
 
+def _visible_item_list(items: Sequence[str], *, empty: str = "none recorded") -> list[str]:
+    values = [str(item) for item in items if str(item)]
+    if not values:
+        return [f"- {empty}"]
+    return [f"- {item}" for item in values]
+
+
+def _visible_section(title: str, lines: Sequence[str]) -> str:
+    return "\n".join([title, *lines])
+
+
+def _visible_helper_response(title: str, sections: Sequence[str]) -> str:
+    return "\n\n".join([title, *sections])
+
+
 def _unwrap_tool_envelope(value: dict[str, Any]) -> dict[str, Any]:
     """Remove MCP response metadata before passing a plan back to pure helpers."""
 
@@ -880,16 +895,70 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
     )
     revision = project_state.state_revision(state)
     refresh_boundary = _mcp_runtime_diagnostic_note(mcp_runtime_diagnostics, session_boundary, client_type)
-    visible_response = (
-        f"ContextForge state for {str(root)} is initialized at revision {revision}. "
-        f"Project services present: {project_service_text}. "
-        f"Configured/imported-tool policy for this client: {tool_text}. "
-        f"Missing target-client projections: {missing_projection_text}. "
-        f"Skipped or unavailable services: {skipped_text}. "
-        f"MCP runtime diagnostics: {mcp_diagnostic_text}. "
-        "client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven. "
-        "This is a read-only project-state readback; interactive proof is not claimed by this readback. "
-        f"Note: {refresh_boundary}"
+    visible_response = _visible_helper_response(
+        "ContextForge tool availability",
+        [
+            _visible_section(
+                "Project",
+                [
+                    f"- Root: `{str(root)}`",
+                    "- Status: initialized",
+                    f"- Revision: {revision}",
+                    f"- Target client: {client_type}",
+                ],
+            ),
+            _visible_section(
+                "Project services",
+                _visible_item_list([item["service_binding"] for item in project_services]),
+            ),
+            _visible_section(
+                "Configured/imported tools for this client",
+                _visible_item_list(
+                    [
+                        f"{item['service_binding']}: {', '.join(item['tool_names'])}"
+                        for item in available_tools
+                    ],
+                    empty=tool_text,
+                ),
+            ),
+            _visible_section(
+                "Missing target-client projections",
+                _visible_item_list(
+                    [
+                        f"{item['service_binding']}: align/import existing project service instance for {client_type}; do not create a new project service instance without explicit approval"
+                        for item in missing_target_client_projection
+                    ]
+                ),
+            ),
+            _visible_section(
+                "Skipped or unavailable services",
+                _visible_item_list(
+                    [
+                        f"{item['service_binding']}: {item['status']} ({item['reason']})"
+                        for item in skipped
+                    ],
+                    empty=skipped_text,
+                ),
+            ),
+            _visible_section(
+                "MCP runtime diagnostics",
+                _visible_item_list(
+                    [
+                        f"{item['service_binding']}: {item['classification']}"
+                        for item in mcp_runtime_diagnostics
+                    ],
+                    empty=mcp_diagnostic_text,
+                ),
+            ),
+            _visible_section(
+                "Readback limits",
+                [
+                    "- Client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven.",
+                    "- This is a read-only project-state readback; interactive proof is not claimed by this readback.",
+                ],
+            ),
+            _visible_section("Next step", [f"- {refresh_boundary}"]),
+        ],
     )
     return {
         "ok": True,
@@ -1043,16 +1112,77 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
             "internal_status_terms_suppressed": True,
             "diagnostic_state_retained_in_structured_fields": True,
         },
-        "assistant_visible_response": (
-            "Source: project state plus ContextForge catalog; no changes were made. "
-            f"In this project, ContextForge is initialized for {str(root)} at state revision {revision}. "
-            f"Important client/session boundary for {client_type}: {refresh_boundary} "
-            f"Project services present: {project_service_text}. "
-            f"Configured in current project state for {client_type}: {available_text}. "
-            f"Missing target-client projections: {missing_projection_text}. "
-            f"Known but unavailable: {unavailable_text}. "
-            f"MCP runtime diagnostics: {mcp_diagnostic_text}. "
-            f"Could be onboarded with approval: {onboarding_text}."
+        "assistant_visible_response": _visible_helper_response(
+            "ContextForge capability summary",
+            [
+                _visible_section(
+                    "Source",
+                    [
+                        "- Project state plus ContextForge catalog.",
+                        "- No changes were made.",
+                    ],
+                ),
+                _visible_section(
+                    "Project",
+                    [
+                        f"- Root: `{str(root)}`",
+                        "- Status: initialized",
+                        f"- Revision: {revision}",
+                        f"- Target client: {client_type}",
+                    ],
+                ),
+                _visible_section("Client/session boundary", [f"- {refresh_boundary}"]),
+                _visible_section(
+                    "Project services",
+                    _visible_item_list([item["service_binding"] for item in project_services], empty=project_service_text),
+                ),
+                _visible_section(
+                    f"Configured in current project state for {client_type}",
+                    _visible_item_list(
+                        [
+                            f"{item.get('service_binding')}: {', '.join(str(name) for name in item.get('tool_names') or [])}"
+                            for item in available_now
+                            if isinstance(item, Mapping)
+                        ],
+                        empty=available_text,
+                    ),
+                ),
+                _visible_section(
+                    "Missing target-client projections",
+                    _visible_item_list(
+                        [
+                            f"{item.get('service_binding')}: align/import existing project service instance for {client_type}; no new project service instance without explicit approval"
+                            for item in missing_projection
+                            if isinstance(item, Mapping)
+                        ],
+                        empty=missing_projection_text,
+                    ),
+                ),
+                _visible_section(
+                    "Known but unavailable",
+                    _visible_item_list(
+                        [
+                            f"{item['service_binding']} ({item['status']}: {item['reason']})"
+                            for item in known_unavailable
+                        ],
+                        empty=unavailable_text,
+                    ),
+                ),
+                _visible_section(
+                    "MCP runtime diagnostics",
+                    _visible_item_list(
+                        [
+                            f"{item.get('service_binding')}: {item.get('classification')}"
+                            for item in mcp_runtime_diagnostics
+                        ],
+                        empty=mcp_diagnostic_text,
+                    ),
+                ),
+                _visible_section(
+                    "Could be onboarded with approval",
+                    _visible_item_list([item["capability"] for item in onboarding_needed], empty=onboarding_text),
+                ),
+            ],
         ),
         "non_actions": [
             "read-only project capability summary",
@@ -1259,17 +1389,84 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
             "client_visible": "reported only from recorded target-client projection state; project tool policy alone is not target-client availability",
             "interactive_proof": "not claimed by this readback; requires a separate ordinary tool-use transcript",
         },
-        "assistant_visible_response": (
-            f"ContextForge state for {str(root)} is {state.get('status')} at revision {revision}. "
-            f"Target client: {client_type}. Selected services: {service_text}. "
-            f"Project tool policy: {policy_text}. "
-            f"Configured/imported-tool policy for this client: {tools_text}. "
-            f"Missing target-client projections: {missing_projection_text}. "
-            f"Skipped or unavailable services: {skipped_text}. "
-            f"Target-client binding state: {target_summaries}. "
-            "client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven. "
-            "This is a read-only project-state readback; interactive proof is not claimed by this readback. "
-            f"Note: {refresh_boundary}"
+        "assistant_visible_response": _visible_helper_response(
+            "ContextForge project state",
+            [
+                _visible_section(
+                    "Project",
+                    [
+                        f"- Root: `{str(root)}`",
+                        f"- Status: {state.get('status')}",
+                        f"- Revision: {revision}",
+                        f"- Target client: {client_type}",
+                    ],
+                ),
+                _visible_section("Selected services", _visible_item_list(selected, empty=service_text)),
+                _visible_section(
+                    "Project tool policy",
+                    _visible_item_list(
+                        [
+                            f"{item.get('service_binding')}: {', '.join(str(name) for name in item.get('tool_policy_names') or []) or 'none reported'}"
+                            for item in project_tool_policies
+                            if isinstance(item, Mapping)
+                        ],
+                        empty=policy_text,
+                    ),
+                ),
+                _visible_section(
+                    "Configured/imported tools for this client",
+                    _visible_item_list(
+                        [
+                            f"{item.get('service_binding')}: {', '.join(str(name) for name in item.get('tool_names') or []) or 'none reported'}"
+                            for item in imported_tools
+                            if isinstance(item, Mapping)
+                        ],
+                        empty=tools_text,
+                    ),
+                ),
+                _visible_section(
+                    "Missing target-client projections",
+                    _visible_item_list(
+                        [
+                            f"{item.get('service_binding')}: align/import existing project service instance for {client_type}; no new project service instance without explicit approval"
+                            for item in missing_projection
+                            if isinstance(item, Mapping)
+                        ],
+                        empty=missing_projection_text,
+                    ),
+                ),
+                _visible_section(
+                    "Skipped or unavailable services",
+                    _visible_item_list(
+                        [
+                            f"{item.get('service_binding')} ({item.get('status')}: {item.get('reason')})"
+                            for item in skipped
+                            if isinstance(item, Mapping)
+                        ],
+                        empty=skipped_text,
+                    ),
+                ),
+                _visible_section(
+                    "Target-client binding state",
+                    _visible_item_list(
+                        [
+                            f"{item['service_binding']}: projection {item['target_client_projection_status']}; "
+                            f"{item['target_client_user_state']}; "
+                            f"MCP runtime {item['mcp_runtime_diagnostic']['classification']}"
+                            for item in service_readbacks
+                        ],
+                        empty=target_summaries,
+                    ),
+                ),
+                _visible_section(
+                    "Readback limits",
+                    [
+                        "- Client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven.",
+                        "- This is a read-only project-state readback; interactive proof is not claimed by this readback.",
+                    ],
+                ),
+                _visible_section("Next step", [f"- {refresh_boundary}"]),
+            ],
         ),
         "non_actions": [
             "read-only project-state readback",

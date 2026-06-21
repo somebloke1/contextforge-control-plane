@@ -2475,21 +2475,16 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(result["do_not_summarize"])
         self.assertNotIn("available_tools", result)
         self.assertNotIn("state_revision", result)
-        self.assertEqual(
-            (
-                f"ContextForge state for {root} is initialized at revision 1. "
-                "Project services present: context7:canonical. "
-                "Configured/imported-tool policy for this client: no currently available target-client tools in this session. "
-                "Missing target-client projections: none recorded. "
-                "Skipped or unavailable services: none reported. "
-                "MCP runtime diagnostics: context7:canonical: reload_pending_before_mcp_startup. "
-                "client-visible tool use is not proven by this readback; target-client-visible=false states remain unproven. "
-                "This is a read-only project-state readback; interactive proof is not claimed by this readback. "
-                "Note: After approved OpenCode project-local MCP config changes, start a new OpenCode session from the project root before relying on the newly installed tools. "
-                "OpenCode discovers project-local MCP servers and loads the user-home ContextForge plugin when a session starts."
-            ),
-            result["assistant_visible_response"],
-        )
+        visible = result["assistant_visible_response"]
+        self.assertTrue(visible.startswith("ContextForge tool availability\n\nProject\n"))
+        self.assertIn(f"- Root: `{root}`", visible)
+        self.assertIn("- Revision: 1", visible)
+        self.assertIn("- Target client: opencode", visible)
+        self.assertIn("Project services\n- context7:canonical", visible)
+        self.assertIn("Configured/imported tools for this client\n- no currently available target-client tools in this session", visible)
+        self.assertIn("MCP runtime diagnostics\n- context7:canonical: reload_pending_before_mcp_startup", visible)
+        self.assertIn("Readback limits\n- Client-visible tool use is not proven by this readback", visible)
+        self.assertIn("Next step\n- After approved OpenCode project-local MCP config changes", visible)
         self.assertIn("no project-init proposal, approval, or apply", result["non_actions"])
 
     def test_opencode_readback_distinguishes_mcp_startup_failure_from_reload_pending(self) -> None:
@@ -2667,15 +2662,15 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("not_claimed", readback["target_client_services"][0]["target_client_visibility_status"])
         self.assertEqual("not_recorded", readback["target_client_services"][0]["target_client_proof_status"])
         self.assertEqual(expected_actions[0], readback["target_client_services"][0]["recommended_action"])
-        self.assertIn("Project tool policy: context7:canonical: context7-local-resolve-library-id, context7-local-query-docs", readback["assistant_visible_response"])
-        self.assertIn("Configured/imported-tool policy for this client: none reported.", readback["assistant_visible_response"])
+        self.assertIn("Project tool policy\n- context7:canonical: context7-local-resolve-library-id, context7-local-query-docs", readback["assistant_visible_response"])
+        self.assertIn("Configured/imported tools for this client\n- none reported", readback["assistant_visible_response"])
         self.assertIn("projection missing; client state not_recorded", readback["assistant_visible_response"])
 
         self.assertEqual([], capabilities["available_now"])
         self.assertEqual(expected_actions, capabilities["missing_target_client_projection"])
         self.assertEqual("context7:canonical", capabilities["project_services"][0]["service_binding"])
-        self.assertIn("Configured in current project state for opencode: none reported.", capabilities["assistant_visible_response"])
-        self.assertIn("Missing target-client projections: context7:canonical", capabilities["assistant_visible_response"])
+        self.assertIn("Configured in current project state for opencode\n- none reported", capabilities["assistant_visible_response"])
+        self.assertIn("Missing target-client projections\n- context7:canonical", capabilities["assistant_visible_response"])
 
     def test_target_client_projection_status_vocabulary_keeps_readiness_layers_separate(self) -> None:
         cases = [
@@ -3042,11 +3037,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("available_now", result)
         self.assertNotIn("onboarding_needed", result)
         visible = result["assistant_visible_response"]
-        self.assertIn("Configured in current project state for opencode: none reported.", visible)
-        self.assertIn("Project services present:", visible)
-        self.assertIn("Known but unavailable:", visible)
-        self.assertIn("Could be onboarded with approval:", visible)
-        self.assertIn("Important client/session boundary for opencode:", visible)
+        self.assertTrue(visible.startswith("ContextForge capability summary\n\nSource\n"))
+        self.assertIn("Configured in current project state for opencode\n- none reported", visible)
+        self.assertIn("Project services\n- context7:canonical", visible)
+        self.assertIn("Known but unavailable\n- web-search:credential_scoped", visible)
+        self.assertIn("Could be onboarded with approval\n- exa-search", visible)
+        self.assertIn("Client/session boundary\n- After approved OpenCode project-local MCP config changes", visible)
         self.assertIn("context7:canonical", visible)
         self.assertIn("web-search:credential_scoped", visible)
         self.assertIn("no service onboarding", result["non_actions"])
@@ -3090,9 +3086,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("state_revision", result)
         visible = result["assistant_visible_response"]
         self.assertIn(str(root), visible)
-        self.assertIn("revision", visible)
+        self.assertTrue(visible.startswith("ContextForge project state\n\nProject\n"))
+        self.assertIn("- Revision: 1", visible)
         self.assertIn("context7:canonical", visible)
-        self.assertIn("Configured/imported-tool policy", visible)
+        self.assertIn("Configured/imported tools for this client", visible)
         self.assertIn("client-visible", visible)
         self.assertIn("not proven by this readback", visible)
         self.assertIn("target-client-visible=false states remain unproven", visible)
