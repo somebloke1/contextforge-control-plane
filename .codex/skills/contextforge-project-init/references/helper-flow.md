@@ -3,7 +3,8 @@
 Core repo files:
 
 - `AGENTS.md`: project-wide constraints and verification policy.
-- `.project/context_forge_state.json`: project-init authority when readable.
+- `.project/context_forge_state.json`: project-init authority when readable and
+  schema-shaped by helper readback or schema validation.
 - `.codex/config.toml`: project-local Codex activation surface.
 - `scripts/contextforge_helper_mcp.py`: helper MCP entrypoint.
 - `scripts/control_plane_project_init_helper.py`: project-init planning logic.
@@ -21,6 +22,12 @@ Root authority:
 
 - Treat `/home/dgk/workspace/cf-controlplane` as the only active helper,
   wrapper, client-cwd, project-state, and Serena provisioning root.
+- Before making project-state claims, rely on helper readback or schema
+  validation of `.project/context_forge_state.json`; do not infer initialized
+  state from env files, client config, or stale transcript text.
+- For a project-state write, the scoped consent receipt must name consent class
+  `project_state_write` along with the target path, service/project scope,
+  requested action, and evidence digest.
 - Any copied, migration, or legacy checkout path in `.codex/config.toml`,
   `.project/context_forge_state.json`, generated prompt resources, or
   server-instance metadata is a blocker to repair, not a usable target.

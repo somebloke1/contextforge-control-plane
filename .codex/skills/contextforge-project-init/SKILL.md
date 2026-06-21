@@ -36,7 +36,9 @@ the task is project activation, approval, apply, or repair.
 
 ## Hard Boundaries
 
-- `.project/context_forge_state.json` is the project-init authority.
+- `.project/context_forge_state.json` is the project-init authority, and
+  project-state claims must be made only after schema-shaped helper readback or
+  schema validation.
 - The active repository root is `/home/dgk/workspace/cf-controlplane`.
   Any copied, migration, or legacy checkout path in config, state, docs, or
   generated prompt material is non-authoritative blocker evidence. Do not use
@@ -44,7 +46,9 @@ the task is project activation, approval, apply, or repair.
   root for new activation work.
 - Client configs and extension files are discovery or activation surfaces, not
   service identity.
-- Mutate only helper-approved project-local activation state.
+- Mutate only helper-approved project-local activation state. A project-state
+  write requires a scoped consent receipt with consent class
+  `project_state_write`, target path, scope, action, and evidence digest.
 - Do not mutate user-global trust, global client configs, secrets, live
   ContextForge registry/catalog state, backend installs, or backend restarts in
   ordinary project init.
