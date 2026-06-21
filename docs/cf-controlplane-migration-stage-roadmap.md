@@ -82,8 +82,8 @@ claims, and evidence:
    integration foils against the ContextForge development Docker surface. For
    the indefinite development path, only Pi and OpenCode are in scope unless
    the user explicitly reopens another client. They use the already served
-   local llama.cpp-hosted Qwen 3.6 A3B model as configuration/default model
-   state, not installation.
+   configured semantic-test model profile as configuration/default model state,
+   not installation.
 
 Avoid Codex and Gemini client containers for this development project; Pi and
 OpenCode are the preferred real client foils.

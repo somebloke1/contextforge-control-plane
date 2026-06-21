@@ -118,8 +118,9 @@ Work toward a systemd-controlled ContextForge installation that:
   semantic test bundles run through actual target clients by dispatched
   sub-agent runners. These bundles must deliberately explore plausible user
   behaviors and map each behavior to the testable surface in that client.
-  Because qwen-backed test sessions have a 128k context limit, prefer a full
-  set of small, focused semantic tests over large monolithic tests.
+  Because tested assistant context is finite regardless of the currently
+  configured semantic-test model profile, prefer a full set of small, focused
+  semantic tests over large monolithic tests.
 - Deterministic tests may establish structure, state, transport, command
   completion, JSON shape, endpoint reachability, and evidence packaging. They
   must not judge free-form assistant meaning or user-facing success; semantic

@@ -205,9 +205,9 @@ Named client home/session state should be reset only when the lease requires a
 fully virgin client home for that target client; unrelated client homes and
 volumes must not be touched.
 
-Local Qwen responses can be slow. The validator must wait at least 90 seconds
-for each assistant response when needed before classifying a response as
-missing, stalled, or failed.
+Semantic-test model responses can be slow. The validator must wait at least 90
+seconds for each assistant response when needed before classifying a response
+as missing, stalled, or failed.
 
 The transcript must include:
 
@@ -285,7 +285,8 @@ The Pi evidence must show:
   the verifier with `--session-id`;
 - the session ran from the non-ephemeral Pi client Docker harness against
   `/workspace`;
-- `qwen3.6-a3b` was the active model;
+- the configured semantic-test model profile was active, with the emitted
+  model id recorded;
 - `context7:canonical` was selected from helper-discovered choices;
 - final assistant output says the tools are installed and `/reload` is required
   before they register.
@@ -319,7 +320,8 @@ The OpenCode evidence must show:
 - the OpenCode session id, such as `ses_...`;
 - the session ran from the non-ephemeral OpenCode client Docker harness against
   `/workspace`;
-- `qwen3.6-a3b` was the active model;
+- the configured semantic-test model profile was active, with the emitted
+  model id recorded;
 - the first prompt or resume context exposed the project-init helper flow;
 - `context7:canonical` was selected from helper-discovered choices;
 - final assistant output says the tools are installed and a new OpenCode session

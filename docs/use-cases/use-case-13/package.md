@@ -45,12 +45,12 @@ Pi, host-global OpenCode, host-global Codex, or production-ish local workflows.
 8. Reset stale Pi client containers, Pi home volume, and the shared harness
    workspace before the Pi client smoke.
 9. Run Pi inside the client harness against `host.docker.internal:4445` using
-   the container-local shim/runtime and local Qwen model configuration.
+   the container-local shim/runtime and configured semantic-test model profile.
 10. Reset stale OpenCode client containers, OpenCode home volume, and the
     shared harness workspace before the OpenCode client smoke.
 11. Run OpenCode inside the client harness against
     `host.docker.internal:4445` using container-local config/plugin/runtime and
-    local Qwen model configuration.
+    the configured semantic-test model profile.
 12. Reset stale Codex client containers, Codex harness home volume, and the
     shared harness workspace before the Codex client smoke.
 13. Run Codex inside the authenticated Docker image against

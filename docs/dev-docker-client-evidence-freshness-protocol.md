@@ -46,7 +46,8 @@ A full #58 evidence refresh has these phases.
      refresh is considered complete.
 4. Validate client Docker foils:
    - run Pi and OpenCode only, unless a later issue explicitly expands scope;
-   - keep local Qwen/llama.cpp as configuration, not an installation task;
+   - keep the configured semantic-test model profile as configuration, not an
+     installation task;
    - prove OpenCode through its remote MCP client surface against
      `http://host.docker.internal:4445`;
    - for the `mentality_dev_docker_server` route, distinguish
@@ -136,13 +137,17 @@ For this protocol, the only client Docker foils are:
 - Pi client Docker;
 - OpenCode client Docker.
 
-The local Qwen model served by llama.cpp is a configuration target. The refresh
-may verify endpoint/model visibility, but it must not install or replace the
-model server. Pi/OpenCode model evidence must record the exact advertised model
-id returned by the endpoint, compare it with the harness expected model id, and
-mark the evidence `stale` when they differ rather than accepting a nearby Qwen
-alias. Do not expand #58 evidence claims to Codex CLI, Gemini CLI, Claude Code,
-or Claude Desktop without a later scoped issue and approval.
+The semantic-test model profile is a configuration target determined by the
+client-harness environment, not by static prompt language. Evidence refreshes
+must record the effective model profile produced by the branch-local semantic
+model env file and generator, including `CONTEXTFORGE_TEST_MODEL` and the
+client-specific default model variables when present. The refresh may verify
+endpoint/model visibility, but it must not install or replace a model provider.
+Pi/OpenCode model evidence must record the exact advertised model id returned
+by the endpoint, compare it with the harness expected model id, and mark stale
+evidence when they differ rather than accepting a nearby alias. Do not expand
+#58 evidence claims to Codex CLI, Gemini CLI, Claude Code, or Claude Desktop
+without a later scoped issue and approval.
 
 ## Non-Actions
 

@@ -884,14 +884,14 @@ The user explicitly approved the operating agent to install software and Python/
 - Updated: 2026-06-17
 - Tags: contextforge,surface-boundaries,docker,clients,operations
 
-ContextForge work must distinguish three surfaces. The legacy/live ContextForge surface is the currently active user/operator environment and is strictly read-only: no registry writes, service registration, prompt/resource upserts, token/team/admin changes, env edits, process restarts, service stops/starts, database writes, config rewrites, hook/trust changes, port changes, or cleanup actions. It may be used only for non-mutating evidence such as health/readiness checks, config/path inspection, process/socket inspection, logs, diagnostics, and comparison. The ContextForge development Docker surface is the isolated mutable gateway/app surface for cf-controlplane validation, with separate ports, volumes, env, registry state, credentials, and test data. Registration tests, endpoint validation, resettable integration work, and other mutable experiments belong there. Client Docker test surfaces are separate Dockerized client foils against the development Docker surface; for now they are Pi and OpenCode only and use the already served local Qwen/llama.cpp path as configuration, not installation. Evidence and claims must name the exercised surface: legacy/live read-only, ContextForge dev Docker, Pi client Docker, or OpenCode client Docker.
+ContextForge work must distinguish three surfaces. The legacy/live ContextForge surface is the currently active user/operator environment and is strictly read-only: no registry writes, service registration, prompt/resource upserts, token/team/admin changes, env edits, process restarts, service stops/starts, database writes, config rewrites, hook/trust changes, port changes, or cleanup actions. It may be used only for non-mutating evidence such as health/readiness checks, config/path inspection, process/socket inspection, logs, diagnostics, and comparison. The ContextForge development Docker surface is the isolated mutable gateway/app surface for cf-controlplane validation, with separate ports, volumes, env, registry state, credentials, and test data. Registration tests, endpoint validation, resettable integration work, and other mutable experiments belong there. Client Docker test surfaces are separate Dockerized client foils against the development Docker surface; for now they are Pi and OpenCode only and use the configured semantic-test model profile as configuration, not installation. Evidence and claims must name the exercised surface: legacy/live read-only, ContextForge dev Docker, Pi client Docker, or OpenCode client Docker.
 <!-- governance-crud:end id=dec-20260617-0002 -->
 
 <!-- governance-crud:start id=dec-20260617-0003 -->
 ## dec-20260617-0003: Use Pi and OpenCode client Docker surfaces with local Qwen
 
 - Ledger: decisions
-- Status: accepted
+- Status: superseded
 - Repository: /home/dgk/workspace/cf-controlplane
 - Created: 2026-06-17
 - Updated: 2026-06-17
@@ -899,6 +899,19 @@ ContextForge work must distinguish three surfaces. The legacy/live ContextForge 
 
 For the indefinite cf-controlplane development path, use only the Pi and OpenCode client Docker surfaces unless the user explicitly reopens another client. Both clients should use the existing local llama.cpp-hosted Qwen 3.6 A3B model as configuration/default model state, not as an installation task. Avoid Codex and Gemini client containers for this development project because Pi and OpenCode are the preferred real client foils.
 <!-- governance-crud:end id=dec-20260617-0003 -->
+
+<!-- governance-crud:start id=dec-20260621-0001 -->
+## dec-20260621-0001: Determine semantic-test model profile from harness environment
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-21
+- Updated: 2026-06-21
+- Tags: clients,docker,semantic-testing,model-profile,env
+
+For Pi and OpenCode client Docker semantic-test sessions, prompts, packages, skills, and evaluation guidance must not hardcode a provider or model name as the active target. The effective semantic-test model profile is determined by the branch-local client-harness environment and generator, especially `docker/client-harness/env/semantic-model.env`, `docker/client-harness/env/semantic-model.env.example`, and `docker/client-harness/scripts/make-semantic-model-env.sh`, plus the client-specific render/bootstrap path that consumes those variables. Evidence must record the effective model-profile variables and the emitted client-visible model id for the exercised run. Decision `dec-20260617-0003` is superseded for model selection; its Pi/OpenCode client-Docker surface preference remains represented by `dec-20260617-0002` and current harness docs.
+<!-- governance-crud:end id=dec-20260621-0001 -->
 
 <!-- governance-crud:start id=dec-20260617-0004 -->
 ## dec-20260617-0004: Retire cf-controlplane naming through GitHub-tracked slices
