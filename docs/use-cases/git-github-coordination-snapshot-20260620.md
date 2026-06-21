@@ -10,8 +10,9 @@ PR #271 is the active ordinary review surface for the SuperLoop harness work:
 https://github.com/somebloke1/contextforge-control-plane/pull/271
 ```
 
-Last pushed readback after flagged-attention and service-parity integration on
-2026-06-21:
+Live PR head must be read from GitHub when acting. The last pre-snapshot
+substantive harness readback after flagged-attention and service-parity
+integration on 2026-06-21 was:
 
 ```text
 base: dev-root
@@ -24,6 +25,10 @@ reviews: none
 check runs: none
 branch delta: 60 commits, 208 changed files
 ```
+
+This snapshot was then updated by coordination-only documentation commits, so
+the PR body and `gh pr view 271 --json headRefOid` are the authoritative live
+head readback.
 
 Earlier divergence between the local tested chain and the draft PR branch has
 been reconciled into PR #271. Do not rely on the older
@@ -54,7 +59,7 @@ and UC15 were refreshed in `a332003` and `86ab19a`, flagged-attention triage was
 refreshed through `92461a8`, and #284 service-parity investigation integration
 is in `11cda69`.
 
-Current-head controller checks after `11cda69`:
+Controller checks after the `11cda69` service-parity integration baseline:
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 run/test-venvs/project-init-workflow/bin/python -m unittest tests.test_use_case1_e2e_gate tests.test_contextforge_docker_harness tests.test_contextforge_development_path_index -v
