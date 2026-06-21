@@ -33,10 +33,10 @@ DOCKER_TARGET_PROFILE: dict[str, dict[str, Any]] = {
         "notes": "Current 4445 has dev names; replacement parity needs mentality/mentality_server.",
     },
     "ssh-tmux": {
-        "locality": "host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9102/mcp",
-        "approval_state": "blocked_pending_single_user_boundary_review",
-        "notes": "Persistent sessions are host-local state; do not blindly share without approval.",
+        "locality": "compose_sidecar",
+        "target_upstream_url": "http://ssh-tmux-transceiver:9202/mcp",
+        "approval_state": "ready_after_single_user_boundary_preflight",
+        "notes": "Container-local tmux state avoids host-session reuse; remote SSH operations still require explicit user/credential approval.",
     },
     "playwright": {
         "locality": "compose_sidecar",
@@ -340,7 +340,7 @@ def build_plan(
         "recommended_ordered_slices": [
             "parameterize target/auth inputs for 4445 without using 4444 wrapper defaults",
             "materialize Docker locality profile for each canonical service",
-            "register canonical sidecar-proven services first: context7, mentality, playwright, github, exa-search, and web-search after env preflight where applicable",
+            "register canonical sidecar-proven services first: context7, mentality, ssh-tmux, playwright, github, exa-search, and web-search after env or boundary preflight where applicable",
             "add or approve service-specific reachable topology for remaining credential and single-user services",
             "register remote OpenZeppelin directly",
             "replay tool guidance using 4445-discovered gateway IDs and canonical tool tags",

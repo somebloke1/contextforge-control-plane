@@ -178,6 +178,14 @@ the compose-network URL `http://exa-search-transceiver:9205/mcp` only after
 credential-env preflight and direct reachability evidence. Do not fall back to
 the host-loopback `127.0.0.1:9105` live surface for Docker successor parity.
 
+`ssh-tmux` follows compose-sidecar locality for the Docker successor surface:
+`ssh-tmux-transceiver` runs build-installed `mcp-ssh-tmux` with
+container-local tmux state and is registered through
+`http://ssh-tmux-transceiver:9202/mcp` only after single-user/credential
+boundary preflight and direct reachability evidence. Do not project or reuse
+host tmux sessions by default; reset the container state instead of calculating
+cleanup deltas.
+
 `playwright` follows the same sidecar-locality principle with a native MCP
 backend instead of a bridge: `playwright-transceiver` runs isolated Chrome for
 Testing/Chromium in the harness network with an in-memory shared browser

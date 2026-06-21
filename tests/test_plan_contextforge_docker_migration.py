@@ -177,6 +177,12 @@ class DockerMigrationPlanTests(unittest.TestCase):
         self.assertFalse(services["exa-search"]["approval_blocked"])
         self.assertTrue(services["exa-search"]["docker_projection_required"])
         self.assertTrue(services["exa-search"]["unsafe_to_reuse_live_default"])
+        self.assertEqual("compose_sidecar", services["ssh-tmux"]["locality"])
+        self.assertEqual("http://ssh-tmux-transceiver:9202/mcp", services["ssh-tmux"]["target_upstream_url"])
+        self.assertEqual("ready_after_single_user_boundary_preflight", services["ssh-tmux"]["approval_state"])
+        self.assertFalse(services["ssh-tmux"]["approval_blocked"])
+        self.assertTrue(services["ssh-tmux"]["docker_projection_required"])
+        self.assertTrue(services["ssh-tmux"]["unsafe_to_reuse_live_default"])
         self.assertEqual("compose_sidecar", services["web-search"]["locality"])
         self.assertEqual("http://web-search-transceiver:9207/mcp", services["web-search"]["target_upstream_url"])
         self.assertEqual("ready_after_credential_env_preflight", services["web-search"]["approval_state"])
@@ -192,7 +198,7 @@ class DockerMigrationPlanTests(unittest.TestCase):
         self.assertFalse(services["github"]["approval_blocked"])
         self.assertTrue(services["github"]["docker_projection_required"])
         self.assertTrue(services["github"]["unsafe_to_reuse_live_default"])
-        self.assertIn("ssh-tmux", plan["summary"]["approval_blocked_services"])
+        self.assertNotIn("ssh-tmux", plan["summary"]["approval_blocked_services"])
         self.assertIn("serena-cf-controlplane-d46fe58a2a20", plan["summary"]["approval_blocked_services"])
 
     def test_helper_dispositions_mark_unsafe_apply_paths(self) -> None:

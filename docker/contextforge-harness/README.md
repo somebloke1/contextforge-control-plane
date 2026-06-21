@@ -31,6 +31,9 @@ registration targets used by the gateway from inside the Compose network.
 - First dev MCP sidecar: `mentality-transceiver` on host
   `http://127.0.0.1:9201` and compose-network
   `http://mentality-transceiver:9201`
+- SSH/tmux successor MCP sidecar: `ssh-tmux-transceiver` on host
+  `http://127.0.0.1:9202` and compose-network
+  `http://ssh-tmux-transceiver:9202`
 - Context7 dev MCP sidecar: `context7-transceiver` on host
   `http://127.0.0.1:9203` and compose-network
   `http://context7-transceiver:9203`
@@ -103,6 +106,26 @@ development gateway must register compose-network upstreams such as
 legacy/live ContextForge surface without a separate approval and threat review.
 It also sets `REQUIRE_USER_IN_DB=false` so the generated bootstrap admin can use
 virtual MCP endpoints during disposable dev-harness validation.
+
+## SSH/tmux Successor MCP Transceiver
+
+The SSH/tmux sidecar fronts build-installed `mcp-ssh-tmux` through the stock
+ContextForge bridge in a dedicated container. It installs `tmux`,
+`openssh-client`, and the MCP package during image build, exposes host
+`127.0.0.1:9202`, and uses compose-network upstream
+`http://ssh-tmux-transceiver:9202/mcp`.
+
+This sidecar intentionally does not reuse host tmux state. Container-local tmux
+state makes reset behavior idempotent and avoids silently sharing host SSH
+sessions with remote clients. Listing tools or sessions is a safe transport
+proof; opening remote SSH sessions, sending keys, reading files, or writing files
+still requires explicit user intent and suitable SSH credentials inside the
+sidecar boundary.
+
+The migration planner targets the compose-network URL
+`http://ssh-tmux-transceiver:9202/mcp`. Registry apply remains a separate
+explicit step after sidecar reachability and single-user/credential boundary
+preflight.
 
 ## Context7 Dev MCP Transceiver
 

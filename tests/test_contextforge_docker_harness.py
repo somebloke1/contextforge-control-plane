@@ -20,6 +20,23 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('"127.0.0.1:9201:9201"', compose)
         self.assertIn("docker/contextforge-harness/mcp-transceiver/Dockerfile", compose)
 
+    def test_compose_defines_ssh_tmux_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/ssh-tmux-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("ssh-tmux-transceiver:", compose)
+        self.assertIn("contextforge-harness-ssh-tmux-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9202:9202"', compose)
+        self.assertIn("docker/contextforge-harness/ssh-tmux-transceiver/Dockerfile", compose)
+        self.assertIn("openssh-client", dockerfile)
+        self.assertIn("tmux", dockerfile)
+        self.assertIn("uv", dockerfile)
+        self.assertIn("uv\" tool install mcp-ssh-tmux", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--stdio", dockerfile)
+        self.assertIn("/root/.local/bin/mcp-ssh-tmux", dockerfile)
+        self.assertIn("9202", dockerfile)
+
     def test_compose_defines_dev_context7_transceiver_sidecar(self) -> None:
         compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
         dockerfile = (ROOT / "docker/contextforge-harness/context7-transceiver/Dockerfile").read_text(encoding="utf-8")
