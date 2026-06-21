@@ -50,6 +50,8 @@ Read [method.md](references/method.md) when selecting services, interpreting run
 
 Assume tested Pi/OpenCode qwen sessions have limited usable context. Activate only the target service for a service slice unless testing multi-service behavior. Avoid all-service activation, huge tool catalogs, and long prompt narratives. Split large services into smaller function groups if needed, but preserve full untruncated use-case stories in the package and evidence.
 
+Before launching another qwen-backed client session, check for active runner/client/model processes and existing evidence from the current slice. Do not stack duplicate sessions just because the controller lost conversational context. If GPU utilization is pegged, identify whether a known test slice is still running before dispatching more model work; stop only sessions owned by this testing loop or ask the SO when ownership is unclear.
+
 ## Bypass Rule
 
 If the tested assistant writes scripts, runs `npx`, invokes upstream MCP packages directly, or manually drives JSON-RPC over stdio instead of using client-visible ContextForge tools, classify the run as not accepted. Preserve the output because it may prove the upstream service works, but triage the client-visible ContextForge exposure failure separately.
