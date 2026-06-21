@@ -13,6 +13,10 @@ Service locality and the first MCP integration path are defined in
 Evidence freshness and PR citation rules for this harness are defined in
 `../../docs/dev-docker-client-evidence-freshness-protocol.md`.
 
+Remote clients use the host/LAN/public ContextForge gateway address, not
+backend sidecar addresses. The sidecar URLs in this document are upstream
+registration targets used by the gateway from inside the Compose network.
+
 ## Runtime
 
 - Image: `ghcr.io/ibm/mcp-context-forge:v1.0.3`
@@ -27,9 +31,27 @@ Evidence freshness and PR citation rules for this harness are defined in
 - First dev MCP sidecar: `mentality-transceiver` on host
   `http://127.0.0.1:9201` and compose-network
   `http://mentality-transceiver:9201`
+- SSH/tmux successor MCP sidecar: `ssh-tmux-transceiver` on host
+  `http://127.0.0.1:9202` and compose-network
+  `http://ssh-tmux-transceiver:9202`
 - Context7 dev MCP sidecar: `context7-transceiver` on host
   `http://127.0.0.1:9203` and compose-network
   `http://context7-transceiver:9203`
+- Exa Search successor MCP sidecar: `exa-search-transceiver` on host
+  `http://127.0.0.1:9205` and compose-network
+  `http://exa-search-transceiver:9205`
+- GitHub successor MCP sidecar: `github-transceiver` on host
+  `http://127.0.0.1:9206` and compose-network
+  `http://github-transceiver:9206`
+- Playwright successor MCP sidecar: `playwright-transceiver` on host
+  `http://127.0.0.1:9204` and compose-network
+  `http://playwright-transceiver:9204`
+- Web Search successor MCP sidecar: `web-search-transceiver` on host
+  `http://127.0.0.1:9207` and compose-network
+  `http://web-search-transceiver:9207`
+- Serena cf-controlplane host proxy: `serena-cf-controlplane-proxy` on Docker
+  host-gateway `http://172.17.0.1:9208`, forwarding to host loopback
+  `http://127.0.0.1:9108`
 
 The named Docker volume has no explicit size cap. Initial gateway-only usage is
 expected to stay small; use `scripts/volume-usage.sh` to inspect it.
@@ -88,6 +110,26 @@ legacy/live ContextForge surface without a separate approval and threat review.
 It also sets `REQUIRE_USER_IN_DB=false` so the generated bootstrap admin can use
 virtual MCP endpoints during disposable dev-harness validation.
 
+## SSH/tmux Successor MCP Transceiver
+
+The SSH/tmux sidecar fronts build-installed `mcp-ssh-tmux` through the stock
+ContextForge bridge in a dedicated container. It installs `tmux`,
+`openssh-client`, and the MCP package during image build, exposes host
+`127.0.0.1:9202`, and uses compose-network upstream
+`http://ssh-tmux-transceiver:9202/mcp`.
+
+This sidecar intentionally does not reuse host tmux state. Container-local tmux
+state makes reset behavior idempotent and avoids silently sharing host SSH
+sessions with remote clients. Listing tools or sessions is a safe transport
+proof; opening remote SSH sessions, sending keys, reading files, or writing files
+still requires explicit user intent and suitable SSH credentials inside the
+sidecar boundary.
+
+The migration planner targets the compose-network URL
+`http://ssh-tmux-transceiver:9202/mcp`. Registry apply remains a separate
+explicit step after sidecar reachability and single-user/credential boundary
+preflight.
+
 ## Context7 Dev MCP Transceiver
 
 The Context7 sidecar fronts `@upstash/context7-mcp` through the same stock
@@ -112,11 +154,120 @@ The names intentionally match the project-init wrapper contract while the
 registry, volume, token, and upstream process remain isolated to the dev Docker
 surface.
 
+## Exa Search Successor MCP Transceiver
+
+The Exa Search sidecar fronts the repo-local Python backend in
+`server-instances/exa-search/server.py` through the stock bridge. It reads
+credentials from ignored `server-instances/exa-search/.env` through an optional
+Compose `env_file`; do not copy or print secret values. A clean checkout can
+still build and list Exa tools without that file, but actual Exa/Gemini calls
+require the ignored credential env to be present.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway exa-search-transceiver
+python ../../scripts/plan_contextforge_docker_migration.py
+```
+
+The migration planner targets the compose-network URL
+`http://exa-search-transceiver:9205/mcp`. Registry apply remains a separate
+explicit step after credential-env preflight and direct reachability evidence.
+
+## GitHub Successor MCP Transceiver
+
+The GitHub sidecar fronts `@modelcontextprotocol/server-github` through the
+stock ContextForge bridge. It reads credentials from ignored
+`server-instances/github/.env` via an optional Compose `env_file`. Do not pass
+host shell API-token variables through Compose, and do not copy or print token
+values. A clean checkout can still launch the bridge; real GitHub tool calls
+require a credential in the ignored env file. The image installs
+`@modelcontextprotocol/server-github@2025.4.8` at build time and runs the
+installed `mcp-server-github` binary at runtime.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway github-transceiver
+```
+
+The migration planner targets the compose-network URL
+`http://github-transceiver:9206/mcp`. Registry apply remains a separate explicit
+step after credential-env preflight and direct reachability evidence.
+
+## Playwright Successor MCP Transceiver
+
+The Playwright sidecar runs `@playwright/mcp` with a Docker-local isolated
+Chrome for Testing/Chromium runtime. It is a native MCP HTTP/SSE backend rather
+than a `mcpgateway.translate` bridge. The sidecar uses an in-memory shared
+browser context so stateful multi-tool workflows survive the ContextForge proxy
+without sharing host browser/session state or writing a persistent browser
+profile. The image installs `@playwright/mcp@0.0.76` at build time and runs the
+installed `playwright-mcp` binary at runtime.
+
+The harness gateway enables stateful Streamable HTTP sessions and runs a single
+Gunicorn worker. Both are intentional: ContextForge binds upstream MCP client
+state to the downstream `Mcp-Session-Id`, and the current upstream-session
+registry is process-local unless a separate session-affinity backend is
+configured. Without those settings, stateful workflows can degrade into
+per-call upstream sessions.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway playwright-transceiver
+python ../../scripts/plan_contextforge_docker_migration.py
+```
+
+The migration planner targets the compose-network URL
+`http://playwright-transceiver:9204/mcp`. Registry apply remains a separate
+explicit step after direct reachability evidence.
+
+## Web Search Successor MCP Transceiver
+
+The Web Search sidecar fronts the repo-local stdio MCP server in
+`/home/dgk/workspace/web_search/dist/mcp-server.js` through the stock
+ContextForge bridge. It runs in a dedicated container and reads credentials from
+ignored `server-instances/web-search/.env` via an optional Compose `env_file`.
+The image build uses the sibling `web_search` checkout as a named Compose build
+context, not as the primary cf-controlplane context. The Dockerfile copies only
+package metadata and TypeScript sources from that named context, runs
+`npm run build`, then prunes development dependencies. Inspect the sibling
+checkout state before relying on runtime evidence from this sidecar.
+Do not copy or print API key or token values. A clean checkout can still build
+and reach transport checks; provider-dependent tool behavior requires appropriate
+credential values.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway web-search-transceiver
+python ../../scripts/plan_contextforge_docker_migration.py
+```
+
+The migration planner targets the compose-network URL
+`http://web-search-transceiver:9207/mcp`. Registry apply remains a separate
+explicit step after credential-env preflight and direct reachability evidence.
+
+## Serena cf-controlplane Host Proxy
+
+The Serena cf-controlplane service is project-scoped to the canonical host
+checkout `/home/dgk/workspace/cf-controlplane` and already runs as a native
+streamable HTTP backend on host loopback `127.0.0.1:9108`. Docker containers
+cannot reach that loopback listener through `host.docker.internal`.
+
+The harness therefore uses `serena-cf-controlplane-proxy`, a constrained
+host-network proxy that binds only the Docker host-gateway address
+`172.17.0.1:9208` and forwards to `127.0.0.1:9108`. The gateway registers
+`http://host.docker.internal:9208/mcp`; remote clients still use only the
+published ContextForge gateway URL, never the proxy or upstream address.
+
+This is not a general host rebind and not a project-mounted Serena sidecar. The
+canonical Serena service remains host/project-scoped, `activate_project` must
+remain excluded from the ContextForge virtual server, and runtime proof must
+show the proxy plus virtual server before claiming parity. The fixed
+`172.17.0.1` binding is a current-host Docker bridge projection, not a portable
+assumption for rootless Docker or custom bridge networks; run the proxy
+preflight before any Serena apply.
+
 ## Operations
 
 ```sh
 docker compose -f compose.yml logs -f contextforge-gateway
 docker compose -f compose.yml logs -f mentality-transceiver
+docker compose -f compose.yml logs -f playwright-transceiver
 docker compose -f compose.yml restart contextforge-gateway
 scripts/volume-usage.sh
 ```
@@ -125,6 +276,10 @@ scripts/volume-usage.sh
 
 - Register MCP services only into this development gateway unless a separate
   approval explicitly targets another surface.
+- Keep client-facing and upstream address planes separate. Remote clients may
+  originate from arbitrary IP-addressed hosts and must connect to the published
+  ContextForge gateway URL with proper auth; they must not be asked to reach
+  compose-internal backend names such as `playwright-transceiver`.
 - Do not install MCP backend files or services inside the gateway container by
   default.
 - Run stdio MCP backends beside a local or remote transceiver, then register the

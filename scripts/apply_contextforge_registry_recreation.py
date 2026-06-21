@@ -322,7 +322,10 @@ def apply_service(service: dict[str, Any], client: ContextForgeClient, *, wait_a
 
 def _has_blocking_boundary(service: dict[str, Any]) -> bool:
     profile = service.get("docker_successor_profile")
-    return isinstance(profile, dict) and bool(profile.get("approval_blocked"))
+    if not isinstance(profile, dict):
+        return False
+    approval_state = str(profile.get("approval_state", ""))
+    return bool(profile.get("approval_blocked")) or approval_state.startswith("blocked_") or approval_state.startswith("ready_after_")
 
 
 def _selection_candidates(

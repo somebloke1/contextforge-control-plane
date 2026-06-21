@@ -33,34 +33,34 @@ DOCKER_TARGET_PROFILE: dict[str, dict[str, Any]] = {
         "notes": "Current 4445 has dev names; replacement parity needs mentality/mentality_server.",
     },
     "ssh-tmux": {
-        "locality": "host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9102/mcp",
-        "approval_state": "blocked_pending_single_user_boundary_review",
-        "notes": "Persistent sessions are host-local state; do not blindly share without approval.",
+        "locality": "compose_sidecar",
+        "target_upstream_url": "http://ssh-tmux-transceiver:9202/mcp",
+        "approval_state": "ready_after_single_user_boundary_preflight",
+        "notes": "Container-local tmux state avoids host-session reuse; remote SSH operations still require explicit user/credential approval.",
     },
     "playwright": {
-        "locality": "host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9104/mcp",
-        "approval_state": "blocked_pending_single_user_boundary_review",
-        "notes": "Browser/session state is user-local; do not blindly share without approval.",
+        "locality": "compose_sidecar",
+        "target_upstream_url": "http://playwright-transceiver:9204/mcp",
+        "approval_state": "available_in_isolated_browser_sidecar",
+        "notes": "Docker-local isolated browser sidecar uses an in-memory shared context for ContextForge proxy continuity without sharing host browser/session state.",
     },
     "exa-search": {
-        "locality": "host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9105/mcp",
-        "approval_state": "blocked_pending_credential_boundary_review",
-        "notes": "Credential-scoped service; env presence and scope must be reviewed without printing secrets.",
+        "locality": "compose_sidecar",
+        "target_upstream_url": "http://exa-search-transceiver:9205/mcp",
+        "approval_state": "ready_after_credential_env_preflight",
+        "notes": "Credential-scoped sidecar uses ignored server-instances/exa-search/.env; prove env presence without printing secrets before apply.",
     },
     "github": {
-        "locality": "host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9106/mcp",
-        "approval_state": "blocked_pending_credential_boundary_review",
-        "notes": "GitHub token scope is a credential boundary; helper must target 4445 explicitly.",
+        "locality": "compose_sidecar",
+        "target_upstream_url": "http://github-transceiver:9206/mcp",
+        "approval_state": "ready_after_credential_env_preflight",
+        "notes": "GitHub credentials are user-scoped; run sidecar with ignored server-instances/github/.env and complete token preflight before registry apply. Do not pass host shell token variables through Compose.",
     },
     "web-search": {
-        "locality": "host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9107/mcp",
-        "approval_state": "blocked_pending_credential_boundary_review",
-        "notes": "Credential/cookie-backed capabilities must be reviewed before successor registration.",
+        "locality": "compose_sidecar",
+        "target_upstream_url": "http://web-search-transceiver:9207/mcp",
+        "approval_state": "ready_after_credential_env_preflight",
+        "notes": "Credential-scoped stdio sidecar uses ignored server-instances/web-search/.env; prove env presence without printing secrets before apply.",
     },
     "openzeppelin-solidity-contracts": {
         "locality": "remote_direct",
@@ -69,10 +69,10 @@ DOCKER_TARGET_PROFILE: dict[str, dict[str, Any]] = {
         "notes": "Remote shared service does not need host gateway projection.",
     },
     "serena-cf-controlplane-d46fe58a2a20": {
-        "locality": "project_scoped_host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9108/mcp",
-        "approval_state": "blocked_pending_project_scoped_runtime_approval",
-        "notes": "Project-scoped code-intelligence state needs explicit Docker/runtime approval.",
+        "locality": "project_scoped_host_proxy",
+        "target_upstream_url": "http://host.docker.internal:9208/mcp",
+        "approval_state": "ready_after_project_scoped_proxy_preflight",
+        "notes": "Host-network proxy binds only the Docker host-gateway address and forwards to the loopback-bound canonical Serena backend.",
     },
 }
 
@@ -232,7 +232,8 @@ def _current_server_summary(current: dict[str, Any] | None) -> dict[str, dict[st
 
 
 def _approval_blocked(profile: dict[str, Any]) -> bool:
-    return str(profile.get("approval_state", "")).startswith("blocked_")
+    approval_state = str(profile.get("approval_state", ""))
+    return approval_state.startswith("blocked_") or approval_state.startswith("ready_after_")
 
 
 def _unsafe_live_default(default_url: str, target_url: str) -> bool:
@@ -340,8 +341,8 @@ def build_plan(
         "recommended_ordered_slices": [
             "parameterize target/auth inputs for 4445 without using 4444 wrapper defaults",
             "materialize Docker locality profile for each canonical service",
-            "register canonical sidecar-proven services first: context7 and mentality",
-            "add or approve host-gateway/service-specific projections for credential and single-user services",
+            "register canonical sidecar-proven services first: context7, mentality, ssh-tmux, playwright, github, exa-search, and web-search after env or boundary preflight where applicable",
+            "add or approve service-specific reachable topology for remaining credential and single-user services",
             "register remote OpenZeppelin directly",
             "replay tool guidance using 4445-discovered gateway IDs and canonical tool tags",
             "handle project-scoped Serena only after explicit runtime/project-state approval",

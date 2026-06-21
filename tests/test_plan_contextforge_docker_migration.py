@@ -159,17 +159,59 @@ class DockerMigrationPlanTests(unittest.TestCase):
         plan = docker_plan.build_plan()
         services = {service["slug"]: service for service in plan["services"]}
 
-        for slug in ["exa-search", "github", "mentality", "playwright", "serena-cf-controlplane-d46fe58a2a20", "ssh-tmux", "web-search"]:
+        for slug in ["github", "mentality", "serena-cf-controlplane-d46fe58a2a20", "ssh-tmux", "web-search"]:
             with self.subTest(slug=slug):
                 self.assertNotIn("127.0.0.1:910", services[slug]["target_upstream_url"])
                 self.assertTrue(services[slug]["docker_projection_required"])
                 self.assertTrue(services[slug]["unsafe_to_reuse_live_default"])
 
+        self.assertEqual("compose_sidecar", services["playwright"]["locality"])
+        self.assertEqual("http://playwright-transceiver:9204/mcp", services["playwright"]["target_upstream_url"])
+        self.assertEqual("available_in_isolated_browser_sidecar", services["playwright"]["approval_state"])
+        self.assertFalse(services["playwright"]["approval_blocked"])
+        self.assertTrue(services["playwright"]["docker_projection_required"])
+        self.assertTrue(services["playwright"]["unsafe_to_reuse_live_default"])
+        self.assertEqual("compose_sidecar", services["exa-search"]["locality"])
+        self.assertEqual("http://exa-search-transceiver:9205/mcp", services["exa-search"]["target_upstream_url"])
+        self.assertEqual("ready_after_credential_env_preflight", services["exa-search"]["approval_state"])
+        self.assertTrue(services["exa-search"]["approval_blocked"])
+        self.assertTrue(services["exa-search"]["docker_projection_required"])
+        self.assertTrue(services["exa-search"]["unsafe_to_reuse_live_default"])
+        self.assertEqual("compose_sidecar", services["ssh-tmux"]["locality"])
+        self.assertEqual("http://ssh-tmux-transceiver:9202/mcp", services["ssh-tmux"]["target_upstream_url"])
+        self.assertEqual("ready_after_single_user_boundary_preflight", services["ssh-tmux"]["approval_state"])
+        self.assertTrue(services["ssh-tmux"]["approval_blocked"])
+        self.assertTrue(services["ssh-tmux"]["docker_projection_required"])
+        self.assertTrue(services["ssh-tmux"]["unsafe_to_reuse_live_default"])
+        self.assertEqual("compose_sidecar", services["web-search"]["locality"])
+        self.assertEqual("http://web-search-transceiver:9207/mcp", services["web-search"]["target_upstream_url"])
+        self.assertEqual("ready_after_credential_env_preflight", services["web-search"]["approval_state"])
+        self.assertTrue(services["web-search"]["approval_blocked"])
+        self.assertTrue(services["web-search"]["docker_projection_required"])
+        self.assertTrue(services["web-search"]["unsafe_to_reuse_live_default"])
         self.assertFalse(services["openzeppelin-solidity-contracts"]["unsafe_to_reuse_live_default"])
         self.assertEqual(9, len(services["ssh-tmux"]["expected_tool_names"]))
         self.assertIn("ssh-tmux-cleanup-dead-sessions", services["ssh-tmux"]["expected_tool_names"])
+        self.assertEqual("compose_sidecar", services["github"]["locality"])
+        self.assertEqual("http://github-transceiver:9206/mcp", services["github"]["target_upstream_url"])
+        self.assertEqual("ready_after_credential_env_preflight", services["github"]["approval_state"])
+        self.assertTrue(services["github"]["approval_blocked"])
+        self.assertTrue(services["github"]["docker_projection_required"])
+        self.assertTrue(services["github"]["unsafe_to_reuse_live_default"])
+        self.assertEqual("project_scoped_host_proxy", services["serena-cf-controlplane-d46fe58a2a20"]["locality"])
+        self.assertEqual(
+            "http://host.docker.internal:9208/mcp",
+            services["serena-cf-controlplane-d46fe58a2a20"]["target_upstream_url"],
+        )
+        self.assertEqual(
+            "ready_after_project_scoped_proxy_preflight",
+            services["serena-cf-controlplane-d46fe58a2a20"]["approval_state"],
+        )
+        self.assertTrue(services["serena-cf-controlplane-d46fe58a2a20"]["approval_blocked"])
         self.assertIn("ssh-tmux", plan["summary"]["approval_blocked_services"])
         self.assertIn("serena-cf-controlplane-d46fe58a2a20", plan["summary"]["approval_blocked_services"])
+        for slug in ["exa-search", "github", "web-search"]:
+            self.assertIn(slug, plan["summary"]["approval_blocked_services"])
 
     def test_helper_dispositions_mark_unsafe_apply_paths(self) -> None:
         plan = docker_plan.build_plan()

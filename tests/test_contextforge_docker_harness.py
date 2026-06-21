@@ -20,6 +20,24 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('"127.0.0.1:9201:9201"', compose)
         self.assertIn("docker/contextforge-harness/mcp-transceiver/Dockerfile", compose)
 
+    def test_compose_defines_ssh_tmux_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/ssh-tmux-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("ssh-tmux-transceiver:", compose)
+        self.assertIn("contextforge-harness-ssh-tmux-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9202:9202"', compose)
+        self.assertIn("docker/contextforge-harness/ssh-tmux-transceiver/Dockerfile", compose)
+        self.assertIn("openssh-client", dockerfile)
+        self.assertIn("tmux", dockerfile)
+        self.assertIn("uv", dockerfile)
+        self.assertIn("MCP_SSH_TMUX_VERSION=0.2.8", dockerfile)
+        self.assertIn("mcp-ssh-tmux==${MCP_SSH_TMUX_VERSION}", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--stdio", dockerfile)
+        self.assertIn("/root/.local/bin/mcp-ssh-tmux", dockerfile)
+        self.assertIn("9202", dockerfile)
+
     def test_compose_defines_dev_context7_transceiver_sidecar(self) -> None:
         compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
         dockerfile = (ROOT / "docker/contextforge-harness/context7-transceiver/Dockerfile").read_text(encoding="utf-8")
@@ -34,6 +52,104 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("mcpgateway.translate", dockerfile)
         self.assertIn("--expose-streamable-http", dockerfile)
         self.assertIn('"9203"', dockerfile)
+
+    def test_compose_defines_exa_search_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/exa-search-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("exa-search-transceiver:", compose)
+        self.assertIn("contextforge-harness-exa-search-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9205:9205"', compose)
+        self.assertIn("docker/contextforge-harness/exa-search-transceiver/Dockerfile", compose)
+        self.assertIn("../../server-instances/exa-search/.env", compose)
+        self.assertIn("required: false", compose)
+        self.assertIn("server-instances/exa-search/server.py", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--expose-streamable-http", dockerfile)
+        self.assertIn('"9205"', dockerfile)
+
+    def test_compose_defines_github_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/github-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("github-transceiver:", compose)
+        self.assertIn("contextforge-harness-github-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9206:9206"', compose)
+        self.assertIn("docker/contextforge-harness/github-transceiver/Dockerfile", compose)
+        self.assertIn("../../server-instances/github/.env", compose)
+        self.assertIn("required: false", compose)
+        self.assertNotIn("- GITHUB_PERSONAL_ACCESS_TOKEN", compose)
+        self.assertIn("mcp-contextforge-gateway", dockerfile)
+        self.assertIn("GITHUB_MCP_SERVER_VERSION=2025.4.8", dockerfile)
+        self.assertIn("@modelcontextprotocol/server-github@${GITHUB_MCP_SERVER_VERSION}", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--expose-sse", dockerfile)
+        self.assertIn("--expose-streamable-http", dockerfile)
+        self.assertIn("--stdio", dockerfile)
+        self.assertIn("mcp-server-github", dockerfile)
+        self.assertNotIn("npx -y @modelcontextprotocol/server-github", dockerfile)
+        self.assertIn('"9206"', dockerfile)
+
+    def test_compose_defines_playwright_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/playwright-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("playwright-transceiver:", compose)
+        self.assertIn("contextforge-harness-playwright-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9204:9204"', compose)
+        self.assertIn("docker/contextforge-harness/playwright-transceiver/Dockerfile", compose)
+        self.assertIn("mcr.microsoft.com/playwright:", dockerfile)
+        self.assertIn("@playwright/mcp@0.0.76", dockerfile)
+        self.assertIn("npm install -g", dockerfile)
+        self.assertIn('CMD ["playwright-mcp"', dockerfile)
+        self.assertIn("install-browser chrome-for-testing", dockerfile)
+        self.assertIn("--browser=chromium", dockerfile)
+        self.assertIn("--isolated", dockerfile)
+        self.assertIn("--shared-browser-context", dockerfile)
+        self.assertIn("--allowed-hosts", dockerfile)
+        self.assertIn("localhost:9204,127.0.0.1:9204,playwright-transceiver:9204", dockerfile)
+        self.assertIn("9204", dockerfile)
+
+    def test_compose_defines_web_search_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/web-search-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("web-search-transceiver:", compose)
+        self.assertIn("contextforge-harness-web-search-transceiver:latest", compose)
+        self.assertIn("additional_contexts:", compose)
+        self.assertIn("web_search: ../../../web_search", compose)
+        self.assertIn('"127.0.0.1:9207:9207"', compose)
+        self.assertIn("docker/contextforge-harness/web-search-transceiver/Dockerfile", compose)
+        self.assertIn("../../server-instances/web-search/.env", compose)
+        self.assertIn("required: false", compose)
+        self.assertIn("COPY --from=web_search package.json package-lock.json tsconfig.mcp.json ./", dockerfile)
+        self.assertIn("COPY --from=web_search *.ts ./", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--stdio", dockerfile)
+        self.assertIn("node /workspace/web_search/dist/mcp-server.js", dockerfile)
+        self.assertIn("npm run build", dockerfile)
+        self.assertIn("npm prune --omit=dev", dockerfile)
+        self.assertIn("9207", dockerfile)
+
+    def test_compose_defines_serena_cf_controlplane_host_proxy(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/serena-host-proxy/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("serena-cf-controlplane-proxy:", compose)
+        self.assertIn("contextforge-harness-serena-host-proxy:latest", compose)
+        self.assertIn("network_mode: host", compose)
+        self.assertIn('SERENA_PROXY_BIND: "172.17.0.1"', compose)
+        self.assertIn('SERENA_PROXY_PORT: "9208"', compose)
+        self.assertIn('SERENA_TARGET_HOST: "127.0.0.1"', compose)
+        self.assertIn('SERENA_TARGET_PORT: "9108"', compose)
+        self.assertIn("nc -z 172.17.0.1 9208", compose)
+        entrypoint = (ROOT / "docker/contextforge-harness/serena-host-proxy/entrypoint.sh").read_text(encoding="utf-8")
+        self.assertIn("nginx", dockerfile)
+        self.assertIn("serena-host-proxy-entrypoint", dockerfile)
+        self.assertIn("listen ${SERENA_PROXY_BIND}:${SERENA_PROXY_PORT}", entrypoint)
+        self.assertIn("proxy_pass http://${SERENA_TARGET_HOST}:${SERENA_TARGET_PORT}", entrypoint)
+        self.assertIn("proxy_set_header Host ${SERENA_TARGET_HOST}:${SERENA_TARGET_PORT}", entrypoint)
+        self.assertIn("proxy_buffering off", entrypoint)
 
     def test_transceiver_dockerfile_uses_stock_contextforge_translate(self) -> None:
         dockerfile = (ROOT / "docker/contextforge-harness/mcp-transceiver/Dockerfile").read_text(encoding="utf-8")
@@ -240,6 +356,13 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("SSRF_ALLOW_PRIVATE_NETWORKS=true", env_example)
         self.assertIn("REQUIRE_USER_IN_DB=false", env_example)
 
+    def test_gateway_preserves_stateful_virtual_mcp_sessions(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+
+        self.assertIn('GUNICORN_WORKERS: "1"', compose)
+        self.assertIn('USE_STATEFUL_SESSIONS: "true"', compose)
+        self.assertIn('MCP_GET_STREAM_ENABLED: "true"', compose)
+
     def test_dev_harness_has_env_auth_preflight(self) -> None:
         source = (ROOT / "docker/contextforge-harness/scripts/ensure-env-auth.sh").read_text(encoding="utf-8")
         readme = (ROOT / "docker/contextforge-harness/README.md").read_text(encoding="utf-8")
@@ -265,6 +388,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("contextforge-gateway", service_names)
         self.assertIn("mentality-transceiver", service_names)
         self.assertIn("context7-transceiver", service_names)
+        self.assertIn("github-transceiver", service_names)
+        self.assertIn("exa-search-transceiver", service_names)
 
     def test_service_locality_records_project_scoped_container_matrix(self) -> None:
         policy = (ROOT / "docker/contextforge-harness/SERVICE_LOCALITY.md").read_text(encoding="utf-8")

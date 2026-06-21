@@ -84,7 +84,7 @@ the backend's real service boundary:
 
 | Service class | Container default | Reason |
 | --- | --- | --- |
-| Shared canonical services such as `mentality`, `context7`, `playwright`, `ssh-tmux`, `exa-search`, `github`, `web-search`, and hosted/native services | Shared service or existing native endpoint | These services are not project-specific by default; duplicating them per project would create sibling identities, token scope drift, port churn, and extra lifecycle state without proving new behavior. |
+| Shared canonical services such as `mentality`, `context7`, `playwright`, `ssh-tmux`, `exa-search`, and hosted/native services | Shared service or existing native endpoint | These services are not project-specific by default; duplicating them per project would create sibling identities, token scope drift, port churn, and extra lifecycle state without proving new behavior. |
 | Credential-scoped or user-scoped services | One backend or transceiver per credential or user when the backend cannot safely multiplex | Credential and local-user boundaries are service boundaries. A shared container is acceptable only when the credential scope and lifecycle are intentionally shared. |
 | Session-scoped or client-local services | One backend or transceiver per client-local state boundary only when required | Client config discovery is not service identity. Keep client-local state out of the gateway image and avoid per-client duplication unless runtime behavior materially differs. |
 | Project-scoped services | One backend or transceiver per project when the backend reads or writes project-local state | The project filesystem, project metadata, code index, language server state, and approval boundary are part of the service identity. |
@@ -154,6 +154,12 @@ to this isolated development surface. The virtual MCP probe uses a temporary
 server-scoped catalog token instead of the admin session JWT, then revokes that
 token after readback.
 
+Keep client and upstream address planes separate. Remote clients may come from
+arbitrary IP-addressed hosts and should use the published ContextForge gateway
+address, such as a LAN or public gateway URL with auth. Compose service names
+and `127.0.0.1:920x` sidecar ports are upstream targets for ContextForge
+registration and local diagnostics, not remote-client configuration values.
+
 For additional service integrations, use a backend-local transceiver before any
 gateway-container MCP install:
 
@@ -164,3 +170,61 @@ gateway-container MCP install:
 5. register all validated packetized endpoints with ContextForge through the
    API;
 6. verify ContextForge readback and client access through the gateway.
+
+`exa-search` follows this pattern for the 4445 successor: the repo-local
+Python backend runs in `exa-search-transceiver`, reads only the ignored
+`server-instances/exa-search/.env`, and is registered by the gateway through
+the compose-network URL `http://exa-search-transceiver:9205/mcp` only after
+credential-env preflight and direct reachability evidence. Do not fall back to
+the host-loopback `127.0.0.1:9105` live surface for Docker successor parity.
+
+`ssh-tmux` follows compose-sidecar locality for the Docker successor surface:
+`ssh-tmux-transceiver` runs build-installed `mcp-ssh-tmux` with
+container-local tmux state and is registered through
+`http://ssh-tmux-transceiver:9202/mcp` only after single-user/credential
+boundary preflight and direct reachability evidence. Do not project or reuse
+host tmux sessions by default; reset the container state instead of calculating
+cleanup deltas.
+
+`playwright` follows the same sidecar-locality principle with a native MCP
+backend instead of a bridge: `playwright-transceiver` runs isolated Chrome for
+Testing/Chromium in the harness network with an in-memory shared browser
+context, and is registered through `http://playwright-transceiver:9204/mcp`
+only after direct reachability evidence. Do not fall back to the host-loopback
+`127.0.0.1:9104` live surface for Docker successor parity; the successor must
+not inherit host browser or session residue.
+
+`github` follows the same compose-sidecar-locality for credential-scoped stdio
+backend: `github-transceiver` runs `@modelcontextprotocol/server-github` in the
+Compose network and is registered through `http://github-transceiver:9206/mcp`
+only after token-boundary preflight and direct reachability evidence. Use the
+ignored `server-instances/github/.env` boundary; do not pass host shell token
+variables through Compose and do not persist secrets in tracked files.
+
+`web-search` follows the same compose-sidecar-locality for credential-scoped stdio
+backend: `web-search-transceiver` runs the local `web_search/dist/mcp-server.js`
+bundle through the stock bridge in the harness network and is registered through
+`http://web-search-transceiver:9207/mcp` only after credential-env preflight and
+direct reachability evidence. The image uses the sibling `web_search` checkout
+as a named Compose build context and copies only package metadata plus
+TypeScript sources into the image; inspect that checkout before treating runtime
+evidence as canonical. Use the ignored `server-instances/web-search/.env`
+boundary; do not persist secrets in tracked files.
+
+`serena-cf-controlplane-d46fe58a2a20` is project-scoped and remains owned by the
+canonical host project instance on `127.0.0.1:9108`. Because Docker cannot reach
+host loopback through `host.docker.internal`, the successor surface uses
+`serena-cf-controlplane-proxy`, a host-network proxy bound only to Docker's
+host-gateway address `172.17.0.1:9208`. Register
+`http://host.docker.internal:9208/mcp` with the Docker gateway only after
+proving the proxy and preserving the virtual-server exclusion of
+`activate_project`. Treat `172.17.0.1` as a current-host Docker bridge
+projection that must be preflighted; rootless Docker or custom bridge networks
+may require a different host-gateway bind address.
+
+Session-scoped services also require stateful gateway ingress. The Docker
+harness sets `USE_STATEFUL_SESSIONS=true` and `GUNICORN_WORKERS=1` so the
+downstream `Mcp-Session-Id` can bind to one process-local upstream MCP session
+across a multi-tool workflow. Do not raise gateway worker count for
+session-scoped parity unless a deliberate session-affinity backend is added and
+verified.
