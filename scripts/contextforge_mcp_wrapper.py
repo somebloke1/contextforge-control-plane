@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import select
+import signal
 import ssl
 import sys
 import urllib.error
@@ -48,6 +49,10 @@ class WrapperLifecycle:
     exit_code: int | None = None
 
 
+class _WrapperSignalExit(SystemExit):
+    """Controlled wrapper exit raised from SIGTERM/SIGINT handlers."""
+
+
 def _log_lifecycle(event: str, lifecycle: WrapperLifecycle, **extra: Any) -> None:
     payload = {
         "event": event,
@@ -84,6 +89,39 @@ def _log_bootstrap_error(server_name: str, stage: str, exc: Exception | str) -> 
         "error": str(exc),
     }
     print(json.dumps(payload, sort_keys=True), file=sys.stderr, flush=True)
+
+
+def _signal_name(signum: int) -> str:
+    try:
+        return signal.Signals(signum).name
+    except ValueError:
+        return f"signal_{signum}"
+
+
+def _install_signal_cleanup_handlers(lifecycle: WrapperLifecycle) -> dict[int, Any]:
+    previous: dict[int, Any] = {}
+
+    def handle_signal(signum: int, frame: Any) -> None:  # noqa: ARG001
+        name = _signal_name(signum)
+        lifecycle.stop_reason = lifecycle.stop_reason or f"signal_{name}"
+        lifecycle.exit_code = lifecycle.exit_code or (128 + signum)
+        _log_lifecycle(
+            "contextforge_wrapper_signal_received",
+            lifecycle,
+            signal=name,
+            exit_code=lifecycle.exit_code,
+        )
+        raise _WrapperSignalExit(lifecycle.exit_code)
+
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        previous[signum] = signal.getsignal(signum)
+        signal.signal(signum, handle_signal)
+    return previous
+
+
+def _restore_signal_handlers(previous: dict[int, Any]) -> None:
+    for signum, handler in previous.items():
+        signal.signal(signum, handler)
 
 
 def _float_env(name: str, default: float) -> float:
@@ -538,9 +576,14 @@ def main() -> int:
     )
     refresh_email = None if scoped_token_id or env_bearer_token else email
     refresh_password = None if scoped_token_id or env_bearer_token else password
+    previous_signal_handlers = _install_signal_cleanup_handlers(lifecycle)
     try:
-        return _run_stock_wrapper(lifecycle, refresh_email, refresh_password)
+        try:
+            return _run_stock_wrapper(lifecycle, refresh_email, refresh_password)
+        except _WrapperSignalExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
     finally:
+        _restore_signal_handlers(previous_signal_handlers)
         if scoped_token_id and scoped_token_admin_token:
             try:
                 _revoke_scoped_server_token(scoped_token_admin_token, scoped_token_id)

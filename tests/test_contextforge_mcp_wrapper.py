@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -127,6 +128,63 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
         self.assertIn("servers.use", payload["permissions"])
         self.assertNotIn("access_token", payload)
         self.assertNotIn("Bearer", written)
+
+    def test_signal_handler_records_reason_and_raises_controlled_exit(self) -> None:
+        lifecycle = wrapper.WrapperLifecycle(
+            server_name="context7_local_server",
+            server_url="http://127.0.0.1:4445/servers/server-123/mcp/",
+            parent_pid=os.getppid(),
+            idle_timeout_seconds=300,
+        )
+        previous = wrapper._install_signal_cleanup_handlers(lifecycle)
+        try:
+            handler = signal.getsignal(signal.SIGTERM)
+            self.assertTrue(callable(handler))
+            with self.assertRaises(wrapper._WrapperSignalExit) as raised:
+                assert callable(handler)
+                handler(signal.SIGTERM, None)
+        finally:
+            wrapper._restore_signal_handlers(previous)
+
+        self.assertEqual(143, raised.exception.code)
+        self.assertEqual("signal_SIGTERM", lifecycle.stop_reason)
+        self.assertEqual(143, lifecycle.exit_code)
+
+    def test_main_revokes_scoped_token_after_controlled_signal_exit(self) -> None:
+        def fake_run_stock(
+            lifecycle: wrapper.WrapperLifecycle,
+            refresh_email: str | None,
+            refresh_password: str | None,
+        ) -> int:
+            self.assertIsNone(refresh_email)
+            self.assertIsNone(refresh_password)
+            lifecycle.stop_reason = "signal_SIGTERM"
+            raise wrapper._WrapperSignalExit(143)
+
+        environ = {
+            "CONTEXTFORGE_BEARER_TOKEN": "",
+            "CONTEXTFORGE_SERVER_ID": "",
+        }
+        with (
+            mock.patch.object(sys, "argv", ["contextforge_mcp_wrapper.py", "context7_local_server"]),
+            mock.patch.dict(os.environ, environ, clear=False),
+            mock.patch.object(wrapper, "_token", return_value="admin-token"),
+            mock.patch.object(
+                wrapper,
+                "_request",
+                return_value={"items": [{"id": "server-123", "name": "context7_local_server"}]},
+            ),
+            mock.patch.object(
+                wrapper,
+                "_create_scoped_server_token",
+                return_value=("tok-123", "scoped-access-token"),
+            ),
+            mock.patch.object(wrapper, "_run_stock_wrapper", side_effect=fake_run_stock),
+            mock.patch.object(wrapper, "_revoke_scoped_server_token") as revoke,
+        ):
+            self.assertEqual(143, wrapper.main())
+
+        revoke.assert_called_once_with("admin-token", "tok-123")
 
     def test_wrapper_can_bootstrap_with_bearer_token_without_env_file(self) -> None:
         env = os.environ.copy()
