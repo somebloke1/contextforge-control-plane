@@ -112,14 +112,16 @@ work, and do not revive post-install validation to close them.
   bearer token shows nine servers, including the eight shared canonical
   services plus the project-scoped Serena server. Port `4445` is a separate
   Docker-published `ghcr.io/ibm/mcp-context-forge:v1.0.3` container and rejects
-  the 4444 bearer token. Refreshed full-list 4444 readback is recorded in
-  `docs/use-cases/contextforge-service-parity-readback-20260621.md`: the host
-  gateway has 9 servers, 104 tools, 83 prompts, 84 resources, and complete
-  81/81 `tool-guidance` prompt/resource pairing by canonical tool tag. The
-  operator has since clarified that 4444 is scheduled for decommissioning, so
-  this readback is a legacy migration baseline rather than a durable operating
-  authority. The remaining required boundary is authenticated 4445 parity and
-  migration-readiness evidence before 4444 is retired.
+  the 4444 bearer token. Authenticated 4445 readback using the ignored Docker
+  harness admin env now succeeds and shows a dev-Docker subset: 2 servers, 7
+  tools, 0 prompts, and 0 resources. Refreshed full-list 4444 readback is
+  recorded in `docs/use-cases/contextforge-service-parity-readback-20260621.md`:
+  the host gateway has 9 servers, 104 tools, 83 prompts, 84 resources, and
+  complete 81/81 `tool-guidance` prompt/resource pairing by canonical tool tag.
+  The operator has since clarified that 4444 is scheduled for decommissioning,
+  so this readback is a legacy migration baseline rather than a durable
+  operating authority. The remaining required boundary is Docker-specific 4445
+  migration implementation plus parity reconciliation before 4444 is retired.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
@@ -145,6 +147,8 @@ target is PR/Project hygiene:
   install-only quarantine boundary;
 - keep #138, #143, and #154 deferred as future ideal-form lanes until
   issue-specific implementation or acceptance evidence exists;
-- treat #284's next safe slice as authenticated 4445 readback with an
-  intentional credential and explicit migration parity reconciliation against
-  the 4444 legacy baseline, because 4444 is scheduled for decommissioning.
+- treat #284's next safe slice as a Docker-specific successor-surface migration
+  plan and implementation path: do not apply live-surface `127.0.0.1:910x`
+  registry recreation defaults directly to 4445, and require explicit parity
+  reconciliation against the 4444 legacy baseline before replacement-readiness
+  is claimed.

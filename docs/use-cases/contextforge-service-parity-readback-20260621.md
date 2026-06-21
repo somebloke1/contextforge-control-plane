@@ -14,14 +14,17 @@ and reconciled before 4444 is retired.
 
 ## Evidence
 
-- Full sanitized JSON:
+- 4444 full sanitized JSON:
   `generated/contextforge-284-full-pagination-readback-1782008501.local.json`
-- Tag analysis:
+- 4444 tag analysis:
   `generated/contextforge-284-guidance-tag-analysis-1782008501.local.json`
-- Token value was used only in memory and was not written to the artifacts.
-- No token was created, revoked, or modified.
-- No registry, service, prompt, resource, tool, or server mutation was
-  performed.
+- 4445 authenticated sanitized JSON:
+  `generated/contextforge-284-4445-authenticated-readback-20260621T023120Z.local.json`
+- 4445 authenticated summary:
+  `generated/contextforge-284-4445-authenticated-summary-20260621T023120Z.local.md`
+- Token values were used only in memory and were not written to the artifacts.
+- No registry, service, prompt, resource, tool, or server mutation was performed
+  by these readbacks.
 
 ## Host Gateway `127.0.0.1:4444`
 
@@ -90,19 +93,45 @@ Using the 4444 bearer token against 4445 returned `401` for:
 - `/prompts`
 - `/resources`
 
-This confirms the two gateways are separate authenticated surfaces. It does not
-prove 4445 parity, and it does not prove 4445 deficiency. The next step for
-4445 requires an intentionally supplied or generated credential for that
-surface, or a controller decision that 4445 is a dev/test comparison target
-rather than a strict successor to 4444.
+This confirms the two gateways are separate authenticated surfaces.
+
+After the operator clarified that 4444 is scheduled for decommissioning, the
+controller ran an authenticated 4445 readback using the ignored Docker harness
+admin env at `docker/contextforge-harness/env/contextforge.env`. The access
+token was not recorded. Full-list readback with `limit=1000` returned:
+
+| Endpoint | Count |
+| --- | ---: |
+| `/servers` | 2 |
+| `/tools` | 7 |
+| `/prompts` | 0 |
+| `/resources` | 0 |
+
+Server association readback returned:
+
+| Server | Tools | Prompts | Resources |
+| --- | ---: | ---: | ---: |
+| `context7_local_server` | 2 | 0 | 0 |
+| `mentality_dev_docker_server` | 5 | 0 | 0 |
+
+Compared with the 4444 migration baseline, 4445 is missing eight of the nine
+4444 servers, 102 of 104 4444 tools, all 83 4444 prompts, and all 84 4444
+resources. The current 4445 service set is therefore a dev-Docker subset, not a
+replacement-equivalent successor.
+
+The existing manifest-driven registry recreation helper is not safe to apply to
+4445 without a Docker-specific migration layer: its default URLs are
+host-local `127.0.0.1:910x` live-surface assumptions, which are not equivalent
+to gateway-container-reachable compose or host endpoints.
 
 ## Controller Disposition
 
 #284 should remain In Review. The 4444 host gateway now has refreshed
 full-list readback evidence showing canonical shared services and complete
-81/81 prompt/resource guidance pairing by canonical tool tag. The remaining
-unproven boundary is 4445 parity, which is blocked by authentication policy
-rather than by a readback mismatch. Because 4444 is scheduled for
-decommissioning, 4445 parity is not optional cleanup; it is the next required
-migration-readiness slice before any claim that the replacement ContextForge
-surface preserves the canonical service and guidance set.
+81/81 prompt/resource guidance pairing by canonical tool tag. The 4445
+successor surface now has authenticated readback evidence too, and that
+evidence shows a concrete parity gap rather than an auth-only boundary.
+Because 4444 is scheduled for decommissioning, 4445 parity is not optional
+cleanup; it is the next required migration-readiness slice before any claim
+that the replacement ContextForge surface preserves the canonical service and
+guidance set.
