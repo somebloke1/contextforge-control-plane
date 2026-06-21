@@ -40,13 +40,11 @@ def default_session_id(client: str, service: str, phase: str, timestamp: str) ->
 
 def service_test_prompt(service: str, display: str, issue: int, global_issue: int) -> str:
     return (
-        f"Please comprehensively test the {display} MCP service in this project. "
-        "Use the available MCP tools for that service through this assistant session. "
-        "Identify the available functions, call every safe read-only or no-op function you can, "
-        "skip mutating functions unless there is a safe dry-run, fixture, or no-op target, "
-        "and report a concise per-function outcome table. "
-        f"If a failure appears shared across services, note that it belongs with issue #{global_issue}; "
-        f"if it appears specific to {service}, note that it belongs with issue #{issue}."
+        f"Test the {display} MCP service now. "
+        "Use each safe function once. "
+        "Skip mutating functions unless there is a dry-run or no-op target. "
+        "Keep the report under 20 lines with function, result, and issue target "
+        f"(#{issue} for {service}, #{global_issue} for shared wrapper/client problems)."
     )
 
 
@@ -221,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
                 "separate service-specific defects from cross-service wrapper/client defects",
                 "triage findings to the service issue or #316",
                 "identify any mutating functions skipped with acceptable rationale",
+                "classify qwen context-window or timeout failures as runner/package defects unless isolated to one service",
             ],
         }
         write_json(output_root / "run-summary.json", summary)

@@ -39,6 +39,22 @@ For each service and each target client:
 11. Remediate, retest, and loop until the service/client slice passes or a
     blocker is explicitly owned.
 
+## Qwen Context Discipline
+
+Pi and OpenCode qwen sessions are limited to a 128k context window. The testing
+process must not spend that window on all-service activation residue, long
+instructions, or giant one-turn tool reports.
+
+- Activate only the service under test unless the slice explicitly requires a
+  dependency.
+- Keep service-test prompts short and natural.
+- For services with many tools, split testing into bounded chunks and use fresh
+  post-activation sessions where needed.
+- Preserve raw evidence to files, but feed evaluators targeted readbacks rather
+  than entire raw JSON streams.
+- Treat timeout after a large prompt or large tool universe as a runner/package
+  defect until evidence shows a service-specific hang.
+
 ## Triage Rules
 
 Route to #316 unless evidence isolates the defect to one service:
