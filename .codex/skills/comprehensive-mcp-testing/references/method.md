@@ -108,6 +108,14 @@ The runner may help create, execute, package, and index these bundles. It must
 not score the meaning of prose. Semantic evaluation belongs to the SO or a
 gpt-5.5/non-Spark evaluator.
 
+Use `docker/client-harness/scripts/run-comprehensive-mcp-model-quorum.py` for
+acceptance-oriented execution. It selects or accepts at least three distinct
+eligible model profiles, calls the single-profile dialogue runner once per
+profile, preserves each profile's raw output, and writes a quorum summary under
+`docker/client-harness/evidence/comprehensive-mcp-quorum/`. The quorum runner
+only determines whether enough model-profile runs completed structurally; it
+does not score semantic pass/fail.
+
 ## Three-Model Quorum
 
 Every semantic test must pass on at least three distinct eligible model

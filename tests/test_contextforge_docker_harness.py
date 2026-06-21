@@ -875,6 +875,9 @@ print(json.dumps(outputs))
         method = (ROOT / ".codex/skills/comprehensive-mcp-testing/references/method.md").read_text(
             encoding="utf-8"
         )
+        quorum_runner = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-model-quorum.py").read_text(
+            encoding="utf-8"
+        )
         skill_line_wrapped = " ".join(skill.split())
         method_line_wrapped = " ".join(method.split())
         profiles = json.loads((ROOT / "docker/client-harness/semantic-model-profiles.json").read_text(encoding="utf-8"))[
@@ -893,8 +896,20 @@ print(json.dumps(outputs))
             "Single-profile runs are model-slice evidence only",
             "A test with one or two passing profiles is `quorum_incomplete`, not passed",
             "The three-model quorum does not permit deterministic prose scoring",
+            "run-comprehensive-mcp-model-quorum.py",
+            "does not score semantic pass/fail",
         ]:
             self.assertIn(phrase, method_line_wrapped)
+        for phrase in [
+            "MIN_MODEL_QUORUM = 3",
+            "semantic_acceptance",
+            "requires_non_spark_evaluator_per_model_and_quorum",
+            "quorum_run_incomplete",
+            "ready_for_evaluator",
+            "quorum runner does not score free-form assistant prose",
+            "varies only semantic model profile across runs",
+        ]:
+            self.assertIn(phrase, quorum_runner)
 
     def test_opencode_renderer_normalizes_accidental_home_marker_in_model_env(self) -> None:
         renderer_path = ROOT / "docker/client-harness/opencode/render-config.py"
