@@ -9,6 +9,12 @@ description: Orchestrate ContextForge comprehensive MCP service testing through 
 
 Treat this as a semantic, model-engaged test regimen. Deterministic tooling may establish structure, runtime facts, command exit status, JSON validity, endpoint reachability, file existence, and evidence packaging. It must not decide whether free-form assistant prose satisfies a service interaction requirement. Use SO judgment or a non-Spark evaluator for meaning.
 
+Every semantic service/client test must pass on at least three distinct
+eligible semantic-test model profiles before the controller may call that test
+accepted. A one-model pass is useful slice evidence, not a test pass. If fewer
+than three eligible profiles are available, the test is blocked for acceptance
+until the profile pool or provider credentials are repaired.
+
 Short of direct user testing, usability evidence comes from a broad and diverse
 set of semantic test bundles with runners dispatched by sub-agents. The bundle
 set must deliberately explore plausible user behaviors and map each behavior to
@@ -29,13 +35,14 @@ pasting large transcripts or multi-service histories into one prompt.
 5. Keep prompts natural, short, and minimally sufficient. Do not coach the tested assistant with tool-call names unless the use case explicitly requires that signal.
 6. Require the tested assistant to use the ContextForge-installed tools exposed in the client session. Direct upstream package execution, shell scripts, or hand-written MCP clients are bypass evidence, not successful service use.
 7. Preserve raw transcripts, command ledgers, summaries, and any container/runtime readback needed to reproduce the run.
-8. Have an evaluator or SO read the evidence semantically and classify outcomes. Search or parse transcripts only to locate evidence, not to score meaning.
-9. Triage findings:
+8. Repeat the same semantic bundle on at least three distinct eligible model profiles before claiming a test pass.
+9. Have an evaluator or SO read the evidence semantically and classify outcomes. Search or parse transcripts only to locate evidence, not to score meaning.
+10. Triage findings:
    - Service tool/schema/upstream/guidance/credential defects go to that service's Comprehensive `<name>` MCP Testing issue.
    - Shared reload, wrapper, auth, token, client, reset, prompt-noise, model-context, or runner defects go to the cross-MCP issue.
-10. Remediate the smallest process/code defect that makes the requested final state more true.
-11. Update GitHub and the branch before dispatching wider agents.
-12. Refine this skill when a new recurrent testing lesson appears, then validate and commit the skill change before relying on that lesson in the next wider wave.
+11. Remediate the smallest process/code defect that makes the requested final state more true.
+12. Update GitHub and the branch before dispatching wider agents.
+13. Refine this skill when a new recurrent testing lesson appears, then validate and commit the skill change before relying on that lesson in the next wider wave.
 
 ## Runner
 
@@ -139,6 +146,21 @@ ContextForge-installed service under test.
 Use gpt-5.5/non-Spark agents for semantic evaluation of model-agent interactions. Use Spark only for bounded mechanical tasks such as summarizing command ledgers, checking links, drafting issue index text, or patching obvious repetitive documentation.
 
 The controller retains GitHub privileges and final acceptance. Subagents return evidence and recommendations, not readiness authority.
+
+## Model Quorum
+
+A semantic test pass requires a quorum of at least three distinct eligible
+semantic-test model profiles. The profiles must run the same service, client,
+prompt bundle, reset discipline, and target surface. Record each profile id,
+provider kind, model id, route-preference list, context window, evidence root,
+and evaluator verdict. The quorum is about model diversity over the same
+behavior, not three retries on one model.
+
+If one profile fails and others pass, classify that failure before replacing
+it: model-adequacy, provider/runtime outage, client/tool defect, prompt/package
+defect, or genuine product failure. Do not hide a failed model run by silently
+dropping it from the packet. If a candidate is unavailable or below the minimum
+context-window floor, it is ineligible rather than failed.
 
 ## Refinement Trigger
 

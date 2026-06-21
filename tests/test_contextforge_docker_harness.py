@@ -870,6 +870,32 @@ print(json.dumps(outputs))
         self.assertIn('launch_command.extend(["-e", key])', runner)
         self.assertNotIn('launch_command.extend(["-e", f"{key}={os.environ[key]}"])', runner)
 
+    def test_comprehensive_mcp_semantic_tests_require_three_model_quorum(self) -> None:
+        skill = (ROOT / ".codex/skills/comprehensive-mcp-testing/SKILL.md").read_text(encoding="utf-8")
+        method = (ROOT / ".codex/skills/comprehensive-mcp-testing/references/method.md").read_text(
+            encoding="utf-8"
+        )
+        skill_line_wrapped = " ".join(skill.split())
+        method_line_wrapped = " ".join(method.split())
+        profiles = json.loads((ROOT / "docker/client-harness/semantic-model-profiles.json").read_text(encoding="utf-8"))[
+            "profiles"
+        ]
+
+        self.assertGreaterEqual(len(profiles), 3)
+        for phrase in [
+            "at least three distinct eligible semantic-test model profiles",
+            "A one-model pass is useful slice evidence, not a test pass",
+            "The quorum is about model diversity over the same behavior",
+        ]:
+            self.assertIn(phrase, skill_line_wrapped)
+        for phrase in [
+            "`model_quorum`",
+            "Single-profile runs are model-slice evidence only",
+            "A test with one or two passing profiles is `quorum_incomplete`, not passed",
+            "The three-model quorum does not permit deterministic prose scoring",
+        ]:
+            self.assertIn(phrase, method_line_wrapped)
+
     def test_opencode_renderer_normalizes_accidental_home_marker_in_model_env(self) -> None:
         renderer_path = ROOT / "docker/client-harness/opencode/render-config.py"
         spec = importlib.util.spec_from_file_location("contextforge_opencode_render_config_test", renderer_path)
