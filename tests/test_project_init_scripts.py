@@ -2418,10 +2418,10 @@ class SerenaManagerTests(unittest.TestCase):
                 client_config_plan=config_plan,
                 validation_plan=binding.build_project_init_validation_plan(
                     [service],
-                    validation_mode="installed",
+                    validation_mode="validate_now",
                     target_client="codex",
                 ),
-                validation_results={},
+                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": True}},
                 consent_receipt_refs=CONSENT_REFS,
             )
             project_state.write_state_atomic(root, state)
@@ -2692,10 +2692,12 @@ class SerenaManagerTests(unittest.TestCase):
                 client_config_plan=config_plan,
                 validation_plan=binding.build_project_init_validation_plan(
                     [service],
-                    validation_mode="installed",
+                    validation_mode="validate_now",
                     target_client="codex",
                 ),
-                validation_results={},
+                validation_results={
+                    "mentality:static_repo_local": {"status": "passed", "target_client_visible": True}
+                },
                 consent_receipt_refs=CONSENT_REFS,
             )
             project_state.write_state_atomic(root, state)
@@ -2726,6 +2728,54 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertIn('"ledger":"decisions"', context)
             self.assertIn("Do not ask which services to activate", context)
             self.assertIn("Do not use shell commands", context)
+
+    def test_codex_hook_reminds_reload_before_governance_guidance_when_tools_are_not_observed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("mentality")
+            service["service_binding"] = "mentality:static_repo_local"
+            service["instantiation_class"] = "static_repo_local"
+            service["virtual_server"] = "mentality_dev_docker_server"
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(
+                    [service],
+                    validation_mode="installed",
+                    target_client="codex",
+                ),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+            self.assertTrue(init_hook.should_inject(root, {}, target_client="codex"))
+
+            run_root = Path(run_tmp)
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "session-governance-reload",
+                "cwd": str(root),
+                "prompt": "what decisions are recorded for this project?",
+            }
+            with (
+                mock.patch.object(init_hook, "RUN_ROOT", run_root),
+                mock.patch.object(init_hook, "STATE_PATH", run_root / "project-init-hook-state.local.json"),
+                mock.patch.object(init_hook, "LOCK_PATH", run_root / "project-init-hook-state.local.lock"),
+                mock.patch.object(init_hook, "LOG_PATH", run_root / "project-init-hook.local.log"),
+                mock.patch.object(init_hook, "read_payload", return_value=payload),
+                contextlib.redirect_stdout(io.StringIO()) as stdout,
+            ):
+                self.assertEqual(0, init_hook.main_for_events(init_hook.CODEX_HOOK_EVENTS, target_client="codex"))
+
+            output = json.loads(stdout.getvalue())
+            context = output["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("<contextforge-project-init-continuation>", context)
+            self.assertIn("cf_project_init_continue", context)
+            self.assertIn("Do not validate, probe, use the installed service", context)
+            self.assertNotIn("<contextforge-project-governance>", context)
 
     def test_hook_decision_repairs_invalid_current_shape_without_fresh_init_classification(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

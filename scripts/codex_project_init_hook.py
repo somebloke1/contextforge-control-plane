@@ -95,18 +95,35 @@ def project_has_governance_service(project_root: Path, *, target_client: str = "
         return False
     if not isinstance(state, dict):
         return False
+    return target_client_service_is_available(
+        state,
+        "mentality:static_repo_local",
+        target_client=target_client,
+    )
+
+
+def target_client_service_is_available(state: dict[str, Any], service_binding: str, *, target_client: str) -> bool:
     service_state = state.get("services") if isinstance(state.get("services"), dict) else {}
-    mentality = service_state.get("mentality:static_repo_local")
-    if not isinstance(mentality, dict):
+    service = service_state.get(service_binding)
+    if not isinstance(service, dict):
         return False
-    target_clients = mentality.get("target_clients")
-    if isinstance(target_clients, dict) and target_client in target_clients:
-        return True
+    target_clients = service.get("target_clients")
+    if isinstance(target_clients, dict):
+        target_record = target_clients.get(target_client)
+        if isinstance(target_record, dict) and (
+            target_record.get("validation_status") in {"passed", "verified"}
+            or target_record.get("status") in {"verified", "tools_registered_observed"}
+        ):
+            return True
     project_init = state.get("project_init") if isinstance(state.get("project_init"), dict) else {}
     client_states = project_init.get("client_states") if isinstance(project_init.get("client_states"), dict) else {}
     client_state = client_states.get(target_client) if isinstance(client_states.get(target_client), dict) else {}
     selected = client_state.get("selected_service_bindings")
-    return isinstance(selected, list) and "mentality:static_repo_local" in selected
+    return (
+        isinstance(selected, list)
+        and service_binding in selected
+        and client_state.get("reload_status") == "tools_registered_observed"
+    )
 
 
 def governance_context_for_prompt(project_root: Path, prompt: str, *, target_client: str = "codex") -> str:
@@ -165,18 +182,7 @@ def project_has_context7_service(project_root: Path, *, target_client: str = "co
         return False
     if not isinstance(state, dict):
         return False
-    service_state = state.get("services") if isinstance(state.get("services"), dict) else {}
-    context7 = service_state.get("context7:canonical")
-    if not isinstance(context7, dict):
-        return False
-    target_clients = context7.get("target_clients")
-    if isinstance(target_clients, dict) and target_client in target_clients:
-        return True
-    project_init = state.get("project_init") if isinstance(state.get("project_init"), dict) else {}
-    client_states = project_init.get("client_states") if isinstance(project_init.get("client_states"), dict) else {}
-    client_state = client_states.get(target_client) if isinstance(client_states.get(target_client), dict) else {}
-    selected = client_state.get("selected_service_bindings")
-    return isinstance(selected, list) and "context7:canonical" in selected
+    return target_client_service_is_available(state, "context7:canonical", target_client=target_client)
 
 
 def context7_normal_use_context_for_prompt(project_root: Path, prompt: str, *, target_client: str = "codex") -> str:
