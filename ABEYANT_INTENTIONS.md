@@ -38,12 +38,12 @@ Thin operator scripts are now present where stock behavior was first proven. scr
 
 - Ledger: abeyant-intentions
 - Status: honored
-- Repository: /home/dgk/workspace/legacy-controlplane-archive
+- Repository: /home/dgk/workspace/cf-controlplane
 - Created: 2026-05-28
-- Updated: 2026-05-28
+- Updated: 2026-06-20
 - Tags: templates,documentation,registration,secrets
 
-Sanitized registration examples have been promoted only after live proof. scripts/register_tool_guidance.py now stores the repeatable prompt/resource guidance registration logic, with API readback and MCP client readback proving 80 prompts and 80 resources associated across all active canonical virtual servers, including GitHub and web-search. Runtime env files, bearer tokens, DB files, logs, screenshots, and host inventories remain ignored local state.
+Sanitized registration examples have been promoted only after live proof. scripts/register_tool_guidance.py stores the repeatable prompt/resource guidance registration logic. Historical API readback and MCP client readback proved 80 prompts and 80 resources associated across all active canonical virtual servers, including GitHub and web-search. The current script inventory defines 81 prompt/resource guidance entries, so any renewed parity claim must be backed by refreshed authenticated API readback and MCP client readback rather than inherited from the older 80/80 proof. Runtime env files, bearer tokens, DB files, logs, screenshots, and host inventories remain ignored local state.
 <!-- governance-crud:end id=ai-20260528-0003 -->
 
 <!-- governance-crud:start id=ai-20260528-0004 -->

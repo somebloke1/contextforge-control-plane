@@ -417,12 +417,12 @@ The Exa Search ContextForge service now points at the local server-instances/exa
 
 - Ledger: decisions
 - Status: accepted
-- Repository: /home/dgk/workspace/legacy-controlplane-archive
+- Repository: /home/dgk/workspace/cf-controlplane
 - Created: 2026-05-28
-- Updated: 2026-05-28
+- Updated: 2026-06-20
 - Tags: contextforge,prompts,resources,tool-guidance,api
 
-For each active canonical MCP tool, register one succinct reusable prompt and one more comprehensive documentation resource through the ContextForge API, then associate both with the tool's canonical virtual server. The live registry now has 80 tools, 80 prompts, and 80 resources across mentality, ssh-tmux, context7, playwright, exa-search, OpenZeppelin Solidity Contracts, GitHub, and web-search. MCP client readback through the ContextForge stdio wrappers should confirm each virtual server exposes matching tool/resource/prompt counts after service additions.
+For each active canonical MCP tool, register one succinct reusable prompt and one more comprehensive documentation resource through the ContextForge API, then associate both with the tool's canonical virtual server. Historical live registry proof covered 80 tools, 80 prompts, and 80 resources across mentality, ssh-tmux, context7, playwright, exa-search, OpenZeppelin Solidity Contracts, GitHub, and web-search. The current scripts/register_tool_guidance.py inventory defines 81 prompt/resource guidance entries across those canonical services; refreshed authenticated full-pagination API readback and MCP client readback are required before claiming current live 81/81 parity after service additions.
 <!-- governance-crud:end id=dec-20260528-0031 -->
 
 <!-- governance-crud:start id=dec-20260528-0032 -->

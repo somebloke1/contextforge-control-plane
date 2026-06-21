@@ -106,11 +106,16 @@ work, and do not revive post-install validation to close them.
 
 ## Category D: Active Follow-Up Or Future Work
 
-- #284 legacy/new ContextForge service, prompt, and resource parity: large
-  service-ops/readiness lane. A read-only parity investigation is now leased
-  to `codex-agent:019ee7cf-f72e-7022-9b9a-c370d3a55ca9` because current
-  evidence shows both `4444` and `4445` listeners and the service-map/#284
-  legacy/new port descriptions need reconciliation before implementation.
+- #284 legacy/new ContextForge service, prompt, and resource parity: read-only
+  investigation integrated. The host-local gateway on `127.0.0.1:4444` is a
+  user `contextforge-gateway.service`; authenticated readback with the local
+  bearer token shows nine servers, including the eight shared canonical
+  services plus the project-scoped Serena server. Port `4445` is a separate
+  Docker-published `ghcr.io/ibm/mcp-context-forge:v1.0.3` container and rejects
+  the 4444 bearer token. `scripts/register_tool_guidance.py` currently defines
+  81 prompt/resource guidance entries, while older governance proof recorded
+  80/80 live parity. Follow-up should refresh full authenticated pagination and
+  reconcile prompt/resource parity before any runtime mutation.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
