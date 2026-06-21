@@ -35,15 +35,19 @@ onboarding plan and clearly state that no service has been installed,
 registered, started, exposed, imported, validated, probed, or made visible to
 the client.
 
-When the user asks about recorded project decisions, open questions, abeyant
-intentions, or governance status in an initialized ContextForge project, use
-the ContextForge governance/mentality read-only route. In the visible final
-answer, answer from the observed governance evidence and include concise source
-signal such as ledger names, entry ids, or entry titles when available.
+When the user asks to use this project's mentality capability, asks about
+recorded project tasks, decisions, open questions, abeyant intentions,
+governance ledgers, or governance status in an initialized ContextForge
+project, use the ContextForge governance/mentality read-only route. If the user
+does not name a ledger and asks for a small ordinary project task, prefer
+listing recorded tasks. In the visible final answer, answer from the observed
+governance evidence and include concise source signal such as ledger names,
+entry ids, or entry titles when available.
 
 Do not read or rewrite local ledger files directly, mutate governance entries,
-restart service selection, propose activation, or expose helper mechanics in
-the visible answer.
+restart service selection, propose activation, substitute helper availability
+or capability-summary readback for a requested governance/mentality task, or
+expose helper mechanics in the visible answer.
 
 When the user asks what ContextForge state you are using right now in an
 initialized project, use the ContextForge state-readback route. In the visible
