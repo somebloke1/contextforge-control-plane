@@ -81,7 +81,7 @@ def read_target_env(path: Path) -> dict[str, str]:
 
 
 def target_login_token(base_url: str, email: str, password: str) -> str:
-    for login_path in ("/auth/email/login", "/auth/login"):
+    for login_path in ("/auth/login", "/auth/email/login"):
         try:
             payload = _target_request(
                 "POST",
@@ -128,6 +128,13 @@ def load_target_client(base_url: str, env_file: Path) -> HttpContextForgeClient:
 def by_name(rows: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
     for row in rows:
         if row.get("name") == name:
+            return row
+    return None
+
+
+def by_url(rows: list[dict[str, Any]], url: str) -> dict[str, Any] | None:
+    for row in rows:
+        if row.get("url") == url:
             return row
     return None
 
@@ -238,9 +245,13 @@ def apply_service(service: dict[str, Any], client: ContextForgeClient, *, wait_a
     gateway_body = gateway_payload(service)
     gateways = client.items("/gateways?include_inactive=true&limit=1000")
     existing_gateway = by_name(gateways, gateway_name)
+    gateway_match = "name"
+    if not existing_gateway:
+        existing_gateway = by_url(gateways, str(gateway_body["url"]))
+        gateway_match = "url"
     if existing_gateway:
         gateway_row = client.request("PUT", f"/gateways/{row_id(existing_gateway)}", gateway_body)
-        gateway_action = "updated"
+        gateway_action = "updated" if gateway_match == "name" else "updated_from_url_match"
     else:
         gateway_row = client.request("POST", "/gateways", gateway_body)
         gateway_action = "created"

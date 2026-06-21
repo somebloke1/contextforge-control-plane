@@ -129,7 +129,15 @@ work, and do not revive post-install validation to close them.
   `scripts/apply_contextforge_registry_recreation.py` now accepts explicit
   target metadata (`--base-url`, `--env-file`, and `--docker-migration-plan`)
   and can emit a 4445 dry-run using Docker-projected upstream URLs without
-  calling ContextForge APIs.
+  calling ContextForge APIs. It also handles Docker successor canonical
+  projection by reusing an existing dev-named gateway with an identical target
+  upstream URL. Safe-service apply against 4445 has now registered or reconciled
+  the three non-blocked services: `context7`, `mentality`, and
+  `openzeppelin-solidity-contracts`. Authenticated 4445 readback after that
+  apply shows 3 gateways, 4 servers, 15 tools, 0 prompts, and 0 resources; the
+  project-init read model marks those three services matched and the remaining
+  credential-scoped, session-scoped, and project-scoped services still missing
+  or not provisioned.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
@@ -160,6 +168,8 @@ target is PR/Project hygiene:
   `scripts/plan_contextforge_docker_migration.py` and the targetable dry-run
   path in `scripts/apply_contextforge_registry_recreation.py`: do not apply
   live-surface `127.0.0.1:910x` registry recreation defaults directly to 4445,
-  repair the stablecoin guidance association, and require explicit parity
+  repair the stablecoin guidance association, replay prompts/resources to 4445,
+  decide the credential/session/project-scoped service boundaries, clean up
+  transitional Docker bootstrap residue, and require explicit parity
   reconciliation against the 4444 legacy baseline before replacement-readiness
   is claimed.

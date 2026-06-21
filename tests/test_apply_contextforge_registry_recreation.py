@@ -189,6 +189,46 @@ class ApplyRegistryRecreationTests(unittest.TestCase):
         self.assertEqual(["agent-id"], server_put["associatedA2aAgents"])
         self.assertEqual(["tool-existing"], server_put["associatedTools"])
 
+    def test_apply_updates_existing_gateway_by_url_for_docker_canonical_projection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, "mentality", ["example-tool"])
+            docker_plan = write_docker_plan(root, "mentality", "http://mentality-transceiver:9201/mcp")
+            client = FakeClient()
+            client.gateways.append(
+                {
+                    "id": "gateway-existing",
+                    "name": "mentality-dev-docker",
+                    "url": "http://mentality-transceiver:9201/mcp",
+                }
+            )
+            client.tools.append({"id": "tool-existing", "name": "example-tool", "gateway_id": "gateway-existing"})
+
+            result = apply_helper.run(apply=True, manifests_root=root, docker_migration_plan=docker_plan, client=client)
+
+        self.assertEqual("updated_from_url_match", result["services"][0]["gateway"]["action"])
+        self.assertEqual("created", result["services"][0]["server"]["action"])
+        gateway_put = next(body for method, path, body in client.requests if method == "PUT" and path == "/gateways/gateway-existing")
+        self.assertEqual("mentality", gateway_put["name"])
+        self.assertEqual("http://mentality-transceiver:9201/mcp", gateway_put["url"])
+
+    def test_target_login_prefers_harness_login_endpoint(self) -> None:
+        calls: list[str] = []
+        original = apply_helper._target_request
+
+        def fake_request(method: str, base_url: str, path: str, body: dict | None = None):
+            calls.append(path)
+            return {"access_token": "target-token"}
+
+        try:
+            apply_helper._target_request = fake_request  # type: ignore[assignment]
+            token = apply_helper.target_login_token("http://127.0.0.1:4445", "admin@example.test", "password")
+        finally:
+            apply_helper._target_request = original  # type: ignore[assignment]
+
+        self.assertEqual("target-token", token)
+        self.assertEqual(["/auth/login"], calls)
+
     def test_cli_dry_run_outputs_clean_json(self) -> None:
         result = subprocess.run(
             [

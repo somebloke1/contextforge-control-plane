@@ -26,9 +26,13 @@ and reconciled before 4444 is retired.
   `generated/contextforge-284-docker-migration-plan-20260621.local.json`
 - 4445 Docker migration apply dry-run:
   `generated/contextforge-284-docker-migration-apply-dry-run-20260621.local.json`
+- 4445 Docker migration safe-service apply:
+  `generated/contextforge-284-docker-migration-apply-safe-services-20260621.local.json`
 - Token values were used only in memory and were not written to the artifacts.
-- No registry, service, prompt, resource, tool, or server mutation was performed
-  by these readbacks.
+- The initial readbacks and dry-runs performed no registry, service, prompt,
+  resource, tool, or server mutation. The safe-service apply intentionally
+  mutated only the Docker successor gateway on `127.0.0.1:4445` for services
+  classified as non-blocked in the Docker migration plan.
 
 ## Host Gateway `127.0.0.1:4444`
 
@@ -131,8 +135,8 @@ Compared with the 4444 migration baseline, 4445 is missing eight of the nine
 resources. The current 4445 service set is therefore a dev-Docker subset, not a
 replacement-equivalent successor.
 
-The existing manifest-driven registry recreation helper is not safe to apply to
-4445 without a Docker-specific migration layer: its default URLs are
+The existing manifest-driven registry recreation helper was not safe to apply
+to 4445 without a Docker-specific migration layer: its default URLs are
 host-local `127.0.0.1:910x` live-surface assumptions, which are not equivalent
 to gateway-container-reachable compose or host endpoints.
 
@@ -156,14 +160,65 @@ apply dry-run shows `context7` projected to
 `http://context7-transceiver:9203/mcp` and records target base
 `http://127.0.0.1:4445`.
 
+The apply helper also now handles Docker successor canonical projection where a
+dev-named gateway already owns the target upstream URL. If no gateway matches
+the canonical name, the helper may match by identical URL and update that row
+instead of attempting a duplicate create. This was required for the existing
+`mentality-dev-docker` gateway at `http://mentality-transceiver:9201/mcp`.
+
+Safe-service apply against 4445 completed for the three non-blocked services:
+
+| Service | Gateway action | Server action | Tools |
+| --- | --- | --- | ---: |
+| `context7` | updated `context7-local` | updated `context7_local_server` | 2 |
+| `mentality` | updated from URL match to `mentality` | created `mentality_server` | 5 |
+| `openzeppelin-solidity-contracts` | created | created `openzeppelin_solidity_contracts_server` | 8 |
+
+Post-apply authenticated 4445 readback returned:
+
+| Endpoint | Count |
+| --- | ---: |
+| `/gateways` | 3 |
+| `/servers` | 4 |
+| `/tools` | 15 |
+| `/prompts` | 0 |
+| `/resources` | 0 |
+
+The live server menu read model sees nine manifest-backed service choices and
+marks these three services as matched:
+
+- `context7:canonical`
+- `mentality:static_repo_local`
+- `openzeppelin-solidity-contracts:canonical`
+
+The remaining services are still intentionally unmatched or not provisioned on
+4445:
+
+- `exa-search:credential_scoped`
+- `github:canonical`
+- `playwright:session_scoped`
+- `ssh-tmux:session_scoped`
+- `web-search:credential_scoped`
+- `serena:8a2a6256eec8`
+
+The old `mentality_dev_docker_server` virtual server remains present as
+transitional Docker bootstrap residue and is associated with the same canonical
+mentality tool IDs. It does not add an extra project-init menu item because
+service discovery is manifest-backed and keys readback to expected virtual
+server names, but it should be reconciled before claiming a fully clean
+successor surface.
+
 ## Controller Disposition
 
-#284 should remain In Review. The 4444 host gateway now has refreshed
-full-list readback evidence showing canonical shared services and complete
-81/81 prompt/resource guidance pairing by canonical tool tag. The 4445
-successor surface now has authenticated readback evidence too, and that
-evidence shows a concrete parity gap rather than an auth-only boundary.
-Because 4444 is scheduled for decommissioning, 4445 parity is not optional
-cleanup; it is the next required migration-readiness slice before any claim
-that the replacement ContextForge surface preserves the canonical service and
-guidance set.
+#284 should remain Active or In Review only after explicit controller
+disposition. The 4444 host gateway now has refreshed full-list readback
+evidence showing canonical shared services and near-complete source guidance
+coverage, with one known stablecoin tag defect that should be repaired during
+successor migration. The 4445 successor surface now has authenticated readback
+evidence and partial safe-service apply evidence. Because 4444 is scheduled for
+decommissioning, 4445 parity is not optional cleanup; it is the next required
+migration-readiness slice before any claim that the replacement ContextForge
+surface preserves the canonical service and guidance set. Remaining work:
+boundary decisions for credential/session/project-scoped services, prompt and
+resource guidance replay to 4445, cleanup of stale dev bootstrap residue, and a
+final parity readback.
