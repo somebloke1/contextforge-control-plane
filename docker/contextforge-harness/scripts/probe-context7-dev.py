@@ -30,7 +30,14 @@ SAFE_CONTEXT7_ARGS = {
 
 
 async def list_tools(url: str, *, headers: dict[str, str] | None = None) -> list[str]:
-    async with streamablehttp_client(url, headers=headers, timeout=30, sse_read_timeout=30) as (read, write, _):
+    # ContextForge server-scoped probe tokens prove tool access. They are
+    # revoked through the token API; do not require optional MCP DELETE-session
+    # permission for probe success.
+    async with streamablehttp_client(url, headers=headers, timeout=30, sse_read_timeout=30, terminate_on_close=False) as (
+        read,
+        write,
+        _,
+    ):
         async with ClientSession(read, write) as session:
             await session.initialize()
             result = await session.list_tools()
@@ -38,7 +45,11 @@ async def list_tools(url: str, *, headers: dict[str, str] | None = None) -> list
 
 
 async def call_resolve_library(url: str, *, headers: dict[str, str] | None = None) -> str:
-    async with streamablehttp_client(url, headers=headers, timeout=30, sse_read_timeout=30) as (read, write, _):
+    async with streamablehttp_client(url, headers=headers, timeout=30, sse_read_timeout=30, terminate_on_close=False) as (
+        read,
+        write,
+        _,
+    ):
         async with ClientSession(read, write) as session:
             await session.initialize()
             tools = await session.list_tools()
