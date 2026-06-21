@@ -24,6 +24,8 @@ and reconciled before 4444 is retired.
   `generated/contextforge-284-4445-authenticated-summary-20260621T023120Z.local.md`
 - 4445 Docker migration dry-run plan:
   `generated/contextforge-284-docker-migration-plan-20260621.local.json`
+- 4445 Docker migration apply dry-run:
+  `generated/contextforge-284-docker-migration-apply-dry-run-20260621.local.json`
 - Token values were used only in memory and were not written to the artifacts.
 - No registry, service, prompt, resource, tool, or server mutation was performed
   by these readbacks.
@@ -145,6 +147,14 @@ baseline services and emits a no-mutation successor profile:
   projected or redesigned before 4445 registration;
 - approval-blocked services: credential-scoped services, single-user/session
   services, and project-scoped Serena.
+
+The registry recreation apply helper now accepts explicit target metadata:
+`--base-url`, `--env-file`, and `--docker-migration-plan`. In dry-run mode it
+projects Docker-safe upstream URLs from the migration plan while continuing to
+perform no ContextForge API calls and without reading env values. The generated
+apply dry-run shows `context7` projected to
+`http://context7-transceiver:9203/mcp` and records target base
+`http://127.0.0.1:4445`.
 
 ## Controller Disposition
 

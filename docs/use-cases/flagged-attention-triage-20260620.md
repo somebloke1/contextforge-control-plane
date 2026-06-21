@@ -126,6 +126,10 @@ work, and do not revive post-install validation to close them.
   so this readback is a legacy migration baseline rather than a durable
   operating authority. The remaining required boundary is Docker-specific 4445
   migration implementation plus parity reconciliation before 4444 is retired.
+  `scripts/apply_contextforge_registry_recreation.py` now accepts explicit
+  target metadata (`--base-url`, `--env-file`, and `--docker-migration-plan`)
+  and can emit a 4445 dry-run using Docker-projected upstream URLs without
+  calling ContextForge APIs.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
@@ -153,7 +157,9 @@ target is PR/Project hygiene:
   issue-specific implementation or acceptance evidence exists;
 - treat #284's next safe slice as a Docker-specific successor-surface migration
   implementation path guided by
-  `scripts/plan_contextforge_docker_migration.py`: do not apply live-surface
-  `127.0.0.1:910x` registry recreation defaults directly to 4445, repair the
-  stablecoin guidance association, and require explicit parity reconciliation
-  against the 4444 legacy baseline before replacement-readiness is claimed.
+  `scripts/plan_contextforge_docker_migration.py` and the targetable dry-run
+  path in `scripts/apply_contextforge_registry_recreation.py`: do not apply
+  live-surface `127.0.0.1:910x` registry recreation defaults directly to 4445,
+  repair the stablecoin guidance association, and require explicit parity
+  reconciliation against the 4444 legacy baseline before replacement-readiness
+  is claimed.

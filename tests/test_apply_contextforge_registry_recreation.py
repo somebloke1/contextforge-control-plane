@@ -30,6 +30,31 @@ def write_manifest(root: Path, slug: str, tools: list[str]) -> None:
     )
 
 
+def write_docker_plan(root: Path, slug: str, target_url: str) -> Path:
+    path = root / "docker-plan.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_uri": "contextforge://diagnostics/docker-successor-migration-plan/v1",
+                "mutation_performed": False,
+                "services": [
+                    {
+                        "slug": slug,
+                        "target_upstream_url": target_url,
+                        "locality": "host_gateway_projection",
+                        "approval_state": "blocked_pending_review",
+                        "approval_blocked": True,
+                        "docker_projection_required": True,
+                        "unsafe_to_reuse_live_default": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 class FakeClient:
     def __init__(self) -> None:
         self.requests: list[tuple[str, str, dict | None]] = []
@@ -100,6 +125,21 @@ class ApplyRegistryRecreationTests(unittest.TestCase):
         self.assertEqual(1, result["service_count"])
         self.assertEqual("mentality", result["services"][0]["slug"])
         self.assertEqual("dry-run; no ContextForge API calls", result["non_actions"][0])
+        self.assertFalse(result["target"]["env_values_recorded"])
+
+    def test_dry_run_can_project_docker_successor_urls_without_api_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, "mentality", ["mentality-governance-list"])
+            docker_plan = write_docker_plan(root, "mentality", "http://mentality-transceiver:9201/mcp")
+
+            result = apply_helper.run(apply=False, manifests_root=root, docker_migration_plan=docker_plan)
+
+        self.assertFalse(result["mutation_performed"])
+        operation = result["services"][0]["operations"][0]
+        self.assertEqual("http://mentality-transceiver:9201/mcp", operation["payload"]["url"])
+        self.assertTrue(result["services"][0]["docker_successor_profile"]["unsafe_to_reuse_live_default"])
+        self.assertEqual(str(docker_plan), result["target"]["docker_migration_plan"])
 
     def test_apply_creates_gateway_refreshes_tools_and_creates_server(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -169,6 +209,39 @@ class ApplyRegistryRecreationTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertFalse(data["mutation_performed"])
         self.assertEqual("#140", data["registry_mutation_discipline"]["issue"])
+
+    def test_cli_accepts_explicit_target_metadata_in_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_manifest(root, "mentality", ["mentality-governance-list"])
+            docker_plan = write_docker_plan(root, "mentality", "http://mentality-transceiver:9201/mcp")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "apply_contextforge_registry_recreation.py"),
+                    "--manifests-root",
+                    str(root),
+                    "--docker-migration-plan",
+                    str(docker_plan),
+                    "--base-url",
+                    "http://127.0.0.1:4445",
+                    "--env-file",
+                    "docker/contextforge-harness/env/contextforge.env",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", result.stderr)
+        data = json.loads(result.stdout)
+        self.assertFalse(data["mutation_performed"])
+        self.assertEqual("http://127.0.0.1:4445", data["target"]["base_url"])
+        self.assertFalse(data["target"]["env_values_recorded"])
+        self.assertEqual("http://mentality-transceiver:9201/mcp", data["services"][0]["operations"][0]["payload"]["url"])
 
 
 if __name__ == "__main__":
