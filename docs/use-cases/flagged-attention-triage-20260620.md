@@ -112,10 +112,13 @@ work, and do not revive post-install validation to close them.
   bearer token shows nine servers, including the eight shared canonical
   services plus the project-scoped Serena server. Port `4445` is a separate
   Docker-published `ghcr.io/ibm/mcp-context-forge:v1.0.3` container and rejects
-  the 4444 bearer token. `scripts/register_tool_guidance.py` currently defines
-  81 prompt/resource guidance entries, while older governance proof recorded
-  80/80 live parity. Follow-up should refresh full authenticated pagination and
-  reconcile prompt/resource parity before any runtime mutation.
+  the 4444 bearer token. Refreshed full-list 4444 readback is recorded in
+  `docs/use-cases/contextforge-service-parity-readback-20260621.md`: the host
+  gateway has 9 servers, 104 tools, 83 prompts, 84 resources, and complete
+  81/81 `tool-guidance` prompt/resource pairing by canonical tool tag. The
+  remaining unproven boundary is authenticated 4445 parity or an explicit
+  decision that 4445 is a dev/test comparison target rather than a strict
+  successor.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
@@ -141,5 +144,6 @@ target is PR/Project hygiene:
   install-only quarantine boundary;
 - keep #138, #143, and #154 deferred as future ideal-form lanes until
   issue-specific implementation or acceptance evidence exists;
-- treat #284's next safe slice as refreshed full authenticated pagination and
-  prompt/resource parity reconciliation, not runtime mutation.
+- treat #284's next safe slice as either authenticated 4445 readback with an
+  intentional credential or a product/architecture decision about whether 4445
+  should be compared as a strict successor to 4444.
