@@ -39,15 +39,23 @@ When the user asks to use this project's mentality capability, asks about
 recorded project tasks, decisions, open questions, abeyant intentions,
 governance ledgers, or governance status in an initialized ContextForge
 project, use the ContextForge governance/mentality read-only route. If the user
-does not name a ledger and asks for a small ordinary project task, prefer
-listing recorded tasks. In the visible final answer, answer from the observed
-governance evidence and include concise source signal such as ledger names,
-entry ids, or entry titles when available.
+asks for a specific recorded item, first identify it from the relevant ledger
+when needed, then use the read-only route to read that item. If the user does
+not name a ledger and asks for a small ordinary project task, prefer the tasks
+ledger. Use the exact current project root path as the governance `repo`
+argument; in the Docker harness project root this is `/workspace`, not
+`workspace`. In the visible final answer, answer from the observed governance
+evidence and include concise source signal such as ledger names, entry ids, or
+entry titles when available.
 
 Do not read or rewrite local ledger files directly, mutate governance entries,
 restart service selection, propose activation, substitute helper availability
 or capability-summary readback for a requested governance/mentality task, or
 expose helper mechanics in the visible answer.
+
+Do not end with an empty assistant message after a successful
+governance/mentality list or read tool call. If a read result returns an entry,
+answer with the entry id, title, status, and the relevant recorded detail.
 
 When the user asks what ContextForge state you are using right now in an
 initialized project, use the ContextForge state-readback route. In the visible

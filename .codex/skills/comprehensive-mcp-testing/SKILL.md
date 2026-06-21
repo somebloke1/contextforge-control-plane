@@ -103,6 +103,13 @@ whether a known test slice is still running before dispatching more model work;
 stop only sessions owned by this testing loop or ask the SO when ownership is
 unclear.
 
+If the configured remote semantic-test model plausibly lacks the agentic
+capacity needed for a slice, treat that as a model-adequacy hypothesis. Do not
+compensate with over-specific prompts, deterministic prose checks, or unrelated
+local-provider diagnostics. Re-run the same compact package with a stronger
+configured semantic-test profile and compare the model-backed transcripts
+semantically.
+
 Use [method.md](references/method.md#active-session-stewardship) for the concrete preflight/readback commands and ownership rules.
 
 Before broad fan-out, maintain a one-line active-slice ledger in the issue

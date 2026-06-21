@@ -26,6 +26,15 @@ SCOPED_TOKEN_PERMISSIONS = [
     "resources.read",
     "prompts.read",
 ]
+MENTALITY_FIXTURE_TASK_ID = "task-cf-harness-001"
+SEMANTIC_MODEL_OVERRIDE_KEYS = [
+    "CONTEXTFORGE_TEST_MODEL",
+    "CONTEXTFORGE_TEST_MODEL_NAME",
+    "OPENROUTER_MODEL",
+    "OPENROUTER_OPENCODE_MODEL",
+    "CONTEXTFORGE_PI_DEFAULT_MODEL",
+    "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL",
+]
 
 
 def load_uc1_module() -> Any:
@@ -60,7 +69,7 @@ def service_test_prompt(service: str, display: str, issue: int, global_issue: in
         )
     if service == "mentality":
         return (
-            "Please check whether this project has any recorded open tasks. "
+            f"Please check the details recorded for task {MENTALITY_FIXTURE_TASK_ID}. "
             "Keep the answer concise and mention the source you used."
         )
     return (
@@ -75,6 +84,89 @@ def activation_prompts(service: str, display: str) -> list[str]:
         prompts.append(DEFAULT_SERENA_LANGUAGE)
     prompts.append("approve")
     return prompts
+
+
+def prepare_service_fixture(harness_root: Path, service: str) -> dict[str, Any] | None:
+    if service != "mentality":
+        return None
+    workspace = harness_root / "workspace"
+    task_path = workspace / "TASKS.md"
+    task_path.write_text(
+        "\n".join(
+            [
+                "# Tasks",
+                "",
+                f"<!-- governance-crud:start id={MENTALITY_FIXTURE_TASK_ID} -->",
+                f"## {MENTALITY_FIXTURE_TASK_ID}: Verify mentality governance read path",
+                "",
+                "- Ledger: tasks",
+                "- Status: open",
+                "- Repository: /workspace",
+                "- Created: 2026-06-21",
+                "- Updated: 2026-06-21",
+                "- Tags: comprehensive-mcp, mentality, read-path",
+                "",
+                "Confirm that the tested assistant can retrieve a specific recorded task through the ContextForge mentality governance read route.",
+                f"<!-- governance-crud:end id={MENTALITY_FIXTURE_TASK_ID} -->",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "service": service,
+        "path": str(task_path),
+        "container_path": "/workspace/TASKS.md",
+        "entry_id": MENTALITY_FIXTURE_TASK_ID,
+        "purpose": "exercise client-visible governance list/read behavior with a known safe ledger entry",
+    }
+
+
+def activation_postcondition_command(client: str, service_binding: str) -> str:
+    if client == "opencode":
+        client_config = "opencode.json"
+    elif client == "pi":
+        client_config = ".project/context_forge_state.json"
+    else:  # pragma: no cover - argparse constrains current callers.
+        client_config = ".project/context_forge_state.json"
+    script = f"""
+import json
+from pathlib import Path
+
+project_root = Path("/workspace")
+state_path = project_root / ".project" / "context_forge_state.json"
+client_config_path = project_root / {client_config!r}
+service_binding = {service_binding!r}
+result = {{
+    "ok": False,
+    "project_root": str(project_root),
+    "client": {client!r},
+    "service_binding": service_binding,
+    "state_path": str(state_path),
+    "state_exists": state_path.exists(),
+    "client_config_path": str(client_config_path),
+    "client_config_exists": client_config_path.exists(),
+    "service_recorded": False,
+}}
+if state_path.exists():
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        services = state.get("services") if isinstance(state, dict) else None
+        result["service_recorded"] = isinstance(services, dict) and service_binding in services
+        if isinstance(services, dict) and isinstance(services.get(service_binding), dict):
+            target_clients = services[service_binding].get("target_clients")
+            result["target_client_recorded"] = isinstance(target_clients, dict) and {client!r} in target_clients
+    except Exception as exc:
+        result["state_error"] = str(exc)
+result["ok"] = bool(result["state_exists"] and result["client_config_exists"] and result["service_recorded"])
+print(json.dumps(result, indent=2, sort_keys=True))
+raise SystemExit(0 if result["ok"] else 1)
+"""
+    return "python3 - <<'PY'\n" + script.strip() + "\nPY"
+
+
+def semantic_model_env_overrides() -> dict[str, str]:
+    return {key: os.environ[key] for key in SEMANTIC_MODEL_OVERRIDE_KEYS if os.environ.get(key)}
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -234,6 +326,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.service not in service_map:
         raise SystemExit(f"unknown service {args.service!r}; see comprehensive-mcp-testing-services.json")
     service = service_map[args.service]
+    service_binding = str(service.get("service_binding") or "")
+    if not service_binding:
+        raise SystemExit(f"service {args.service!r} is missing service_binding in comprehensive-mcp-testing-services.json")
     global_issue = 316
 
     lock_file = uc1.acquire_harness_lock(harness_root)
@@ -252,6 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     scoped_env_removed = False
     scoped_server_id = ""
     scoped_token_revoked = False
+    semantic_overrides = semantic_model_env_overrides()
 
     try:
         virtual_server_name = str(service.get("virtual_server") or "")
@@ -289,6 +385,7 @@ def main(argv: list[str] | None = None) -> int:
             commands=commands,
         )
         reset_json = uc1.parse_json_or_text(reset["stdout"])
+        service_fixture = prepare_service_fixture(harness_root, args.service)
 
         uc1.ensure_semantic_model_env(harness_root, client=args.client, commands=commands, runner=uc1.run)
 
@@ -312,6 +409,8 @@ def main(argv: list[str] | None = None) -> int:
             "--no-deps",
             "-d",
         ]
+        for key, value in sorted(semantic_overrides.items()):
+            launch_command.extend(["-e", f"{key}={value}"])
         launch_command.extend([uc1.compose_service_name(args.client), "sleep", "infinity"])
         launch = uc1.run(
             launch_command,
@@ -344,8 +443,25 @@ def main(argv: list[str] | None = None) -> int:
                 if discovered:
                     activation_session = discovered
 
+        activation_postcondition = uc1.run(
+            [
+                "docker",
+                "exec",
+                container,
+                "bash",
+                "-lc",
+                activation_postcondition_command(args.client, service_binding),
+            ],
+            cwd=repo_root,
+            timeout=60,
+            commands=commands,
+        )
+        activation_postcondition_path = output_root / "activation-postcondition.raw.txt"
+        activation_postcondition_path.write_text(uc1.render_command_block(activation_postcondition), encoding="utf-8")
+        activation_postcondition_payload = uc1.parse_json_or_text(activation_postcondition["stdout"])
+
         tool_inventory: dict[str, Any] | None = None
-        if args.client == "pi":
+        if activation_postcondition["returncode"] == 0 and args.client == "pi":
             inventory_prompt = "What ContextForge tools are available in this project?"
             inventory_session = default_session_id(args.client, args.service, "inventory", timestamp)
             command = uc1.target_client_command(args.client, inventory_session, inventory_prompt)
@@ -365,21 +481,24 @@ def main(argv: list[str] | None = None) -> int:
                 "timeout": inventory_result["timeout"],
             }
 
-        prompt = service_test_prompt(args.service, str(service["display"]), int(service["issue"]), global_issue)
-        command = uc1.target_client_command(
-            args.client,
-            test_session,
-            prompt,
-            create_session=args.client == "opencode",
-        )
-        result = uc1.run(["docker", "exec", container, "bash", "-lc", command], cwd=repo_root, timeout=args.timeout, commands=commands)
-        path = output_root / "service-test-turn.raw.txt"
-        path.write_text(uc1.render_command_block(result), encoding="utf-8")
-        turns.append({"phase": "service_test", "turn": 1, "prompt": prompt, "path": str(path), **result})
-        if args.client == "opencode":
-            discovered = uc1.extract_opencode_session_id(str(result.get("stdout") or ""))
-            if discovered:
-                test_session = discovered
+        service_test_executed = False
+        if activation_postcondition["returncode"] == 0:
+            prompt = service_test_prompt(args.service, str(service["display"]), int(service["issue"]), global_issue)
+            command = uc1.target_client_command(
+                args.client,
+                test_session,
+                prompt,
+                create_session=args.client == "opencode",
+            )
+            result = uc1.run(["docker", "exec", container, "bash", "-lc", command], cwd=repo_root, timeout=args.timeout, commands=commands)
+            path = output_root / "service-test-turn.raw.txt"
+            path.write_text(uc1.render_command_block(result), encoding="utf-8")
+            turns.append({"phase": "service_test", "turn": 1, "prompt": prompt, "path": str(path), **result})
+            service_test_executed = True
+            if args.client == "opencode":
+                discovered = uc1.extract_opencode_session_id(str(result.get("stdout") or ""))
+                if discovered:
+                    test_session = discovered
 
         mcp_status: dict[str, Any] | None = None
         if args.client == "opencode":
@@ -433,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
             "semantic_acceptance": "requires_non_spark_evaluator",
             "client": args.client,
             "service": args.service,
+            "service_binding": service_binding,
             "service_issue": service["issue"],
             "global_issue": global_issue,
             "timestamp": timestamp,
@@ -441,6 +561,7 @@ def main(argv: list[str] | None = None) -> int:
             "test_session": test_session,
             "activation_prompts": prompts,
             "output_root": str(output_root),
+            "semantic_model_env_overrides": semantic_overrides,
             "contextforge": {
                 "host_base_url": args.contextforge_host_base_url,
                 "container_base_url": args.contextforge_container_base_url,
@@ -455,9 +576,17 @@ def main(argv: list[str] | None = None) -> int:
                 "probe_token_revoked": scoped_token_revoked,
             },
             "reset": reset_json,
+            "service_fixture": service_fixture,
             "build_returncode": None if build_result is None else build_result["returncode"],
             "launch_returncode": launch["returncode"],
             "runtime_returncode": runtime["returncode"],
+            "activation_postcondition": {
+                "path": str(activation_postcondition_path),
+                "returncode": activation_postcondition["returncode"],
+                "timeout": activation_postcondition["timeout"],
+                "payload": activation_postcondition_payload,
+            },
+            "service_test_executed": service_test_executed,
             "mcp_status": None
             if mcp_status is None
             else {
@@ -495,7 +624,11 @@ def main(argv: list[str] | None = None) -> int:
         }
         write_json(output_root / "run-summary.json", summary)
         print(json.dumps(summary, indent=2, sort_keys=True))
-        return 0 if all(not turn["timeout"] and turn["returncode"] == 0 for turn in turns) else 1
+        return 0 if (
+            activation_postcondition["returncode"] == 0
+            and service_test_executed
+            and all(not turn["timeout"] and turn["returncode"] == 0 for turn in turns)
+        ) else 1
     finally:
         if scoped_env_payload and not scoped_env_removed:
             if host_scoped_env_file is not None:
