@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-ACTIVATION_PROMPTS = ["hello", "all services", "python", "approve"]
+DEFAULT_SERENA_LANGUAGE = "python"
 
 
 def load_uc1_module() -> Any:
@@ -48,6 +48,14 @@ def service_test_prompt(service: str, display: str, issue: int, global_issue: in
         f"If a failure appears shared across services, note that it belongs with issue #{global_issue}; "
         f"if it appears specific to {service}, note that it belongs with issue #{issue}."
     )
+
+
+def activation_prompts(service: str, display: str) -> list[str]:
+    prompts = ["hello", display]
+    if service == "serena":
+        prompts.append(DEFAULT_SERENA_LANGUAGE)
+    prompts.append("approve")
+    return prompts
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -139,7 +147,8 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         turns: list[dict[str, Any]] = []
-        for index, prompt in enumerate(ACTIVATION_PROMPTS, start=1):
+        prompts = activation_prompts(args.service, str(service["display"]))
+        for index, prompt in enumerate(prompts, start=1):
             command = uc1.target_client_command(
                 args.client,
                 activation_session,
@@ -183,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
             "container": container,
             "activation_session": activation_session,
             "test_session": test_session,
+            "activation_prompts": prompts,
             "output_root": str(output_root),
             "reset": reset_json,
             "build_returncode": None if build_result is None else build_result["returncode"],
