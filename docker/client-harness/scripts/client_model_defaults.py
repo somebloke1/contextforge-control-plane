@@ -44,7 +44,7 @@ def pi_command_prefix(session_id: str) -> str:
 
 
 def opencode_model_arg() -> str:
-    return "${CONTEXTFORGE_OPENCODE_DEFAULT_MODEL:-openrouter/~google/gemini-2.5-flash-lite}"
+    return "${CONTEXTFORGE_OPENCODE_DEFAULT_MODEL:-openrouter/google/gemini-2.5-flash-lite}"
 
 
 def opencode_command_prefix(session_id: str | None = None, *, create_session: bool = False) -> str:

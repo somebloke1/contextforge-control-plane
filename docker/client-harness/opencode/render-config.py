@@ -32,7 +32,7 @@ def render_config() -> None:
         shutil.copy2(source, target)
 
     data = json.loads(target.read_text(encoding="utf-8"))
-    model_id = os.environ.get("OPENROUTER_OPENCODE_MODEL", "~google/gemini-2.5-flash-lite")
+    model_id = os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemini-2.5-flash-lite")
     route = os.environ.get("OPENROUTER_PROVIDER_ROUTE", "google-ai-studio")
     data["model"] = os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL", f"openrouter/{model_id}")
     provider = data.setdefault("provider", {}).setdefault("openrouter", {})

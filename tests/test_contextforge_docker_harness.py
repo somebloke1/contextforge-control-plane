@@ -725,7 +725,7 @@ print(json.dumps(outputs))
         self.assertIn("OPENROUTER_STICKY_EPOCH_SECONDS", opencode_renderer)
         self.assertIn('return f"{base}-e{bucket}"', opencode_renderer)
         self.assertIn(
-            'model_id = os.environ.get("OPENROUTER_OPENCODE_MODEL", "~google/gemini-2.5-flash-lite")',
+            'model_id = os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemini-2.5-flash-lite")',
             opencode_renderer,
         )
         self.assertIn(
