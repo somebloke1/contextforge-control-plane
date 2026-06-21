@@ -24,7 +24,7 @@ ENV CONTEXTFORGE_HELPER_PYTHON=/opt/contextforge-helper-venv/bin/python
 ENV CONTEXTFORGE_HELPER_SCRIPT=/repo/scripts/contextforge_helper_mcp.py
 ENV CONTEXTFORGE_CODEX_WRAPPER_PYTHON=/opt/contextforge-helper-venv/bin/python
 ENV CONTEXTFORGE_CODEX_WRAPPER_SCRIPT=/repo/scripts/contextforge_mcp_wrapper.py
-ENV CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV=/config/contextforge/contextforge.env
+ENV CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV=/run/contextforge-client-scoped/contextforge.env
 ENV CONTEXTFORGE_CODEX_WRAPPER_BASE_URL=http://host.docker.internal:4445
 ENV CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE=/tmp/contextforge-wrapper-token.local.json
 

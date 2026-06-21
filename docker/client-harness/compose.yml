@@ -38,7 +38,7 @@ x-opencode-contextforge-baseline: &opencode-contextforge-baseline
     CONTEXTFORGE_OPENCODE_HOOK_PYTHON: /opt/contextforge-helper-venv/bin/python
     CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON: /opt/contextforge-helper-venv/bin/python
     CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT: /repo/scripts/contextforge_mcp_wrapper.py
-    CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV: /config/contextforge/contextforge.env
+    CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV: /run/contextforge-client-scoped/contextforge.env
     CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL: http://host.docker.internal:4445
     CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
     CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
@@ -71,7 +71,7 @@ x-pi-contextforge-baseline: &pi-contextforge-baseline
     CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT: /workspace
     CONTEXTFORGE_PI_SHIM_PYTHON: /opt/contextforge-wrapper-venv/bin/python
     CONTEXTFORGE_PI_SHIM_WRAPPER: /repo/scripts/contextforge_mcp_wrapper.py
-    CONTEXTFORGE_CONFIG_ENV: /config/contextforge/contextforge.env
+    CONTEXTFORGE_CONFIG_ENV: /run/contextforge-client-scoped/contextforge.env
     CONTEXTFORGE_BASE_URL: http://host.docker.internal:4445
     CONTEXTFORGE_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
     CONTEXTFORGE_TOKEN_LOCK: /tmp/contextforge-wrapper-token.local.json.lock
@@ -108,7 +108,7 @@ services:
       CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT: "1"
       CONTEXTFORGE_CODEX_WRAPPER_PYTHON: /opt/contextforge-helper-venv/bin/python
       CONTEXTFORGE_CODEX_WRAPPER_SCRIPT: /repo/scripts/contextforge_mcp_wrapper.py
-      CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV: /config/contextforge/contextforge.env
+      CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV: /run/contextforge-client-scoped/contextforge.env
       CONTEXTFORGE_CODEX_WRAPPER_BASE_URL: http://host.docker.internal:4445
       CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
       CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
@@ -127,8 +127,8 @@ services:
     volumes:
       - codex-cli-home:/home/agent
       - ../..:/repo:ro
-      - ../../server-instances:/repo/server-instances
-      - ../contextforge-harness/env:/config/contextforge:ro
+      - ../../server-instances:/repo/server-instances:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
 
@@ -143,7 +143,7 @@ services:
       CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT: "1"
       CONTEXTFORGE_CODEX_WRAPPER_PYTHON: /opt/contextforge-helper-venv/bin/python
       CONTEXTFORGE_CODEX_WRAPPER_SCRIPT: /repo/scripts/contextforge_mcp_wrapper.py
-      CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV: /config/contextforge/contextforge.env
+      CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV: /run/contextforge-client-scoped/contextforge.env
       CONTEXTFORGE_CODEX_WRAPPER_BASE_URL: http://host.docker.internal:4445
       CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json
       CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER: "1"
@@ -161,8 +161,8 @@ services:
       CONTEXT7_API_KEY: ""
     volumes:
       - ../..:/repo:ro
-      - ../../server-instances:/repo/server-instances
-      - ../contextforge-harness/env:/config/contextforge:ro
+      - ../../server-instances:/repo/server-instances:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
 
@@ -209,9 +209,9 @@ services:
     volumes:
       - opencode-home:/home/agent
       - ../..:/repo:ro
-      - ../../server-instances:/repo/server-instances
+      - ../../server-instances:/repo/server-instances:ro
       - ./config/opencode:/config/opencode:ro
-      - ../contextforge-harness/env:/config/contextforge:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
 
@@ -220,9 +220,9 @@ services:
     volumes:
       - opencode-home:/home/agent
       - ../..:/repo:ro
-      - ../../server-instances:/repo/server-instances
+      - ../../server-instances:/repo/server-instances:ro
       - ./config/opencode:/config/opencode:ro
-      - ../contextforge-harness/env:/config/contextforge:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./evidence:/evidence
     tmpfs:
       - /workspace:uid=1000,gid=1000,mode=0755
@@ -255,9 +255,9 @@ services:
     volumes:
       - pi-home:/home/agent
       - ../..:/repo:ro
-      - ../../server-instances:/repo/server-instances
+      - ../../server-instances:/repo/server-instances:ro
       - ./config/pi:/config/pi:ro
-      - ../contextforge-harness/env:/config/contextforge:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./workspace:/workspace
       - ./evidence:/evidence
 
@@ -266,9 +266,9 @@ services:
     volumes:
       - pi-home:/home/agent
       - ../..:/repo:ro
-      - ../../server-instances:/repo/server-instances
+      - ../../server-instances:/repo/server-instances:ro
       - ./config/pi:/config/pi:ro
-      - ../contextforge-harness/env:/config/contextforge:ro
+      - ./client-scoped:/run/contextforge-client-scoped:ro
       - ./evidence:/evidence
     tmpfs:
       - /workspace:uid=1000,gid=1000,mode=0755

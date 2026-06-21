@@ -7,7 +7,7 @@
 : "${CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT:=/workspace}"
 : "${CONTEXTFORGE_PI_SHIM_PYTHON:=/opt/contextforge-wrapper-venv/bin/python}"
 : "${CONTEXTFORGE_PI_SHIM_WRAPPER:=/repo/scripts/contextforge_mcp_wrapper.py}"
-: "${CONTEXTFORGE_CONFIG_ENV:=/config/contextforge/contextforge.env}"
+: "${CONTEXTFORGE_CONFIG_ENV:=/run/contextforge-client-scoped/contextforge.env}"
 : "${CONTEXTFORGE_BASE_URL:=http://host.docker.internal:4445}"
 : "${CONTEXTFORGE_TOKEN_CACHE:=/tmp/contextforge-wrapper-token.local.json}"
 : "${CONTEXTFORGE_TOKEN_LOCK:=${CONTEXTFORGE_TOKEN_CACHE}.lock}"

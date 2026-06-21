@@ -10,7 +10,7 @@ set -euo pipefail
 : "${CONTEXTFORGE_OPENCODE_HOOK_PYTHON:=${CONTEXTFORGE_HELPER_PYTHON:-/opt/contextforge-helper-venv/bin/python}}"
 : "${CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON:=/opt/contextforge-helper-venv/bin/python}"
 : "${CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT:=/repo/scripts/contextforge_mcp_wrapper.py}"
-: "${CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV:=/config/contextforge/contextforge.env}"
+: "${CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV:=/run/contextforge-client-scoped/contextforge.env}"
 : "${CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL:=http://host.docker.internal:4445}"
 : "${CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE:=/tmp/contextforge-wrapper-token.local.json}"
 : "${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/home/agent/.local/state/contextforge-client-harness-runtime/project-init}"

@@ -90,6 +90,9 @@ Thumbs.db
 !docker/client-harness/env/
 !docker/client-harness/env/local-llama.env.example
 docker/client-harness/env/local-llama.env
+!docker/client-harness/client-scoped/
+!docker/client-harness/client-scoped/contextforge.env.example
+docker/client-harness/client-scoped/contextforge.env
 docker/client-harness/evidence/
 docker/client-harness/workspace/*
 !docker/client-harness/workspace/.gitkeep

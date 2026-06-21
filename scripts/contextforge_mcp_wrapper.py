@@ -255,8 +255,8 @@ def _login_token(email: str, password: str) -> str:
     return token
 
 
-def _token(email: str | None, password: str | None) -> str:
-    env_token = os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
+def _token(email: str | None, password: str | None, bearer_token: str | None = None) -> str:
+    env_token = bearer_token or os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
     if env_token:
         return env_token.removeprefix("Bearer ").strip()
     if not email or not password:
@@ -476,15 +476,15 @@ def main() -> int:
     email = env.get("PLATFORM_ADMIN_EMAIL")
     password = env.get("PLATFORM_ADMIN_PASSWORD")
 
-    env_bearer_token = os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
+    env_bearer_token = env.get("CONTEXTFORGE_BEARER_TOKEN") or os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
     try:
-        token = _token(email, password)
+        token = _token(email, password, env_bearer_token)
     except RuntimeError as exc:
         _log_bootstrap_error(server_name, "auth_token", exc)
         print(str(exc), file=sys.stderr)
         return 1
 
-    server_id = os.environ.get("CONTEXTFORGE_SERVER_ID", "").strip()
+    server_id = (os.environ.get("CONTEXTFORGE_SERVER_ID") or env.get("CONTEXTFORGE_SERVER_ID") or "").strip()
     if not server_id:
         try:
             servers = _items(_request("GET", "/servers?include_inactive=true&limit=1000", token=token))
@@ -536,8 +536,8 @@ def main() -> int:
             DEFAULT_WRAPPER_IDLE_TIMEOUT_SECONDS,
         ),
     )
-    refresh_email = None if scoped_token_id else email
-    refresh_password = None if scoped_token_id else password
+    refresh_email = None if scoped_token_id or env_bearer_token else email
+    refresh_password = None if scoped_token_id or env_bearer_token else password
     try:
         return _run_stock_wrapper(lifecycle, refresh_email, refresh_password)
     finally:

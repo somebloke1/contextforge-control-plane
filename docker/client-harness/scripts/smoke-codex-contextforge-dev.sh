@@ -34,7 +34,7 @@ trust_level = "trusted"
 command = "/opt/contextforge-helper-venv/bin/python"
 args = ["/repo/scripts/contextforge_mcp_wrapper.py", "${CONTEXTFORGE_DEV_SERVER_NAME}"]
 cwd = "/repo"
-env = { CONTEXTFORGE_CONFIG_ENV = "/config/contextforge/contextforge.env", CONTEXTFORGE_BASE_URL = "${CONTEXTFORGE_CONTAINER_BASE_URL}", CONTEXTFORGE_TOKEN_CACHE = "/tmp/contextforge-wrapper-token.local.json", CONTEXTFORGE_TOKEN_LOCK = "/tmp/contextforge-wrapper-token.local.json.lock", CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
+env = { CONTEXTFORGE_CONFIG_ENV = "/run/contextforge-client-scoped/contextforge.env", CONTEXTFORGE_BASE_URL = "${CONTEXTFORGE_CONTAINER_BASE_URL}", CONTEXTFORGE_TOKEN_CACHE = "/tmp/contextforge-wrapper-token.local.json", CONTEXTFORGE_TOKEN_LOCK = "/tmp/contextforge-wrapper-token.local.json.lock", CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
 startup_timeout_ms = 60000
 tool_timeout_ms = 120000
 EOF

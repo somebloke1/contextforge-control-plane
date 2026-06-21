@@ -296,7 +296,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             {
                 "CONTEXTFORGE_CODEX_WRAPPER_PYTHON": "/opt/contextforge-helper-venv/bin/python",
                 "CONTEXTFORGE_CODEX_WRAPPER_SCRIPT": "/repo/scripts/contextforge_mcp_wrapper.py",
-                "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV": "/config/contextforge/contextforge.env",
+                "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV": "/run/contextforge-client-scoped/contextforge.env",
                 "CONTEXTFORGE_CODEX_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
                 "CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE": "/tmp/contextforge-wrapper-token.local.json",
             },
@@ -311,7 +311,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         text = plan["next_text"]
         self.assertIn('command = "/opt/contextforge-helper-venv/bin/python"', text)
         self.assertIn('args = ["/repo/scripts/contextforge_mcp_wrapper.py", "context7_server"]', text)
-        self.assertIn('CONTEXTFORGE_CONFIG_ENV = "/config/contextforge/contextforge.env"', text)
+        self.assertIn('CONTEXTFORGE_CONFIG_ENV = "/run/contextforge-client-scoped/contextforge.env"', text)
         self.assertIn('CONTEXTFORGE_BASE_URL = "http://host.docker.internal:4445"', text)
         self.assertIn('CONTEXTFORGE_TOKEN_CACHE = "/tmp/contextforge-wrapper-token.local.json"', text)
         self.assertIn('CONTEXTFORGE_TOKEN_LOCK = "/tmp/contextforge-wrapper-token.local.json.lock"', text)
@@ -341,7 +341,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             {
                 "CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON": "/opt/contextforge-helper-venv/bin/python",
                 "CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT": "/repo/scripts/contextforge_mcp_wrapper.py",
-                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/config/contextforge/contextforge.env",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/run/contextforge-client-scoped/contextforge.env",
                 "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
                 "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/tmp/contextforge-wrapper-token.local.json",
             },
@@ -363,7 +363,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             ],
             entry["command"],
         )
-        self.assertEqual("/config/contextforge/contextforge.env", entry["environment"]["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual("/run/contextforge-client-scoped/contextforge.env", entry["environment"]["CONTEXTFORGE_CONFIG_ENV"])
         self.assertEqual("http://host.docker.internal:4445", entry["environment"]["CONTEXTFORGE_BASE_URL"])
         self.assertEqual("/tmp/contextforge-wrapper-token.local.json", entry["environment"]["CONTEXTFORGE_TOKEN_CACHE"])
         self.assertEqual(

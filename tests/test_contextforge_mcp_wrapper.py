@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from unittest import mock
@@ -74,13 +75,13 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
         self.assertIn('CONTEXTFORGE_CONFIG_ENV", REPO_ROOT / "config" / "contextforge.env"', source)
         self.assertIn('CONTEXTFORGE_TOKEN_CACHE", REPO_ROOT / "run" / "contextforge-wrapper-token.local.json"', source)
         self.assertIn('CONTEXTFORGE_TOKEN_LOCK", f"{TOKEN_CACHE}.lock"', source)
-        self.assertIn('os.environ.get("CONTEXTFORGE_BEARER_TOKEN")', source)
-        self.assertIn('os.environ.get("CONTEXTFORGE_SERVER_ID", "").strip()', source)
+        self.assertIn('env.get("CONTEXTFORGE_BEARER_TOKEN") or os.environ.get("CONTEXTFORGE_BEARER_TOKEN")', source)
+        self.assertIn('env.get("CONTEXTFORGE_SERVER_ID")', source)
         self.assertIn("SCOPED_SERVER_TOKEN_PERMISSIONS", source)
         self.assertIn('"/tokens"', source)
         self.assertIn('"servers.use"', source)
-        self.assertIn("refresh_email = None if scoped_token_id else email", source)
-        self.assertIn("refresh_password = None if scoped_token_id else password", source)
+        self.assertIn("refresh_email = None if scoped_token_id or env_bearer_token else email", source)
+        self.assertIn("refresh_password = None if scoped_token_id or env_bearer_token else password", source)
         self.assertIn("if not email or not password:", source)
 
     def test_wrapper_scoped_server_token_create_and_revoke_use_catalog_api(self) -> None:
@@ -153,6 +154,38 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
         self.assertEqual(env["CONTEXTFORGE_TOKEN_CACHE"], lines[1])
         self.assertEqual(f"{env['CONTEXTFORGE_TOKEN_CACHE']}.lock", lines[2])
         self.assertEqual("test-token", lines[3])
+
+    def test_wrapper_can_read_scoped_bearer_token_from_config_file(self) -> None:
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "run") as tmp:
+            config_env = Path(tmp) / "contextforge-client-scoped.env"
+            config_env.write_text(
+                "CONTEXTFORGE_BEARER_TOKEN=Bearer scoped-token\n"
+                "CONTEXTFORGE_SERVER_ID=server-123\n",
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["CONTEXTFORGE_CONFIG_ENV"] = str(config_env)
+            env.pop("CONTEXTFORGE_BEARER_TOKEN", None)
+            env.pop("CONTEXTFORGE_SERVER_ID", None)
+            code = (
+                "import sys; "
+                f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); "
+                "import contextforge_mcp_wrapper as w; "
+                "env = w._read_env(w.CONFIG_ENV); "
+                "print(w._token(None, None, env.get('CONTEXTFORGE_BEARER_TOKEN'))); "
+                "print((__import__('os').environ.get('CONTEXTFORGE_SERVER_ID') or env.get('CONTEXTFORGE_SERVER_ID') or '').strip())"
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-c", code],
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+
+        self.assertEqual(["scoped-token", "server-123"], result.stdout.strip().splitlines())
 
 if __name__ == "__main__":
     unittest.main()

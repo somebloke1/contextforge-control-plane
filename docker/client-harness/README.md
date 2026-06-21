@@ -41,9 +41,14 @@ or transcript output through the shared redactor before it is written under
 docker/client-harness/scripts/redact-contextforge-secrets.py < raw.txt > redacted.txt
 ```
 
-This includes local-only files such as `config/direct-clients.local.env` and
-keys such as `MCP_BEARER_TOKEN`; preserve their existence/permission evidence
-without copying credential values.
+This includes local-only files such as
+`docker/client-harness/client-scoped/contextforge.env` and keys such as
+`CONTEXTFORGE_BEARER_TOKEN`; preserve their existence/permission evidence
+without copying credential values. Target-client containers must not mount the
+Docker ContextForge admin env. They may mount only the client-scoped file, which
+must contain least-privilege server credentials such as `CONTEXTFORGE_BEARER_TOKEN`
+and `CONTEXTFORGE_SERVER_ID`, never `PLATFORM_ADMIN_EMAIL` or
+`PLATFORM_ADMIN_PASSWORD`.
 
 ## Build
 
