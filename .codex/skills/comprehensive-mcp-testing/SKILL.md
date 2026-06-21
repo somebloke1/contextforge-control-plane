@@ -9,10 +9,18 @@ description: Orchestrate ContextForge comprehensive MCP service testing through 
 
 Treat this as a semantic, model-engaged test regimen. Deterministic tooling may establish structure, runtime facts, command exit status, JSON validity, endpoint reachability, file existence, and evidence packaging. It must not decide whether free-form assistant prose satisfies a service interaction requirement. Use SO judgment or a non-Spark evaluator for meaning.
 
+Short of direct user testing, usability evidence comes from a broad and diverse
+set of semantic test bundles with runners dispatched by sub-agents. The bundle
+set must deliberately explore plausible user behaviors and map each behavior to
+the actual Pi/OpenCode client surface under test. Do not substitute one large
+happy-path transcript for coverage. Because qwen-backed tested assistants have
+a 128k context limit, split coverage into small, focused tests with compact
+prompts and isolated evidence packages.
+
 ## Operating Loop
 
 1. Re-anchor on the current branch, issue map, runner, and evidence paths.
-2. Define the service/client slice before running it: service issue, client type, safe functions, mutating-function policy, expected evidence, and failure triage target.
+2. Define the service/client slice before running it: service issue, client type, safe functions, user-behavior bundle, mutating-function policy, expected evidence, and failure triage target.
 3. Start from a virgin target-client harness state. Reset the target client container/home volume/workspace rather than calculating cleanup deltas.
 4. Run a real Pi or OpenCode command-line session with qwen, using a stable session identity for each interaction phase.
 5. Keep prompts natural, short, and minimally sufficient. Do not coach the tested assistant with tool-call names unless the use case explicitly requires that signal.

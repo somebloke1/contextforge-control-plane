@@ -114,6 +114,16 @@ Work toward a systemd-controlled ContextForge installation that:
 - Use current local files, command output, service state, and HTTP probes as
   authority.
 - Verify the clean stock server before registering any external services.
+- Short of direct user involvement, usability claims require broad, diverse
+  semantic test bundles run through actual target clients by dispatched
+  sub-agent runners. These bundles must deliberately explore plausible user
+  behaviors and map each behavior to the testable surface in that client.
+  Because qwen-backed test sessions have a 128k context limit, prefer a full
+  set of small, focused semantic tests over large monolithic tests.
+- Deterministic tests may establish structure, state, transport, command
+  completion, JSON shape, endpoint reachability, and evidence packaging. They
+  must not judge free-form assistant meaning or user-facing success; semantic
+  evaluation must be performed by an appropriate model/human evaluator.
 - Before claiming completion, verify inventory coverage, gateway health, bridge
   health where bridges are needed, ContextForge registration, and exposed `/sse`
   plus `/mcp` endpoints.

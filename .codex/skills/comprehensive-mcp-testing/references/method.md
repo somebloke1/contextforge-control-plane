@@ -25,6 +25,7 @@ Each test slice must declare:
 - `client`: `pi` or `opencode`.
 - `model`: qwen-backed tested assistant, currently local `qwen3.6-a3b` in the harness.
 - `state`: target-client virgin reset; no stale container/home/workspace state.
+- `behavior_bundle`: the small user-behavior slice being explored.
 - `prompt`: natural, short, sufficient user request.
 - `evidence`: raw turn transcripts, command ledger, run summary, runtime readback, and evaluator narrative.
 - `acceptance`: every safe function is actually attempted through the tested assistant, mutating functions are skipped or constrained with a safe dry-run/no-op rationale, and defects are triaged to the correct issue.
@@ -45,6 +46,47 @@ cache after the run. For OpenCode slices, capture `opencode mcp list` before
 cleanup as structural evidence of whether the client saw the MCP server as
 connected, failed, or absent; do not use that structural status as a substitute
 for semantic evidence that the assistant actually used the tool.
+
+## Semantic Usability Bundle Design
+
+Short of direct user involvement, the only acceptable usability approximation
+is a broad, diverse set of small semantic bundles executed through actual
+target clients by dispatched runner agents. Each bundle should explore one
+plausible user behavior against one service/client surface, then return a
+compact evidence package for semantic evaluator review.
+
+Do not build one large monolithic test story. Qwen-backed tested assistants
+have a 128k context limit, and oversized sessions hide the point of failure.
+Coverage should come from many smallish tests with fresh state, compact prompts,
+and explicit evidence roots.
+
+Useful behavior dimensions include:
+
+- ordinary successful user task that naturally requires the service;
+- minimal ambiguous request where the assistant should infer the service
+  without being handed tool names;
+- post-install or post-reload use where the assistant should avoid stale
+  guidance and unnecessary technical noise;
+- recovery from a missing/failed tool without bypassing ContextForge;
+- user-facing clarity when service output is large, partial, or surprising;
+- constrained mutating function, dry-run, or explicit skip path;
+- cross-client comparison for the same behavior in Pi and OpenCode;
+- credential/auth/token failure that should be explained without exposing
+  secrets or blaming the wrong layer.
+
+For every bundle, record the mapping:
+
+- behavior being explored;
+- service and client surface;
+- prompt given to the tested assistant;
+- expected target-client-visible tool path;
+- deterministic support checks allowed;
+- semantic evaluator criteria;
+- defect routing target if the bundle fails.
+
+The runner may help create, execute, package, and index these bundles. It must
+not score the meaning of prose. Semantic evaluation belongs to the SO or a
+gpt-5.5/non-Spark evaluator.
 
 ## Evaluation Boundary
 
