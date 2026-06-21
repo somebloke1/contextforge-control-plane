@@ -6,6 +6,12 @@ Scope: read-only authenticated inventory of the local host ContextForge gateway
 on `127.0.0.1:4444`, plus auth-boundary confirmation for the separate Docker
 gateway on `127.0.0.1:4445`.
 
+Operator update: the 4444 gateway is scheduled for decommissioning. Treat this
+readback as a legacy/source-of-truth baseline for migration, not as an
+indefinite operating target. The durable target is to make the successor
+surface, currently represented by 4445, explicitly authenticated, inventoried,
+and reconciled before 4444 is retired.
+
 ## Evidence
 
 - Full sanitized JSON:
@@ -96,4 +102,7 @@ rather than a strict successor to 4444.
 full-list readback evidence showing canonical shared services and complete
 81/81 prompt/resource guidance pairing by canonical tool tag. The remaining
 unproven boundary is 4445 parity, which is blocked by authentication policy
-rather than by a readback mismatch.
+rather than by a readback mismatch. Because 4444 is scheduled for
+decommissioning, 4445 parity is not optional cleanup; it is the next required
+migration-readiness slice before any claim that the replacement ContextForge
+surface preserves the canonical service and guidance set.

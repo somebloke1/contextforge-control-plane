@@ -116,9 +116,10 @@ work, and do not revive post-install validation to close them.
   `docs/use-cases/contextforge-service-parity-readback-20260621.md`: the host
   gateway has 9 servers, 104 tools, 83 prompts, 84 resources, and complete
   81/81 `tool-guidance` prompt/resource pairing by canonical tool tag. The
-  remaining unproven boundary is authenticated 4445 parity or an explicit
-  decision that 4445 is a dev/test comparison target rather than a strict
-  successor.
+  operator has since clarified that 4444 is scheduled for decommissioning, so
+  this readback is a legacy migration baseline rather than a durable operating
+  authority. The remaining required boundary is authenticated 4445 parity and
+  migration-readiness evidence before 4444 is retired.
 - #138 explicit recovery workflows: high-risk future apply-recovery lane.
 - #143 client adapter conformance packs: future client-adapter conformance
   lane.
@@ -144,6 +145,6 @@ target is PR/Project hygiene:
   install-only quarantine boundary;
 - keep #138, #143, and #154 deferred as future ideal-form lanes until
   issue-specific implementation or acceptance evidence exists;
-- treat #284's next safe slice as either authenticated 4445 readback with an
-  intentional credential or a product/architecture decision about whether 4445
-  should be compared as a strict successor to 4444.
+- treat #284's next safe slice as authenticated 4445 readback with an
+  intentional credential and explicit migration parity reconciliation against
+  the 4444 legacy baseline, because 4444 is scheduled for decommissioning.
