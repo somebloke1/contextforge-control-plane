@@ -58,6 +58,11 @@ def service_test_prompt(service: str, display: str, issue: int, global_issue: in
             "In current Next.js, how should Server Actions handle authentication? "
             "Keep the answer concise and cite the documentation source you used."
         )
+    if service == "mentality":
+        return (
+            "Please check whether this project has any recorded open tasks. "
+            "Keep the answer concise and mention the source you used."
+        )
     return (
         f"Please use the project's {display} capability for a small ordinary task that fits it. "
         "Keep the answer concise and mention any limitation that prevents completion."

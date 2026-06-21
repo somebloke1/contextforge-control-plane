@@ -8,6 +8,7 @@ import re
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 
@@ -560,11 +561,21 @@ print(json.dumps(redact_value(payload), sort_keys=True))
         )
 
         self.assertIn("Please use this project's documentation lookup capability", runner)
+        self.assertIn("Please check whether this project has any recorded open tasks", runner)
         self.assertIn("What ContextForge tools are available in this project?", runner)
         self.assertIn('"tool_inventory": tool_inventory', runner)
         self.assertIn("tool-inventory-turn.raw.txt", runner)
         self.assertNotIn("resolve the library id first, then look up documentation", runner)
         self.assertNotIn("Context7 functions used", runner)
+
+    def test_opencode_mentality_guidance_routes_ordinary_governance_tasks(self) -> None:
+        guidance = (ROOT / "docker/client-harness/config/opencode/AGENTS.md").read_text(encoding="utf-8")
+        guidance_wrapped = " ".join(guidance.split())
+
+        self.assertIn("asks about recorded project tasks", guidance_wrapped)
+        self.assertIn("prefer listing recorded tasks", guidance_wrapped)
+        self.assertIn("substitute helper availability", guidance_wrapped)
+        self.assertIn("for a requested governance/mentality task", guidance_wrapped)
 
     def test_pi_availability_readback_passes_live_runtime_tools_to_helper(self) -> None:
         pi_source = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
