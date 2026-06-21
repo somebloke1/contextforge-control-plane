@@ -173,3 +173,14 @@ Before dispatching wider runners:
 4. Dispatch bounded agents only after the invocation pattern is stable.
 
 While agents run, maintain GitHub and branch hygiene rather than idling.
+
+## Learning Capture
+
+At the end of every slice, record one controller learning disposition:
+
+- `skill-update-needed`: the short operating rules should change before more agents rely on the method.
+- `method-update-needed`: the detailed reference, runner invocation, or evidence package rules should change.
+- `candidate-only`: the observation may matter but needs another example before becoming a rule.
+- `no-method-change`: the failure belongs to product code, service config, credentials, or the tested client, not the testing method.
+
+Make durable edits immediately when the lesson would prevent repeated bad runs. Validate the skill after edits and mention the refinement in the same GitHub evidence stream as the slice that produced it.
