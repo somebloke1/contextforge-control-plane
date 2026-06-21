@@ -25,28 +25,23 @@ Root authority:
   `.project/context_forge_state.json`, generated prompt resources, or
   server-instance metadata is a blocker to repair, not a usable target.
 
-Post-init service-tool checks:
+Install-only completion policy:
 
-- Project init does not include service probing, validation recording, or reload
-  acknowledgement recording.
-- The project-init endpoint is: helper-approved install/apply succeeds, then
-  the assistant tells the user reload/new session is required and stops.
-- Separate service-tool checks, when explicitly requested after reload/new
-  session, must use only safe read/list/search operations.
-- `mentality`: list or read governance entries only.
-- `context7`: resolve library id or docs lookup only.
-- `web-search` and `exa-search`: search/fetch-like read probes only.
-- `playwright`: inert page inspection or tool listing only when semantics allow.
-- `ssh-tmux`: list sessions or read existing session visibility only; opening
-  sessions or sending commands needs explicit approval.
-- `serena`: validate only through an approved target-client-visible policy; do
-  not invent backend-only proof.
+- Project init presents the live service menu, accepts the user's service
+  selection, presents the helper-owned installation package, applies only after
+  explicit approval, reports that the selected ContextForge tools are installed,
+  and stops at the reload/new-session boundary.
+- Do not add post-install validation, service probing, reload acknowledgement
+  recording, safe-probe payloads, or target-client proof collection to ordinary
+  project init.
+- Tool-specific smoke checks may be diagnostic work in a separate test or
+  service-ops context, but they are not part of the project-init user flow.
 
 Reload rule:
 
-- If the helper says a target client reload or new session is required, tell the
-  user the selected ContextForge tools are installed and that reload/new session
-  is required before the tools register, then stop.
+- If the helper says a target client reload or new session is required, report
+  that boundary and stop. Do not ask the user to provide low-level keys,
+  challenge values, or proof values that the helper already generated.
 
 Recovery tool routing:
 
