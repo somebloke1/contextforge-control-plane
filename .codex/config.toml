@@ -31,7 +31,7 @@ suppressOutput = true
 command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
 args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_mcp_wrapper.py", "context7_local_server"]
 cwd = "/home/dgk/workspace/cf-controlplane"
-env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
+env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "0", MCP_WRAPPER_LOG_LEVEL = "INFO" }
 startup_timeout_ms = 60000
 tool_timeout_ms = 120000
 
@@ -42,7 +42,7 @@ tool_timeout_ms = 120000
 command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
 args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_mcp_wrapper.py", "github_server"]
 cwd = "/home/dgk/workspace/cf-controlplane"
-env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
+env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "0", MCP_WRAPPER_LOG_LEVEL = "INFO" }
 startup_timeout_ms = 60000
 tool_timeout_ms = 120000
 
@@ -53,7 +53,7 @@ tool_timeout_ms = 120000
 command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
 args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_mcp_wrapper.py", "mentality_server"]
 cwd = "/home/dgk/workspace/cf-controlplane"
-env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
+env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "0", MCP_WRAPPER_LOG_LEVEL = "INFO" }
 startup_timeout_ms = 60000
 tool_timeout_ms = 120000
 
@@ -64,7 +64,7 @@ tool_timeout_ms = 120000
 command = "/home/dgk/workspace/cf-controlplane/.venv/bin/python"
 args = ["/home/dgk/workspace/cf-controlplane/scripts/contextforge_mcp_wrapper.py", "web_search_server"]
 cwd = "/home/dgk/workspace/cf-controlplane"
-env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "300", MCP_WRAPPER_LOG_LEVEL = "INFO" }
+env = { CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS = "0", MCP_WRAPPER_LOG_LEVEL = "INFO" }
 startup_timeout_ms = 60000
 tool_timeout_ms = 120000
 
