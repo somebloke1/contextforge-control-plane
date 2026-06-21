@@ -92,7 +92,7 @@ Pi and OpenCode semantic-test paths read their provider/model defaults from
 `env/semantic-model.env`:
 
 ```sh
-scripts/probe-llama.sh
+scripts/probe-semantic-model.sh
 ```
 
 By default the containers reach OpenRouter through:
@@ -113,6 +113,10 @@ are run with:
 ```sh
 scripts/smoke-agents.sh
 ```
+
+The legacy `scripts/probe-llama.sh` name remains only as a compatibility
+wrapper. Do not use it as a local llama-server check unless the configured
+semantic-test profile is actually local-hosted.
 
 The probe writes exact advertised model identity reports to ignored local
 evidence files:

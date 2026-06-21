@@ -1697,12 +1697,31 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Do not answer, resume, or return to the user's original ordinary prompt", text)
         self.assertIn("Do not invent, rename, summarize, or substitute service names from memory", text)
         self.assertIn("do not invent a service list", text)
+        self.assertIn("using Pi's actual tool-call mechanism", text)
+        self.assertIn("print(default_api...)", text)
+        self.assertIn("<ctrl...> blocks", text)
+        self.assertIn("Do not end with an empty assistant message after a successful route tool call.", text)
+        self.assertIn("Do not end with an empty assistant message after this tool succeeds.", text)
+        self.assertIn("plainUserFacingRouteResult", text)
+        self.assertIn("isUserFacingReadbackOperation", text)
+        self.assertIn("staticServiceRouteReadbackTools", text)
+        self.assertIn("staticReadbackTool", text)
+        self.assertIn("cf_mentality_governance_list", text)
+        self.assertIn("governance_list", text)
+        self.assertIn("toolDefinition.renderResult = renderNothing", text)
+        self.assertIn('"get_project_tool_availability"', text)
+        self.assertIn("return message || undefined", text)
         self.assertIn("Which ContextForge services should I activate for this project?", text)
         self.assertIn('items: { type: "string" }', text)
         self.assertIn("minItems: 1", text)
         self.assertIn("next_turn.choices[].id", text)
         self.assertIn('for example \\"context7:canonical\\"', text)
         self.assertIn('client_type: "pi"', text)
+        self.assertIn('dry_run: { type: "boolean" }', text)
+        self.assertIn('selected_services: {', text)
+        self.assertIn('project_root: { type: "string", description: "Alias for projectRoot." }', text)
+        self.assertIn("normalizeProjectInitPayload", text)
+        self.assertIn("normalized.selected_services = normalized.selectedServices", text)
         self.assertIn("root === workspaceRoot", text)
         self.assertNotIn("systemPrompt:", text)
         self.assertIn("runHelperOperationJson", text)
@@ -2535,6 +2554,54 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("visible_in_current_session", runtime_report["project_services"][0]["target_client_visibility_status"])
         self.assertIn("context7:canonical: context7-local-resolve-library-id, context7-local-query-docs", runtime_report["assistant_visible_response"])
         self.assertIn("mcp_available_or_partially_observed", runtime_report["assistant_visible_response"])
+        self.assertIn("do not ask for another reload", runtime_report["assistant_visible_response"])
+
+    def test_pi_tool_availability_accepts_static_mentality_runtime_readback(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            mentality = service_descriptor("mentality")
+            mentality["service_binding"] = "mentality:static_repo_local"
+            mentality["instantiation_class"] = "static_repo_local"
+            selected = [mentality]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+            runtime = {
+                "tools": [
+                    {
+                        "serviceBinding": "mentality:static_repo_local",
+                        "mcpName": "governance_list",
+                        "piName": "cf_mentality_governance_list",
+                        "blockedByDefault": False,
+                    },
+                    {
+                        "serviceBinding": "mentality:static_repo_local",
+                        "mcpName": "governance_read",
+                        "piName": "cf_mentality_governance_read",
+                        "blockedByDefault": False,
+                    },
+                ]
+            }
+
+            runtime_report = contextforge_helper_mcp.project_tool_availability(
+                str(root),
+                client_type="pi",
+                target_client_runtime=runtime,
+            )
+
+        self.assertEqual("tools_registered_observed", runtime_report["current_session_boundary"]["reload_status"])
+        self.assertEqual(["governance_list", "governance_read"], runtime_report["available_tools"][0]["tool_names"])
+        self.assertTrue(runtime_report["project_services"][0]["available_to_target_client"])
+        self.assertEqual("visible_in_current_session", runtime_report["project_services"][0]["target_client_visibility_status"])
+        self.assertIn("mentality:static_repo_local: governance_list, governance_read", runtime_report["assistant_visible_response"])
         self.assertIn("do not ask for another reload", runtime_report["assistant_visible_response"])
 
     def test_opencode_readback_distinguishes_mcp_startup_failure_from_reload_pending(self) -> None:

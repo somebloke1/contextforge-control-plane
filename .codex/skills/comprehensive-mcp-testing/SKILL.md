@@ -90,26 +90,30 @@ manifest-first with targeted excerpts and raw artifact references, not
 transcript dumps.
 
 Before launching another model-backed client session, check for active
-runner/client/model processes, existing evidence from the current slice, and
-target-client containers left from the prior run. Distinguish loaded local
-model residency from active generation when a local model profile is in use:
-GPU memory held by a local model server with near-zero utilization is not the
-same signal as an in-flight tested-assistant turn. Do not stack duplicate
-sessions just because the controller lost conversational context. If GPU
-utilization is pegged, identify whether a known test slice is still running
-before dispatching more model work; stop only sessions owned by this testing
-loop or ask the SO when ownership is unclear.
+runner/client processes, existing evidence from the current slice, and
+target-client containers left from the prior run. Determine the configured
+provider/model first. Only run local-model/GPU stewardship checks when the
+selected semantic profile is actually hosted by a local model server. When a
+local model profile is in use, distinguish loaded local model residency from
+active generation: GPU memory held by a local model server with near-zero
+utilization is not the same signal as an in-flight tested-assistant turn. Do
+not stack duplicate sessions just because the controller lost conversational
+context. If GPU utilization is pegged during a local-model profile, identify
+whether a known test slice is still running before dispatching more model work;
+stop only sessions owned by this testing loop or ask the SO when ownership is
+unclear.
 
 Use [method.md](references/method.md#active-session-stewardship) for the concrete preflight/readback commands and ownership rules.
 
 Before broad fan-out, maintain a one-line active-slice ledger in the issue
 comment, evidence summary, or controller notes: service, client, container,
 session ids, evidence root, start time, current state, and owner. Refresh that
-ledger before starting any new model-backed turn. If the only signal is resident
-GPU memory at 0% utilization, treat it as loaded-model residency, not a reason
-to kill or duplicate sessions. If a slice-owned container remains after the
-turn, either reuse it deliberately for readback or preserve evidence and reset
-it before the next attempt.
+ledger before starting any new model-backed turn. If the selected semantic
+profile is local-hosted and the only signal is resident GPU memory at 0%
+utilization, treat it as loaded-model residency, not a reason to kill or
+duplicate sessions. If a slice-owned container remains after the turn, either
+reuse it deliberately for readback or preserve evidence and reset it before the
+next attempt.
 
 ## Bypass Rule
 
