@@ -28,6 +28,9 @@ Each test slice must declare:
   route-preference list, and client-specific default model variables. Do not
   hardcode a provider or model name in the test package, and do not change the
   model per inference within a run.
+- `model_quorum`: acceptance requires the same semantic bundle to pass on at
+  least three distinct eligible semantic-test model profiles. Single-profile
+  runs are model-slice evidence only; they do not satisfy the test pass gate.
 - `state`: target-client virgin reset; no stale container/home/workspace state.
 - `behavior_bundle`: the small user-behavior slice being explored.
 - `prompt`: natural, short, sufficient user request.
@@ -104,6 +107,33 @@ passing bundle proves only the layers it exercised and named.
 The runner may help create, execute, package, and index these bundles. It must
 not score the meaning of prose. Semantic evaluation belongs to the SO or a
 gpt-5.5/non-Spark evaluator.
+
+## Three-Model Quorum
+
+Every semantic test must pass on at least three distinct eligible model
+profiles before it can be accepted. Eligible means the profile is available for
+the target client, has the required provider credential, satisfies the current
+minimum context-window floor, and is not excluded by the test package.
+
+For a quorum run, keep these variables constant:
+
+- service slug and issue;
+- client type and target surface;
+- reset and reload/session boundary discipline;
+- prompt bundle and user-behavior story;
+- allowed mutation/non-action policy;
+- deterministic setup checks and evidence package shape.
+
+Only the selected semantic-test model profile should vary. Record one
+sub-evidence root per profile, then assemble a quorum packet that maps each
+profile id to its raw artifacts and semantic evaluator verdict. A model that
+fails is evidence, not noise; classify it before deciding whether to remediate,
+rerun, or add another eligible profile. A test with one or two passing profiles
+is `quorum_incomplete`, not passed.
+
+The three-model quorum does not permit deterministic prose scoring. Each model
+run still requires semantic evaluation for route use, user-facing clarity,
+leakage, recovery, and behavioral acceptance.
 
 ## Model-Sized Evaluation Packets
 
