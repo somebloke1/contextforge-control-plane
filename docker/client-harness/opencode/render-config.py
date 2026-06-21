@@ -56,27 +56,31 @@ def render_config() -> None:
 
     data = json.loads(target.read_text(encoding="utf-8"))
     model_id = openrouter_model_component(os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemini-2.5-flash-lite"))
-    route = os.environ.get("OPENROUTER_PROVIDER_ROUTE", "google-ai-studio")
+    routes = [item.strip() for item in os.environ.get("OPENROUTER_PROVIDER_ROUTES", "").split(",") if item.strip()]
+    if not routes and os.environ.get("OPENROUTER_PROVIDER_ROUTE"):
+        routes = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
     data["model"] = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"), model_id)
     provider = data.setdefault("provider", {}).setdefault("openrouter", {})
-    provider["models"] = {
-        model_id: {
-            "name": os.environ.get("CONTEXTFORGE_TEST_MODEL_NAME", "Configured semantic-test model via OpenRouter"),
-            "limit": {
-                "context": int(os.environ.get("CONTEXTFORGE_TEST_CONTEXT_WINDOW", "1048576")),
-                "output": int(os.environ.get("CONTEXTFORGE_TEST_MAX_TOKENS", "65535")),
-            },
-            "options": {
-                "provider": {
-                    "only": [route],
-                    "order": [route],
-                    "allow_fallbacks": False,
-                }
-            },
-            "headers": {
-                "x-session-id": effective_sticky_key(),
-            },
+    model_config = {
+        "name": os.environ.get("CONTEXTFORGE_TEST_MODEL_NAME", "Configured semantic-test model via OpenRouter"),
+        "limit": {
+            "context": int(os.environ.get("CONTEXTFORGE_TEST_CONTEXT_WINDOW", "1048576")),
+            "output": int(os.environ.get("CONTEXTFORGE_TEST_MAX_TOKENS", "65535")),
+        },
+        "headers": {
+            "x-session-id": effective_sticky_key(),
+        },
+    }
+    if routes:
+        model_config["options"] = {
+            "provider": {
+                "only": routes,
+                "order": routes,
+                "allow_fallbacks": False,
+            }
         }
+    provider["models"] = {
+        model_id: model_config
     }
     target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

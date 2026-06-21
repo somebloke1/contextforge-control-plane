@@ -7,6 +7,7 @@ import argparse
 import importlib.util
 import json
 import os
+import random
 import sys
 import urllib.error
 import urllib.request
@@ -19,6 +20,7 @@ from uuid import uuid4
 DEFAULT_SERENA_LANGUAGE = "python"
 DEFAULT_CONTEXTFORGE_HOST_BASE_URL = "http://127.0.0.1:4445"
 DEFAULT_CONTEXTFORGE_CONTAINER_BASE_URL = "http://host.docker.internal:4445"
+MIN_SEMANTIC_CONTEXT_WINDOW = 262144
 SCOPED_TOKEN_PERMISSIONS = [
     "servers.use",
     "tools.read",
@@ -30,9 +32,15 @@ MENTALITY_FIXTURE_TASK_ID = "task-cf-harness-001"
 SEMANTIC_MODEL_OVERRIDE_KEYS = [
     "CONTEXTFORGE_TEST_MODEL",
     "CONTEXTFORGE_TEST_MODEL_NAME",
+    "CONTEXTFORGE_TEST_PROVIDER",
+    "CONTEXTFORGE_TEST_PROVIDER_KIND",
+    "CONTEXTFORGE_TEST_PROVIDER_ROUTE",
     "OPENROUTER_MODEL",
     "OPENROUTER_OPENCODE_MODEL",
+    "OPENROUTER_PROVIDER_ROUTE",
+    "OPENROUTER_PROVIDER_ROUTES",
     "CONTEXTFORGE_PI_DEFAULT_MODEL",
+    "CONTEXTFORGE_PI_DEFAULT_PROVIDER",
     "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL",
 ]
 
@@ -50,6 +58,14 @@ def load_uc1_module() -> Any:
 def load_service_map(harness_root: Path) -> dict[str, dict[str, Any]]:
     data = json.loads((harness_root / "comprehensive-mcp-testing-services.json").read_text(encoding="utf-8"))
     return {str(item["slug"]): item for item in data["services"]}
+
+
+def load_semantic_model_profiles(harness_root: Path) -> list[dict[str, Any]]:
+    data = json.loads((harness_root / "semantic-model-profiles.json").read_text(encoding="utf-8"))
+    profiles = data.get("profiles")
+    if not isinstance(profiles, list):
+        raise RuntimeError("semantic-model-profiles.json must contain a profiles list")
+    return [profile for profile in profiles if isinstance(profile, dict)]
 
 
 def default_session_id(client: str, service: str, phase: str, timestamp: str) -> str:
@@ -167,6 +183,164 @@ raise SystemExit(0 if result["ok"] else 1)
 
 def semantic_model_env_overrides() -> dict[str, str]:
     return {key: os.environ[key] for key in SEMANTIC_MODEL_OVERRIDE_KEYS if os.environ.get(key)}
+
+
+def profile_supports_client(profile: dict[str, Any], client: str) -> bool:
+    supported = profile.get("supported_clients")
+    return not isinstance(supported, list) or client in {str(item) for item in supported}
+
+
+def profile_available(profile: dict[str, Any], available_env: dict[str, str]) -> bool:
+    key_env = str(profile.get("api_key_env") or "").strip()
+    if key_env and not (os.environ.get(key_env) or available_env.get(key_env)):
+        return False
+    return True
+
+
+def profile_weight(profile: dict[str, Any]) -> int:
+    try:
+        return max(0, int(profile.get("weight", 1)))
+    except (TypeError, ValueError):
+        return 1
+
+
+def profile_context_window(profile: dict[str, Any]) -> int:
+    try:
+        return int(profile.get("context_window", 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def route_preferences(profile: dict[str, Any]) -> list[str]:
+    raw = profile.get("route_preferences")
+    if raw is None:
+        raw = profile.get("provider_route")
+    if isinstance(raw, list):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    if raw:
+        return [str(raw).strip()]
+    return []
+
+
+def choose_semantic_model_profile(
+    harness_root: Path,
+    client: str,
+    selector: str,
+    available_env: dict[str, str],
+) -> dict[str, Any] | None:
+    if selector == "env":
+        return None
+    profiles = [
+        profile
+        for profile in load_semantic_model_profiles(harness_root)
+        if profile_supports_client(profile, client)
+        and profile_available(profile, available_env)
+        and profile_context_window(profile) >= MIN_SEMANTIC_CONTEXT_WINDOW
+        and profile_weight(profile) > 0
+    ]
+    if not profiles:
+        raise RuntimeError(f"no semantic model profiles are available for client {client!r}")
+    if selector == "random":
+        return random.choices(profiles, weights=[profile_weight(profile) for profile in profiles], k=1)[0]
+    matches = [profile for profile in profiles if str(profile.get("id") or "") == selector]
+    if len(matches) != 1:
+        raise RuntimeError(f"semantic model profile {selector!r} is not available for client {client!r}")
+    return matches[0]
+
+
+def selected_profile_env(
+    profile: dict[str, Any] | None,
+    client: str,
+    available_env: dict[str, str],
+) -> tuple[dict[str, str], list[str]]:
+    if profile is None:
+        return {}, []
+    provider_kind = str(profile.get("provider_kind") or "").strip()
+    model = str(profile.get("model") or "").strip()
+    if not provider_kind or not model:
+        raise RuntimeError("selected semantic profile must include provider_kind and model")
+    display_name = str(profile.get("display_name") or model)
+    env: dict[str, str] = {
+        "CONTEXTFORGE_TEST_PROVIDER": str(profile.get("provider_label") or provider_kind),
+        "CONTEXTFORGE_TEST_PROVIDER_KIND": provider_kind,
+        "CONTEXTFORGE_TEST_MODEL": model,
+        "CONTEXTFORGE_TEST_MODEL_NAME": display_name,
+        "CONTEXTFORGE_TEST_CONTEXT_WINDOW": str(profile_context_window(profile)),
+    }
+    secret_env_keys: list[str] = []
+    key_env = str(profile.get("api_key_env") or "").strip()
+    if key_env:
+        secret_env_keys.append(key_env)
+    base_url_env = str(profile.get("base_url_env") or "").strip()
+    base_url = (os.environ.get(base_url_env) or available_env.get(base_url_env)) if base_url_env else None
+    base_url = base_url or str(profile.get("default_base_url") or "")
+    if base_url_env and base_url:
+        env[base_url_env] = base_url
+    if provider_kind == "openrouter":
+        routes = route_preferences(profile)
+        env["OPENROUTER_MODEL"] = model
+        env["OPENROUTER_OPENCODE_MODEL"] = model
+        if base_url:
+            env["OPENROUTER_BASE_URL"] = base_url
+        env["OPENROUTER_PROVIDER_ROUTES"] = ",".join(routes)
+        if routes:
+            env["OPENROUTER_PROVIDER_ROUTE"] = routes[0]
+            env["CONTEXTFORGE_TEST_PROVIDER_ROUTE"] = routes[0]
+        else:
+            env["OPENROUTER_PROVIDER_ROUTE"] = ""
+            env["CONTEXTFORGE_TEST_PROVIDER_ROUTE"] = ""
+        env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"] = (
+            os.environ.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
+            or available_env.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
+            or "openrouter-gemini-flash-lite"
+        )
+        env["CONTEXTFORGE_PI_DEFAULT_MODEL"] = model
+        env["CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"] = f"openrouter/{model}"
+    elif provider_kind == "openai_compatible":
+        env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"] = str(profile.get("pi_provider") or "local-llama-qwen")
+        env["CONTEXTFORGE_PI_DEFAULT_MODEL"] = model
+        if client == "opencode":
+            raise RuntimeError("openai_compatible semantic profiles are not yet wired for OpenCode")
+    else:
+        raise RuntimeError(f"unsupported semantic provider_kind {provider_kind!r}")
+    return env, secret_env_keys
+
+
+def redacted_profile_summary(
+    profile: dict[str, Any] | None,
+    env: dict[str, str],
+    secret_env_keys: list[str],
+    selector: str,
+    available_env: dict[str, str],
+) -> dict[str, Any]:
+    if profile is None:
+        return {
+            "selection_scope": "per_test_run",
+            "selection_mode": selector,
+            "profile_id": None,
+            "source": "explicit environment",
+            "env_keys": sorted(env),
+            "secret_env_keys": sorted(secret_env_keys),
+        }
+    key_env = str(profile.get("api_key_env") or "").strip()
+    return {
+        "selection_scope": "per_test_run",
+        "selection_mode": selector,
+        "profile_id": profile.get("id"),
+        "provider_kind": profile.get("provider_kind"),
+        "provider_label": profile.get("provider_label"),
+        "model": profile.get("model"),
+        "display_name": profile.get("display_name"),
+        "context_window": profile_context_window(profile),
+        "minimum_context_window": MIN_SEMANTIC_CONTEXT_WINDOW,
+        "api_key_env": key_env or None,
+        "api_key_present": bool(key_env and (os.environ.get(key_env) or available_env.get(key_env))),
+        "base_url_env": profile.get("base_url_env"),
+        "route_preferences": route_preferences(profile),
+        "supported_clients": profile.get("supported_clients"),
+        "env_keys": sorted(env),
+        "secret_env_keys": sorted(secret_env_keys),
+    }
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -308,6 +482,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--service", required=True)
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--no-build", action="store_true")
+    parser.add_argument(
+        "--semantic-model-profile",
+        default=os.environ.get("CONTEXTFORGE_SEMANTIC_MODEL_PROFILE", "random"),
+        help="Semantic model profile id, 'random' for per-test-run random choice, or 'env' to use explicit environment values.",
+    )
     parser.add_argument("--contextforge-host-base-url", default=os.environ.get("CONTEXTFORGE_HOST_BASE_URL", DEFAULT_CONTEXTFORGE_HOST_BASE_URL))
     parser.add_argument("--contextforge-container-base-url", default=os.environ.get("CONTEXTFORGE_CONTAINER_BASE_URL", DEFAULT_CONTEXTFORGE_CONTAINER_BASE_URL))
     parser.add_argument(
@@ -347,7 +526,11 @@ def main(argv: list[str] | None = None) -> int:
     scoped_env_removed = False
     scoped_server_id = ""
     scoped_token_revoked = False
-    semantic_overrides = semantic_model_env_overrides()
+    selected_profile: dict[str, Any] | None = None
+    semantic_overrides: dict[str, str] = {}
+    semantic_secret_env_keys: list[str] = []
+    semantic_secret_env_keys_to_pass: list[str] = []
+    semantic_profile_summary: dict[str, Any] = {}
 
     try:
         virtual_server_name = str(service.get("virtual_server") or "")
@@ -388,6 +571,32 @@ def main(argv: list[str] | None = None) -> int:
         service_fixture = prepare_service_fixture(harness_root, args.service)
 
         uc1.ensure_semantic_model_env(harness_root, client=args.client, commands=commands, runner=uc1.run)
+        semantic_env_file = harness_root / "env" / "semantic-model.env"
+        available_model_env = read_env(semantic_env_file) if semantic_env_file.exists() else {}
+        selected_profile = choose_semantic_model_profile(
+            harness_root,
+            args.client,
+            args.semantic_model_profile,
+            available_model_env,
+        )
+        if selected_profile is None:
+            semantic_overrides = semantic_model_env_overrides()
+            selected_secret_env_keys = []
+        else:
+            semantic_overrides, selected_secret_env_keys = selected_profile_env(
+                selected_profile,
+                args.client,
+                available_model_env,
+            )
+        semantic_secret_env_keys = sorted(set(selected_secret_env_keys))
+        semantic_secret_env_keys_to_pass = [key for key in semantic_secret_env_keys if os.environ.get(key)]
+        semantic_profile_summary = redacted_profile_summary(
+            selected_profile,
+            semantic_overrides,
+            semantic_secret_env_keys,
+            args.semantic_model_profile,
+            available_model_env,
+        )
 
         build_result = None
         if not args.no_build:
@@ -411,6 +620,8 @@ def main(argv: list[str] | None = None) -> int:
         ]
         for key, value in sorted(semantic_overrides.items()):
             launch_command.extend(["-e", f"{key}={value}"])
+        for key in semantic_secret_env_keys_to_pass:
+            launch_command.extend(["-e", key])
         launch_command.extend([uc1.compose_service_name(args.client), "sleep", "infinity"])
         launch = uc1.run(
             launch_command,
@@ -562,6 +773,7 @@ def main(argv: list[str] | None = None) -> int:
             "activation_prompts": prompts,
             "output_root": str(output_root),
             "semantic_model_env_overrides": semantic_overrides,
+            "semantic_model_profile": semantic_profile_summary,
             "contextforge": {
                 "host_base_url": args.contextforge_host_base_url,
                 "container_base_url": args.contextforge_container_base_url,

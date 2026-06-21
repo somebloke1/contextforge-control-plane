@@ -25,7 +25,7 @@ pasting large transcripts or multi-service histories into one prompt.
 1. Re-anchor on the current branch, issue map, runner, and evidence paths.
 2. Define the service/client slice before running it: service issue, client type, safe functions, user-behavior bundle, mutating-function policy, expected evidence, and failure triage target.
 3. Start from a virgin target-client harness state. Reset the target client container/home volume/workspace rather than calculating cleanup deltas.
-4. Run a real Pi or OpenCode command-line session with the configured semantic-test model profile, using a stable session identity for each interaction phase.
+4. Run a real Pi or OpenCode command-line session with one semantic-test model profile selected for the whole run, using a stable session identity for each interaction phase.
 5. Keep prompts natural, short, and minimally sufficient. Do not coach the tested assistant with tool-call names unless the use case explicitly requires that signal.
 6. Require the tested assistant to use the ContextForge-installed tools exposed in the client session. Direct upstream package execution, shell scripts, or hand-written MCP clients are bypass evidence, not successful service use.
 7. Preserve raw transcripts, command ledgers, summaries, and any container/runtime readback needed to reproduce the run.
@@ -91,9 +91,12 @@ transcript dumps.
 
 Before launching another model-backed client session, check for active
 runner/client processes, existing evidence from the current slice, and
-target-client containers left from the prior run. Determine the configured
-provider/model first. Only run local-model/GPU stewardship checks when the
-selected semantic profile is actually hosted by a local model server. When a
+target-client containers left from the prior run. Determine the selected
+provider/model profile first. The profile source is provider-agnostic and may
+name any supported provider kind, key env, base URL env, client support set,
+and route-preference list. Randomize profiles per test run, not per inference.
+Only run local-model/GPU stewardship checks when the selected semantic profile
+is actually hosted by a local model server. When a
 local model profile is in use, distinguish loaded local model residency from
 active generation: GPU memory held by a local model server with near-zero
 utilization is not the same signal as an in-flight tested-assistant turn. Do

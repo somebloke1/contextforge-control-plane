@@ -59,9 +59,20 @@ provider = data["providers"]["openrouter-gemini-flash-lite"]
 provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]
 provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]
 provider["headers"]["x-session-id"] = effective_sticky_key()
-provider["compat"]["openRouterRouting"]["only"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
-provider["compat"]["openRouterRouting"]["order"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
+routes = [item.strip() for item in os.environ.get("OPENROUTER_PROVIDER_ROUTES", "").split(",") if item.strip()]
+if not routes and os.environ.get("OPENROUTER_PROVIDER_ROUTE"):
+    routes = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
+if routes:
+    provider["compat"]["openRouterRouting"] = {
+        "only": routes,
+        "order": routes,
+        "allow_fallbacks": False,
+    }
+else:
+    provider["compat"].pop("openRouterRouting", None)
 provider["models"][0]["id"] = os.environ["OPENROUTER_MODEL"]
+if os.environ.get("CONTEXTFORGE_TEST_CONTEXT_WINDOW"):
+    provider["models"][0]["contextWindow"] = int(os.environ["CONTEXTFORGE_TEST_CONTEXT_WINDOW"])
 target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 fi

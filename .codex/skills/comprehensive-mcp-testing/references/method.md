@@ -23,11 +23,11 @@ Each test slice must declare:
 
 - `service`: ContextForge service slug.
 - `client`: `pi` or `opencode`.
-- `model`: configured semantic-test model profile from the client harness
-  environment. Record the effective values produced by the branch-local
-  semantic model env file and generator, including `CONTEXTFORGE_TEST_MODEL`
-  and the client-specific default model variables. Do not hardcode a provider
-  or model name in the test package.
+- `model`: one semantic-test model profile selected for the test run. Record
+  the selected profile id, provider kind, model id, key env name, base URL env,
+  route-preference list, and client-specific default model variables. Do not
+  hardcode a provider or model name in the test package, and do not change the
+  model per inference within a run.
 - `state`: target-client virgin reset; no stale container/home/workspace state.
 - `behavior_bundle`: the small user-behavior slice being explored.
 - `prompt`: natural, short, sufficient user request.
