@@ -127,13 +127,19 @@ work, and do not revive post-install validation to close them.
 ## Current Next Target
 
 Do not select #289 again unless review finds a concrete gap; it is already
-packaged. The next controller-maintenance target is PR/Project hygiene:
+packaged. After the #284 report integration, the next controller-maintenance
+target is PR/Project hygiene:
 
-- reconcile stale duplicate review surfaces such as draft PR #291 versus the
-  active PR #271 review surface;
+- keep PR #271 as the active ordinary review surface and keep its body,
+  comments, and coordination snapshots aligned with the latest pushed head;
+- keep #243-#255 in review rather than closing them solely from local
+  controller acceptance; issue closure should follow PR review/merge or an
+  explicit closure decision;
 - keep #290/#292/#293/#289 in review rather than active development unless
   reviewers return actionable defects;
 - keep the validation-era cleanup group (#272-#276/#279) In Review under the
   install-only quarantine boundary;
-- integrate the #284 read-only parity report before selecting any runtime,
-  registration, prompt, or resource implementation slice.
+- keep #138, #143, and #154 deferred as future ideal-form lanes until
+  issue-specific implementation or acceptance evidence exists;
+- treat #284's next safe slice as refreshed full authenticated pagination and
+  prompt/resource parity reconciliation, not runtime mutation.
