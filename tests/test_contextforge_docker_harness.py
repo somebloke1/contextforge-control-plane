@@ -50,6 +50,24 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("--expose-streamable-http", dockerfile)
         self.assertIn('"9205"', dockerfile)
 
+    def test_compose_defines_playwright_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/playwright-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("playwright-transceiver:", compose)
+        self.assertIn("contextforge-harness-playwright-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9204:9204"', compose)
+        self.assertIn("docker/contextforge-harness/playwright-transceiver/Dockerfile", compose)
+        self.assertIn("mcr.microsoft.com/playwright:", dockerfile)
+        self.assertIn("@playwright/mcp@latest", dockerfile)
+        self.assertIn("install-browser chrome-for-testing", dockerfile)
+        self.assertIn("--browser=chromium", dockerfile)
+        self.assertIn("--isolated", dockerfile)
+        self.assertIn("--shared-browser-context", dockerfile)
+        self.assertIn("--allowed-hosts", dockerfile)
+        self.assertIn("localhost:9204,127.0.0.1:9204,playwright-transceiver:9204", dockerfile)
+        self.assertIn("9204", dockerfile)
+
     def test_transceiver_dockerfile_uses_stock_contextforge_translate(self) -> None:
         dockerfile = (ROOT / "docker/contextforge-harness/mcp-transceiver/Dockerfile").read_text(encoding="utf-8")
 

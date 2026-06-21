@@ -13,6 +13,10 @@ Service locality and the first MCP integration path are defined in
 Evidence freshness and PR citation rules for this harness are defined in
 `../../docs/dev-docker-client-evidence-freshness-protocol.md`.
 
+Remote clients use the host/LAN/public ContextForge gateway address, not
+backend sidecar addresses. The sidecar URLs in this document are upstream
+registration targets used by the gateway from inside the Compose network.
+
 ## Runtime
 
 - Image: `ghcr.io/ibm/mcp-context-forge:v1.0.3`
@@ -33,6 +37,9 @@ Evidence freshness and PR citation rules for this harness are defined in
 - Exa Search successor MCP sidecar: `exa-search-transceiver` on host
   `http://127.0.0.1:9205` and compose-network
   `http://exa-search-transceiver:9205`
+- Playwright successor MCP sidecar: `playwright-transceiver` on host
+  `http://127.0.0.1:9204` and compose-network
+  `http://playwright-transceiver:9204`
 
 The named Docker volume has no explicit size cap. Initial gateway-only usage is
 expected to stay small; use `scripts/volume-usage.sh` to inspect it.
@@ -133,11 +140,30 @@ The migration planner targets the compose-network URL
 `http://exa-search-transceiver:9205/mcp`. Registry apply remains a separate
 explicit step after credential-env preflight and direct reachability evidence.
 
+## Playwright Successor MCP Transceiver
+
+The Playwright sidecar runs `@playwright/mcp` with a Docker-local isolated
+Chrome for Testing/Chromium runtime. It is a native MCP HTTP/SSE backend rather
+than a `mcpgateway.translate` bridge. The sidecar uses an in-memory shared
+browser context so stateful multi-tool workflows survive the ContextForge proxy
+without sharing host browser/session state or writing a persistent browser
+profile.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway playwright-transceiver
+python ../../scripts/plan_contextforge_docker_migration.py
+```
+
+The migration planner targets the compose-network URL
+`http://playwright-transceiver:9204/mcp`. Registry apply remains a separate
+explicit step after direct reachability evidence.
+
 ## Operations
 
 ```sh
 docker compose -f compose.yml logs -f contextforge-gateway
 docker compose -f compose.yml logs -f mentality-transceiver
+docker compose -f compose.yml logs -f playwright-transceiver
 docker compose -f compose.yml restart contextforge-gateway
 scripts/volume-usage.sh
 ```
@@ -146,6 +172,10 @@ scripts/volume-usage.sh
 
 - Register MCP services only into this development gateway unless a separate
   approval explicitly targets another surface.
+- Keep client-facing and upstream address planes separate. Remote clients may
+  originate from arbitrary IP-addressed hosts and must connect to the published
+  ContextForge gateway URL with proper auth; they must not be asked to reach
+  compose-internal backend names such as `playwright-transceiver`.
 - Do not install MCP backend files or services inside the gateway container by
   default.
 - Run stdio MCP backends beside a local or remote transceiver, then register the

@@ -39,10 +39,10 @@ DOCKER_TARGET_PROFILE: dict[str, dict[str, Any]] = {
         "notes": "Persistent sessions are host-local state; do not blindly share without approval.",
     },
     "playwright": {
-        "locality": "host_gateway_projection",
-        "target_upstream_url": "http://host.docker.internal:9104/mcp",
-        "approval_state": "blocked_pending_single_user_boundary_review",
-        "notes": "Browser/session state is user-local; do not blindly share without approval.",
+        "locality": "compose_sidecar",
+        "target_upstream_url": "http://playwright-transceiver:9204/mcp",
+        "approval_state": "available_in_isolated_browser_sidecar",
+        "notes": "Docker-local isolated browser sidecar uses an in-memory shared context for ContextForge proxy continuity without sharing host browser/session state.",
     },
     "exa-search": {
         "locality": "compose_sidecar",
@@ -340,7 +340,7 @@ def build_plan(
         "recommended_ordered_slices": [
             "parameterize target/auth inputs for 4445 without using 4444 wrapper defaults",
             "materialize Docker locality profile for each canonical service",
-            "register canonical sidecar-proven services first: context7, mentality, and exa-search after env preflight",
+            "register canonical sidecar-proven services first: context7, mentality, playwright, and exa-search after env preflight where applicable",
             "add or approve service-specific reachable topology for remaining credential and single-user services",
             "register remote OpenZeppelin directly",
             "replay tool guidance using 4445-discovered gateway IDs and canonical tool tags",

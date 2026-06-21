@@ -154,6 +154,12 @@ to this isolated development surface. The virtual MCP probe uses a temporary
 server-scoped catalog token instead of the admin session JWT, then revokes that
 token after readback.
 
+Keep client and upstream address planes separate. Remote clients may come from
+arbitrary IP-addressed hosts and should use the published ContextForge gateway
+address, such as a LAN or public gateway URL with auth. Compose service names
+and `127.0.0.1:920x` sidecar ports are upstream targets for ContextForge
+registration and local diagnostics, not remote-client configuration values.
+
 For additional service integrations, use a backend-local transceiver before any
 gateway-container MCP install:
 
@@ -171,3 +177,11 @@ Python backend runs in `exa-search-transceiver`, reads only the ignored
 the compose-network URL `http://exa-search-transceiver:9205/mcp` only after
 credential-env preflight and direct reachability evidence. Do not fall back to
 the host-loopback `127.0.0.1:9105` live surface for Docker successor parity.
+
+`playwright` follows the same sidecar-locality principle with a native MCP
+backend instead of a bridge: `playwright-transceiver` runs isolated Chrome for
+Testing/Chromium in the harness network with an in-memory shared browser
+context, and is registered through `http://playwright-transceiver:9204/mcp`
+only after direct reachability evidence. Do not fall back to the host-loopback
+`127.0.0.1:9104` live surface for Docker successor parity; the successor must
+not inherit host browser or session residue.
