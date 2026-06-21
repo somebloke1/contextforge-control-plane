@@ -1202,7 +1202,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("client_reload_required", proposal["status"])
         self.assertEqual("pi-project-init-installed", proposal["next_turn"]["question_id"])
 
-    def test_client_reload_acknowledgement_rejects_validation_intent(self) -> None:
+    def test_client_reload_report_rejects_validation_intent(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1231,11 +1231,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 )
             after = project_state.load_state(root)
 
-        self.assertEqual("pending_reload", pending_job["x_client_reload_fsm"]["state"])
-        self.assertEqual("pending_reload", pending_client_state["reload_status"])
+        self.assertEqual("reload_required", pending_job["x_client_reload_fsm"]["state"])
+        self.assertEqual("reload_required", pending_client_state["reload_status"])
         self.assertEqual(written, after)
 
-    def test_client_reload_acknowledgement_rejects_presume_working_intent(self) -> None:
+    def test_client_reload_report_rejects_presume_working_intent(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1499,7 +1499,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertFalse(symlink_result["ok"])
         self.assertEqual("RootValidationError", symlink_result["error"]["type"])
 
-    def test_pi_reload_acknowledgement_changes_normal_readback_contract(self) -> None:
+    def test_pi_reload_report_does_not_change_normal_readback_contract(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
@@ -1517,27 +1517,29 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             project_state.write_state_atomic(root, state)
 
             pending_readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="pi")
-            ack = record_pi_reload(root)
-            acknowledged_readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="pi")
-            acknowledged_availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="pi")
-            acknowledged_summary = contextforge_helper_mcp.project_capability_summary(str(root), client_type="pi")
+            report = record_pi_reload(root)
+            reported_readback = contextforge_helper_mcp.project_state_readback(str(root), client_type="pi")
+            reported_availability = contextforge_helper_mcp.project_tool_availability(str(root), client_type="pi")
+            reported_summary = contextforge_helper_mcp.project_capability_summary(str(root), client_type="pi")
 
-        self.assertEqual("pending_reload", pending_readback["current_session_boundary"]["reload_status"])
-        self.assertEqual("reload_acknowledged", ack["current_job"]["client_reload_fsm"]["state"])
-        for result in (acknowledged_readback, acknowledged_availability, acknowledged_summary):
+        self.assertEqual("reload_required", pending_readback["current_session_boundary"]["reload_status"])
+        self.assertEqual("client_reload_report_ignored", report["status"])
+        self.assertEqual("reload_required", report["reload_state"])
+        for result in (reported_readback, reported_availability, reported_summary):
             with self.subTest(status=result["status"]):
-                self.assertEqual("reload_acknowledged", result["current_session_boundary"]["reload_status"])
-                self.assertEqual("reload_acknowledged", result["current_session_boundary"]["user_status"])
-                self.assertFalse(result["current_session_boundary"]["requires_reload"])
-                self.assertTrue(result["current_session_boundary"]["reload_acknowledged"])
+                self.assertEqual("reload_required", result["current_session_boundary"]["reload_status"])
+                self.assertEqual("reload_required", result["current_session_boundary"]["user_status"])
+                self.assertTrue(result["current_session_boundary"]["requires_reload"])
+                self.assertFalse(result["current_session_boundary"]["reload_acknowledged"])
+                self.assertFalse(result["current_session_boundary"]["tools_registered_observed"])
                 self.assertTrue(result["assistant_visible_response_policy"]["internal_status_terms_suppressed"])
         self.assertEqual(
-            "projection recorded; reload acknowledged",
-            acknowledged_readback["target_client_services"][0]["target_client_user_state"],
+            "projection recorded; client reload required",
+            reported_readback["target_client_services"][0]["target_client_user_state"],
         )
         self.assertEqual(
             "shim_activation_planned",
-            acknowledged_readback["target_client_services"][0]["target_client_state"]["status"],
+            reported_readback["target_client_services"][0]["target_client_state"]["status"],
         )
 
     def test_pi_helper_detects_and_repairs_installed_shim_metadata_drift(self) -> None:
@@ -1992,7 +1994,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("deferred", state["decisions"][serena_key]["state"])
         self.assertEqual({}, state["services"])
 
-    def test_helper_completes_install_only_flow_after_reload_acknowledgment(self) -> None:
+    def test_helper_keeps_install_only_flow_blocked_after_reload_report(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             service = service_descriptor("context7")
@@ -2021,11 +2023,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(["context7:canonical"], capabilities["current_job"]["selected_service_bindings"])
         self.assertEqual("client_reload_required", proposal["status"])
         self.assertEqual("codex-project-init-installed", proposal["next_turn"]["question_id"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertIn("available_services", after_ack)
-        self.assertNotEqual("installed_reload_required", after_ack.get("status"))
+        self.assertEqual("client_reload_report_ignored", ack["status"])
+        self.assertEqual("client_reload_required", after_ack["status"])
+        self.assertEqual("codex-project-init-installed", after_ack["next_turn"]["question_id"])
 
-    def test_helper_allows_new_selection_after_install_only_reload_acknowledgment(self) -> None:
+    def test_helper_blocks_new_selection_after_install_only_reload_report(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             service = service_descriptor("context7")
@@ -2050,11 +2052,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             proposal = helper.propose_project_init(project_root=root, selected_services=[service_descriptor("github")])
 
         self.assertEqual("client_reload_required", blocked["status"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertNotIn("next_turn", ack)
-        self.assertIn("available_services", capabilities)
-        self.assertEqual("approve-project-init-plan", proposal["next_turn"]["question_id"])
-        self.assertEqual("github:canonical", proposal["plan_summary"]["bindings"][0]["service_binding"])
+        self.assertEqual("client_reload_report_ignored", ack["status"])
+        self.assertEqual("client_reload_required", capabilities["status"])
+        self.assertEqual("client_reload_required", proposal["status"])
+        self.assertEqual("codex-project-init-installed", proposal["next_turn"]["question_id"])
 
     def test_helper_detects_and_repairs_pending_config_drift_before_install_completion(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2096,9 +2097,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("[mcp_servers.github]", config_text)
         self.assertEqual("client_reload_required", after["status"])
         self.assertEqual("codex-project-init-installed", after["next_turn"]["question_id"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertIn("available_services", after_ack)
-        self.assertNotEqual("installed_reload_required", after_ack.get("status"))
+        self.assertEqual("client_reload_report_ignored", ack["status"])
+        self.assertEqual("client_reload_required", after_ack["status"])
+        self.assertEqual("codex-project-init-installed", after_ack["next_turn"]["question_id"])
 
     def test_helper_repairs_missing_project_init_state_without_overwriting_unmanaged_codex_config(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2137,9 +2138,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(unmanaged_config, config_after)
         self.assertEqual("client_reload_required", resume["status"])
         self.assertEqual("codex-project-init-installed", resume["next_turn"]["question_id"])
-        self.assertEqual("client_reload_recorded", ack["status"])
-        self.assertIn("available_services", after_ack)
-        self.assertNotEqual("installed_reload_required", after_ack.get("status"))
+        self.assertEqual("client_reload_report_ignored", ack["status"])
+        self.assertEqual("client_reload_required", after_ack["status"])
+        self.assertEqual("codex-project-init-installed", after_ack["next_turn"]["question_id"])
         self.assert_validation_operation_retired(presumed)
         assert written is not None
         self.assertEqual("completed_unverified", written["project_init"]["x_hook_prompt_state"])
@@ -2722,7 +2723,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             ),
             (
                 "reload_required",
-                {"status": "installed", "validation_status": "installed", "reload_status": "pending_reload"},
+                {"status": "installed", "validation_status": "installed", "reload_status": "reload_required"},
                 "reload_required",
                 False,
             ),
@@ -2756,15 +2757,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                     )
                     job_id = state["project_init"]["current_job_id"]
                     if expected_projection != "reload_required":
-                        state["project_init"]["activation_jobs"][job_id]["x_client_reload_ack"] = {
-                            "client_type": "codex",
-                            "job_id": job_id,
-                            "acknowledged_at": "2026-06-20T00:00:00Z",
-                        }
                         state["project_init"]["activation_jobs"][job_id]["x_client_reload_fsm"] = {
                             "client_type": "codex",
                             "job_id": job_id,
-                            "state": "reload_acknowledged",
+                            "state": "tools_registered_observed",
+                            "observed_at": "2026-06-20T00:00:00Z",
+                            "proof_ref": "run/evidence/context7-codex-tool-list.json",
                         }
                     state["services"]["context7:canonical"]["target_clients"]["codex"].update(target_state)
                     project_state.write_state_atomic(root, state)
@@ -2834,7 +2832,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("installed", planned["services"]["context7:canonical"]["target_clients"]["opencode"]["validation_status"])
         self.assertEqual("project_local_opencode_config_planned", planned["services"]["github:canonical"]["target_clients"]["opencode"]["status"])
         self.assertEqual("installed", planned["services"]["github:canonical"]["target_clients"]["opencode"]["validation_status"])
-        self.assertEqual("installed", planned["project_init"]["client_states"]["opencode"]["status"])
+        self.assertEqual("reload_required", planned["project_init"]["client_states"]["opencode"]["status"])
+        self.assertEqual("reload_required", planned["project_init"]["client_states"]["opencode"]["reload_status"])
         self.assertEqual(["context7:canonical", "github:canonical"], planned["project_init"]["client_states"]["opencode"]["selected_service_bindings"])
         self.assertNotIn("opencode", base_state["services"]["context7:canonical"]["target_clients"])
         self.assertNotIn("opencode", base_state["services"]["github:canonical"]["target_clients"])
@@ -3407,6 +3406,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("selected ContextForge tools are installed", plan_doc)
         self.assertIn("new session or reload", plan_doc)
         self.assertIn("Stop there", plan_doc)
+        self.assertIn("Reload state is a three-value contract", plan_doc)
+        self.assertIn("not_required", plan_doc)
+        self.assertIn("reload_required", plan_doc)
+        self.assertIn("tools_registered_observed", plan_doc)
+        self.assertIn("Only this state can support claims", plan_doc)
+        self.assertIn("No user acknowledgement is required or recorded", plan_doc)
         self.assertNotIn("ACTUAL_TARGET_CLIENT_TOOL_NAME", plan_doc)
         self.assertNotIn("validation_results", plan_doc)
 

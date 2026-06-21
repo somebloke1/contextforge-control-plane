@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from typing import Any
 
@@ -116,6 +118,28 @@ class ControlPlaneInferenceHarnessTests(unittest.TestCase):
         case_types = {case["case_type"] for case in validated["cases"]}
         self.assertIn("adversarial_prompt_injection", case_types)
         self.assertIn("malicious_metadata", case_types)
+
+    def test_project_init_semantic_cases_use_installed_reload_boundary_not_validation(self) -> None:
+        serialized = json.dumps(self.cases, sort_keys=True)
+        for retired in ("validate_now", "presume-working", "skip-validation"):
+            self.assertNotIn(retired, serialized)
+        for stale_fixture_text in (
+            "/home/dgk/workspace/legacy-controlplane-archive",
+            "context7_local_server",
+            "web_search_server",
+            "mentality_server",
+        ):
+            self.assertNotIn(stale_fixture_text, serialized)
+
+        post_apply = self.cases["cases"][3]
+        self.assertEqual("cfcp-infer-post-apply-installed-reload-boundary", post_apply["scenario_id"])
+        case_text = json.dumps(post_apply, sort_keys=True)
+        for reload_state in ("not_required", "reload_required", "tools_registered_observed"):
+            self.assertIn(reload_state, case_text)
+        self.assertNotIn("reload_reported_unverified", case_text)
+        self.assertNotIn("reload_acknowledged", case_text)
+        self.assertIn("Only tools_registered_observed may support claims", case_text)
+        self.assertIn("Do not run probes", case_text)
 
     def test_fixture_authored_assistant_turns_are_rejected(self) -> None:
         cases = copy.deepcopy(self.cases)
@@ -260,6 +284,44 @@ class ControlPlaneInferenceHarnessTests(unittest.TestCase):
             ("codex", "exec", "--ephemeral", "--sandbox", "read-only", "--model", "gpt-5-4-mini"),
             runner.command_prefix,
         )
+
+    def test_live_codex_runner_can_route_models_by_role(self) -> None:
+        runner = harness.CodexExecRunner(
+            command_prefix=("codex", "exec", "--ephemeral", "--sandbox", "read-only"),
+            role_model_overrides={"tested_assistant": "gpt-5.4-mini", "evaluator": "gpt-5.5"},
+        )
+
+        completed = subprocess.CompletedProcess(args=(), returncode=0, stdout="", stderr="")
+        with mock.patch("control_plane_inference_harness.subprocess.run", return_value=completed) as run_mock:
+            runner.run(
+                harness.HeadlessCommandRequest(
+                    role="tested_assistant",
+                    scenario_id="cfcp-test",
+                    prompt="hello",
+                    artifact_ref_base="run/test/assistant",
+                )
+            )
+            runner.run(
+                harness.HeadlessCommandRequest(
+                    role="evaluator",
+                    scenario_id="cfcp-test",
+                    prompt="{}",
+                    artifact_ref_base="run/test/evaluator",
+                    output_schema=harness.evaluator_output_schema(
+                        requirement_ids=["cfcp-req-one"],
+                        transcript_entry_ids=["prompt-1", "assistant-output-1"],
+                    ),
+                )
+            )
+
+        assistant_command = run_mock.call_args_list[0].args[0]
+        evaluator_command = run_mock.call_args_list[1].args[0]
+        self.assertIn("--model", assistant_command)
+        self.assertEqual("gpt-5.4-mini", assistant_command[assistant_command.index("--model") + 1])
+        self.assertNotIn("--output-schema", assistant_command)
+        self.assertIn("--model", evaluator_command)
+        self.assertEqual("gpt-5.5", evaluator_command[evaluator_command.index("--model") + 1])
+        self.assertIn("--output-schema", evaluator_command)
 
     def test_fake_evaluator_pass_without_required_transcript_evidence_fails_closed(self) -> None:
         case = self.cases["cases"][0]

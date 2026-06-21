@@ -479,7 +479,7 @@ def _target_client_projection_status(
         return "partial"
     if (
         status == "reload_required"
-        or reload_status in {"required", "pending_reload", "reload_observed"}
+        or reload_status in {"required", "pending_reload", "reload_observed", "acknowledged", "reload_acknowledged", "reload_required"}
         or session_boundary.get("requires_reload") is True
     ):
         return "reload_required"
@@ -616,8 +616,8 @@ def _target_client_mcp_runtime_diagnostic(target_client_state: Mapping[str, Any]
         classification = "mcp_available_or_partially_observed"
     elif session_boundary.get("requires_reload"):
         classification = "reload_pending_before_mcp_startup"
-    elif session_boundary.get("reload_acknowledged"):
-        classification = "reload_acknowledged_no_mcp_observation"
+    elif session_boundary.get("tools_registered_observed"):
+        classification = "tools_registered_observed_without_mcp_startup_diagnostic"
     else:
         classification = "no_mcp_startup_observation"
     evidence_ref = diagnostics.get("evidence_ref") or target_client_state.get("mcp_evidence_ref")
@@ -681,35 +681,43 @@ def _project_client_reload_state(state: Mapping[str, Any], client_type: str) -> 
     client_states = project_init.get("client_states") if isinstance(project_init.get("client_states"), Mapping) else {}
     client_state = client_states.get(client_type) if isinstance(client_states.get(client_type), Mapping) else {}
     reload_status = str(client_state.get("reload_status") or "unknown")
-    requires_reload = reload_status in {"required", "pending_reload", "reload_observed"}
-    acknowledged = reload_status in {"acknowledged", "reload_acknowledged"}
-    if acknowledged:
-        user_status = "reload_acknowledged"
-    elif requires_reload:
-        user_status = "reload_required"
+    if reload_status == "tools_registered_observed":
+        canonical_status = "tools_registered_observed"
     elif reload_status == "not_required":
+        canonical_status = "not_required"
+    elif reload_status in {"required", "pending_reload", "reload_observed", "acknowledged", "reload_acknowledged", "reload_required"}:
+        canonical_status = "reload_required"
+    else:
+        canonical_status = "unknown"
+    requires_reload = canonical_status == "reload_required"
+    tools_registered_observed = canonical_status == "tools_registered_observed"
+    if requires_reload:
+        user_status = "reload_required"
+    elif tools_registered_observed:
+        user_status = "tools_registered_observed"
+    elif canonical_status == "not_required":
         user_status = "reload_not_required"
     else:
         user_status = "reload_status_unknown"
     return {
         "client_type": client_type,
-        "reload_status": reload_status,
+        "reload_status": canonical_status,
         "user_status": user_status,
         "requires_reload": requires_reload,
-        "reload_acknowledged": acknowledged,
+        "reload_acknowledged": False,
+        "tools_registered_observed": tools_registered_observed,
     }
 
 
 def _client_session_boundary(state: Mapping[str, Any], client_type: str) -> dict[str, Any]:
     reload_state = _project_client_reload_state(state, client_type)
     reload_requirement = common.client_reload_requirement(client_type, event="project_activation_apply")
-    if reload_state["reload_acknowledged"]:
-        if client_type == "pi":
-            instruction = "Pi reload has been acknowledged for this project state; no additional Pi reload is recorded as pending."
-        elif client_type == "opencode":
-            instruction = "A new OpenCode session has been acknowledged for this project state; no additional OpenCode session restart is recorded as pending."
-        else:
-            instruction = "The required client reload or new session has been acknowledged for this project state; no additional reload is recorded as pending."
+    if reload_state["tools_registered_observed"]:
+        instruction = "The target-client session has observed the installed ContextForge tools; no reload reminder is pending."
+    elif reload_state["requires_reload"] and isinstance(reload_requirement, Mapping):
+        instruction = str(reload_requirement.get("instruction") or "")
+    elif reload_state["requires_reload"]:
+        instruction = "A client reload or new session is required before the installed ContextForge tools register."
     elif isinstance(reload_requirement, Mapping):
         instruction = str(reload_requirement.get("instruction") or "")
     else:
@@ -721,8 +729,8 @@ def _client_session_boundary(state: Mapping[str, Any], client_type: str) -> dict
 
 
 def _target_client_user_state(target_client_state: Mapping[str, Any], session_boundary: Mapping[str, Any]) -> str:
-    if session_boundary.get("reload_acknowledged"):
-        return "projection recorded; reload acknowledged"
+    if session_boundary.get("tools_registered_observed"):
+        return "projection recorded; tools registered observed"
     status = str(target_client_state.get("status") or "recorded")
     if session_boundary.get("requires_reload"):
         return "projection recorded; client reload required"
