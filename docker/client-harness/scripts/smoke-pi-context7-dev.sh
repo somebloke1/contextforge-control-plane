@@ -10,8 +10,8 @@ if [[ ! -w evidence ]]; then
   docker compose -f compose.yml run --rm --no-deps -u root pi \
     chown -R "$(id -u):$(id -g)" /evidence
 fi
-if [[ ! -f env/local-llama.env ]]; then
-  scripts/make-local-llama-env.sh
+if [[ ! -f env/semantic-model.env ]]; then
+  scripts/make-semantic-model-env.sh
 fi
 
 if [[ -z "${PYTHON:-}" ]]; then
@@ -185,9 +185,12 @@ import os
 
 path = "/config/pi/models.json"
 data = json.load(open(path, encoding="utf-8"))
-provider = data["providers"]["local-llama-qwen"]
-provider["baseUrl"] = os.environ["LOCAL_LLAMA_BASE_URL"]
-provider["apiKey"] = os.environ["LOCAL_LLAMA_KEY"]
+provider = data["providers"]["openrouter-gemini-flash-lite"]
+provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]
+provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]
+provider["compat"]["openRouterRouting"]["only"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
+provider["compat"]["openRouterRouting"]["order"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
+provider["models"][0]["id"] = os.environ["OPENROUTER_MODEL"]
 out = os.path.join(os.environ["PI_CODING_AGENT_DIR"], "models.json")
 json.dump(data, open(out, "w", encoding="utf-8"), indent=2)
 PY
@@ -197,8 +200,8 @@ PY
       --no-builtin-tools \
       --no-context-files \
       --tools cf_contextforge_pi_readback \
-      --provider local-llama-qwen \
-      --model qwen3.6-a3b \
+      --provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER}" \
+      --model "${CONTEXTFORGE_PI_DEFAULT_MODEL}" \
       -p "Use the cf_contextforge_pi_readback tool for projectRoot /workspace. Return the tool JSON result verbatim."
   ' | redact_token_stream | tee -a "${EVIDENCE_FILE}"
 

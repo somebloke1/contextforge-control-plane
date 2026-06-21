@@ -21,14 +21,26 @@ package sources; no application-published images are used.
 
 ## Secrets
 
-Do not commit `env/local-llama.env`. Generate it from the host:
+Do not commit `env/semantic-model.env`. Generate it from the host or populate
+it directly from `env/semantic-model.env.example`:
 
 ```sh
-scripts/make-local-llama-env.sh
+scripts/make-semantic-model-env.sh
 ```
 
-The script reads `LOCAL_LLAMA_KEY` from `~/.env` and writes a local env file
-with mode `0600` semantics through `umask 077`.
+The default semantic-test profile uses OpenRouter with
+`google/gemini-2.5-flash-lite` routed through `google-ai-studio`. The only
+required secret for that profile is `OPENROUTER_API_KEY`. The generated local
+env file is written with mode `0600` semantics through `umask 077`.
+
+`OPENROUTER_STICKY_KEY` is a non-secret cache-affinity key. It is passed as the
+OpenRouter `x-session-id` header where the client config surface supports model
+request headers. Use one stable base sticky key across the semantic-test profile
+so Pi and OpenCode share provider sticky routing for prompt caching. At client
+bootstrap/config render time the harness appends a coarse epoch bucket
+controlled by `OPENROUTER_STICKY_EPOCH_SECONDS` and defaulting to two hours.
+This keeps cache affinity stable within an active testing window while naturally
+resetting it between testing epochs.
 
 Do not print raw ContextForge env files, bearer headers, passwords, API keys,
 tokens, JWTs, private keys, or credential values into terminal transcripts or
@@ -74,24 +86,25 @@ scripts/check-versions.sh
 
 This validates that all five client commands launch.
 
-## llama.cpp Qwen Probe
+## Semantic Model Probe
 
-Only Pi and OpenCode are configured for the existing host llama.cpp endpoint:
+Pi and OpenCode semantic-test paths read their provider/model defaults from
+`env/semantic-model.env`:
 
 ```sh
 scripts/probe-llama.sh
 ```
 
-By default the containers reach the host endpoint through:
+By default the containers reach OpenRouter through:
 
 ```text
-http://host.docker.internal:8742/v1
+https://openrouter.ai/api/v1
 ```
 
 and use model id:
 
 ```text
-qwen3.6-a3b
+google/gemini-2.5-flash-lite
 ```
 
 This probe only checks endpoint/model visibility. Agent-level response probes
@@ -105,14 +118,14 @@ The probe writes exact advertised model identity reports to ignored local
 evidence files:
 
 ```text
-evidence/pi-llama-model-identity.json
-evidence/opencode-llama-model-identity.json
+evidence/pi-semantic-model-identity.json
+evidence/opencode-semantic-model-identity.json
 ```
 
-Each report records the expected harness model id, the endpoint-advertised model
-ids, the exercised client surface, and a `current`, `stale`, or `unverified`
-status. A mismatch marks the evidence stale rather than silently accepting a
-nearby Qwen alias.
+Each report records the expected harness model id, the endpoint-advertised
+model ids, the exercised client surface, and a `current`, `stale`, or `unverified`
+status. A mismatch marks the evidence stale rather than silently
+accepting a nearby alias.
 
 The Pi config follows the public Pi custom model docs from:
 
@@ -125,8 +138,17 @@ The OpenCode config follows the public OpenCode config/provider docs:
 - https://opencode.ai/docs/config/
 - https://opencode.ai/docs/providers/
 
-The remaining launch-only clients are not configured against Qwen in this
-harness yet. They are installed and version-checked only.
+Prompt caching is provider-level. For Gemini through OpenRouter, keep stable
+prompt prefixes across turns and use the shared sticky key so repeated agent
+sessions route to the same provider cache context for the current epoch. Inspect
+`usage.prompt_tokens_details.cached_tokens` where raw responses are available.
+Do not add Anthropic-style `cache_control` markers for this Gemini profile;
+Google prompt caching is implicit for eligible repeated prefixes.
+Do not enable or evaluate OpenRouter response caching via `X-OpenRouter-Cache`;
+that caches identical whole responses and is not the semantic-test objective.
+
+The remaining launch-only clients do not consume this semantic-test model
+profile yet. They are installed and version-checked only.
 
 ## ContextForge Helper Baseline
 
@@ -154,9 +176,9 @@ scripts/start-opencode-contextforge-baseline.sh
 They mount this repository read-only at `/repo`, with the narrow exception that
 `/repo/server-instances` is writable for helper-managed project-scoped service
 backends such as Serena. They keep generated client state in the client
-container/workspace volumes, keep Pi/OpenCode on the configured local Qwen model
-path, seed only container-user helper/plugin bootstrap where needed, and avoid
-host Pi/OpenCode global config mutation. Runtime
+container/workspace volumes, keep Pi/OpenCode on the configured semantic-test
+model profile, seed only container-user helper/plugin bootstrap where needed,
+and avoid host Pi/OpenCode global config mutation. Runtime
 proof still requires separate approval to rebuild or run Docker client
 containers.
 
@@ -169,7 +191,7 @@ code-assistant consumers in this harness. ContextForge production
 responsibility reaches the helper service and the services that the helper
 facilitates; code-assistant runtimes are exercised as consumers, not as runtime
 surfaces owned by this control plane. Pi and OpenCode are the currently
-configured local-Qwen install/readback samples because they are thin consumers,
+configured semantic-test install/readback samples because they are thin consumers,
 especially Pi, and expose less-mediated model behavior during development
 checks.
 
@@ -183,7 +205,7 @@ or orphaned library/config artifacts behind.
 The Pi service also wraps bare `pi` commands inside the container. A developer
 who enters the persistent container with `docker compose -f
 docker/client-harness/compose.yml run pi bash` and then runs `pi` gets the same
-container-local Qwen model file and ContextForge shim bootstrap as the baseline
+container-local semantic model file and ContextForge shim bootstrap as the baseline
 launcher, without touching host/global Pi state.
 
 Use `pi-ephemeral` and `opencode-ephemeral` when a dev-time test needs a clean

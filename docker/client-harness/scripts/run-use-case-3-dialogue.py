@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from client_model_defaults import ensure_semantic_model_env, opencode_command_prefix, pi_command_prefix
 from harness_redaction import redact_text, redact_value
 
 
@@ -57,8 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     reset_json = parse_json_or_text(reset["stdout"])
 
-    if args.client != "codex" and not (harness_root / "env" / "local-llama.env").exists():
-        run([str(harness_root / "scripts" / "make-local-llama-env.sh")], cwd=harness_root, timeout=60, commands=commands)
+    ensure_semantic_model_env(harness_root, client=args.client, commands=commands, runner=run)
     if not args.no_build:
         run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "build", "base", build_service_name(args.client)], cwd=repo_root, timeout=600, commands=commands)
 
@@ -276,13 +276,13 @@ def fixture_readback_command(client: str) -> str:
 def target_client_command(client: str, session_id: str, prompt: str) -> str:
     quoted = shlex.quote(prompt)
     if client == "pi":
-        return f"cd /workspace && pi --provider local-llama-qwen --model qwen3.6-a3b --session-id {shlex.quote(session_id)} --mode json -p {quoted}"
+        return f"{pi_command_prefix(session_id)} -p {quoted}"
     if client == "codex":
         codex_flags = "--json --dangerously-bypass-hook-trust --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check"
         if session_id:
             return f"cd /workspace && codex exec resume {codex_flags} {shlex.quote(session_id)} {quoted} </dev/null"
         return f"cd /workspace && codex exec {codex_flags} {quoted} </dev/null"
-    return 'cd /workspace && opencode run --dangerously-skip-permissions --model "llama.cpp/${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}" --agent build --format json ' + quoted
+    return f"{opencode_command_prefix()} {quoted}"
 
 
 def run(cmd: list[str], *, cwd: Path, timeout: int, commands: list[dict[str, Any]]) -> dict[str, Any]:

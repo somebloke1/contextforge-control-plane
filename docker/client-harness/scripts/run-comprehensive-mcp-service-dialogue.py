@@ -292,9 +292,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         reset_json = uc1.parse_json_or_text(reset["stdout"])
 
-        local_env = harness_root / "env" / "local-llama.env"
-        if not local_env.exists():
-            uc1.run([str(harness_root / "scripts" / "make-local-llama-env.sh")], cwd=harness_root, timeout=60, commands=commands)
+        uc1.ensure_semantic_model_env(harness_root, client=args.client, commands=commands, runner=uc1.run)
 
         build_result = None
         if not args.no_build:
@@ -472,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
                 "separate service-specific defects from cross-service wrapper/client defects",
                 "triage findings to the service issue or #316",
                 "identify any mutating functions skipped with acceptable rationale",
-                "classify qwen context-window or timeout failures as runner/package defects unless isolated to one service",
+                "classify semantic model context-window or timeout failures as runner/package defects unless isolated to one service",
             ],
         }
         write_json(output_root / "run-summary.json", summary)

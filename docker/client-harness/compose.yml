@@ -19,14 +19,8 @@ x-opencode-contextforge-baseline: &opencode-contextforge-baseline
       MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"
       OPENCODE_VERSION: "${OPENCODE_VERSION:-latest}"
   env_file:
-    - ./env/local-llama.env
+    - ./env/semantic-model.env
   environment:
-    OPENAI_API_KEY: "${LOCAL_LLAMA_KEY:-}"
-    LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
-    OPENCODE_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
-    LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
-    OPENCODE_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
-    LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
     OPENCODE_CONFIG: /home/agent/.config/opencode/opencode.json
     CONTEXTFORGE_OPENCODE_CONFIG_SOURCE: /config/opencode/opencode.json
     CONTEXTFORGE_OPENCODE_CONFIG_TARGET: /home/agent/.config/opencode/opencode.json
@@ -59,11 +53,8 @@ x-pi-contextforge-baseline: &pi-contextforge-baseline
       MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"
       PI_CODING_AGENT_VERSION: "${PI_CODING_AGENT_VERSION:-latest}"
   env_file:
-    - ./env/local-llama.env
+    - ./env/semantic-model.env
   environment:
-    LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
-    LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
-    LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
     PI_CODING_AGENT_DIR: /home/agent/.pi/agent
     CONTEXTFORGE_PI_SHIM_EXTENSION: /repo/pi-extensions/contextforge-global-shim/index.ts
     CONTEXTFORGE_PI_SHIM_INSTALL_DIR: /home/agent/.pi/agent/extensions/contextforge-global-shim
@@ -235,14 +226,8 @@ services:
       args:
         OPENCODE_VERSION: "${OPENCODE_VERSION:-latest}"
     env_file:
-      - ./env/local-llama.env
+      - ./env/semantic-model.env
     environment:
-      OPENAI_API_KEY: "${LOCAL_LLAMA_KEY:-}"
-      LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
-      OPENCODE_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
-      LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
-      OPENCODE_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
-      LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
       OPENCODE_CONFIG: /config/opencode/opencode.json
     volumes:
       - opencode-alpine-home:/home/agent
@@ -281,11 +266,8 @@ services:
       args:
         PI_CODING_AGENT_VERSION: "${PI_CODING_AGENT_VERSION:-latest}"
     env_file:
-      - ./env/local-llama.env
+      - ./env/semantic-model.env
     environment:
-      LOCAL_LLAMA_KEY: "${LOCAL_LLAMA_KEY:-}"
-      LOCAL_LLAMA_BASE_URL: "${LOCAL_LLAMA_BASE_URL:-http://host.docker.internal:8742/v1}"
-      LOCAL_LLAMA_MODEL: "${LOCAL_LLAMA_MODEL:-qwen3.6-a3b}"
       PI_CODING_AGENT_DIR: /home/agent/.pi/agent
     volumes:
       - pi-alpine-home:/home/agent

@@ -2,7 +2,7 @@
   "schema_uri": "contextforge://client-harness/comprehensive-mcp-testing-services/v1",
   "global_issue": 316,
   "target_clients": ["pi", "opencode"],
-  "model_family": "qwen",
+  "model_profile": "semantic-test",
   "semantic_evaluator_required": true,
   "deterministic_semantic_oracles_allowed": false,
   "services": [

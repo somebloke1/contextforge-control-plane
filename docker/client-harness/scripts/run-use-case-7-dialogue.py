@@ -64,8 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     reset_json = uc3.parse_json_or_text(reset["stdout"])
 
-    if args.client != "codex" and not (harness_root / "env" / "local-llama.env").exists():
-        uc3.run([str(harness_root / "scripts" / "make-local-llama-env.sh")], cwd=harness_root, timeout=60, commands=commands)
+    uc3.ensure_semantic_model_env(harness_root, client=args.client, commands=commands, runner=uc3.run)
     if not args.no_build:
         uc3.run(["docker", "compose", "-f", str(harness_root / "compose.yml"), "build", "base", uc3.build_service_name(args.client)], cwd=repo_root, timeout=600, commands=commands)
 

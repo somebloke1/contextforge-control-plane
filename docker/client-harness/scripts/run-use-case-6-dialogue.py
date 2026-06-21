@@ -109,9 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     reset_json = uc1.parse_json_or_text(reset["stdout"])
 
-    local_env = harness_root / "env" / "local-llama.env"
-    if args.client != "codex" and not local_env.exists():
-        uc1.run([str(harness_root / "scripts" / "make-local-llama-env.sh")], cwd=harness_root, timeout=60, commands=commands)
+    uc1.ensure_semantic_model_env(harness_root, client=args.client, commands=commands, runner=uc1.run)
     build_result = None
     if not args.no_build:
         build_result = uc1.run(

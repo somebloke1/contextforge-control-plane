@@ -15,7 +15,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && npm cache clean --force
 COPY --chown=agent:agent entrypoint.sh /usr/local/bin/contextforge-opencode-entrypoint
-RUN chmod 0755 /usr/local/bin/contextforge-opencode-entrypoint
+COPY --chown=agent:agent render-config.py /usr/local/bin/contextforge-opencode-render-config
+RUN chmod 0755 /usr/local/bin/contextforge-opencode-entrypoint \
+      /usr/local/bin/contextforge-opencode-render-config
 USER agent
 
 ENV OPENCODE_CONFIG_DIR=/home/agent/.config/opencode

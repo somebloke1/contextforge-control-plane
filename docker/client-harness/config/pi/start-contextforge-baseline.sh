@@ -5,6 +5,6 @@ set -euo pipefail
 . /usr/local/bin/contextforge-pi-bootstrap
 
 exec "${CONTEXTFORGE_PI_REAL_BIN:-/usr/bin/pi}" \
-  --provider local-llama-qwen \
-  --model qwen3.6-a3b \
+  --provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:-openrouter-gemini-flash-lite}" \
+  --model "${CONTEXTFORGE_PI_DEFAULT_MODEL:-${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}}" \
   "$@"

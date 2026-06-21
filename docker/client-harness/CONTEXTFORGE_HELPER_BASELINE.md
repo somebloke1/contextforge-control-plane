@@ -14,7 +14,7 @@ In scope:
 
 - Pi client Docker.
 - OpenCode client Docker.
-- The existing local llama.cpp Qwen model path.
+- The generated semantic-test model profile in `env/semantic-model.env`.
 - The ContextForge development Docker surface.
 - Project-local helper/hook wiring under this repository.
 
@@ -37,11 +37,13 @@ paths:
   `--extension` flag for one readback run.
 - `docker/client-harness/scripts/smoke-opencode-contextforge-dev.sh` runs
   `opencode mcp add` against the development gateway for one runtime check.
-- `docker/client-harness/config/pi/AGENTS.md` only gives Qwen smoke guidance.
-- `docker/client-harness/config/opencode/opencode.json` defines the Qwen
-  provider/model and the harness-owned `contextforge-helper` local MCP entry,
-  but ordinary shell runs need that fixture materialized into the container
-  user's normal OpenCode config directory.
+- `docker/client-harness/config/pi/AGENTS.md` gives semantic-test model
+  guidance through environment variables.
+- `docker/client-harness/config/opencode/opencode.json` defines the
+  environment-driven semantic-test model and the harness-owned
+  `contextforge-helper` local MCP entry, but ordinary shell runs need that
+  fixture materialized into the container user's normal OpenCode config
+  directory.
 
 Therefore a Pi or OpenCode container shell can truthfully lack ContextForge
 helper tools even when the specialized smoke scripts pass.
@@ -81,8 +83,9 @@ debugging path `docker compose -f docker/client-harness/compose.yml run pi bash`
 followed by a bare `pi` command. The image-level wrapper at `/usr/local/bin/pi`
 seeds the same container-local `models.json`, AGENTS guidance, and shim files
 before delegating to the real npm Pi binary at `/usr/bin/pi`, and defaults that
-bare session to `local-llama-qwen/qwen3.6-a3b` unless the command explicitly
-selects another provider or model.
+bare session to `CONTEXTFORGE_PI_DEFAULT_PROVIDER` and
+`CONTEXTFORGE_PI_DEFAULT_MODEL` unless the command explicitly selects another
+provider or model.
   Container-local writes under `/home/agent/.pi/agent/extensions` are harness
   setup, not project-init approval/apply writes.
 
@@ -150,7 +153,8 @@ Minimum future runtime checks:
   tools without host-global Pi mutation.
 - OpenCode ad hoc session receives project-init helper/hook context from the
   container user-home fixture without host user-global OpenCode mutation.
-- Both clients continue using the local llama.cpp Qwen model path.
+- Both clients continue using the configured semantic-test model profile from
+  `env/semantic-model.env`.
 - Any scoped development token is created, used, redacted in evidence, and
   revoked before exit.
 

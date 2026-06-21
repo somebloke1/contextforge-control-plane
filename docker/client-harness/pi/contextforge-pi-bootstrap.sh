@@ -37,17 +37,31 @@ fi
 
 if [[ -f /config/pi/models.json ]]; then
   export PI_CODING_AGENT_DIR
+  export OPENROUTER_STICKY_KEY="${OPENROUTER_STICKY_KEY:-contextforge-semantic-test}"
+  export OPENROUTER_STICKY_EPOCH_SECONDS="${OPENROUTER_STICKY_EPOCH_SECONDS:-7200}"
   python3 - <<'PY'
 import json
 import os
+import time
 from pathlib import Path
+
+def effective_sticky_key() -> str:
+    base = os.environ["OPENROUTER_STICKY_KEY"]
+    epoch_seconds = int(os.environ["OPENROUTER_STICKY_EPOCH_SECONDS"])
+    if epoch_seconds <= 0:
+        return base
+    return f"{base}-e{int(time.time() // epoch_seconds)}"
 
 source = Path("/config/pi/models.json")
 target = Path(os.environ["PI_CODING_AGENT_DIR"]) / "models.json"
 data = json.loads(source.read_text(encoding="utf-8"))
-provider = data["providers"]["local-llama-qwen"]
-provider["baseUrl"] = os.environ["LOCAL_LLAMA_BASE_URL"]
-provider["apiKey"] = os.environ["LOCAL_LLAMA_KEY"]
+provider = data["providers"]["openrouter-gemini-flash-lite"]
+provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]
+provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]
+provider["headers"]["x-session-id"] = effective_sticky_key()
+provider["compat"]["openRouterRouting"]["only"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
+provider["compat"]["openRouterRouting"]["order"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
+provider["models"][0]["id"] = os.environ["OPENROUTER_MODEL"]
 target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 fi
