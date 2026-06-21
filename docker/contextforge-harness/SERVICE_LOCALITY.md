@@ -195,11 +195,15 @@ only after direct reachability evidence. Do not fall back to the host-loopback
 not inherit host browser or session residue.
 
 `github` follows the same compose-sidecar-locality for credential-scoped stdio
-backend: `github-transceiver` runs `@modelcontextprotocol/server-github` in the
-Compose network and is registered through `http://github-transceiver:9206/mcp`
-only after token-boundary preflight and direct reachability evidence. Use the
-ignored `server-instances/github/.env` boundary; do not pass host shell token
-variables through Compose and do not persist secrets in tracked files.
+backend: `github-transceiver` runs GitHub's maintained official
+`github-mcp-server` binary in the Compose network through the stock
+ContextForge bridge and is registered through
+`http://github-transceiver:9206/mcp` only after token-boundary preflight and
+direct reachability evidence. Keep the official server in stdio mode here:
+native HTTP requires GitHub Authorization at the upstream HTTP boundary, while
+the bridge keeps credentials inside the ignored `server-instances/github/.env`
+sidecar boundary. Do not pass host shell token variables through Compose and do
+not persist secrets in tracked files.
 
 `web-search` follows the same compose-sidecar-locality for credential-scoped stdio
 backend: `web-search-transceiver` runs the local `web_search/dist/mcp-server.js`
