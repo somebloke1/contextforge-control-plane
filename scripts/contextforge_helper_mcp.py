@@ -532,6 +532,31 @@ def _projection_status_allows_target_client_availability(status: str) -> bool:
     return status in {"imported", "verified"}
 
 
+def _runtime_observed_tools_by_service(runtime_readback: Mapping[str, Any] | None) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(runtime_readback, Mapping):
+        return {}
+    tools = runtime_readback.get("tools")
+    if not isinstance(tools, Sequence) or isinstance(tools, (str, bytes)):
+        return {}
+    by_service: dict[str, list[dict[str, Any]]] = {}
+    for raw_tool in tools:
+        if not isinstance(raw_tool, Mapping):
+            continue
+        service_binding = str(raw_tool.get("serviceBinding") or raw_tool.get("service_binding") or "")
+        mcp_name = str(raw_tool.get("mcpName") or raw_tool.get("mcp_name") or "")
+        pi_name = str(raw_tool.get("piName") or raw_tool.get("pi_name") or "")
+        if not service_binding or not mcp_name:
+            continue
+        by_service.setdefault(service_binding, []).append(
+            {
+                "mcp_name": mcp_name,
+                "pi_name": pi_name,
+                "blocked_by_default": bool(raw_tool.get("blockedByDefault") or raw_tool.get("blocked_by_default")),
+            }
+        )
+    return by_service
+
+
 def _normalize_mcp_status(value: Any) -> str:
     text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
     if text in {"ok", "pass", "passed", "success", "started", "running", "available", "listed"}:
@@ -756,7 +781,11 @@ def _target_client_user_state(target_client_state: Mapping[str, Any], session_bo
     return "projection recorded"
 
 
-def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
+def project_tool_availability(
+    project_root: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    target_client_runtime: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Read initialized project state and summarize client-visible ContextForge tools."""
 
     root = project_state.validate_project_root(project_root, require_workspace=True)
@@ -769,6 +798,16 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
     skipped: list[dict[str, Any]] = []
     approved: list[str] = []
     session_boundary = _client_session_boundary(state, client_type)
+    runtime_tools_by_service = _runtime_observed_tools_by_service(target_client_runtime)
+    if runtime_tools_by_service:
+        session_boundary = {
+            **session_boundary,
+            "requires_reload": False,
+            "reload_status": "tools_registered_observed",
+            "user_status": "tools_registered_observed",
+            "tools_registered_observed": True,
+            "instruction": "The current target-client session has observed imported ContextForge tools; do not ask for another reload.",
+        }
     mcp_runtime_diagnostics: list[dict[str, Any]] = []
     decision_bindings: set[str] = set()
     decisions = state.get("decisions") if isinstance(state.get("decisions"), Mapping) else {}
@@ -805,9 +844,24 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
             continue
         tool_names = _tool_names_for_service(service_family)
         target_client_state = _client_state_for_service(service, client_type)
+        runtime_observed_tools = runtime_tools_by_service.get(service_binding, [])
         projection_status = _target_client_projection_status(target_client_state, session_boundary)
         tool_policy_status = _tool_policy_status_for_service(service, tool_names)
         mcp_diagnostic = _target_client_mcp_runtime_diagnostic(target_client_state, session_boundary)
+        if runtime_observed_tools:
+            observed_tool_names = [item["mcp_name"] for item in runtime_observed_tools if not item["blocked_by_default"]]
+            if observed_tool_names:
+                tool_names = observed_tool_names
+            projection_status = "verified"
+            mcp_diagnostic = {
+                **mcp_diagnostic,
+                "classification": "mcp_available_or_partially_observed",
+                "attempted": True,
+                "startup_status": "passed",
+                "tool_listing_status": "passed",
+                "validation_proof": "runtime_readback_observed",
+                "runtime_observed_pi_tools": [item["pi_name"] for item in runtime_observed_tools if item["pi_name"]],
+            }
         runtime_blocks_availability = _mcp_runtime_diagnostic_blocks_availability(mcp_diagnostic)
         available_to_target_client = bool(
             _projection_status_allows_target_client_availability(projection_status)
@@ -824,8 +878,8 @@ def project_tool_availability(project_root: str, client_type: str = DEFAULT_CLIE
             "target_client_projection_status": projection_status,
             "tool_policy_status": tool_policy_status,
             "tool_policy_names": tool_names,
-            "target_client_visibility_status": _target_client_visibility_status(target_client_state),
-            "target_client_proof_status": _target_client_proof_status(target_client_state),
+            "target_client_visibility_status": "visible_in_current_session" if runtime_observed_tools else _target_client_visibility_status(target_client_state),
+            "target_client_proof_status": "runtime_readback_observed" if runtime_observed_tools else _target_client_proof_status(target_client_state),
             "mcp_runtime_diagnostic": mcp_diagnostic,
             "available_to_target_client": available_to_target_client,
         }

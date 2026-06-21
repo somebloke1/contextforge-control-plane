@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
+import os
 import re
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -542,6 +545,39 @@ print(json.dumps(redact_value(payload), sort_keys=True))
             self.assertIn("redact_value(reset_json)", source)
             self.assertIn("\"commands\": redact_value(commands)", source)
 
+    def test_dialogue_runners_use_model_env_variables_not_static_model_fallbacks(self) -> None:
+        defaults = (ROOT / "docker/client-harness/scripts/client_model_defaults.py").read_text(encoding="utf-8")
+
+        self.assertIn('--provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER}"', defaults)
+        self.assertIn('--model "${CONTEXTFORGE_PI_DEFAULT_MODEL}"', defaults)
+        self.assertIn("return \"${CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}\"", defaults)
+        self.assertNotIn("openrouter-gemini-flash-lite", defaults)
+        self.assertNotIn("google/gemini-2.5-flash-lite", defaults)
+
+    def test_comprehensive_mcp_runner_uses_natural_prompt_and_separate_inventory(self) -> None:
+        runner = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Please use this project's documentation lookup capability", runner)
+        self.assertIn("What ContextForge tools are available in this project?", runner)
+        self.assertIn('"tool_inventory": tool_inventory', runner)
+        self.assertIn("tool-inventory-turn.raw.txt", runner)
+        self.assertNotIn("resolve the library id first, then look up documentation", runner)
+        self.assertNotIn("Context7 functions used", runner)
+
+    def test_pi_availability_readback_passes_live_runtime_tools_to_helper(self) -> None:
+        pi_source = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
+        cli_source = (ROOT / "scripts/pi_project_init_helper_cli.py").read_text(encoding="utf-8")
+        helper_source = (ROOT / "scripts/contextforge_helper_mcp.py").read_text(encoding="utf-8")
+
+        self.assertIn('item.operation === "get_project_tool_availability"', pi_source)
+        self.assertIn("payload.target_client_runtime = readbackSnapshot()", pi_source)
+        self.assertIn("function readbackSnapshot()", pi_source)
+        self.assertIn('target_client_runtime=data.get("target_client_runtime")', cli_source)
+        self.assertIn("target_client_runtime: Mapping[str, Any] | None = None", helper_source)
+        self.assertIn("tools_registered_observed", helper_source)
+
     def test_later_dialogue_runners_redact_custom_command_renderers(self) -> None:
         script = r'''
 import importlib.util
@@ -725,7 +761,7 @@ print(json.dumps(outputs))
         self.assertIn("OPENROUTER_STICKY_EPOCH_SECONDS", opencode_renderer)
         self.assertIn('return f"{base}-e{bucket}"', opencode_renderer)
         self.assertIn(
-            'model_id = os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemini-2.5-flash-lite")',
+            'model_id = openrouter_model_component(os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemini-2.5-flash-lite"))',
             opencode_renderer,
         )
         self.assertIn(
@@ -733,7 +769,7 @@ print(json.dumps(outputs))
             opencode_renderer,
         )
         self.assertIn(
-            'data["model"] = os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL", f"openrouter/{model_id}")',
+            'data["model"] = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"), model_id)',
             opencode_renderer,
         )
         self.assertNotIn("setCacheKey", opencode_renderer)
@@ -743,6 +779,42 @@ print(json.dumps(outputs))
         self.assertIn('"x-session-id": effective_sticky_key()', opencode_renderer)
         self.assertIn('data["openrouter"] = {"type": "api", "key": os.environ["OPENROUTER_API_KEY"]}', opencode_renderer)
         self.assertIn("target.chmod(0o600)", opencode_renderer)
+
+    def test_opencode_renderer_normalizes_accidental_home_marker_in_model_env(self) -> None:
+        renderer_path = ROOT / "docker/client-harness/opencode/render-config.py"
+        spec = importlib.util.spec_from_file_location("contextforge_opencode_render_config_test", renderer_path)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        self.assertIsNotNone(spec.loader)
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "opencode.source.json"
+            target = root / "opencode.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "$schema": "https://opencode.ai/config.json",
+                        "model": "{env:CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}",
+                        "provider": {"openrouter": {"models": {}}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = {
+                "CONTEXTFORGE_OPENCODE_CONFIG_SOURCE": str(source),
+                "CONTEXTFORGE_OPENCODE_CONFIG_TARGET": str(target),
+                "OPENROUTER_OPENCODE_MODEL": "~google/gemini-2.5-flash-lite",
+                "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL": "openrouter/~google/gemini-2.5-flash-lite",
+            }
+            with unittest.mock.patch.dict(os.environ, env, clear=False):
+                module.render_config()
+
+            data = json.loads(target.read_text(encoding="utf-8"))
+
+        self.assertEqual("openrouter/google/gemini-2.5-flash-lite", data["model"])
+        self.assertEqual(["google/gemini-2.5-flash-lite"], list(data["provider"]["openrouter"]["models"]))
 
     def test_opencode_image_provisions_container_local_contextforge_helper_runtime(self) -> None:
         dockerfile = (ROOT / "docker/client-harness/opencode/Dockerfile").read_text(encoding="utf-8")
@@ -1007,8 +1079,10 @@ print(json.dumps(outputs))
         self.assertIn("cp -R \"$(dirname \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\")\" \"${CONTEXTFORGE_PI_SHIM_INSTALL_DIR}\"", combined)
         self.assertIn("contextforge-root.json", combined)
         self.assertNotIn("--extension \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\"", combined)
-        self.assertIn('--provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:-openrouter-gemini-flash-lite}"', container_launcher)
-        self.assertIn('--model "${CONTEXTFORGE_PI_DEFAULT_MODEL:-${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}}"', container_launcher)
+        self.assertIn('--provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER}"', container_launcher)
+        self.assertIn('--model "${CONTEXTFORGE_PI_DEFAULT_MODEL}"', container_launcher)
+        self.assertNotIn("openrouter-gemini-flash-lite", container_launcher)
+        self.assertNotIn("google/gemini-2.5-flash-lite", container_launcher)
         self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON:=/opt/contextforge-wrapper-venv/bin/python", combined)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WRAPPER:=/repo/scripts/contextforge_mcp_wrapper.py", combined)
         self.assertIn("CONTEXTFORGE_CONFIG_ENV:=/run/contextforge-client-scoped/contextforge.env", combined)

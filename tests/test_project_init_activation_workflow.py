@@ -2487,6 +2487,56 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Next step\n- After approved OpenCode project-local MCP config changes", visible)
         self.assertIn("no project-init proposal, approval, or apply", result["non_actions"])
 
+    def test_pi_tool_availability_uses_current_runtime_readback_when_supplied(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            selected = [service_descriptor("context7")]
+            config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                selected,
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(selected, validation_mode="installed", target_client="pi"),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+            runtime = {
+                "tools": [
+                    {
+                        "serviceBinding": "context7:canonical",
+                        "mcpName": "context7-local-resolve-library-id",
+                        "piName": "cf_context7_s123__context7-local-resolve-library-id",
+                        "blockedByDefault": False,
+                    },
+                    {
+                        "serviceBinding": "context7:canonical",
+                        "mcpName": "context7-local-query-docs",
+                        "piName": "cf_context7_s123__context7-local-query-docs",
+                        "blockedByDefault": False,
+                    },
+                ]
+            }
+
+            stale_report = contextforge_helper_mcp.project_tool_availability(str(root), client_type="pi")
+            runtime_report = contextforge_helper_mcp.project_tool_availability(
+                str(root),
+                client_type="pi",
+                target_client_runtime=runtime,
+            )
+
+        self.assertEqual([], stale_report["available_tools"])
+        self.assertIn("reload_pending_before_mcp_startup", stale_report["assistant_visible_response"])
+        self.assertEqual("tools_registered_observed", runtime_report["current_session_boundary"]["reload_status"])
+        self.assertFalse(runtime_report["current_session_boundary"]["requires_reload"])
+        self.assertEqual(["context7-local-resolve-library-id", "context7-local-query-docs"], runtime_report["available_tools"][0]["tool_names"])
+        self.assertTrue(runtime_report["project_services"][0]["available_to_target_client"])
+        self.assertEqual("visible_in_current_session", runtime_report["project_services"][0]["target_client_visibility_status"])
+        self.assertIn("context7:canonical: context7-local-resolve-library-id, context7-local-query-docs", runtime_report["assistant_visible_response"])
+        self.assertIn("mcp_available_or_partially_observed", runtime_report["assistant_visible_response"])
+        self.assertIn("do not ask for another reload", runtime_report["assistant_visible_response"])
+
     def test_opencode_readback_distinguishes_mcp_startup_failure_from_reload_pending(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()

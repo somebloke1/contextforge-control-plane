@@ -54,20 +54,13 @@ def default_session_id(client: str, service: str, phase: str, timestamp: str) ->
 def service_test_prompt(service: str, display: str, issue: int, global_issue: int) -> str:
     if service == "context7":
         return (
-            "Use Context7 to answer this: for Next.js, resolve the library id first, then look up documentation about server actions and authentication. "
-            "Do not use shell commands, package installs, web search, or direct upstream calls as substitutes. "
-            "Keep the report under 20 lines with the Context7 functions used, concise results, and issue target "
-            f"(#{issue} for {service}, #{global_issue} for shared wrapper/client problems)."
+            "Please use this project's documentation lookup capability to answer: "
+            "In current Next.js, how should Server Actions handle authentication? "
+            "Keep the answer concise and cite the documentation source you used."
         )
     return (
-        f"Test the {display} MCP service now. "
-        "Use the MCP tools already exposed in this assistant session; do not use shell scripts, package installs, or direct upstream calls as substitutes. "
-        "Use each safe function once if visible. "
-        "Skip mutating functions unless there is a dry-run or no-op target. "
-        "If the service tools are not visible, say that directly. "
-        "Do not test unrelated services or governance routes. "
-        "Keep the report under 20 lines with function, result, and issue target "
-        f"(#{issue} for {service}, #{global_issue} for shared wrapper/client problems)."
+        f"Please use the project's {display} capability for a small ordinary task that fits it. "
+        "Keep the answer concise and mention any limitation that prevents completion."
     )
 
 
@@ -346,6 +339,27 @@ def main(argv: list[str] | None = None) -> int:
                 if discovered:
                     activation_session = discovered
 
+        tool_inventory: dict[str, Any] | None = None
+        if args.client == "pi":
+            inventory_prompt = "What ContextForge tools are available in this project?"
+            inventory_session = default_session_id(args.client, args.service, "inventory", timestamp)
+            command = uc1.target_client_command(args.client, inventory_session, inventory_prompt)
+            inventory_result = uc1.run(
+                ["docker", "exec", container, "bash", "-lc", command],
+                cwd=repo_root,
+                timeout=args.timeout,
+                commands=commands,
+            )
+            inventory_path = output_root / "tool-inventory-turn.raw.txt"
+            inventory_path.write_text(uc1.render_command_block(inventory_result), encoding="utf-8")
+            tool_inventory = {
+                "phase": "tool_inventory",
+                "prompt": inventory_prompt,
+                "path": str(inventory_path),
+                "returncode": inventory_result["returncode"],
+                "timeout": inventory_result["timeout"],
+            }
+
         prompt = service_test_prompt(args.service, str(service["display"]), int(service["issue"]), global_issue)
         command = uc1.target_client_command(
             args.client,
@@ -446,6 +460,7 @@ def main(argv: list[str] | None = None) -> int:
                 "returncode": mcp_status["returncode"],
                 "timeout": mcp_status["timeout"],
             },
+            "tool_inventory": tool_inventory,
             "turns": [
                 {
                     "phase": turn["phase"],

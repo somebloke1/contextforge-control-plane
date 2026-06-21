@@ -205,8 +205,16 @@ not by itself justify skipping focused validation.
 Prefer prompts like:
 
 ```text
-Use Context7 to answer this: for Next.js, resolve the library id first, then look up documentation about server actions and authentication. Do not use shell commands, package installs, web search, or direct upstream calls as substitutes. Keep the report under 20 lines with the Context7 functions used, concise results, and issue target (#307 for context7, #316 for shared wrapper/client problems).
+Please use this project's documentation lookup capability to answer: In current Next.js, how should Server Actions handle authentication? Keep the answer concise and cite the documentation source you used.
 ```
+
+The prompt should supply minimal natural user intent. Do not hand the tested
+assistant exact low-level callable names, function suffixes, issue numbers,
+expected call sequence, or anti-bypass checklists unless the behavior under
+test is explicitly whether the assistant can follow user-supplied technical
+tool instructions. Tool inventories, expected route maps, issue targets, and
+bypass criteria belong in the evaluator packet and runner metadata, not in the
+tested user's ordinary prompt.
 
 Avoid prompts that:
 
@@ -214,6 +222,7 @@ Avoid prompts that:
   naturally require the service tools.
 - list low-level helper calls to perform unless testing helper behavior.
 - pre-narrate the desired conclusion.
+- teach exact tool names or call order when testing natural service use.
 - invite broad codebase exploration when the target is service use.
 - activate every service when a single-service slice is under test.
 

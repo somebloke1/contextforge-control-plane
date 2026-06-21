@@ -1043,6 +1043,10 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const projectRoot = projectRootFromParams(params, ctx);
         const payload = { ...asObject(params), project_root: projectRoot, client_type: "pi" };
+        if (item.operation === "get_project_tool_availability") {
+          await activateProject(pi, projectRoot, clients, { acknowledgeReload: true });
+          payload.target_client_runtime = readbackSnapshot();
+        }
         const result = await runProjectInitHelperOperation(item.operation, projectRoot, payload);
         if (shouldRefreshAfterHelperOperation(item.operation, payload)) {
           await activateProject(pi, projectRoot, clients);
@@ -1051,6 +1055,10 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
       },
     });
   }
+}
+
+function readbackSnapshot(): JsonObject {
+  return JSON.parse(JSON.stringify(readback)) as JsonObject;
 }
 
 function renderNothing() {

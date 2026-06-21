@@ -10,6 +10,29 @@ import time
 from pathlib import Path
 
 
+def strip_accidental_home_marker(value: str) -> str:
+    text = value.strip()
+    while text.startswith("~"):
+        text = text[1:]
+    return text
+
+
+def openrouter_model_component(raw_value: str) -> str:
+    text = strip_accidental_home_marker(raw_value)
+    if text.startswith("openrouter/"):
+        text = text.removeprefix("openrouter/")
+    return strip_accidental_home_marker(text)
+
+
+def opencode_model_id(raw_value: str | None, model_id: str) -> str:
+    if not raw_value:
+        return f"openrouter/{model_id}"
+    text = strip_accidental_home_marker(raw_value)
+    if text.startswith("openrouter/~"):
+        text = "openrouter/" + strip_accidental_home_marker(text.removeprefix("openrouter/"))
+    return text
+
+
 def effective_sticky_key() -> str:
     base = os.environ.get("OPENROUTER_STICKY_KEY", "contextforge-semantic-test")
     epoch_seconds = int(os.environ.get("OPENROUTER_STICKY_EPOCH_SECONDS", "7200"))
@@ -32,9 +55,9 @@ def render_config() -> None:
         shutil.copy2(source, target)
 
     data = json.loads(target.read_text(encoding="utf-8"))
-    model_id = os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemini-2.5-flash-lite")
+    model_id = openrouter_model_component(os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemini-2.5-flash-lite"))
     route = os.environ.get("OPENROUTER_PROVIDER_ROUTE", "google-ai-studio")
-    data["model"] = os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL", f"openrouter/{model_id}")
+    data["model"] = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"), model_id)
     provider = data.setdefault("provider", {}).setdefault("openrouter", {})
     provider["models"] = {
         model_id: {
