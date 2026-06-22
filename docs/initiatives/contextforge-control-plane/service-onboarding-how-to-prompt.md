@@ -18,7 +18,12 @@ The workflow is:
 5. When the user asks to continue, use the ContextForge service-onboarding or
    service-management continuation surface. Do not treat an uncataloged service
    as an existing project-init activation choice.
-6. Runtime/apply work is a later approved surface. It must prove backend
+6. When the user later approves runtime/apply work after continuation, use the
+   ContextForge service-onboarding runtime/apply package surface. That package
+   must name the service binding, backend home, service-provision plan, and
+   ContextForge registration plan while still avoiding mutation unless an
+   approved executor performs it.
+7. Runtime/apply execution is a later approved surface. It must prove backend
    behavior, ContextForge registration, reload or new-session boundary,
    target-client-visible service listing, and a safe call before verified
    availability is claimed.
@@ -27,8 +32,9 @@ Claim boundaries:
 
 - Source-only planning does not install, register, start, expose, import,
   validate, probe, or make a service available.
-- If the runtime/apply surface is missing, say so directly as a generic
-  support gap. Do not substitute direct client-local configuration.
+- If the runtime/apply package or executor surface is missing, say so directly
+  as a generic support gap. Do not substitute direct client-local
+  configuration.
 - User approval to create arbitrary local client files is not a ContextForge
   runtime/apply surface. Do not write `.vscode/mcp.json`, `.opencode`, client
   config, or project activation files unless a ContextForge helper/apply surface

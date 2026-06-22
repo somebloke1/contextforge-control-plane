@@ -1753,6 +1753,28 @@ def _require_user_approval_text(project_root: str, challenge_id: str | None, pla
         )
 
 
+def _require_runtime_apply_approval_text(project_root: str) -> None:
+    if _env_truthy("CONTEXTFORGE_HELPER_ALLOW_UNGATED_RUNTIME_APPLY_PACKAGE"):
+        return
+    if _approval_source_path() is None:
+        raise PermissionError(
+            "runtime/apply package tool requires latest-user approval evidence; "
+            "configure CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH or use the pure helper CLI package builder for non-client planning"
+        )
+    text = _read_latest_user_message_text(project_root)
+    lowered = text.strip().lower()
+    approval_terms = {"approve", "approved", "proceed", "continue"}
+    has_approval = _latest_text_is_approval(text) or any(term in lowered for term in approval_terms)
+    has_runtime_intent = bool(
+        re.search(r"\b(?:runtime|apply|implement|implementation|register|registration|install|start|execute)\b", lowered)
+    )
+    if _latest_text_has_approval_negation(lowered) or not (has_approval and has_runtime_intent):
+        raise PermissionError(
+            "latest user message does not contain explicit runtime/apply approval intent; "
+            "ask the user to approve or decline the runtime/apply package before calling this tool"
+        )
+
+
 def _remember_plan(project_root: str, plan: dict[str, Any]) -> dict[str, Any]:
     _CACHED_PLANS[_cache_key(project_root)] = dict(plan)
     current = _read_durable_cache(project_root)
@@ -2152,6 +2174,177 @@ def build_service_onboarding_continuation(
         source_path=source_path,
         backend_package=backend_package,
         backend_command=backend_command,
+        transport_type=transport_type,
+        localization_type=localization_type,
+        functional_type=functional_type,
+        state_type=state_type,
+        credential_boundary=credential_boundary,
+        approval_type=approval_type,
+        expected_tools=expected_tools,
+        issue=issue,
+        client_type=client_type,
+    )
+
+
+@server.tool()
+def build_service_onboarding_continue(
+    project_root: str,
+    candidate_service: str = "",
+    operator_goal: str = "",
+    source_path: str = "",
+    backend_package: str = "",
+    backend_command: str = "",
+    transport_type: str = "",
+    localization_type: str = "",
+    functional_type: str = "",
+    state_type: str = "",
+    credential_boundary: str = "",
+    approval_type: str = "",
+    expected_tools: list[str] | None = None,
+    issue: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Natural alias for cf_project_service_onboarding_continue."""
+    return cf_project_service_onboarding_continue(
+        project_root=project_root,
+        candidate_service=candidate_service,
+        operator_goal=operator_goal,
+        source_path=source_path,
+        backend_package=backend_package,
+        backend_command=backend_command,
+        transport_type=transport_type,
+        localization_type=localization_type,
+        functional_type=functional_type,
+        state_type=state_type,
+        credential_boundary=credential_boundary,
+        approval_type=approval_type,
+        expected_tools=expected_tools,
+        issue=issue,
+        client_type=client_type,
+    )
+
+
+@server.tool()
+def cf_project_service_onboarding_runtime_apply(
+    project_root: str,
+    candidate_service: str = "",
+    operator_goal: str = "",
+    source_path: str = "",
+    service_binding: str = "",
+    backend_package: str = "",
+    backend_command: str = "",
+    backend_args: list[str] | None = None,
+    transport_type: str = "",
+    localization_type: str = "",
+    functional_type: str = "",
+    state_type: str = "",
+    credential_boundary: str = "",
+    approval_type: str = "",
+    expected_tools: list[str] | None = None,
+    issue: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Build a non-mutating runtime-apply package for an approved uncataloged service."""
+    try:
+        root = _continuation_project_root(project_root, client_type)
+        _require_runtime_apply_approval_text(root)
+        result = service_onboarding_surfaces.build_service_onboarding_runtime_apply_package(
+            root,
+            {
+                "candidate_service": candidate_service,
+                "operator_goal": operator_goal,
+                "source_path": source_path,
+                "service_binding": service_binding,
+                "backend_package": backend_package,
+                "backend_command": backend_command,
+                "backend_args": backend_args or [],
+                "transport_type": transport_type,
+                "localization_type": localization_type,
+                "functional_type": functional_type,
+                "state_type": state_type,
+                "credential_boundary": credential_boundary,
+                "approval_type": approval_type,
+                "expected_tools": expected_tools or [],
+                "issue": issue,
+            },
+        )
+        return client_visible_service_onboarding_payload({"ok": True, **result})
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def build_service_onboarding_runtime_apply_package(
+    project_root: str,
+    candidate_service: str = "",
+    operator_goal: str = "",
+    source_path: str = "",
+    service_binding: str = "",
+    backend_package: str = "",
+    backend_command: str = "",
+    backend_args: list[str] | None = None,
+    transport_type: str = "",
+    localization_type: str = "",
+    functional_type: str = "",
+    state_type: str = "",
+    credential_boundary: str = "",
+    approval_type: str = "",
+    expected_tools: list[str] | None = None,
+    issue: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Alias for cf_project_service_onboarding_runtime_apply."""
+    return cf_project_service_onboarding_runtime_apply(
+        project_root=project_root,
+        candidate_service=candidate_service,
+        operator_goal=operator_goal,
+        source_path=source_path,
+        service_binding=service_binding,
+        backend_package=backend_package,
+        backend_command=backend_command,
+        backend_args=backend_args,
+        transport_type=transport_type,
+        localization_type=localization_type,
+        functional_type=functional_type,
+        state_type=state_type,
+        credential_boundary=credential_boundary,
+        approval_type=approval_type,
+        expected_tools=expected_tools,
+        issue=issue,
+        client_type=client_type,
+    )
+
+
+@server.tool()
+def build_service_onboarding_runtime_apply(
+    project_root: str,
+    candidate_service: str = "",
+    operator_goal: str = "",
+    source_path: str = "",
+    service_binding: str = "",
+    backend_package: str = "",
+    backend_command: str = "",
+    backend_args: list[str] | None = None,
+    transport_type: str = "",
+    localization_type: str = "",
+    functional_type: str = "",
+    state_type: str = "",
+    credential_boundary: str = "",
+    approval_type: str = "",
+    expected_tools: list[str] | None = None,
+    issue: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Natural alias for cf_project_service_onboarding_runtime_apply."""
+    return cf_project_service_onboarding_runtime_apply(
+        project_root=project_root,
+        candidate_service=candidate_service,
+        operator_goal=operator_goal,
+        source_path=source_path,
+        service_binding=service_binding,
+        backend_package=backend_package,
+        backend_command=backend_command,
+        backend_args=backend_args,
         transport_type=transport_type,
         localization_type=localization_type,
         functional_type=functional_type,

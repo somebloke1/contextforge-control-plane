@@ -25,6 +25,14 @@ tool families, and a draft compact abstract service spec before the
 deterministic helper packages the record. The helper remains a no-mutation
 record builder; it does not browse, register, run, or probe services by itself.
 
+The initial generic onboarding how-to is a helper-delivered product surface,
+not a client-local harness prompt. The helper loads it from
+`CONTEXTFORGE_SERVICE_ONBOARDING_HOW_TO_URL`, or the repository default URL when
+that variable is unset, and client adapters should inject the text as hidden
+agent context where the client supports hidden prompts. User-visible helper
+responses must not include the how-to text, and ordinary onboarding use must not
+publish or upsert that prompt on every run.
+
 ## Dialogue States
 
 The helper is stateful. Each session should advance through named states and

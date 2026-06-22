@@ -102,6 +102,10 @@ def _build_service_onboarding_continuation(project_root: str, data: Mapping[str,
     return service_onboarding_surfaces.build_service_onboarding_continuation(project_root, data)
 
 
+def _build_service_onboarding_runtime_apply_package(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
+    return service_onboarding_surfaces.build_service_onboarding_runtime_apply_package(project_root, data)
+
+
 def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
     project_root = _project_root(
         data,
@@ -132,8 +136,10 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
         )
     if operation == "build_service_onboarding_plan":
         return _ok(_build_service_onboarding_plan(project_root, data))
-    if operation in {"build_service_onboarding_continuation", "cf_project_service_onboarding_continue"}:
+    if operation in {"build_service_onboarding_continuation", "build_service_onboarding_continue", "cf_project_service_onboarding_continue"}:
         return _ok(_build_service_onboarding_continuation(project_root, data))
+    if operation in {"build_service_onboarding_runtime_apply_package", "build_service_onboarding_runtime_apply", "cf_project_service_onboarding_runtime_apply"}:
+        return _ok(_build_service_onboarding_runtime_apply_package(project_root, data))
     if operation == "get_service_onboarding_how_to":
         return _ok(service_onboarding_surfaces.hidden_onboarding_guidance(data))
     if operation == "list_available_capabilities":
