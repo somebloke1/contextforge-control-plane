@@ -6,13 +6,32 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 import unittest.mock
 from pathlib import Path
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_script_module(path: Path, module_name: str) -> Any:
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys_path = sys.path
+    sys_path.insert(0, str(path.parent))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        try:
+            sys_path.remove(str(path.parent))
+        except ValueError:
+            pass
+    return module
 
 
 class ContextForgeDockerHarnessTests(unittest.TestCase):
@@ -434,6 +453,12 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
     def test_onboarding_semantic_process_gate_uses_real_clients_and_composite_persona(self) -> None:
         gate = (ROOT / "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md").read_text(encoding="utf-8")
         method = (ROOT / "docker/client-harness/DIALOGUE_EVALUATION_METHOD.md").read_text(encoding="utf-8")
+        dialogue_runner = (
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py"
+        ).read_text(encoding="utf-8")
+        quorum_runner = (
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-quorum.py"
+        ).read_text(encoding="utf-8")
         comprehensive_skill = (ROOT / ".codex/skills/comprehensive-mcp-testing/SKILL.md").read_text(
             encoding="utf-8"
         )
@@ -509,6 +534,54 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
             "`interaction_style`",
         ]:
             self.assertIn(persona_dimension, onboarding_skill)
+        for source in [dialogue_runner, quorum_runner]:
+            self.assertIn("requires_non_spark_evaluator", source)
+            self.assertIn("deterministic_semantic_oracles_allowed", source)
+            self.assertIn("does not score free-form assistant prose", source)
+            self.assertIn("Codex as tested assistant", source)
+        self.assertIn("choices=[\"pi\", \"opencode\"]", dialogue_runner)
+        self.assertIn("choices=[\"pi\", \"opencode\"]", quorum_runner)
+        self.assertIn("separate_simulated_human_responder_required", dialogue_runner)
+        self.assertIn("agent_supplied_prompt_sequence", dialogue_runner)
+        self.assertIn("agent_supplied_prompt_file", dialogue_runner)
+        self.assertIn("runner default prompts are structural scaffolding", dialogue_runner)
+        self.assertIn("dry_run", dialogue_runner)
+        self.assertIn("if not args.dry_run", dialogue_runner)
+        self.assertIn("MIN_MODEL_QUORUM = 3", quorum_runner)
+        self.assertIn("select_persona_indices", quorum_runner)
+        self.assertIn("persona_coverage", quorum_runner)
+        self.assertIn("parallel_isolated", quorum_runner)
+        self.assertIn("at least three distinct eligible semantic-test model profiles", " ".join(onboarding_skill.split()))
+
+        dialogue_module = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+            "onboarding_semantic_dialogue_test",
+        )
+        quorum_module = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-quorum.py",
+            "onboarding_semantic_quorum_test",
+        )
+        persona = dialogue_module.compose_persona(scenarios, seed=17, index=1)
+        self.assertEqual(
+            {
+                "domain_knowledge",
+                "goal_specificity",
+                "risk_posture",
+                "technical_fluency",
+                "interaction_style",
+            },
+            set(persona),
+        )
+        prompts = dialogue_module.persona_prompt_sequence(scenarios["foils"][0], persona, 2)
+        self.assertEqual(2, len(prompts))
+        self.assertIn(scenarios["foils"][0]["source_lead"], prompts[0])
+        persona_indices = quorum_module.select_persona_indices(dialogue_module, scenarios, 3, 17)
+        personas = [
+            dialogue_module.compose_persona(scenarios, seed=17, index=index)
+            for index in persona_indices
+        ]
+        coverage = quorum_module.persona_coverage(personas)
+        self.assertTrue(coverage["ready_for_acceptance_matrix"])
 
     def test_dev_harness_env_allows_compose_network_upstreams(self) -> None:
         env_example = (ROOT / "docker/contextforge-harness/env/contextforge.env.example").read_text(encoding="utf-8")

@@ -95,6 +95,22 @@ controller explicitly records a blocked state with owner and remediation path.
 
 ## Runner Requirements
 
+Use the onboarding semantic-process runners, not the comprehensive
+already-registered-service runners:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
+  docker/client-harness/scripts/run-onboarding-semantic-process-quorum.py \
+  --client pi \
+  --foil time \
+  --timeout 420 \
+  --no-build
+```
+
+Use `run-onboarding-semantic-process-dialogue.py` only for one
+client/model/persona slice, debugging, or a runner-invoking agent that supplies
+persona-consistent prompts with `--prompt` or `--prompt-file`.
+
 The runner may deterministically verify reset postconditions, command status,
 JSON structure, artifact existence, endpoint reachability, transcript capture,
 and credential cleanup. It must not evaluate generated assistant meaning
