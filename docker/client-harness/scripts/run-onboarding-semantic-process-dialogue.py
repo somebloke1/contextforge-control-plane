@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
 import random
-import shlex
 import sys
 import urllib.error
 import urllib.request
@@ -283,6 +283,11 @@ def pi_responder_config(args: argparse.Namespace) -> dict[str, str]:
     }
 
 
+def pi_responder_session_id(*, foil: str, client: str, run_id: str) -> str:
+    digest = hashlib.sha1(run_id.encode("utf-8")).hexdigest()[:16]
+    return f"human-sim-{foil}-{client}-{digest}"
+
+
 def pi_responder_prompt(
     foil: dict[str, Any],
     persona: dict[str, str],
@@ -303,8 +308,8 @@ def pi_responder_prompt(
     )
 
 
-def pi_responder_command(config: Mapping[str, str], session_id: str, prompt: str) -> str:
-    args = [
+def pi_responder_command(config: Mapping[str, str], session_id: str, prompt: str) -> list[str]:
+    return [
         "pi",
         "--provider",
         config["provider"],
@@ -326,7 +331,6 @@ def pi_responder_command(config: Mapping[str, str], session_id: str, prompt: str
         "-p",
         prompt,
     ]
-    return " ".join(shlex.quote(item) for item in args)
 
 
 def openrouter_chat_completion(config: dict[str, Any], messages: list[dict[str, str]]) -> str:
@@ -897,7 +901,7 @@ def main(argv: list[str] | None = None) -> int:
             "image": responder_config["image"],
             "launch_returncode": responder_launch["returncode"],
             "launch_timeout": responder_launch["timeout"],
-            "session_id": f"human-sim-{args.foil}-{args.client}-{run_id}",
+            "session_id": pi_responder_session_id(foil=args.foil, client=args.client, run_id=run_id),
         }
         if responder_launch["returncode"] == 0 and not responder_launch["timeout"]:
             version = uc1.run(
@@ -972,8 +976,15 @@ def main(argv: list[str] | None = None) -> int:
                 previous_user_prompt=previous_user_prompt,
                 previous_assistant_output=previous_assistant_output,
             )
-            command_text = pi_responder_command(responder_config, str(responder_runtime["session_id"]), prompt_request)
-            result = uc1.run(["docker", "exec", str(responder_runtime["container"]), "bash", "-lc", command_text], cwd=repo_root, timeout=args.timeout, commands=commands)
+            command_args = pi_responder_command(responder_config, str(responder_runtime["session_id"]), prompt_request)
+            result = uc1.run(
+                ["docker", "exec", str(responder_runtime["container"]), *command_args],
+                cwd=repo_root,
+                timeout=args.timeout,
+                commands=commands,
+            )
+            responder_path = output_root / f"human-responder-turn-{index}.raw.txt"
+            responder_path.write_text(uc1.render_command_block(result), encoding="utf-8")
             if result["returncode"] != 0 or result["timeout"]:
                 responder_turns.append(
                     {
@@ -984,6 +995,7 @@ def main(argv: list[str] | None = None) -> int:
                         "returncode": result["returncode"],
                         "timeout": result["timeout"],
                         "error": "Pi simulated-human responder turn failed",
+                        "path": str(responder_path),
                     }
                 )
                 break
@@ -995,6 +1007,7 @@ def main(argv: list[str] | None = None) -> int:
                     "model": responder_config["model"],
                     "image": responder_config["image"],
                     "response_chars": len(prompt),
+                    "path": str(responder_path),
                 }
             )
             if not prompt:
