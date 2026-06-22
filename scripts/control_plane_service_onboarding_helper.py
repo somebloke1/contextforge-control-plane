@@ -583,9 +583,11 @@ def build_research_packet(record: Mapping[str, Any], *, session_record_path: str
         "draft abstract_service_spec with summary, workflow, and lazy_detail",
     ]
     instruction = _first_string(research_plan.get("research_agent_instruction")) or (
-        "Use the seed leads to gather source evidence, transport facts, credential/state boundaries, "
-        "likely tool families, and a draft compact abstract service spec. Do not register, run, probe, "
-        "or mutate services from this research pass."
+        "Use only the seed leads as the starting knowledge. From those leads, perform read-only source "
+        "research sufficient to infer package identity, executable or bridge entrypoint, native transport, "
+        "tool contract, configuration knobs, state footprint, auth boundary, test coverage, unresolved "
+        "implementation decisions, and a draft compact abstract service spec. Do not register, run, probe, "
+        "install, or mutate services from this research pass."
     )
 
     packet = {
@@ -603,7 +605,11 @@ def build_research_packet(record: Mapping[str, Any], *, session_record_path: str
         "allowed_read_only_actions": [
             "read upstream documentation, repositories, package metadata, issue references, and explicitly provided local paths",
             "inspect source files and manifests without executing service code or installers",
+            "trace from a URL or package seed to package metadata, executable entrypoints, modules, Dockerfiles, README examples, and tests",
+            "extract the declared tool contract, required arguments, safety/idempotence hints, and result shape from source evidence",
+            "identify configuration knobs, local defaults, credential/auth boundaries, and state footprint without requesting or handling secrets",
             "classify transport, credential, locality, and state boundaries from cited source evidence",
+            "draft implementation decision candidates and unresolved questions for the controller's user-facing decision brief",
             "draft a compact abstract service spec for proactive ContextForge client loading",
             "name unresolved questions explicitly when source evidence is insufficient",
         ],
@@ -627,6 +633,10 @@ def build_research_packet(record: Mapping[str, Any], *, session_record_path: str
         "submission_shape": {
             "source_evidence": "append exact source evidence entries suitable for rerunning the onboarding helper",
             "classification": "fill known classification values or leave dimensions unresolved with evidence notes",
+            "package_runtime_evidence": "summarize package identity, executable entrypoint, module path, container option, or documented equivalent",
+            "tool_contract_evidence": "summarize tools, arguments, safety hints, and result shape grounded in cited source evidence",
+            "configuration_state_auth_evidence": "summarize flags, env vars, defaults, state footprint, and auth or no-secret boundary",
+            "implementation_decision_candidates": "list candidate decisions the controller should present before runtime/client mutation",
             "abstract_service_spec": "provide summary, ordinary workflow, and lazy_detail text grounded in source evidence",
             "unresolved_questions": "list remaining questions without guessing",
             "final_narrative": "include the required stepwise research narrative with evidence",
@@ -683,7 +693,7 @@ def _implementation_decision_brief(
     known = _known_classifications(classification)
     service_slug = _first_string(footprint.get("service_slug"))
     abstract_spec = _mapping(guidance_plan.get("abstract_service_spec"))
-    credential_boundary = _first_string(
+    auth_boundary = _first_string(
         source.get("credential_boundary"),
         source.get("credential_scope"),
         source.get("account_boundary"),
@@ -691,6 +701,12 @@ def _implementation_decision_brief(
         source.get("token_boundary"),
         source.get("installation_boundary"),
     )
+    if (
+        not auth_boundary
+        and known.get("localization_type") != "credential_scoped"
+        and known.get("state_type") != "credential_state"
+    ):
+        auth_boundary = "no credential or auth boundary required by current source evidence"
     state_footprint = _first_string(
         _mapping(source.get("footprint_plan")).get("state_footprint"),
         source.get("state_footprint"),
@@ -742,7 +758,7 @@ def _implementation_decision_brief(
         _decision_item(
             "credential_auth_boundary",
             "Credential and auth boundary",
-            {"approval_type": known.get("approval_type"), "credential_boundary": credential_boundary},
+            {"approval_type": known.get("approval_type"), "authority_boundary": auth_boundary},
             "approve or amend account, tenant, token, installation, or no-secret boundary",
             ["credential boundary evidence when credentials scope the service"],
         ),
@@ -1028,14 +1044,21 @@ def _research_plan(
         "read_only": True,
         "mutation_allowed": False,
         "research_agent_instruction": (
-            "Use the seed leads to gather source evidence, transport facts, credential/state boundaries, "
-            "likely tool families, and a draft compact abstract service spec. Do not register, run, probe, "
-            "or mutate services from this research pass."
+            "Use only the seed leads as the starting knowledge. From those leads, perform read-only source "
+            "research sufficient to infer package identity, executable or bridge entrypoint, native transport, "
+            "tool contract, configuration knobs, state footprint, auth boundary, test coverage, unresolved "
+            "implementation decisions, and a draft compact abstract service spec. Do not register, run, probe, "
+            "install, or mutate services from this research pass."
         ),
         "required_outputs": [
             "source_evidence entries with exact URLs, package names, repository references, local paths, or issue links",
+            "package/runtime entrypoint evidence, including package name, executable command, module path, Docker image, or documented equivalent when present",
             "classification values or explicitly unresolved dimensions",
             "transport and state boundary evidence",
+            "tool contract evidence: tool names, required arguments, read/write/destructive/idempotence hints, and expected result shape when available",
+            "configuration/auth evidence, including environment variables, flags, local defaults, credential scope, or explicit no-secret boundary",
+            "upstream test or verification evidence that informs safe probe selection",
+            "implementation decision candidates and unresolved questions that must be presented before runtime/client mutation",
             "draft abstract_service_spec with summary, workflow, and lazy_detail",
         ],
         "candidate_service_hint": candidate_service,

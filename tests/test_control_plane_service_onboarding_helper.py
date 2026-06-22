@@ -363,6 +363,14 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
             item for item in brief["decision_categories"] if item["id"] == "contextforge_registration_plan"  # type: ignore[index]
         )
         self.assertIn("bounded registration surface", registration["user_prompt"])  # type: ignore[index]
+        auth_boundary = next(
+            item for item in brief["decision_categories"] if item["id"] == "credential_auth_boundary"  # type: ignore[index]
+        )
+        self.assertEqual(
+            "no credential or auth boundary required by current source evidence",
+            auth_boundary["current_decision"]["authority_boundary"],  # type: ignore[index]
+        )
+        self.assertNotIn("<redacted>", json.dumps(auth_boundary))
 
     def test_github_url_lead_is_typed_for_research_plan(self) -> None:
         record = helper.build_onboarding_record(
@@ -1003,8 +1011,18 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         )
         self.assertIn("do not call ContextForge registry", " ".join(packet["forbidden_actions"]))
         self.assertIn("draft abstract_service_spec", " ".join(packet["required_outputs"]))
+        self.assertIn("package/runtime entrypoint evidence", " ".join(packet["required_outputs"]))
+        self.assertIn("tool contract evidence", " ".join(packet["required_outputs"]))
+        self.assertIn("configuration/auth evidence", " ".join(packet["required_outputs"]))
+        self.assertIn("upstream test or verification evidence", " ".join(packet["required_outputs"]))
+        self.assertIn("implementation decision candidates", " ".join(packet["required_outputs"]))
+        self.assertIn("Use only the seed leads", packet["research_agent_instruction"])
         self.assertIn("source_leads", packet["descriptor_patch_contract"])
         self.assertIn("abstract_service_spec", packet["descriptor_patch_contract"])
+        self.assertIn("package_runtime_evidence", packet["submission_shape"])
+        self.assertIn("tool_contract_evidence", packet["submission_shape"])
+        self.assertIn("configuration_state_auth_evidence", packet["submission_shape"])
+        self.assertIn("implementation_decision_candidates", packet["submission_shape"])
         self.assertIn("final_narrative", packet["submission_shape"])
         self.assertIn("state explicitly that no runtime", " ".join(packet["final_narrative_requirement"]))
 
