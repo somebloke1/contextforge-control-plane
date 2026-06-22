@@ -125,7 +125,7 @@ class DockerMigrationPlanTests(unittest.TestCase):
 
         self.assertEqual(docker_plan.SCHEMA_URI, plan["schema_uri"])
         self.assertFalse(plan["mutation_performed"])
-        self.assertEqual(9, plan["summary"]["target_service_count"])
+        self.assertEqual(len(registry_plan.CANONICAL_SERVICE_DEFAULTS), plan["summary"]["target_service_count"])
         self.assertEqual(
             sorted(registry_plan.CANONICAL_SERVICE_DEFAULTS),
             sorted(service["slug"] for service in plan["services"]),

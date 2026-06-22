@@ -22,6 +22,12 @@ Canonical service set:
 | `openzeppelin-solidity-contracts` | `server-instances/openzeppelin-solidity-contracts` | remote native streamable HTTP |
 | `serena` | project-specific `server-instances/serena-<slug>-<hash>` under `/home/dgk/workspace/cf-controlplane` | project-scoped native HTTP; regenerate or compatibility-classify any older Serena directory before activation |
 
+Onboarding development foils:
+
+| Service | Backend home | Transport note |
+| --- | --- | --- |
+| `time` | `server-instances/time` | first development foil; stdio bridge planned on `127.0.0.1:9109`; not evidence that the foil ladder is a canonical post-development service set |
+
 Important scripts:
 
 - `scripts/inventory_mcp.py`: read-only MCP client config inventory.

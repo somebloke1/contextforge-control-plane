@@ -1420,10 +1420,10 @@ class SerenaManagerTests(unittest.TestCase):
     def test_operator_reserved_port_is_skipped_if_range_changes(self) -> None:
         with (
             mock.patch.object(serena_manager, "PORT_RANGE", range(9108, 9111)),
-            mock.patch.object(serena_manager, "used_manifest_ports", return_value=set()),
+            mock.patch.object(serena_manager, "used_manifest_ports", return_value={9109}),
             mock.patch.object(serena_manager, "socket_port_open", return_value=False),
         ):
-            self.assertEqual(9109, serena_manager.reserve_port())
+            self.assertEqual(9110, serena_manager.reserve_port())
 
     def test_gemini_project_init_hook_uses_gemini_lifecycle_events(self) -> None:
         self.assertEqual({"SessionStart", "BeforeAgent"}, set(gemini_project_init_hook.GEMINI_HOOK_EVENTS))

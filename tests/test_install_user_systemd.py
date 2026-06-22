@@ -26,6 +26,23 @@ class InstallUserSystemdPlanTests(unittest.TestCase):
         self.assertEqual(len(install_user_systemd.units()), plan["summary"]["desired_unit_count"])
         self.assertEqual(0, plan["summary"]["installed_unit_count"])
         self.assertEqual(plan["summary"]["desired_unit_count"], plan["summary"]["write_or_replace_count"])
+        by_unit = {unit["unit"]: unit for unit in plan["units"]}
+        self.assertIn("contextforge-time.service", by_unit)
+        desired_time = install_user_systemd.units()["contextforge-time.service"]
+        self.assertIn("server-instances/time/run-bridge.sh", desired_time)
+        self.assertIn("EnvironmentFile=-", desired_time)
+        self.assertIn("server-instances/time/.env", desired_time)
+        self.assertEqual(
+            [
+                {
+                    "path": str(REPO_ROOT / "server-instances" / "time" / ".env"),
+                    "optional": True,
+                    "exists": False,
+                    "is_file": False,
+                }
+            ],
+            by_unit["contextforge-time.service"]["desired_environment_files"],
+        )
 
     def test_plan_detects_external_workspace_root_in_current_unit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
