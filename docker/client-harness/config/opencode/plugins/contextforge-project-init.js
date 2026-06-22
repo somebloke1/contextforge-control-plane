@@ -367,6 +367,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
       const cwd = directory ?? process.cwd()
       const latestText = latestUserMessageText(output.messages)
       const previousSessionID = previousRecordedSessionID()
+      const sameRecordedSession = previousSessionID && previousSessionID === String(sessionID)
       if (previousSessionID && previousSessionID !== String(sessionID)) {
         recordReloadIfPending(cwd)
       }
@@ -589,7 +590,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         injected = true
         return
       }
-      const continuationHint = projectInitContinuationHint(latestText)
+      const continuationHint = sameRecordedSession ? projectInitContinuationHint(latestText) : ""
       if (continuationHint) {
         output.messages.unshift({
           info: {
