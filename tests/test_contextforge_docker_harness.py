@@ -1569,6 +1569,17 @@ print(json.dumps(outputs))
         self.assertIn("Do not spend time checking `nvidia-smi`, `ollama ps`, or a", method_line_wrapped)
         self.assertIn("when the active profile is OpenRouter or another remote provider", method_line_wrapped)
 
+    def test_comprehensive_mcp_live_target_credentials_stay_out_of_prompts(self) -> None:
+        method = (ROOT / ".codex/skills/comprehensive-mcp-testing/references/method.md").read_text(
+            encoding="utf-8"
+        )
+        method_line_wrapped = " ".join(method.split())
+
+        self.assertIn("keep credentials in the runtime boundary", method_line_wrapped)
+        self.assertIn("do not teach the tested assistant a password or token", method_line_wrapped)
+        self.assertIn("sidecar-local wrapper that consumes secrets without printing them", method_line_wrapped)
+        self.assertIn("proves only the backend/auth layer", method_line_wrapped)
+
 
 if __name__ == "__main__":
     unittest.main()
