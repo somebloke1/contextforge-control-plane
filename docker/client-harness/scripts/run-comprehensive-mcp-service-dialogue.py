@@ -209,6 +209,10 @@ def profile_weight(profile: dict[str, Any]) -> int:
         return 1
 
 
+def profile_multi_step_quorum_eligible(profile: dict[str, Any]) -> bool:
+    return profile.get("multi_step_quorum_eligible") is not False
+
+
 def profile_context_window(profile: dict[str, Any]) -> int:
     try:
         return int(profile.get("context_window", 0))
@@ -235,7 +239,7 @@ def choose_semantic_model_profile(
 ) -> dict[str, Any] | None:
     if selector == "env":
         return None
-    profiles = [
+    available_profiles = [
         profile
         for profile in load_semantic_model_profiles(harness_root)
         if profile_supports_client(profile, client)
@@ -243,11 +247,14 @@ def choose_semantic_model_profile(
         and profile_context_window(profile) >= MIN_SEMANTIC_CONTEXT_WINDOW
         and profile_weight(profile) > 0
     ]
-    if not profiles:
+    if not available_profiles:
         raise RuntimeError(f"no semantic model profiles are available for client {client!r}")
     if selector == "random":
+        profiles = [profile for profile in available_profiles if profile_multi_step_quorum_eligible(profile)]
+        if not profiles:
+            raise RuntimeError(f"no multi-step semantic model profiles are available for client {client!r}")
         return random.choices(profiles, weights=[profile_weight(profile) for profile in profiles], k=1)[0]
-    matches = [profile for profile in profiles if str(profile.get("id") or "") == selector]
+    matches = [profile for profile in available_profiles if str(profile.get("id") or "") == selector]
     if len(matches) != 1:
         raise RuntimeError(f"semantic model profile {selector!r} is not available for client {client!r}")
     return matches[0]

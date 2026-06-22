@@ -47,6 +47,7 @@ def select_profiles(
         if dialogue.profile_supports_client(profile, client)
         and dialogue.profile_available(profile, available_env)
         and dialogue.profile_context_window(profile) >= dialogue.MIN_SEMANTIC_CONTEXT_WINDOW
+        and dialogue.profile_multi_step_quorum_eligible(profile)
         and dialogue.profile_weight(profile) > 0
     ]
     by_id = {str(profile.get("id") or ""): profile for profile in eligible}
@@ -84,6 +85,8 @@ def profile_record(dialogue: Any, profile: dict[str, Any]) -> dict[str, Any]:
         "model": profile.get("model"),
         "context_window": dialogue.profile_context_window(profile),
         "route_preferences": dialogue.route_preferences(profile),
+        "multi_step_quorum_eligible": dialogue.profile_multi_step_quorum_eligible(profile),
+        "usage_modes": profile.get("usage_modes"),
     }
 
 

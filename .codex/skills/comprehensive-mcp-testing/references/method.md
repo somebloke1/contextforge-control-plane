@@ -91,6 +91,12 @@ model alone still fails while other models pass the same bundle, record a
 model-adequacy finding and consider disabling that model from the default pool
 for multi-step semantic tests.
 
+Profiles marked single-shot or `multi_step_quorum_eligible=false` remain useful
+for explicit diagnostic or one-call tests, but default acceptance-oriented
+quorum selection must exclude them. They may not supply one of the three
+multi-step quorum passes unless a later branch revalidates the exact
+client/provider path and changes the profile metadata.
+
 For every bundle, record the mapping:
 
 - behavior being explored;

@@ -15,6 +15,9 @@
       "default_base_url": "https://openrouter.ai/api/v1",
       "route_preferences": ["google-ai-studio"],
       "supported_clients": ["pi", "opencode"],
+      "usage_modes": ["single_shot", "diagnostic"],
+      "multi_step_quorum_eligible": false,
+      "model_notes": "Runtime evidence and external research indicate Flash Lite is suitable for one-call or shallow tool-use tests, but it is not reliable enough for default multi-step semantic quorum selection.",
       "weight": 1
     },
     {
