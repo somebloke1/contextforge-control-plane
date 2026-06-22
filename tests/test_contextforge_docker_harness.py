@@ -733,6 +733,8 @@ console.log(JSON.stringify({{
         self.assertIn('choices=["pi", "model", "seeded"]', dialogue_runner)
         self.assertIn('default="pi"', dialogue_runner)
         self.assertIn("pi_gpt_5_5_simulated_human_responder", dialogue_runner)
+        self.assertIn("acceptance_matrix_eligibility", dialogue_runner)
+        self.assertIn("dialogue_summary_acceptance_eligible", quorum_runner)
         self.assertIn("contextforge-client-pi:human-sim-authenticated", dialogue_runner)
         evaluation_docs = gate + method + onboarding_skill + readme
         self.assertIn("gpt-5.5", gate + onboarding_skill + dialogue_runner)
@@ -778,6 +780,43 @@ console.log(JSON.stringify({{
         ]
         coverage = quorum_module.persona_coverage(personas)
         self.assertTrue(coverage["ready_for_acceptance_matrix"])
+        self.assertTrue(
+            dialogue_module.acceptance_matrix_eligibility(
+                dry_run=False,
+                responder_mode="pi_gpt_5_5_simulated_human_responder",
+                manual_prompting=False,
+                allow_preexisting_foil_artifacts=False,
+                preflight_status="passed",
+            )["eligible"]
+        )
+        seeded_eligibility = dialogue_module.acceptance_matrix_eligibility(
+            dry_run=False,
+            responder_mode="seeded_default_persona_prompts",
+            manual_prompting=False,
+            allow_preexisting_foil_artifacts=False,
+            preflight_status="passed",
+        )
+        self.assertFalse(seeded_eligibility["eligible"])
+        self.assertIn("simulated_human_responder_not_pi_gpt_5_5", seeded_eligibility["disqualifiers"])
+        manual_eligibility = dialogue_module.acceptance_matrix_eligibility(
+            dry_run=False,
+            responder_mode="pi_gpt_5_5_simulated_human_responder",
+            manual_prompting=True,
+            allow_preexisting_foil_artifacts=False,
+            preflight_status="passed",
+        )
+        self.assertFalse(manual_eligibility["eligible"])
+        self.assertIn("manual_or_seeded_prompt_sequence", manual_eligibility["disqualifiers"])
+        self.assertTrue(
+            quorum_module.dialogue_summary_acceptance_eligible(
+                {"acceptance_matrix_eligibility": {"eligible": True}}
+            )
+        )
+        self.assertFalse(
+            quorum_module.dialogue_summary_acceptance_eligible(
+                {"acceptance_matrix_eligibility": seeded_eligibility}
+            )
+        )
 
     def test_dev_harness_env_allows_compose_network_upstreams(self) -> None:
         env_example = (ROOT / "docker/contextforge-harness/env/contextforge.env.example").read_text(encoding="utf-8")

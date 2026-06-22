@@ -286,6 +286,7 @@ class FakeHostRuntime:
         self.applied = False
         self.deleted = False
         self.calls: list[str] = []
+        self.applied_version_policies: list[str] = []
 
     def _endpoint(self, package: dict[str, Any]) -> dict[str, Any]:
         content = package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["content"]
@@ -295,6 +296,9 @@ class FakeHostRuntime:
         self.calls.append("apply")
         if self.fail_apply:
             raise RuntimeError("simulated host runtime failure")
+        record_path = Path(package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["path"])
+        record = json.loads(record_path.read_text(encoding="utf-8")) if record_path.exists() else {}
+        self.applied_version_policies.append(str(record.get("version_policy") or ""))
         self.applied = True
         self.deleted = False
         return {
@@ -304,6 +308,7 @@ class FakeHostRuntime:
             "mutation_performed": True,
             "endpoint": self._endpoint(package),
             "running": True,
+            "record_version_policy": str(record.get("version_policy") or ""),
         }
 
     def view(self, package: dict[str, Any]) -> dict[str, Any]:
@@ -562,6 +567,7 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
 
             self.assertEqual("1.0.0", json.loads(record_path.read_text(encoding="utf-8"))["version_policy"])
             self.assertEqual(["apply", "apply", "apply"], host_runtime.calls)
+            self.assertEqual(["1.0.0", "1.0.1", "1.0.0"], host_runtime.applied_version_policies)
             self.assertNotIn("delete", host_runtime.calls)
             actions = [action.get("action") for action in ctx.exception.failure_report["rollback_actions_attempted"]]
             self.assertIn("rollback_npm_stdio_host_runtime_to_previous", actions)
