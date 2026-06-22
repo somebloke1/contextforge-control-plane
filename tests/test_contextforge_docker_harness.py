@@ -863,6 +863,8 @@ print(json.dumps(outputs))
         self.assertNotIn("google/gemini-2.5-pro", models)
         self.assertNotIn("qwen3.6-a3b", models)
         self.assertEqual(["google-ai-studio"], models["google/gemini-2.5-flash-lite"]["route_preferences"])
+        self.assertFalse(models["google/gemini-2.5-flash-lite"]["multi_step_quorum_eligible"])
+        self.assertIn("single_shot", models["google/gemini-2.5-flash-lite"]["usage_modes"])
         self.assertEqual([], models["qwen/qwen3-coder-next"]["route_preferences"])
         for profile in profiles_doc["profiles"]:
             self.assertIn("provider_kind", profile)
@@ -873,6 +875,7 @@ print(json.dumps(outputs))
 
         self.assertIn("--semantic-model-profile", runner)
         self.assertIn('if selector == "random"', runner)
+        self.assertIn("profile_multi_step_quorum_eligible(profile)", runner)
         self.assertIn("random.choices", runner)
         self.assertIn("MIN_SEMANTIC_CONTEXT_WINDOW = 262144", runner)
         self.assertIn("profile_context_window(profile) >= MIN_SEMANTIC_CONTEXT_WINDOW", runner)
@@ -884,6 +887,38 @@ print(json.dumps(outputs))
         self.assertIn('"api_key_present"', runner)
         self.assertIn('launch_command.extend(["-e", key])', runner)
         self.assertNotIn('launch_command.extend(["-e", f"{key}={os.environ[key]}"])', runner)
+
+    def test_flash_lite_is_explicit_only_for_multi_step_quorum(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "comprehensive_mcp_service_dialogue",
+            ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        profiles = module.load_semantic_model_profiles(ROOT / "docker/client-harness")
+        by_model = {profile["model"]: profile for profile in profiles}
+        flash_lite = by_model["google/gemini-2.5-flash-lite"]
+
+        self.assertFalse(module.profile_multi_step_quorum_eligible(flash_lite))
+        explicit = module.choose_semantic_model_profile(
+            ROOT / "docker/client-harness",
+            "pi",
+            "openrouter-google-gemini-2.5-flash-lite-google-ai-studio",
+            {"OPENROUTER_API_KEY": "present"},
+        )
+        random_candidates = [
+            profile
+            for profile in profiles
+            if module.profile_supports_client(profile, "pi")
+            and module.profile_available(profile, {"OPENROUTER_API_KEY": "present"})
+            and module.profile_context_window(profile) >= module.MIN_SEMANTIC_CONTEXT_WINDOW
+            and module.profile_weight(profile) > 0
+            and module.profile_multi_step_quorum_eligible(profile)
+        ]
+
+        self.assertEqual(flash_lite["id"], explicit["id"])
+        self.assertNotIn(flash_lite["id"], {profile["id"] for profile in random_candidates})
 
     def test_pi_openrouter_profiles_without_route_use_generic_provider(self) -> None:
         spec = importlib.util.spec_from_file_location(

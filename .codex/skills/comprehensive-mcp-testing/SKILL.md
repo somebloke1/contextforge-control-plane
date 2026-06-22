@@ -145,6 +145,10 @@ users benefit from self-explanatory tool output. Only remove or disable that
 model from the default quorum pool after the same model remains uniquely
 inadequate despite a reasonable, user-facing result shape.
 
+Profiles marked single-shot or `multi_step_quorum_eligible=false` may be used
+for explicit diagnostic runs, but they do not count toward the default
+three-model quorum for multi-step semantic acceptance.
+
 Use [method.md](references/method.md#active-session-stewardship) for the concrete preflight/readback commands and ownership rules.
 
 Before broad fan-out, maintain a one-line active-slice ledger in the issue
