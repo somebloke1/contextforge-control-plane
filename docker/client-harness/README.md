@@ -33,9 +33,12 @@ Semantic-test runs choose one provider-agnostic model profile per run from
 specific profile id is supplied. Profiles can name any supported provider kind,
 model id, provider-specific key env, base URL env, client support set, and
 route-preference list. The current profile pool is OpenRouter-backed and uses
-`OPENROUTER_API_KEY`; route preferences are profile-specific, while empty
-route lists leave routing to OpenRouter. The generated local env file is
-written with mode `0600` semantics through `umask 077`.
+`OPENROUTER_API_KEY` on the host only. Pi/OpenCode Docker containers must not
+receive the real provider key; runners start a host-side proxy, configure the
+container with a host-gateway base URL, and pass only a dummy key into the
+container. Route preferences are profile-specific, while empty route lists
+leave routing to OpenRouter. The generated local env file is written with mode
+`0600` semantics through `umask 077`.
 
 `OPENROUTER_STICKY_KEY` is a non-secret cache-affinity key. It is passed as the
 OpenRouter `x-session-id` header where the client config surface supports model
@@ -48,10 +51,11 @@ resetting it between testing epochs.
 
 Do not print raw ContextForge env files, bearer headers, passwords, API keys,
 tokens, JWTs, private keys, or credential values into terminal transcripts or
-evidence packages. For diagnostics, report key presence/status, file
-permissions, selected non-secret ids, and redacted values only. Pipe env-like
-or transcript output through the shared redactor before it is written under
-`evidence/`, exported from a container, or copied into GitHub:
+evidence packages. Do not pass provider API keys into target-client Docker
+containers. For diagnostics, report key presence/status, file permissions,
+selected non-secret ids, and redacted values only. Pipe env-like or transcript
+output through the shared redactor before it is written under `evidence/`,
+exported from a container, or copied into GitHub:
 
 ```sh
 docker/client-harness/scripts/redact-contextforge-secrets.py < raw.txt > redacted.txt
@@ -93,7 +97,9 @@ This validates that all five client commands launch.
 ## Semantic Model Probe
 
 Pi and OpenCode semantic-test paths read provider/model defaults and available
-provider secrets from `env/semantic-model.env`:
+provider secrets from `env/semantic-model.env` on the host. Remote provider
+secrets remain host-only; target-client containers receive a dummy provider
+key and a host-gateway proxy base URL:
 
 ```sh
 scripts/probe-semantic-model.sh

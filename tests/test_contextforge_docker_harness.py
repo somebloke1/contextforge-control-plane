@@ -1355,7 +1355,8 @@ print(json.dumps(outputs))
         opencode_entrypoint = (ROOT / "docker/client-harness/opencode/entrypoint.sh").read_text(encoding="utf-8")
         env_example = (ROOT / "docker/client-harness/env/semantic-model.env.example").read_text(encoding="utf-8")
 
-        self.assertIn("./env/semantic-model.env", compose)
+        self.assertNotIn("./env/semantic-model.env", compose)
+        self.assertIn('OPENROUTER_API_KEY: ""', compose)
         self.assertIn("OPENROUTER_API_KEY=replace-with-openrouter-secret", env_example)
         self.assertIn("CONTEXTFORGE_TEST_MODEL=google/gemma-4-26b-a4b-it", env_example)
         self.assertIn("CONTEXTFORGE_TEST_PROVIDER_ROUTE=", env_example)
@@ -1444,12 +1445,39 @@ print(json.dumps(outputs))
         self.assertIn("profile_context_window(profile) >= MIN_SEMANTIC_CONTEXT_WINDOW", runner)
         self.assertIn("route_preferences(profile)", runner)
         self.assertIn('env["OPENROUTER_PROVIDER_ROUTE"] = ""', runner)
-        self.assertIn('else "openrouter"', runner)
+        self.assertIn('or "openrouter-semantic-test"', runner)
         self.assertIn('"selection_scope": "per_test_run"', runner)
         self.assertIn('"minimum_context_window"', runner)
         self.assertIn('"api_key_present"', runner)
-        self.assertIn('launch_command.extend(["-e", key])', runner)
+        self.assertIn("semantic_model_host_proxy", runner)
+        self.assertIn("DUMMY_API_KEY", runner)
+        self.assertIn('container_receives_real_semantic_model_api_key": False', runner)
+        self.assertIn("API_KEY_ENV_NAMES", runner)
+        self.assertNotIn('launch_command.extend(["-e", key])', runner)
         self.assertNotIn('launch_command.extend(["-e", f"{key}={os.environ[key]}"])', runner)
+
+    def test_semantic_model_host_proxy_keeps_provider_keys_out_of_docker(self) -> None:
+        compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
+        proxy = (ROOT / "docker/client-harness/scripts/semantic_model_host_proxy.py").read_text(encoding="utf-8")
+        comprehensive_runner = (
+            ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py"
+        ).read_text(encoding="utf-8")
+        onboarding_runner = (
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("env_file:\n    - ./env/semantic-model.env", compose)
+        self.assertIn('OPENROUTER_API_KEY: ""', compose)
+        self.assertIn("DUMMY_API_KEY", proxy)
+        self.assertIn("host.docker.internal", proxy)
+        self.assertIn("headers[\"Authorization\"] = f\"Bearer {api_key}\"", proxy)
+        for runner in [comprehensive_runner, onboarding_runner]:
+            self.assertIn("start_openrouter_proxy", runner)
+            self.assertIn("semantic_model_host_proxy", runner)
+            self.assertIn("container_receives_real_semantic_model_api_key", runner)
+            self.assertIn("OPENROUTER_BASE_URL", runner)
+            self.assertIn("DUMMY_API_KEY", runner)
+            self.assertNotIn('for key in semantic_secret_env_keys_to_pass:\n            launch_command.extend(["-e", key])', runner)
 
     def test_flash_lite_is_explicit_only_for_multi_step_quorum(self) -> None:
         spec = importlib.util.spec_from_file_location(
@@ -1572,7 +1600,7 @@ print(json.dumps(outputs))
         ]:
             self.assertIn(phrase, quorum)
 
-    def test_pi_openrouter_profiles_without_route_use_generic_provider(self) -> None:
+    def test_pi_openrouter_profiles_without_route_still_use_harness_provider(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "comprehensive_mcp_service_dialogue",
             ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",
@@ -1613,7 +1641,7 @@ print(json.dumps(outputs))
         )
 
         self.assertEqual("openrouter-semantic-test", routed_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
-        self.assertEqual("openrouter", unrouted_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
+        self.assertEqual("openrouter-semantic-test", unrouted_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
         self.assertEqual("", unrouted_env["OPENROUTER_PROVIDER_ROUTES"])
         self.assertEqual("", unrouted_env["OPENROUTER_PROVIDER_ROUTE"])
 
