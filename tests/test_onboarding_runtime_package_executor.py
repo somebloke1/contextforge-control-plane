@@ -17,6 +17,38 @@ import control_plane_project_state as project_state
 import control_plane_service_onboarding_surfaces as surfaces
 
 
+def npm_stdio_required_payload() -> dict[str, Any]:
+    return {
+        "packageRegistryType": "npm",
+        "packageVersion": "1.0.0",
+        "runtimeHint": "npx",
+        "npmPackageConfirmed": True,
+        "environmentVariablesReviewed": True,
+        "packageArgumentsReviewed": True,
+        "environmentVariables": [],
+        "packageArguments": [],
+        "requiredSecretNames": [],
+        "toolSchemas": {
+            "get_current_time": {"inputSchema": {"type": "object", "properties": {"timezone": {"type": "string"}}, "required": ["timezone"]}},
+            "convert_time": {
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "source_timezone": {"type": "string"},
+                        "target_timezone": {"type": "string"},
+                        "time": {"type": "string"},
+                    },
+                    "required": ["source_timezone", "target_timezone", "time"],
+                }
+            },
+        },
+        "promptLibrary": {
+            "abstract_prompt": "Time provides current-time and timezone conversion tools.",
+            "detail_prompts": {"usage": "Use IANA timezone names."},
+        },
+    }
+
+
 def load_executor():
     path = REPO_ROOT / "docker/contextforge-harness/scripts/apply_onboarding_runtime_package.py"
     spec = importlib.util.spec_from_file_location("apply_onboarding_runtime_package_test", path)
@@ -43,6 +75,7 @@ def write_time_package(path: Path, project_root: Path) -> dict[str, Any]:
             "credentialBoundary": "no credentials required",
             "expectedTools": ["get_current_time", "convert_time"],
             "issue": "356",
+            **npm_stdio_required_payload(),
         },
     )
     path.write_text(json.dumps(package), encoding="utf-8")
@@ -94,6 +127,15 @@ class FakeClient:
             row = next(server for server in self.servers if server["id"] == server_id)
             row.update(body or {})
             return row
+        if method == "DELETE" and path.startswith("/servers/"):
+            server_id = path.rsplit("/", 1)[-1]
+            self.servers = [server for server in self.servers if server.get("id") != server_id]
+            return {"ok": True}
+        if method == "DELETE" and path.startswith("/gateways/"):
+            gateway_id = path.rsplit("/", 1)[-1]
+            self.gateways = [gateway for gateway in self.gateways if gateway.get("id") != gateway_id]
+            self.tools = [tool for tool in self.tools if tool.get("gateway_id") != gateway_id and tool.get("gatewayId") != gateway_id]
+            return {"ok": True}
         raise AssertionError(f"unexpected request {method} {path}")
 
     def items(self, path: str) -> list[dict[str, Any]]:
@@ -168,6 +210,22 @@ class RefreshRetryClient(FakeClient):
         return super().request(method, path, body)
 
 
+class FailingRefreshClient(FakeClient):
+    def request(self, method: str, path: str, body: dict | None = None):
+        self.requests.append((method, path, body))
+        if method == "POST" and path == "/gateways":
+            row = {"id": "gateway-failing", **(body or {})}
+            self.gateways.append(row)
+            return row
+        if method == "POST" and path.endswith("/tools/refresh"):
+            raise RuntimeError("simulated refresh failure")
+        if method == "DELETE" and path.startswith("/gateways/"):
+            gateway_id = path.rsplit("/", 1)[-1]
+            self.gateways = [gateway for gateway in self.gateways if gateway.get("id") != gateway_id]
+            return {"ok": True}
+        return super().request(method, path, body)
+
+
 class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
     def test_dry_run_consumes_runtime_package_without_api_or_env_reads(self) -> None:
         executor = load_executor()
@@ -190,6 +248,8 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
         self.assertEqual("time_dev_docker_server", result["registry_request"]["server_name"])
         self.assertEqual("http://time-transceiver:9209/mcp", result["registry_request"]["upstream_url"])
         self.assertEqual(["get_current_time", "convert_time"], result["registry_request"]["expected_tools"])
+        self.assertEqual("npm-stdio-host", result["npm_stdio_host_request"]["host_service"])
+        self.assertIn("server-instances/time-canonical/npm-stdio-service.json", result["npm_stdio_host_request"]["record_path"])
         self.assertFalse(result["target"]["env_values_recorded"])
         self.assertIn("dry-run; no ContextForge API calls", result["non_actions"])
 
@@ -211,18 +271,67 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
                 wait_attempts=1,
             )
 
-        self.assertTrue(result["mutation_performed"])
-        self.assertEqual("created", result["gateway"]["action"])
-        self.assertEqual("created", result["server"]["action"])
-        self.assertEqual(["time-dev-docker-get-current-time", "time-dev-docker-convert-time"], result["tool_names"])
-        self.assertEqual(
-            [
-                ("POST", "/gateways"),
-                ("POST", "/gateways/gateway-1/tools/refresh"),
-                ("POST", "/servers"),
-            ],
-            [(method, path) for method, path, _body in client.requests],
-        )
+            self.assertTrue(result["mutation_performed"])
+            self.assertEqual("created", result["gateway"]["action"])
+            self.assertEqual("created", result["server"]["action"])
+            self.assertEqual(["time-dev-docker-get-current-time", "time-dev-docker-convert-time"], result["tool_names"])
+            self.assertEqual(
+                [
+                    ("POST", "/gateways"),
+                    ("POST", "/gateways/gateway-1/tools/refresh"),
+                    ("POST", "/servers"),
+                ],
+                [(method, path) for method, path, _body in client.requests],
+            )
+            record_path = Path(result["npm_stdio_host_record"]["record_path"])
+            self.assertTrue(record_path.exists())
+            self.assertEqual("created", result["npm_stdio_host_record"]["action"])
+            self.assertEqual("mcp-server-time", json.loads(record_path.read_text(encoding="utf-8"))["package"])
+
+            second = executor.run(
+                package_path=package_path,
+                upstream_url="http://time-transceiver:9209/mcp",
+                gateway_name="time-dev-docker",
+                server_name="time_dev_docker_server",
+                apply=True,
+                client=client,
+                wait_attempts=1,
+            )
+            self.assertEqual("already_applied", second["npm_stdio_host_record"]["action"])
+            self.assertEqual(1, len(client.gateways))
+            self.assertEqual(1, len(client.servers))
+
+    def test_apply_rolls_back_created_host_record_and_gateway_on_refresh_failure(self) -> None:
+        executor = load_executor()
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            package = write_time_package(package_path, root)
+            client = FailingRefreshClient()
+            record_path = Path(
+                package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["path"]
+            )
+
+            with self.assertRaises(executor.RuntimeApplyError) as ctx:
+                executor.run(
+                    package_path=package_path,
+                    upstream_url="http://time-transceiver:9209/mcp",
+                    gateway_name="time-dev-docker",
+                    server_name="time_dev_docker_server",
+                    apply=True,
+                    client=client,
+                    wait_attempts=1,
+                )
+
+            self.assertFalse(record_path.exists())
+            self.assertEqual([], client.gateways)
+            self.assertIn(("DELETE", "/gateways/gateway-failing"), [(method, path) for method, path, _body in client.requests])
+            report = ctx.exception.failure_report
+            self.assertEqual("tool_refresh", report["failed_stage"])
+            self.assertEqual("passed", report["rollback_result"])
+            self.assertTrue(
+                any(action.get("action") == "rollback_npm_stdio_host_record" for action in report["rollback_actions_attempted"])
+            )
 
     def test_apply_waits_for_delayed_expected_tool_visibility(self) -> None:
         executor = load_executor()
@@ -412,6 +521,18 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "package status"):
                 executor.run(package_path=package_path, upstream_url="http://time-transceiver:9209/mcp")
 
+    def test_rejects_runtime_package_without_npm_stdio_host_record_artifact(self) -> None:
+        executor = load_executor()
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            package = write_time_package(package_path, root)
+            del package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]
+            package_path.write_text(json.dumps(package), encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimeError, "npm_stdio_service_record is required"):
+                executor.run(package_path=package_path, upstream_url="http://time-transceiver:9209/mcp")
+
     def test_cli_dry_run_outputs_clean_json(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -442,6 +563,41 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertFalse(data["mutation_performed"])
         self.assertEqual("time-dev-docker", data["registry_request"]["gateway_name"])
+
+    def test_npm_stdio_host_records_cli_upserts_and_deletes_record(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            write_time_package(package_path, root)
+            script = REPO_ROOT / "docker/contextforge-harness/scripts/npm_stdio_host_records.py"
+
+            upsert = subprocess.run(
+                [sys.executable, str(script), "upsert", "--package-json", str(package_path)],
+                cwd=REPO_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+            )
+
+            self.assertEqual(0, upsert.returncode, upsert.stderr)
+            upsert_payload = json.loads(upsert.stdout)
+            record_path = Path(upsert_payload["record_path"])
+            self.assertTrue(record_path.exists())
+            self.assertEqual("created", upsert_payload["action"])
+
+            delete = subprocess.run(
+                [sys.executable, str(script), "delete", "--project-root", str(root), "--service-binding", "time:canonical"],
+                cwd=REPO_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+            )
+
+            self.assertEqual(0, delete.returncode, delete.stderr)
+            self.assertFalse(record_path.exists())
+            self.assertTrue(json.loads(delete.stdout)["ok"])
 
 
 if __name__ == "__main__":

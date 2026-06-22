@@ -549,15 +549,19 @@ const flatten = (messages) => messages
 console.log(JSON.stringify({{
   firstCount: first.messages.length,
   firstRoute: first.messages[0].parts[0].text,
+  firstInjectedRoute: first.messages[first.messages.length - 1].parts[0].text,
   firstVisibleContext: flatten(first.messages),
   secondCount: second.messages.length,
   secondRoute: second.messages[0].parts[0].text,
+  secondInjectedRoute: second.messages[second.messages.length - 1].parts[0].text,
   secondVisibleContext: flatten(second.messages),
   thirdCount: third.messages.length,
   thirdRoute: third.messages[0].parts[0].text,
+  thirdInjectedRoute: third.messages[third.messages.length - 1].parts[0].text,
   thirdVisibleContext: flatten(third.messages),
   fourthCount: fourth.messages.length,
   fourthRoute: fourth.messages[0].parts[0].text,
+  fourthInjectedRoute: fourth.messages[fourth.messages.length - 1].parts[0].text,
   fourthVisibleContext: flatten(fourth.messages),
 }}));
 """
@@ -577,23 +581,27 @@ console.log(JSON.stringify({{
         self.assertEqual(0, result.returncode, result.stderr)
         parsed = json.loads(result.stdout)
         self.assertEqual(2, parsed["firstCount"])
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", parsed["firstRoute"])
+        self.assertEqual(user_text, parsed["firstRoute"])
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", parsed["firstInjectedRoute"])
         self.assertIn("https://github.com/modelcontextprotocol/servers/tree/main/src/time", parsed["firstVisibleContext"])
         self.assertIn("get_current_time", parsed["firstVisibleContext"])
-        self.assertNotIn("Reply with exactly the following text", parsed["firstRoute"])
+        self.assertNotIn("Reply with exactly the following text", parsed["firstInjectedRoute"])
         self.assertGreaterEqual(parsed["secondCount"], 4)
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_continue", parsed["secondRoute"])
+        self.assertEqual(user_text, parsed["secondRoute"])
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_continue", parsed["secondInjectedRoute"])
         self.assertIn("https://github.com/modelcontextprotocol/servers/tree/main/src/time", parsed["secondVisibleContext"])
         self.assertIn("approve", parsed["secondVisibleContext"])
         self.assertGreaterEqual(parsed["thirdCount"], 4)
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", parsed["thirdRoute"])
-        self.assertIn("ContextForge Service Onboarding How-To", parsed["thirdRoute"])
-        self.assertIn("use available read-only source-research tools", parsed["thirdRoute"])
-        self.assertNotIn("guidance_resource_uri", parsed["thirdRoute"])
+        self.assertEqual(user_text, parsed["thirdRoute"])
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", parsed["thirdInjectedRoute"])
+        self.assertIn("ContextForge Service Onboarding How-To", parsed["thirdInjectedRoute"])
+        self.assertIn("use available read-only source-research tools", parsed["thirdInjectedRoute"])
+        self.assertNotIn("guidance_resource_uri", parsed["thirdInjectedRoute"])
         self.assertGreaterEqual(parsed["fourthCount"], 6)
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_runtime_execute", parsed["fourthRoute"])
+        self.assertEqual(user_text, parsed["fourthRoute"])
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_runtime_execute", parsed["fourthInjectedRoute"])
         self.assertIn("approve runtime apply and registration", parsed["fourthVisibleContext"])
-        self.assertIn("ContextForge Service Onboarding How-To", parsed["fourthRoute"])
+        self.assertIn("ContextForge Service Onboarding How-To", parsed["fourthInjectedRoute"])
 
     def test_onboarding_semantic_process_gate_uses_real_clients_and_composite_persona(self) -> None:
         gate = (ROOT / "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md").read_text(encoding="utf-8")
@@ -807,6 +815,19 @@ console.log(JSON.stringify({{
         self.assertIn("It does not create Docker", readme)
         self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/probe-time-dev.py", readme)
         self.assertIn("target-client readiness still needs", readme)
+
+    def test_npm_stdio_host_substrate_is_declared_in_compose_and_readme(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/npm-stdio-host/Dockerfile").read_text(encoding="utf-8")
+        readme = (ROOT / "docker/contextforge-harness/README.md").read_text(encoding="utf-8")
+
+        self.assertIn("npm-stdio-host:", compose)
+        self.assertIn("docker/contextforge-harness/npm-stdio-host/Dockerfile", compose)
+        self.assertIn("../../server-instances:/workspace/server-instances", compose)
+        self.assertIn("node:24-bookworm-slim", dockerfile)
+        self.assertIn("npm_stdio_host_records.py", dockerfile)
+        self.assertIn("Managed npm-stdio Host Substrate", readme)
+        self.assertIn("does not yet claim full dynamic package", readme)
 
     def test_time_onboarding_foil_cleanup_readback_identifies_all_required_artifact_scopes(self) -> None:
         cleanup = _load_script_module(
