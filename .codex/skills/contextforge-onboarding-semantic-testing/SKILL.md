@@ -36,6 +36,12 @@ probe succeeded. Acceptance requires evidence that real Pi and real OpenCode
 target-client assistants progressed through the generic onboarding process and
 then saw and safely used the onboarded service through ContextForge.
 
+If the foil is already present in the target ContextForge surface before the
+run starts, the run is invalid. "Present" includes an MCP service, service
+tools, virtual server, service-bound prompt, service-bound resource, or any
+client activation-menu entry for the foil. Treat current menu/readback checks
+as a minimum visible preflight, not as the whole cleanup contract.
+
 Codex subagents may build runners, package evidence, review GitHub state, or
 evaluate transcripts. They are never the tested assistant for this gate.
 
@@ -63,6 +69,12 @@ memory, evaluator criteria, or prior-run conclusions.
 The runner and evaluator may know the criteria, but that knowledge must not
 enter prompts sent to the tested assistant.
 
+Acceptance-matrix runs should use a reactive simulated-human responder that
+reads the tested assistant's previous visible output and produces the next
+persona-consistent user message. Seeded prompt sequences are acceptable for
+runner smoke/debug checks, but they are not equivalent to a model-backed
+responder answering the actual questions asked.
+
 ## Persona Sampling
 
 For each client/model run, randomly compose one simulated-human persona across
@@ -89,6 +101,14 @@ For each onboarding foil, acceptance requires:
   evidence root per client/model/persona run;
 - at least one low-knowledge persona, one higher-knowledge persona, and two
   distinct risk postures across the accepted matrix.
+- enough interaction budget for the persona and outcome, without treating a
+  fixed turn count as acceptance. The semantic evaluator judges whether the
+  dialogue was truncated, over-guided, unnecessarily long, or complete with no
+  loss of required outcome.
+- semantic evaluation of interaction efficiency, taking the sampled persona's
+  natural overhead as given and judging whether the assistant avoided needless
+  detours, repeated explanations, premature approvals, overlong procedural
+  narration, and premature truncation.
 
 Do not move to the next foil until the current foil passes this matrix or the
 controller explicitly records a blocked state with owner and remediation path.
@@ -113,9 +133,9 @@ persona-consistent prompts with `--prompt` or `--prompt-file`.
 
 The runner may deterministically verify reset postconditions, command status,
 JSON structure, artifact existence, endpoint reachability, transcript capture,
-and credential cleanup. It must not evaluate generated assistant meaning
-through string matching, regex matching, keyword matching, or transcript
-pattern scoring.
+credential cleanup, and preexisting-foil absence in structured ContextForge
+readbacks. It must not evaluate generated assistant meaning through string
+matching, regex matching, keyword matching, or transcript pattern scoring.
 
 The runner package should emit a manifest-first evidence bundle with:
 
@@ -147,6 +167,7 @@ judge whether the tested assistant:
 - handled reload or new-session boundaries clearly;
 - produced clear, low-noise user-facing copy;
 - demonstrated target-client-visible service listing and a safe service call;
+- moved efficiently relative to persona, task complexity, and required outcome;
 - identified residual risks honestly.
 
 Classify failures as runner defect, simulated-human defect, tested-client

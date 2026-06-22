@@ -2,8 +2,8 @@
 set -euo pipefail
 
 : "${CONTEXTFORGE_PI_REAL_BIN:=/usr/bin/pi}"
-: "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=openrouter-gemini-flash-lite}"
-: "${CONTEXTFORGE_PI_DEFAULT_MODEL:=${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}}"
+: "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=openrouter-semantic-test}"
+: "${CONTEXTFORGE_PI_DEFAULT_MODEL:=${OPENROUTER_MODEL:-google/gemma-4-26b-a4b-it}}"
 
 # shellcheck source=/usr/local/bin/contextforge-pi-bootstrap
 . /usr/local/bin/contextforge-pi-bootstrap

@@ -32,6 +32,9 @@
       "default_base_url": "https://openrouter.ai/api/v1",
       "route_preferences": [],
       "supported_clients": ["pi", "opencode"],
+      "usage_modes": ["multi_step_semantic_quorum"],
+      "multi_step_quorum_eligible": true,
+      "model_notes": "Current semantic quorum member: Gemma, Qwen Coder, and DeepSeek v4-class.",
       "weight": 1
     },
     {
@@ -46,6 +49,9 @@
       "default_base_url": "https://openrouter.ai/api/v1",
       "route_preferences": [],
       "supported_clients": ["pi", "opencode"],
+      "usage_modes": ["multi_step_semantic_quorum"],
+      "multi_step_quorum_eligible": true,
+      "model_notes": "Current semantic quorum member: Gemma, Qwen Coder, and DeepSeek v4-class.",
       "weight": 1
     },
     {
@@ -60,6 +66,9 @@
       "default_base_url": "https://openrouter.ai/api/v1",
       "route_preferences": [],
       "supported_clients": ["pi", "opencode"],
+      "usage_modes": ["diagnostic", "future_candidate"],
+      "multi_step_quorum_eligible": false,
+      "model_notes": "Retained as a future candidate, but excluded from the current semantic quorum set. Current quorum is Gemma, Qwen Coder, and DeepSeek v4-class.",
       "weight": 1
     },
     {
@@ -74,6 +83,9 @@
       "default_base_url": "https://openrouter.ai/api/v1",
       "route_preferences": [],
       "supported_clients": ["pi", "opencode"],
+      "usage_modes": ["diagnostic", "future_candidate"],
+      "multi_step_quorum_eligible": false,
+      "model_notes": "Retained as a future candidate, but excluded from the current semantic quorum set. Current quorum is Gemma, Qwen Coder, and DeepSeek v4-class.",
       "weight": 1
     },
     {
@@ -88,6 +100,9 @@
       "default_base_url": "https://openrouter.ai/api/v1",
       "route_preferences": [],
       "supported_clients": ["pi", "opencode"],
+      "usage_modes": ["diagnostic", "future_candidate"],
+      "multi_step_quorum_eligible": false,
+      "model_notes": "Retained as a future candidate, but excluded from the current semantic quorum set. Current quorum is Gemma, Qwen Coder, and DeepSeek v4-class.",
       "weight": 1
     },
     {
@@ -102,6 +117,9 @@
       "default_base_url": "https://openrouter.ai/api/v1",
       "route_preferences": [],
       "supported_clients": ["pi", "opencode"],
+      "usage_modes": ["diagnostic", "future_candidate"],
+      "multi_step_quorum_eligible": false,
+      "model_notes": "Retained as a future candidate, but excluded from the current semantic quorum set. Current quorum is Gemma, Qwen Coder, and DeepSeek v4-class.",
       "weight": 1
     },
     {
@@ -116,6 +134,9 @@
       "default_base_url": "https://openrouter.ai/api/v1",
       "route_preferences": [],
       "supported_clients": ["pi", "opencode"],
+      "usage_modes": ["multi_step_semantic_quorum"],
+      "multi_step_quorum_eligible": true,
+      "model_notes": "Current semantic quorum member: Gemma, Qwen Coder, and DeepSeek v4-class.",
       "weight": 1
     }
   ]

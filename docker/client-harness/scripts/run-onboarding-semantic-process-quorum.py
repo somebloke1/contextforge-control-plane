@@ -16,6 +16,12 @@ from typing import Any
 
 
 MIN_MODEL_QUORUM = 3
+DEFAULT_ONBOARDING_TURNS = 8
+TURN_BUDGET_POLICY = (
+    "interaction length is persona- and outcome-dependent; default seeded runs "
+    "use a generous budget, but semantic adequacy is judged by required outcomes, "
+    "not by a fixed turn count"
+)
 
 
 def load_script_module(filename: str, module_name: str) -> Any:
@@ -131,7 +137,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", action="append", default=[])
     parser.add_argument("--seed", type=int)
     parser.add_argument("--jobs", type=int, default=0)
-    parser.add_argument("--max-turns", type=int, default=2)
+    parser.add_argument("--max-turns", type=int, default=DEFAULT_ONBOARDING_TURNS)
+    parser.add_argument(
+        "--responder-mode",
+        choices=["model", "seeded"],
+        default="model",
+        help="Use model-backed simulated human responders by default; seeded mode is debug scaffolding.",
+    )
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -206,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
             str(args.timeout),
             "--max-turns",
             str(args.max_turns),
+            "--responder-mode",
+            args.responder_mode,
             "--semantic-model-profile",
             profile_id,
             "--persona-index",
@@ -260,12 +274,18 @@ def main(argv: list[str] | None = None) -> int:
 
     completed = [run for run in runs if run["returncode"] == 0 and run["dialogue_run_summary"]]
     coverage = persona_coverage([run["persona"] for run in runs])
+    if args.dry_run:
+        quorum_status = "dry_run_structural_package_only"
+    elif len(completed) >= MIN_MODEL_QUORUM and coverage["ready_for_acceptance_matrix"]:
+        quorum_status = "ready_for_evaluator"
+    else:
+        quorum_status = "quorum_run_incomplete"
     summary = {
         "schema_uri": "contextforge://client-harness/onboarding-semantic-process-quorum/v1",
         "ok_scope": "structural onboarding process quorum package only",
         "semantic_acceptance": "requires_non_spark_evaluator_per_model_and_quorum",
         "deterministic_semantic_oracles_allowed": False,
-        "quorum_status": "ready_for_evaluator" if len(completed) >= MIN_MODEL_QUORUM and coverage["ready_for_acceptance_matrix"] else "quorum_run_incomplete",
+        "quorum_status": quorum_status,
         "minimum_model_quorum_per_client": MIN_MODEL_QUORUM,
         "client": args.client,
         "foil": args.foil,
@@ -279,7 +299,12 @@ def main(argv: list[str] | None = None) -> int:
         "persona_seed": args.seed,
         "persona_indices": persona_indices,
         "persona_coverage": coverage,
+        "default_turn_budget": DEFAULT_ONBOARDING_TURNS,
+        "configured_max_turns": args.max_turns,
+        "responder_mode": args.responder_mode,
+        "turn_budget_policy": TURN_BUDGET_POLICY,
         "completed_profile_count": len(completed),
+        "real_dialogue_completed_profile_count": 0 if args.dry_run else len(completed),
         "runs": runs,
         "deterministic_non_actions": [
             "quorum runner does not score free-form assistant prose",
@@ -290,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:
         "evaluator_required_narrative": [
             "judge each client/model/persona run behind the source-lead-only veil",
             "accept quorum only if at least three distinct eligible profiles pass semantically",
+            "judge interaction efficiency relative to each sampled persona overhead and required outcome",
             "classify every failed run before replacement or acceptance",
             "aggregate persona coverage and route/claim-boundary findings",
         ],

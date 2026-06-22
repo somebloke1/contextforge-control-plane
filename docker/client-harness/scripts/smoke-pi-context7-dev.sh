@@ -185,7 +185,7 @@ import os
 
 path = "/config/pi/models.json"
 data = json.load(open(path, encoding="utf-8"))
-provider = data["providers"]["openrouter-gemini-flash-lite"]
+provider = data["providers"]["openrouter-semantic-test"]
 provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]
 provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]
 provider["compat"]["openRouterRouting"]["only"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]

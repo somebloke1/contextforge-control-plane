@@ -55,6 +55,17 @@
       "order": 1,
       "source_lead": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
       "source_lead_only": true,
+      "invalid_if_preexisting_contextforge_artifacts": true,
+      "forbidden_existing_contextforge_bindings": ["time:canonical"],
+      "preexisting_contextforge_artifact_scope": [
+        "mcp_service",
+        "service_tools",
+        "virtual_server",
+        "service_bound_prompts",
+        "service_bound_resources",
+        "client_activation_menu_entries"
+      ],
+      "preexisting_contextforge_cleanup_requirement": "Before acceptance runs, the development ContextForge surface must not already expose the foil as an MCP service, tools, virtual server, or service-bound prompt/resource. Current deterministic preflight fails closed when the foil appears in available-capabilities readback; broader cleanup/readback practice must co-evolve with ContextForge artifact APIs.",
       "no_service_specific_facts_in_runner_prompt": true,
       "completion_gate": "pi_and_opencode_each_pass_three_model_semantic_process_matrix_before_fetch"
     }

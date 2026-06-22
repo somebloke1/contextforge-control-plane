@@ -953,3 +953,20 @@ For Pi client validation, use the existing TypeScript global shim path under `pi
 
 Deterministic state setup and semantic agent validation are separate responsibilities. Evidence preservation, target-client reset, workspace fixture creation, fixed postcondition checks, and verifier invocation must be implemented as idempotent commands or scripts with stable, repeatable outcomes. Agents and humans must not be asked to infer residue deltas or decide whether cleanup is clean enough; that creates a second non-deterministic validation problem. Reserve high-dimensional language-model judgment for the semantic work: conducting the code-assistant dialogue, observing real assistant/tool behavior, evaluating protocol adherence against the full use-case story, and writing the interaction narrative from evidence. Validation gates must not invert these responsibilities by using brittle pattern matching for semantic dialogue success while relying on non-deterministic model judgment for simple state reset.
 <!-- governance-crud:end id=dec-20260619-0001 -->
+
+<!-- governance-crud:start id=dec-20260621-0002 -->
+## dec-20260621-0002: Preserve the SuperLoop reproductive clause at goal completion
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-21
+- Updated: 2026-06-21
+- Tags: superloop,governance,goal-completion,continuity
+
+Every SuperLoop goal includes a reproductive clause that must not be forgotten
+or treated as optional continuation context. When a SuperLoop goal completes,
+the controller must explicitly remember and apply the reproductive clause as
+part of completion handling, so successor work, re-entry state, and continuity
+obligations are preserved instead of being dropped at the finish boundary.
+<!-- governance-crud:end id=dec-20260621-0002 -->

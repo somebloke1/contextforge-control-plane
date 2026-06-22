@@ -33,7 +33,7 @@ Semantic-test runs choose one provider-agnostic model profile per run from
 specific profile id is supplied. Profiles can name any supported provider kind,
 model id, provider-specific key env, base URL env, client support set, and
 route-preference list. The current profile pool is OpenRouter-backed and uses
-`OPENROUTER_API_KEY`; Google profiles prefer `google-ai-studio`, while empty
+`OPENROUTER_API_KEY`; route preferences are profile-specific, while empty
 route lists leave routing to OpenRouter. The generated local env file is
 written with mode `0600` semantics through `umask 077`.
 
@@ -108,8 +108,13 @@ https://openrouter.ai/api/v1
 and begins with model id:
 
 ```text
-google/gemini-2.5-flash-lite
+google/gemma-4-26b-a4b-it
 ```
+
+The current default multi-step semantic quorum is Gemma, Qwen Coder, and
+DeepSeek v4-class model profiles. Diagnostic or future-candidate profiles may
+remain listed but are excluded from random quorum selection unless explicitly
+marked eligible.
 
 Each comprehensive runner invocation records the selected semantic profile in
 the evidence summary. Random profile selection is per test run, not per

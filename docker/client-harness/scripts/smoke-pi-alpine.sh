@@ -22,7 +22,7 @@ docker compose -f compose.yml run --rm pi-alpine bash -lc '
 import json, os
 p = "/config/pi/models.json"
 data = json.load(open(p))
-provider = data["providers"]["openrouter-gemini-flash-lite"]
+provider = data["providers"]["openrouter-semantic-test"]
 provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]
 provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]
 provider["compat"]["openRouterRouting"]["only"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
