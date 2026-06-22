@@ -125,6 +125,23 @@ proof; opening remote SSH sessions, sending keys, reading files, or writing file
 still requires explicit user intent and suitable SSH credentials inside the
 sidecar boundary.
 
+For live authenticated ssh-tmux semantic tests, place target details in the
+ignored `../../server-instances/ssh-tmux/.env` file. Start from
+`../../server-instances/ssh-tmux/.env.example` and replace the dummy values:
+
+```sh
+cp ../../server-instances/ssh-tmux/.env.example ../../server-instances/ssh-tmux/.env
+mkdir -p ../../server-instances/ssh-tmux/auth
+```
+
+The harness reads that env file into `ssh-tmux-transceiver` when present and
+mounts ignored host files from `../../server-instances/ssh-tmux/auth/` at
+`/run/contextforge-ssh-tmux` inside the sidecar. For key auth, place the private
+key at `../../server-instances/ssh-tmux/auth/id_ed25519` and known-hosts file at
+`../../server-instances/ssh-tmux/auth/known_hosts`, then keep the default
+container paths in `.env`. Do not commit the real `.env`, private keys,
+passwords, or known-hosts material.
+
 The migration planner targets the compose-network URL
 `http://ssh-tmux-transceiver:9202/mcp`. Registry apply remains a separate
 explicit step after sidecar reachability and single-user/credential boundary
