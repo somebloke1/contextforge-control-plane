@@ -40,6 +40,8 @@ STATE_PATH = RUN_ROOT / "project-init-hook-state.local.json"
 LOCK_PATH = RUN_ROOT / "project-init-hook-state.local.lock"
 LOG_PATH = RUN_ROOT / "project-init-hook.local.log"
 CODEX_HOOK_EVENTS = frozenset({"SessionStart", "UserPromptSubmit"})
+SERVICE_ABSTRACT_SPEC_PREFIX = "contextforge://service-specs/"
+SERVICE_ABSTRACT_SPEC_SUFFIX = "/abstract/v1"
 
 
 def log_failure(message: str) -> None:
@@ -183,6 +185,91 @@ def project_has_context7_service(project_root: Path, *, target_client: str = "co
     if not isinstance(state, dict):
         return False
     return target_client_service_is_available(state, "context7:canonical", target_client=target_client)
+
+
+def active_service_families(project_root: Path, *, target_client: str = "codex") -> set[str]:
+    try:
+        state = project_state.load_state(project_root)
+    except Exception:
+        return set()
+    services = state.get("services") if isinstance(state, dict) and isinstance(state.get("services"), dict) else {}
+    families: set[str] = set()
+    for binding, service in services.items():
+        if not isinstance(service, dict):
+            continue
+        if not target_client_service_is_available(state, str(binding), target_client=target_client):
+            continue
+        family = str(service.get("service_family") or str(binding).split(":", 1)[0]).strip()
+        if family:
+            families.add(family)
+    return families
+
+
+def service_from_abstract_spec_uri(uri: str) -> str:
+    if not uri.startswith(SERVICE_ABSTRACT_SPEC_PREFIX) or not uri.endswith(SERVICE_ABSTRACT_SPEC_SUFFIX):
+        return ""
+    value = uri.removeprefix(SERVICE_ABSTRACT_SPEC_PREFIX).removesuffix(SERVICE_ABSTRACT_SPEC_SUFFIX)
+    return value.strip("/")
+
+
+def resource_text(resource: dict[str, Any]) -> str:
+    for key in ("text", "content"):
+        value = resource.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    contents = resource.get("contents")
+    if isinstance(contents, list):
+        parts = []
+        for item in contents:
+            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"].strip())
+        return "\n\n".join(part for part in parts if part).strip()
+    return ""
+
+
+def service_abstract_specs_context(project_root: Path, *, target_client: str = "codex") -> str:
+    families = active_service_families(project_root, target_client=target_client)
+    if not families:
+        return ""
+    try:
+        env = gateway._read_env(gateway.CONFIG_ENV)
+        token = gateway._token(env["PLATFORM_ADMIN_EMAIL"], env["PLATFORM_ADMIN_PASSWORD"])
+        resources = gateway._items(gateway._request("GET", "/resources?include_inactive=true&limit=1000", token=token))
+    except Exception as exc:
+        log_failure(f"service abstract spec resource list unavailable: {type(exc).__name__}: {exc}")
+        return ""
+
+    specs: list[str] = []
+    for resource in resources:
+        if not isinstance(resource, dict):
+            continue
+        uri = str(resource.get("uri") or "")
+        service = service_from_abstract_spec_uri(uri)
+        if service not in families:
+            continue
+        resource_id = str(resource.get("id") or "")
+        if not resource_id:
+            continue
+        try:
+            full = gateway._request("GET", f"/resources/{resource_id}", token=token)
+        except Exception as exc:
+            log_failure(f"service abstract spec read failed for {service}: {type(exc).__name__}: {exc}")
+            continue
+        text = resource_text(full if isinstance(full, dict) else {})
+        if text:
+            specs.append(text)
+
+    if not specs:
+        return ""
+    return "\n\n".join(
+        [
+            "<contextforge-service-abstract-specs>",
+            "Private service context loaded from ContextForge resources. Do not quote this block unless the user asks how the services are defined.",
+            "Use these compact service specs for ordinary service selection and first-step behavior. Load detailed tool guidance lazily only when a specific tool/task requires it.",
+            *specs,
+            "</contextforge-service-abstract-specs>",
+        ]
+    )
 
 
 def context7_normal_use_context_for_prompt(project_root: Path, prompt: str, *, target_client: str = "codex") -> str:
@@ -768,6 +855,9 @@ def main_for_events(
                     text = render_local_prompt(args)
             if not text:
                 return 0
+            specs_context = service_abstract_specs_context(identity.root, target_client=target_client)
+            if specs_context:
+                text = f"{specs_context}\n\n{text}"
 
             entries[key] = {
                 "session_id": session_id,

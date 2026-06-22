@@ -98,6 +98,30 @@ class RegisterToolGuidanceTests(unittest.TestCase):
         self.assertEqual("admin@contextforge-harness.dev", items[0].resource_body["owner_email"])
         self.assertEqual("admin@contextforge-harness.dev", items[0].prompt_body["ownerEmail"])
 
+    def test_service_abstract_specs_are_contextforge_resources(self) -> None:
+        service_meta = guidance.resolve_service_meta(
+            {"context7-local": {"id": "gateway-context7-target", "name": "context7-local"}}
+        )
+
+        items, existing = guidance.build_service_spec_items(
+            resources_by_uri={},
+            services_to_update=["context7"],
+            service_meta=service_meta,
+            owner_email="admin@contextforge-harness.dev",
+        )
+
+        self.assertEqual(1, len(items))
+        body = items[0].resource_body
+        self.assertEqual("contextforge://service-specs/context7/abstract/v1", body["uri"])
+        self.assertEqual("gateway-context7-target", body["gateway_id"])
+        self.assertEqual("admin@contextforge-harness.dev", body["owner_email"])
+        self.assertIn("service-guidance", body["tags"])
+        self.assertIn("abstract-service-spec", body["tags"])
+        self.assertIn("context7", body["tags"])
+        self.assertIn("Use Context7", body["content"])
+        self.assertIn("Lazy detail", body["content"])
+        self.assertIsNone(existing["service-spec:context7"])
+
     def test_target_login_prefers_harness_login_endpoint(self) -> None:
         calls: list[str] = []
         original = guidance.target_request

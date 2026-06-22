@@ -16,6 +16,15 @@ plan must identify sources, classify the service, assess feasibility, choose a
 ContextForge integration paradigm, record approval boundaries, and describe the
 implementation and lifecycle footprint before any runtime work starts.
 
+The broader onboarding process may begin with very little input: a source lead.
+An upstream documentation URL or GitHub repository URL is preferred, but package
+names, local paths, issue references, documentation phrases, and other concrete
+leads are acceptable. A read-only research agent or tool pass should turn those
+leads into source evidence, transport facts, credential/state boundaries, likely
+tool families, and a draft compact abstract service spec before the
+deterministic helper packages the record. The helper remains a no-mutation
+record builder; it does not browse, register, run, or probe services by itself.
+
 ## Dialogue States
 
 The helper is stateful. Each session should advance through named states and
@@ -24,11 +33,13 @@ be resumable from the last recorded state:
 | State | Purpose | Required evidence |
 | --- | --- | --- |
 | `intake` | Name the candidate service, operator goal, expected users, and initial source hints. | User statement, issue link, or discovery note. |
+| `research_plan` | If only source leads are available, describe the read-only research pass needed before deterministic onboarding can complete. | Seed leads, allowed read-only actions, and required evidence outputs. |
 | `source_discovery` | Locate upstream docs, packages, repositories, executable entrypoints, config files, credential surfaces, and native transport docs. | Exact URLs, package names, commands, or local paths. |
 | `feasibility_review` | Check whether the service can be registered directly, needs a package bridge/transceiver, needs a dev Docker proof, or should be deferred. | Transport facts, dependency facts, credential/state facts, and known risks. |
 | `classification` | Assign typed classifications that drive implementation and approval boundaries. | `plan_type`, `localization_type`, `functional_type`, and other relevant dimensions. |
 | `strategy_selection` | Select the ContextForge implementation paradigm and explain why alternatives were rejected. | Chosen strategy, rejected strategies, and evidence gaps. |
 | `footprint_plan` | List source files, manifests, scripts, Docker surfaces, tests, docs, runtime state, and cleanup/rollback expectations. | Reviewable file and system surface list. |
+| `guidance_plan` | Generate or carry the compact service abstract spec and its ContextForge publication target. | Draft or reviewed abstract spec plus `contextforge://service-specs/<service>/abstract/v1` resource URI. |
 | `approval_gate` | Stop before any runtime/global/live mutation and emit exact approval text when required. | Required approvals and non-actions. |
 | `handoff` | Produce durable issue/PR-ready output with residual risks and next steps. | Structured onboarding record and GitHub links. |
 
@@ -131,6 +142,9 @@ Each completed helper session should emit a structured record with:
 - proposed `server-instances/<service-slug>/` home or documented equivalent;
 - expected transports, endpoints, and bridge/transceiver needs;
 - required files, scripts, docs, tests, fixtures, Docker surfaces, and generated artifacts;
+- `guidance_plan.abstract_service_spec`, generated from the descriptor when no
+  reviewed spec is supplied, with the intended ContextForge resource URI and
+  publication requirement;
 - explicit runtime, global, client, Pi, registry, service, systemd, hook, trust,
   secret, and cleanup approval boundaries;
 - non-actions already preserved;
@@ -144,7 +158,7 @@ any runtime work. The gate is source-only and always records
 
 - known and missing dimensions for source evidence, canonical service identity,
   scope/locality, transport, credential boundary, state footprint, approval
-  boundary, and validation-probe plan;
+  boundary, validation-probe plan, and abstract service spec generation;
 - required pre-runtime evidence for each dimension;
 - planned validation probe layers such as native transport contract readback,
   bridge transport smoke plan, credential scope negative readback, client session scope probe,
@@ -155,6 +169,10 @@ any runtime work. The gate is source-only and always records
 
 The gate only plans probes. It does not call ContextForge, start services, run Docker,
 mutate registries, write client/global config, or execute validation commands.
+Runtime registration or client readiness remains incomplete until the compact
+abstract service spec is published as a ContextForge resource and associated
+with the service. Clients then load that abstract spec proactively and load
+detailed tool guidance only when a specific task requires it.
 
 ## Source Helper CLI
 

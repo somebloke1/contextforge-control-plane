@@ -111,6 +111,57 @@ SERVICE_META = {
     },
 }
 
+SERVICE_ABSTRACT_SPECS = {
+    "mentality": {
+        "title": "Mentality Governance",
+        "summary": "Use Mentality for durable project governance records: decisions, open questions, abeyant intentions, and tasks.",
+        "workflow": "List before reading or changing uncertain entries. Read one exact entry before any update or deletion.",
+        "lazy_detail": "Load tool guidance only when choosing a specific ledger operation.",
+    },
+    "ssh-tmux": {
+        "title": "SSH Tmux Sessions",
+        "summary": "Use ssh-tmux for persistent remote shell sessions backed by tmux.",
+        "workflow": "List sessions first, inspect a snapshot before acting, and prefer ordinary commands over raw key sends.",
+        "lazy_detail": "Load tool guidance before file transfer, raw key input, cleanup, or session close operations.",
+    },
+    "context7": {
+        "title": "Context7 Documentation",
+        "summary": "Use Context7 for current library, package, API, and configuration documentation.",
+        "workflow": "Resolve the library ID when needed, then ask a concrete documentation question with task and version context.",
+        "lazy_detail": "Load tool guidance when the lookup target is ambiguous or a docs query needs stronger source discipline.",
+    },
+    "playwright": {
+        "title": "Playwright Browser Automation",
+        "summary": "Use Playwright for browser navigation, page inspection, form interaction, screenshots, console, and network checks.",
+        "workflow": "Navigate or inspect first, rely on accessibility snapshots for element references, and wait on page conditions.",
+        "lazy_detail": "Load tool guidance before unsafe code execution, uploads, dialogs, network inspection, or complex UI actions.",
+    },
+    "exa-search": {
+        "title": "Exa Search",
+        "summary": "Use Exa for source discovery, readable page fetches, and cited synthesis from retrieved source text.",
+        "workflow": "Search to find sources, fetch known URLs for readable content, and synthesize only from returned material.",
+        "lazy_detail": "Load tool guidance when choosing search versus fetch or when citation discipline matters.",
+    },
+    "openzeppelin-solidity-contracts": {
+        "title": "OpenZeppelin Solidity Contracts",
+        "summary": "Use OpenZeppelin Solidity Contracts to generate Wizard-based Solidity contract source.",
+        "workflow": "Choose the contract family, provide concrete options, and review generated code and warnings before any deployment use.",
+        "lazy_detail": "Load tool guidance for the exact contract generator before selecting features or interpreting generated Solidity.",
+    },
+    "github": {
+        "title": "GitHub",
+        "summary": "Use GitHub for repository, issue, pull request, branch, file, and code-search work through scoped ContextForge access.",
+        "workflow": "Prefer read-only discovery first. Treat file writes, issue changes, branch creation, reviews, and merges as explicit-intent operations.",
+        "lazy_detail": "Load tool guidance before any mutating GitHub operation or when repository identity is uncertain.",
+    },
+    "web-search": {
+        "title": "Web Search",
+        "summary": "Use Web Search for general web results, readable URL extraction, code/docs search, public GitHub extraction, and PDF text extraction.",
+        "workflow": "Search for candidate sources, fetch or extract the specific source, then answer with source-aware limits.",
+        "lazy_detail": "Load tool guidance when bounding result count, source type, extraction size, or citation requirements.",
+    },
+}
+
 PROMPTS = {
     "mentality-governance-create": ("mentality_governance_create_entry", "Create one governance ledger entry with repo {repo}, ledger {ledger}, title {title}, optional body {body}, optional status {status}, optional comma-separated tags {tags}, and optional explicit id {id}. Use a ledger-valid status or omit it for the ledger default. Return the created id, ledger path, and concise summary."),
     "mentality-governance-delete": ("mentality_governance_delete_entry", "Delete exactly one governance ledger entry using repo {repo}, ledger {ledger}, and exact id {id}. Do not infer the id; list or read first when uncertain. Return the deleted id and path, or the tool error."),
@@ -219,6 +270,12 @@ class GuidanceItem:
     service: str
     resource_body: dict[str, Any]
     prompt_body: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ServiceSpecItem:
+    service: str
+    resource_body: dict[str, Any]
 
 
 def api_items(path: str, token: str, *, base_url: str | None = None) -> list[dict[str, Any]]:
@@ -412,6 +469,18 @@ def resource_uri(tool: dict[str, Any], service: str) -> str:
     raise ValueError(service)
 
 
+def service_abstract_spec_tag(service: str) -> str:
+    return f"service-spec-{service}" if len(f"service-spec-{service}") <= MAX_CONTEXTFORGE_TAG_LENGTH else "service-spec-" + hashlib.sha256(service.encode("utf-8")).hexdigest()[:16]
+
+
+def service_abstract_spec_uri(service: str) -> str:
+    return f"contextforge://service-specs/{service}/abstract/v1"
+
+
+def service_abstract_spec_name(service: str) -> str:
+    return f"{service} abstract service spec"
+
+
 def titleize(text: str) -> str:
     return text.replace("_", " ").replace("-", " ").title()
 
@@ -493,6 +562,26 @@ Service: {service}
     return sanitize_scanner_text(content)
 
 
+def service_abstract_spec_content(service: str, meta: dict[str, Any]) -> str:
+    spec = SERVICE_ABSTRACT_SPECS[service]
+    content = f"""# {spec["title"]}
+
+Service: {service}
+
+## Abstract Spec
+- Use for: {spec["summary"]}
+- Start with: {spec["workflow"]}
+- Lazy detail: {spec["lazy_detail"]}
+
+## Boundary
+This compact spec is loaded proactively for ordinary service use. Detailed tool prompts and resources remain lazy-loaded by exact tool or task.
+
+## Sources
+{chr(10).join(f"- {source}" for source in meta["sources"])}
+"""
+    return sanitize_scanner_text(content)
+
+
 def compact(text: str, limit: int = 220) -> str:
     one_line = " ".join(text.split())
     return one_line if len(one_line) <= limit else one_line[: limit - 1].rstrip() + "..."
@@ -560,7 +649,41 @@ def build_guidance_items(
     return items, existing_by_key
 
 
-def preflight_guidance(items: list[GuidanceItem], *, owner_email: str = OWNER) -> None:
+def build_service_spec_items(
+    resources_by_uri: dict[str, dict[str, Any]],
+    services_to_update: list[str],
+    *,
+    service_meta: dict[str, dict[str, Any]] | None = None,
+    owner_email: str = OWNER,
+) -> tuple[list[ServiceSpecItem], dict[str, dict[str, Any] | None]]:
+    items: list[ServiceSpecItem] = []
+    existing_by_key: dict[str, dict[str, Any] | None] = {}
+    meta_by_service = service_meta or SERVICE_META
+
+    for service in sorted(services_to_update):
+        meta = meta_by_service[service]
+        uri = service_abstract_spec_uri(service)
+        name = service_abstract_spec_name(service)
+        spec = SERVICE_ABSTRACT_SPECS[service]
+        resource_body = {
+            "uri": uri,
+            "name": name,
+            "title": spec["title"],
+            "description": f"Compact proactive service spec for {service}; detailed tool guidance remains lazy-loaded.",
+            "mimeType": "text/markdown",
+            "content": service_abstract_spec_content(service, meta),
+            "tags": ["service-guidance", "abstract-service-spec", service, service_abstract_spec_tag(service)],
+            "owner_email": owner_email,
+            "visibility": VISIBILITY,
+            "gateway_id": meta["gateway"],
+        }
+        items.append(ServiceSpecItem(service=service, resource_body=resource_body))
+        existing_by_key[f"service-spec:{service}"] = resources_by_uri.get(uri)
+
+    return items, existing_by_key
+
+
+def preflight_guidance(items: list[GuidanceItem], service_spec_items: list[ServiceSpecItem] | None = None, *, owner_email: str = OWNER) -> None:
     from mcpgateway.services.content_security import get_content_security_service
 
     service = get_content_security_service()
@@ -590,6 +713,19 @@ def preflight_guidance(items: list[GuidanceItem], *, owner_email: str = OWNER) -
                 f"prompt {item.tool_name}: {violation}; pattern={pattern!r}; snippet={snippet!r}"
             )
 
+    for item in service_spec_items or []:
+        content = item.resource_body["content"]
+        try:
+            service.validate_resource_size(content, uri=item.resource_body["uri"], user_email=owner_email)
+            service.detect_malicious_patterns(content, content_type="Resource content", user_email=owner_email)
+        except Exception as exc:  # noqa: BLE001 - report ContextForge validation details.
+            violation = getattr(exc, "violation_type", type(exc).__name__)
+            pattern = getattr(exc, "pattern_matched", "")
+            snippet = getattr(exc, "content_snippet", "")
+            errors.append(
+                f"service spec {item.service}: {violation}; pattern={pattern!r}; snippet={snippet!r}"
+            )
+
     if errors:
         raise RuntimeError("ContextForge validation preflight failed:\n" + "\n".join(errors))
 
@@ -597,24 +733,37 @@ def preflight_guidance(items: list[GuidanceItem], *, owner_email: str = OWNER) -
 def guidance_counts(
     guidance_items: list[GuidanceItem],
     existing_by_key: dict[str, dict[str, Any] | None],
+    service_spec_items: list[ServiceSpecItem],
+    existing_service_specs_by_key: dict[str, dict[str, Any] | None],
     services_to_update: list[str],
 ) -> dict[str, Any]:
+    service_specs_by_service = {
+        service: sum(1 for item in service_spec_items if item.service == service)
+        for service in services_to_update
+    }
     by_service = {
         service: {
-            "resources": sum(1 for item in guidance_items if item.service == service),
+            "resources": sum(1 for item in guidance_items if item.service == service) + service_specs_by_service[service],
             "prompts": sum(1 for item in guidance_items if item.service == service),
+            "service_specs": service_specs_by_service[service],
         }
         for service in services_to_update
     }
+    service_spec_creates = sum(1 for item in service_spec_items if not existing_service_specs_by_key[f"service-spec:{item.service}"])
+    service_spec_updates = sum(1 for item in service_spec_items if existing_service_specs_by_key[f"service-spec:{item.service}"])
     return {
         "tools_covered": len(guidance_items),
         "resources": {
-            "create": sum(1 for item in guidance_items if not existing_by_key[f"resource:{item.tool_name}"]),
-            "update": sum(1 for item in guidance_items if existing_by_key[f"resource:{item.tool_name}"]),
+            "create": sum(1 for item in guidance_items if not existing_by_key[f"resource:{item.tool_name}"]) + service_spec_creates,
+            "update": sum(1 for item in guidance_items if existing_by_key[f"resource:{item.tool_name}"]) + service_spec_updates,
         },
         "prompts": {
             "create": sum(1 for item in guidance_items if not existing_by_key[f"prompt:{item.tool_name}"]),
             "update": sum(1 for item in guidance_items if existing_by_key[f"prompt:{item.tool_name}"]),
+        },
+        "service_specs": {
+            "create": service_spec_creates,
+            "update": service_spec_updates,
         },
         "by_service": by_service,
     }
@@ -624,9 +773,10 @@ def print_summary(summary: dict[str, Any]) -> None:
     print(f"tools covered: {summary['tools_covered']}")
     print(f"resources created={summary['resources']['create']} updated={summary['resources']['update']}")
     print(f"prompts created={summary['prompts']['create']} updated={summary['prompts']['update']}")
+    print(f"service specs created={summary['service_specs']['create']} updated={summary['service_specs']['update']}")
     for service in sorted(SERVICE_META):
-        counts = summary["by_service"].get(service, {"resources": 0, "prompts": 0})
-        print(f"{service}: resources={counts['resources']} prompts={counts['prompts']}")
+        counts = summary["by_service"].get(service, {"resources": 0, "prompts": 0, "service_specs": 0})
+        print(f"{service}: resources={counts['resources']} prompts={counts['prompts']} service_specs={counts['service_specs']}")
 
 
 def main() -> int:
@@ -680,20 +830,26 @@ def main() -> int:
         service_meta=service_meta,
         owner_email=owner_email,
     )
+    services_to_update = sorted(selected_services) if selected_services else sorted(SERVICE_META)
+    service_spec_items, existing_service_specs_by_key = build_service_spec_items(
+        resources_by_uri,
+        services_to_update,
+        service_meta=service_meta,
+        owner_email=owner_email,
+    )
     try:
-        preflight_guidance(guidance_items, owner_email=owner_email)
+        preflight_guidance(guidance_items, service_spec_items, owner_email=owner_email)
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
-    services_to_update = sorted(selected_services) if selected_services else sorted(SERVICE_META)
     for service in services_to_update:
         meta = service_meta[service]
         if meta["server"] not in servers_by_name:
             print(f"missing server {meta['server']}", file=sys.stderr)
             return 1
 
-    planned_summary = guidance_counts(guidance_items, existing_by_key, services_to_update)
+    planned_summary = guidance_counts(guidance_items, existing_by_key, service_spec_items, existing_service_specs_by_key, services_to_update)
     if args.dry_run:
         result = {
             "schema_uri": "contextforge://diagnostics/tool-guidance-registration/v1",
@@ -714,6 +870,7 @@ def main() -> int:
         return 0
 
     resource_ids: dict[str, list[str]] = defaultdict(list)
+    service_spec_resource_ids: dict[str, list[str]] = defaultdict(list)
     prompt_ids: dict[str, list[str]] = defaultdict(list)
     created_resources = updated_resources = created_prompts = updated_prompts = 0
 
@@ -744,12 +901,26 @@ def main() -> int:
             created_prompts += 1
         prompt_ids[item.service].append(prompt["id"])
 
+    for item in service_spec_items:
+        existing_resource = existing_service_specs_by_key[f"service-spec:{item.service}"]
+        if existing_resource:
+            resource = api_request(
+                "PUT", f"/resources/{existing_resource['id']}", token=token, body=item.resource_body, base_url=args.base_url
+            )
+            updated_resources += 1
+        else:
+            resource = api_request(
+                "POST", "/resources", token=token, body={"resource": item.resource_body, "visibility": VISIBILITY}, base_url=args.base_url
+            )
+            created_resources += 1
+        service_spec_resource_ids[item.service].append(resource["id"])
+
     for service in services_to_update:
         meta = service_meta[service]
         server = servers_by_name.get(meta["server"])
         body = {
             "associatedTools": server.get("associatedToolIds") or [],
-            "associatedResources": resource_ids[service],
+            "associatedResources": service_spec_resource_ids[service] + resource_ids[service],
             "associatedPrompts": prompt_ids[service],
             "associatedA2aAgents": server.get("associatedA2aAgents") or [],
             "ownerEmail": owner_email,
@@ -769,8 +940,12 @@ def main() -> int:
         "tools_covered": len(prompt_defs),
         "resources": {"create": created_resources, "update": updated_resources},
         "prompts": {"create": created_prompts, "update": updated_prompts},
+        "service_specs": {
+            "create": sum(1 for item in service_spec_items if not existing_service_specs_by_key[f"service-spec:{item.service}"]),
+            "update": sum(1 for item in service_spec_items if existing_service_specs_by_key[f"service-spec:{item.service}"]),
+        },
         "by_service": {
-            service: {"resources": len(resource_ids[service]), "prompts": len(prompt_ids[service])}
+            service: {"resources": len(resource_ids[service]) + len(service_spec_resource_ids[service]), "prompts": len(prompt_ids[service]), "service_specs": len(service_spec_resource_ids[service])}
             for service in services_to_update
         },
     }

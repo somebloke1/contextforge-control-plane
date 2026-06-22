@@ -65,6 +65,14 @@ type RegisteredResource = {
   mimeType?: string;
 };
 
+type ServiceAbstractSpec = {
+  serviceBinding: string;
+  virtualServer: string;
+  uri: string;
+  title?: string;
+  text: string;
+};
+
 type ToolRoute = {
   client: JsonRpcStdioClient;
   mcpName: string;
@@ -84,6 +92,7 @@ type ReadbackState = {
   tools: RegisteredTool[];
   prompts: RegisteredPrompt[];
   resources: RegisteredResource[];
+  abstractServiceSpecs: ServiceAbstractSpec[];
   skipped: Array<{ serviceBinding?: string; reason: string }>;
   errors: string[];
 };
@@ -131,7 +140,7 @@ function shimGlobalState(): ShimGlobalState {
       projectInitCache: new Map<string, ProjectInitCacheEntry>(),
       firstPromptInitOffered: new Set<string>(),
       initializedPromptOffered: new Set<string>(),
-      readback: { services: [], tools: [], prompts: [], resources: [], skipped: [], errors: [] },
+      readback: { services: [], tools: [], prompts: [], resources: [], abstractServiceSpecs: [], skipped: [], errors: [] },
     };
   }
   holder[GLOBAL_STATE_KEY].serviceRoutes ||= new Map<string, JsonRpcStdioClient>();
@@ -139,6 +148,7 @@ function shimGlobalState(): ShimGlobalState {
   holder[GLOBAL_STATE_KEY].initializedPromptOffered ||= new Set<string>();
   holder[GLOBAL_STATE_KEY].readback.prompts ||= [];
   holder[GLOBAL_STATE_KEY].readback.resources ||= [];
+  holder[GLOBAL_STATE_KEY].readback.abstractServiceSpecs ||= [];
   return holder[GLOBAL_STATE_KEY];
 }
 
@@ -590,6 +600,7 @@ function initializedProjectContextMessage(projectRoot: string): JsonObject | und
       "For ordinary normal-use readback questions, do not call cf_project_init_list_capabilities.",
       `For questions asking how to use the project docs lookup capability, docs lookup capability, ContextForge docs lookup guidance, or similar, call cf_contextforge_guidance_lookup {"projectRoot":"${root}","serviceBinding":"context7:canonical","mcpToolName":"project docs lookup capability"} and answer from its message or fallback_guidance. Do not call the Context7 docs query tools directly for this guidance-question class, and do not answer the underlying configuration question yet.`,
       "For ordinary docs, library, package, API, or configuration lookup questions, use the relevant ContextForge service tool directly. For Context7 documentation requests, call the Context7 resolve-library-id tool first when a library id is needed, then call the Context7 query-docs tool as needed. Do not call cf_project_init_get_context, cf_project_init_continue, cf_project_init_list_capabilities, availability, capability-summary, or state-readback routes before ordinary Context7 tool use.",
+      ...abstractServiceSpecContextLines(),
       `Route decisions question -> cf_mentality_governance_list {"repo":"${root}","ledger":"decisions"}.`,
       `Route open-questions question -> cf_mentality_governance_list {"repo":"${root}","ledger":"open-questions"}.`,
       `Route abeyant-intentions question -> cf_mentality_governance_list {"repo":"${root}","ledger":"abeyant-intentions"}.`,
@@ -661,6 +672,7 @@ async function activateProject(pi: ExtensionAPI, cwd: string, clients: JsonRpcSt
   readback.tools = [];
   readback.prompts = [];
   readback.resources = [];
+  readback.abstractServiceSpecs = [];
   readback.skipped = [];
   readback.errors = [];
 
@@ -748,10 +760,55 @@ async function importGuidanceMetadata(client: JsonRpcStdioClient, service: Proje
         title: typeof resource.title === "string" ? resource.title : undefined,
         mimeType: String(resource.mimeType || resource.mime_type || ""),
       });
+      const uri = String(resource.uri || "");
+      if (isServiceAbstractSpecUri(uri)) {
+        try {
+          const readResult = await client.readResource(uri);
+          const text = resourceReadText(readResult);
+          if (text) {
+            readback.abstractServiceSpecs.push({
+              serviceBinding: service.serviceBinding,
+              virtualServer: service.virtualServer,
+              uri,
+              title: typeof resource.title === "string" ? resource.title : undefined,
+              text,
+            });
+          }
+        } catch (error) {
+          readback.errors.push(`${service.serviceBinding}: abstract service spec read failed: ${errorMessage(error)}`);
+        }
+      }
     }
   } catch (error) {
     readback.errors.push(`${service.serviceBinding}: resources/list failed: ${errorMessage(error)}`);
   }
+}
+
+function isServiceAbstractSpecUri(uri: string): boolean {
+  return uri.startsWith("contextforge://service-specs/") && uri.endsWith("/abstract/v1");
+}
+
+function resourceReadText(result: JsonObject): string {
+  const direct = String(result.text || result.content || "").trim();
+  if (direct) return direct;
+  const contents = Array.isArray(result.contents) ? result.contents : [];
+  return contents
+    .map((item) => {
+      const object = asObject(item);
+      return String(object.text || object.content || "").trim();
+    })
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+}
+
+function abstractServiceSpecContextLines(): string[] {
+  if (!readback.abstractServiceSpecs.length) return [];
+  return [
+    "ContextForge service abstract specs are loaded below from ContextForge resources. Do not quote this block unless the user asks how the services are defined.",
+    "Use these compact service specs for ordinary service selection and first-step behavior. Load detailed tool guidance lazily only when a specific tool/task requires it.",
+    ...readback.abstractServiceSpecs.map((spec) => spec.text),
+  ];
 }
 
 function registerImportedTool(pi: ExtensionAPI, client: JsonRpcStdioClient, service: ProjectService, mcpTool: JsonObject): void {

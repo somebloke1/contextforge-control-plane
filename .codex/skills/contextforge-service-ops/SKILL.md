@@ -24,10 +24,21 @@ translator fleets, or service identities named after clients.
    package-provided `mcpgateway.translate`.
 5. Keep every exposed service grounded in `server-instances/<service-slug>/` or
    an explicitly documented equivalent.
-6. Change ContextForge-owned state through ContextForge APIs or Admin UI
+6. Every onboarded service needs a compact abstract service spec published as a
+   ContextForge resource and associated with the service before runtime/client
+   readiness. Clients should load these abstract specs proactively and load
+   detailed tool prompts/resources lazily.
+7. New-service onboarding may begin from a minimal source lead. Prefer an
+   upstream documentation URL or GitHub repository URL, but package names, local
+   paths, issue references, documentation phrases, or other concrete leads are
+   acceptable. Use a read-only research pass to turn leads into source evidence,
+   transport facts, credential/state boundaries, likely tools, and a draft
+   abstract spec, then feed that descriptor into the no-mutation onboarding
+   helper. Do not treat the deterministic helper itself as the research agent.
+8. Change ContextForge-owned state through ContextForge APIs or Admin UI
    behavior only. Direct database writes are diagnostic-only and prohibited for
    mutation.
-7. Verify with current command output and endpoint probes before claiming
+9. Verify with current command output and endpoint probes before claiming
    completion.
 
 ## Commands
@@ -54,7 +65,8 @@ For runtime claims, collect enough proof for the claim:
 - gateway health and authenticated admin/API behavior
 - direct bridge or native upstream `/mcp` and `/sse` where applicable
 - ContextForge virtual server `/mcp` and `/sse`
-- tool/resource/prompt readback where registration is involved
+- tool/resource/prompt readback where registration is involved, including
+  abstract service spec resources for newly onboarded or refreshed services
 - user systemd unit state for local services
 
 Read [service-map.md](references/service-map.md) for canonical services, ports,
