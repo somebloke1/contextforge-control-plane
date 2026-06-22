@@ -81,6 +81,11 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("ready_for_handoff", record["status"])
         self.assertEqual("handoff", record["current_state"])
         self.assertFalse(record["approval_gate"]["approval_required"])  # type: ignore[index]
+        spec = record["guidance_plan"]["abstract_service_spec"]  # type: ignore[index]
+        self.assertEqual("known", spec["status"])  # type: ignore[index]
+        self.assertEqual("contextforge://service-specs/docs-search/abstract/v1", spec["resource_uri"])  # type: ignore[index]
+        self.assertIn("shared documentation lookup", spec["summary"])  # type: ignore[index]
+        self.assertIn("register a ContextForge resource", record["guidance_plan"]["publication_requirement"])  # type: ignore[index]
         self.assertEqual("Direct native registration", record["integration_strategy"]["primary_paradigm"])  # type: ignore[index]
         self.assertEqual("docs-search", record["footprint_plan"]["service_slug"])  # type: ignore[index]
         self.assertIn("open or update a focused issue/PR", " ".join(record["next_issue_pr_steps"]))  # type: ignore[index]
@@ -216,6 +221,11 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("<redacted>", first["source_descriptor"]["api_key"])  # type: ignore[index]
         self.assertIn("source_evidence", {blocker["field"] for blocker in first["blockers"]})  # type: ignore[index]
         self.assertIn("plan_type", {blocker["field"] for blocker in _blockers(first)})
+        spec = first["guidance_plan"]["abstract_service_spec"]  # type: ignore[index]
+        self.assertEqual("draft_generated", spec["status"])  # type: ignore[index]
+        self.assertTrue(spec["review_required"])  # type: ignore[index]
+        self.assertEqual("contextforge://service-specs/unknown-service/abstract/v1", spec["resource_uri"])  # type: ignore[index]
+        self.assertIn("publication_requirement", first["guidance_plan"])  # type: ignore[operator]
         gate = first["pre_runtime_workflow_gate"]
         self.assertFalse(gate["runtime_work_allowed"])  # type: ignore[index]
         self.assertEqual("blocked", gate["gate_status"])  # type: ignore[index]
@@ -232,6 +242,50 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertIn(
             "Which validation probe layers should be planned from source evidence without running them?",
             first["next_questions"],
+        )
+
+    def test_source_lead_without_evidence_routes_to_read_only_research_plan(self) -> None:
+        record = helper.build_onboarding_record(
+            {
+                "candidate_service": "possible-docs-service",
+                "operator_goal": "Investigate whether this lead can become a ContextForge service.",
+                "source_leads": ["possible-docs-mcp package"],
+            },
+            project_root=PROJECT_ROOT,
+            issue="#52",
+        )
+
+        self.assertEqual("research_required", record["status"])
+        self.assertEqual("research_plan", record["current_state"])
+        research = record["research_plan"]
+        self.assertEqual("research_required", research["status"])  # type: ignore[index]
+        self.assertTrue(research["read_only"])  # type: ignore[index]
+        self.assertFalse(research["mutation_allowed"])  # type: ignore[index]
+        self.assertEqual(
+            [{"type": "lead", "ref": "possible-docs-mcp package"}],
+            research["seed_leads"],  # type: ignore[index]
+        )
+        self.assertIn("GitHub repository URL", research["preferred_seed_types"])  # type: ignore[index]
+        self.assertIn("package name", research["preferred_seed_types"])  # type: ignore[index]
+        self.assertIn("draft abstract_service_spec", " ".join(research["required_outputs"]))  # type: ignore[index]
+        self.assertIn("read-only research pass", record["next_questions"][0])  # type: ignore[index]
+
+    def test_github_url_lead_is_typed_for_research_plan(self) -> None:
+        record = helper.build_onboarding_record(
+            {
+                "candidate_service": "possible-github-service",
+                "operator_goal": "Investigate whether this repository hosts an MCP service.",
+                "lead": "https://github.com/example/possible-github-service",
+            },
+            project_root=PROJECT_ROOT,
+            issue="#52",
+        )
+
+        research = record["research_plan"]
+        self.assertEqual("research_required", record["status"])
+        self.assertEqual(
+            [{"type": "github_url", "ref": "https://github.com/example/possible-github-service"}],
+            research["seed_leads"],  # type: ignore[index]
         )
 
     def test_missing_credential_boundary_blocks_before_runtime_handoff(self) -> None:
@@ -305,6 +359,10 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         )
         self.assertEqual("Direct native registration", resumed["dialogue_session"]["decision_log"][-1]["primary_paradigm"])  # type: ignore[index]
         self.assertFalse(resumed["dialogue_session"]["decision_log"][-1]["mutation_allowed"])  # type: ignore[index]
+        resumed_spec = resumed["guidance_plan"]["abstract_service_spec"]  # type: ignore[index]
+        self.assertEqual("draft_generated", resumed_spec["status"])  # type: ignore[index]
+        self.assertEqual("contextforge://service-specs/unknown-service/abstract/v1", resumed_spec["resource_uri"])  # type: ignore[index]
+        self.assertIn("client_loading_requirement", resumed["guidance_plan"])  # type: ignore[operator]
         self.assertIn(
             {"type": "upstream_doc", "ref": "https://example.invalid/unknown-service"},
             resumed["source_evidence"],

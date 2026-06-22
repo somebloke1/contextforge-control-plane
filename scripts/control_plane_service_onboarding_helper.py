@@ -23,11 +23,13 @@ LOCAL_SESSION_STORAGE_MODE = "local_ignored_session_file"
 
 DIALOGUE_STATES = (
     "intake",
+    "research_plan",
     "source_discovery",
     "feasibility_review",
     "classification",
     "strategy_selection",
     "footprint_plan",
+    "guidance_plan",
     "approval_gate",
     "handoff",
 )
@@ -149,12 +151,14 @@ def build_onboarding_record(
     )
     operator_goal = _first_string(source.get("operator_goal"), source.get("goal"), source.get("desired_outcome"))
     source_evidence = _source_evidence(source)
+    research_plan = _research_plan(source, source_evidence, candidate_service, operator_goal)
     classification = _classification(source)
     feasibility = _feasibility(source, classification)
     strategy = _strategy(source, classification, feasibility)
     footprint = _footprint(source, candidate_service, strategy, project_root)
+    guidance_plan = _guidance_plan(source, candidate_service)
     approvals = _approval_gate(classification, strategy)
-    record_blockers = _blockers(candidate_service, operator_goal, source_evidence, classification, feasibility, footprint)
+    record_blockers = _blockers(candidate_service, operator_goal, source_evidence, classification, feasibility, footprint, guidance_plan)
     pre_runtime_gate = _pre_runtime_workflow_gate(
         source,
         candidate_service,
@@ -163,6 +167,7 @@ def build_onboarding_record(
         feasibility,
         strategy,
         footprint,
+        guidance_plan,
         approvals,
         record_blockers,
     )
@@ -170,11 +175,16 @@ def build_onboarding_record(
     current_state = _current_state(blockers, approvals)
     questions = _questions(blockers, classification, strategy)
 
-    status = "ready_for_handoff"
-    if blockers:
+    if research_plan["status"] == "research_required" and blockers:
+        status = "research_required"
+        current_state = "research_plan"
+        questions = _research_questions(research_plan)
+    elif blockers:
         status = "needs_user_input"
     elif approvals["approval_required"]:
         status = "approval_required"
+    else:
+        status = "ready_for_handoff"
 
     record = {
         "schema_version": HELPER_VERSION,
@@ -189,11 +199,13 @@ def build_onboarding_record(
         "candidate_service": candidate_service,
         "operator_goal": operator_goal,
         "source_evidence": source_evidence,
+        "research_plan": research_plan,
         "unresolved_source_questions": [blocker["question"] for blocker in blockers if blocker["field"].startswith("source_")],
         "classification": classification,
         "feasibility": feasibility,
         "integration_strategy": strategy,
         "footprint_plan": footprint,
+        "guidance_plan": guidance_plan,
         "approval_gate": approvals,
         "pre_runtime_workflow_gate": pre_runtime_gate,
         "dialogue_session": _dialogue_session(
@@ -366,6 +378,7 @@ def build_session_status(record: Mapping[str, Any], *, session_record_path: str 
         "secondary_validation_paradigms": _string_list(strategy.get("secondary_validation_paradigms")),
         "approval_required": bool(approvals.get("approval_required")),
         "required_approval_types": _string_list(approvals.get("required_approval_types")),
+        "research_plan": _compact_research_plan(record.get("research_plan")),
         "pre_runtime_workflow_gate": _compact_pre_runtime_workflow_gate(record.get("pre_runtime_workflow_gate")),
         "answered_questions": _string_list(session.get("answered_questions")),
         "next_questions": _string_list(record.get("next_questions")),
@@ -413,6 +426,7 @@ def build_session_template(record: Mapping[str, Any], *, session_record_path: st
     footprint = _mapping(record.get("footprint_plan"))
     feasibility = _mapping(record.get("feasibility"))
     pre_runtime_gate = _mapping(record.get("pre_runtime_workflow_gate"))
+    research_plan = _mapping(record.get("research_plan"))
 
     descriptor_patch: dict[str, Any] = {}
     if not _first_string(record.get("candidate_service")):
@@ -423,6 +437,13 @@ def build_session_template(record: Mapping[str, Any], *, session_record_path: st
         descriptor_patch["source_evidence"] = [
             {"type": "<docs|package|repository|local_path|issue>", "ref": "<source reference>"}
         ]
+    if research_plan.get("status") == "research_required":
+        descriptor_patch["source_leads"] = _as_list(research_plan.get("seed_leads"))
+        descriptor_patch["abstract_service_spec"] = {
+            "summary": "<compact source-backed service purpose>",
+            "workflow": "<ordinary first-step workflow for assistants using this service>",
+            "lazy_detail": "<when to load detailed tool guidance>",
+        }
 
     classification_patch = {}
     for dimension, allowed in CLASSIFICATION_VALUES.items():
@@ -663,6 +684,173 @@ def _footprint(
     }
 
 
+def _research_plan(
+    source: Mapping[str, Any],
+    source_evidence: list[dict[str, Any]],
+    candidate_service: str | None,
+    operator_goal: str | None,
+) -> dict[str, Any]:
+    explicit = _mapping(source.get("research_plan"))
+    seed_leads = _source_leads(source, source_evidence)
+    required = not source_evidence and bool(seed_leads)
+    status = _first_string(explicit.get("status"))
+    if not status:
+        status = "research_required" if required else "not_required"
+    if source_evidence:
+        status = "complete"
+
+    return {
+        "status": status,
+        "seed_leads": seed_leads,
+        "preferred_seed_types": [
+            "upstream documentation URL",
+            "GitHub repository URL",
+            "package name",
+            "local path",
+            "issue reference",
+            "documentation phrase or search lead",
+        ],
+        "read_only": True,
+        "mutation_allowed": False,
+        "research_agent_instruction": (
+            "Use the seed leads to gather source evidence, transport facts, credential/state boundaries, "
+            "likely tool families, and a draft compact abstract service spec. Do not register, run, probe, "
+            "or mutate services from this research pass."
+        ),
+        "required_outputs": [
+            "source_evidence entries with exact URLs, package names, repository references, local paths, or issue links",
+            "classification values or explicitly unresolved dimensions",
+            "transport and state boundary evidence",
+            "draft abstract_service_spec with summary, workflow, and lazy_detail",
+        ],
+        "candidate_service_hint": candidate_service,
+        "operator_goal_hint": operator_goal,
+    }
+
+
+def _source_leads(source: Mapping[str, Any], source_evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    explicit = source.get("source_leads")
+    if explicit is None:
+        explicit = source.get("research_leads")
+    if explicit is None:
+        explicit = source.get("lead")
+    if explicit is None:
+        explicit = source.get("url")
+    if explicit is None and source_evidence:
+        explicit = source_evidence
+
+    leads = []
+    for item in _as_list(explicit):
+        if isinstance(item, Mapping):
+            leads.append(_redact_for_record(_json_compatible_copy(item)))
+        elif isinstance(item, str) and item.strip():
+            leads.append({"type": _lead_type(item), "ref": item.strip()})
+    return leads
+
+
+def _lead_type(value: str) -> str:
+    lowered = value.strip().lower()
+    if lowered.startswith(("http://", "https://")):
+        if "github.com/" in lowered:
+            return "github_url"
+        return "url"
+    if lowered.startswith(("/", "./", "../")):
+        return "local_path"
+    if lowered.startswith("#") or re.fullmatch(r"[A-Za-z0-9_.-]+#[0-9]+", lowered):
+        return "issue"
+    return "lead"
+
+
+def _research_questions(research_plan: Mapping[str, Any]) -> list[str]:
+    leads = _as_list(research_plan.get("seed_leads"))
+    if leads:
+        return [
+            "Run a read-only research pass from the provided source leads and return source evidence, classification facts, transport/state boundaries, and a draft abstract service spec."
+        ]
+    return [
+        "Provide a source lead for research, preferably an upstream documentation URL or GitHub repository URL, but a package name, local path, issue, or documentation phrase is acceptable."
+    ]
+
+
+def _compact_research_plan(value: Any) -> dict[str, Any]:
+    plan = _mapping(value)
+    if not plan:
+        return {"status": "not_required", "seed_leads": []}
+    return {
+        "status": _first_string(plan.get("status")) or "unknown",
+        "seed_leads": _as_list(plan.get("seed_leads")),
+        "read_only": bool(plan.get("read_only")),
+        "mutation_allowed": bool(plan.get("mutation_allowed")),
+        "required_outputs": _string_list(plan.get("required_outputs")),
+    }
+
+
+def _guidance_plan(source: Mapping[str, Any], candidate_service: str | None) -> dict[str, Any]:
+    explicit = _mapping(source.get("guidance_plan"))
+    raw_spec = (
+        explicit.get("abstract_service_spec")
+        if "abstract_service_spec" in explicit
+        else source.get("abstract_service_spec")
+    )
+    if raw_spec is None:
+        raw_spec = source.get("service_abstract_spec")
+
+    slug = _slug(_first_string(source.get("service_slug"), candidate_service))
+    uri = f"contextforge://service-specs/{slug}/abstract/v1" if slug else ""
+    spec: dict[str, Any] = {
+        "status": "missing",
+        "resource_uri": uri,
+        "required_before_runtime": True,
+        "purpose": "compact proactive service context for Pi, OpenCode, Codex, and other clients",
+        "lazy_detail_rule": "detailed tool prompts/resources remain lazy-loaded after the abstract spec",
+    }
+    if isinstance(raw_spec, Mapping):
+        summary = _first_string(raw_spec.get("summary"), raw_spec.get("use_for"), raw_spec.get("purpose"))
+        workflow = _first_string(raw_spec.get("workflow"), raw_spec.get("start_with"), raw_spec.get("first_step"))
+        lazy_detail = _first_string(raw_spec.get("lazy_detail"), raw_spec.get("lazy_detail_rule"))
+        title = _first_string(raw_spec.get("title"))
+        if summary and workflow:
+            spec.update(
+                {
+                    "status": "known",
+                    "title": title or candidate_service or slug,
+                    "summary": summary,
+                    "workflow": workflow,
+                    "lazy_detail": lazy_detail or spec["lazy_detail_rule"],
+                }
+            )
+    elif isinstance(raw_spec, str) and raw_spec.strip():
+        spec.update(
+            {
+                "status": "known",
+                "title": candidate_service or slug,
+                "summary": raw_spec.strip(),
+                "workflow": "start from the compact ContextForge-published service spec, then choose the relevant tool",
+                "lazy_detail": spec["lazy_detail_rule"],
+            }
+        )
+    else:
+        operator_goal = _first_string(source.get("operator_goal"), source.get("goal"), source.get("desired_outcome"))
+        if candidate_service and operator_goal:
+            spec.update(
+                {
+                    "status": "draft_generated",
+                    "title": candidate_service,
+                    "summary": f"Use {candidate_service} to support this operator outcome: {operator_goal}",
+                    "workflow": "Start with source-backed service identity, scope, transport, and state boundaries from this onboarding record before choosing tools.",
+                    "lazy_detail": spec["lazy_detail_rule"],
+                    "review_required": True,
+                }
+            )
+
+    return {
+        "abstract_service_spec": spec,
+        "generation_requirement": "onboarding must generate or carry a compact abstract service spec before runtime/client readiness",
+        "publication_requirement": "register a ContextForge resource at resource_uri and associate it with the service before runtime/client readiness",
+        "client_loading_requirement": "clients load abstract specs proactively and detailed tool guidance lazily",
+    }
+
+
 def _approval_gate(classification: Mapping[str, Mapping[str, str | None]], strategy: Mapping[str, Any]) -> dict[str, Any]:
     approval_values = []
     approval_entry = classification.get("approval_type", {})
@@ -694,6 +882,7 @@ def _pre_runtime_workflow_gate(
     feasibility: Mapping[str, Any],
     strategy: Mapping[str, Any],
     footprint: Mapping[str, Any],
+    guidance_plan: Mapping[str, Any],
     approvals: Mapping[str, Any],
     record_blockers: list[dict[str, str]],
 ) -> dict[str, Any]:
@@ -765,6 +954,11 @@ def _pre_runtime_workflow_gate(
             "validation_probe_plan",
             bool(planned_probe_layers),
             "planned validation probe layers only; no probes are run by this helper",
+        ),
+        (
+            "abstract_service_spec",
+            _mapping(guidance_plan.get("abstract_service_spec")).get("status") in {"known", "draft_generated"},
+            "compact ContextForge-published service spec resource planned before runtime or client exposure",
         ),
     ]
 
@@ -866,6 +1060,7 @@ def _pre_runtime_blocker(dimension: str) -> dict[str, str]:
         "state_footprint": "Which state footprint evidence defines files, cache, registry, runtime evidence, or stateless behavior?",
         "approval_boundary": "Which approval boundary applies before runtime, client, global, registry, or cleanup work?",
         "validation_probe_plan": "Which validation probe layers should be planned from source evidence without running them?",
+        "abstract_service_spec": "What compact abstract service spec should ContextForge publish for proactive client loading?",
     }
     states = {
         "source_evidence": "source_discovery",
@@ -876,6 +1071,7 @@ def _pre_runtime_blocker(dimension: str) -> dict[str, str]:
         "state_footprint": "footprint_plan",
         "approval_boundary": "approval_gate",
         "validation_probe_plan": "feasibility_review",
+        "abstract_service_spec": "handoff",
     }
     return _blocker(states[dimension], f"pre_runtime_workflow_gate.{dimension}", questions[dimension])
 
@@ -911,6 +1107,7 @@ def _blockers(
     classification: Mapping[str, Mapping[str, str | None]],
     feasibility: Mapping[str, Any],
     footprint: Mapping[str, Any],
+    guidance_plan: Mapping[str, Any],
 ) -> list[dict[str, str]]:
     blockers = []
     if not candidate_service:
@@ -944,6 +1141,14 @@ def _blockers(
         )
     if not footprint["service_slug"]:
         blockers.append(_blocker("footprint_plan", "footprint_plan.service_slug", "Choose a stable service slug."))
+    if _mapping(guidance_plan.get("abstract_service_spec")).get("status") not in {"known", "draft_generated"}:
+        blockers.append(
+            _blocker(
+                "handoff",
+                "guidance_plan.abstract_service_spec",
+                "What compact abstract service spec should ContextForge publish for proactive client loading?",
+            )
+        )
     return blockers
 
 

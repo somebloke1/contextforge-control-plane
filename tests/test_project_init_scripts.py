@@ -2459,6 +2459,108 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertNotIn("cf_project_init_continue", context)
             self.assertNotIn("<contextforge-project-state-readback>", context)
 
+    def test_codex_hook_loads_service_abstract_specs_from_contextforge_resources(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(
+                    [service],
+                    validation_mode="validate_now",
+                    target_client="codex",
+                ),
+                validation_results={"context7:canonical": {"status": "passed", "target_client_visible": True}},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state)
+
+            def fake_request(method: str, path: str, *, token=None, body=None):
+                if path.startswith("/resources?"):
+                    return {
+                        "items": [
+                            {
+                                "id": "resource-context7-abstract",
+                                "uri": "contextforge://service-specs/context7/abstract/v1",
+                                "name": "context7 abstract service spec",
+                            }
+                        ]
+                    }
+                if path == "/resources/resource-context7-abstract":
+                    return {"text": "# Context7 Documentation\n\nUse Context7 for current docs.\n"}
+                raise AssertionError(path)
+
+            with (
+                mock.patch.object(init_hook.gateway, "_read_env", return_value={"PLATFORM_ADMIN_EMAIL": "admin", "PLATFORM_ADMIN_PASSWORD": "pw"}),
+                mock.patch.object(init_hook.gateway, "_token", return_value="token"),
+                mock.patch.object(init_hook.gateway, "_request", side_effect=fake_request),
+            ):
+                context = init_hook.service_abstract_specs_context(root, target_client="codex")
+
+            self.assertIn("<contextforge-service-abstract-specs>", context)
+            self.assertIn("loaded from ContextForge resources", context)
+            self.assertIn("Use Context7 for current docs", context)
+            self.assertNotIn("ssh-tmux", context)
+
+    def test_codex_hook_loads_service_abstract_specs_after_reload_observed_before_validation(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            state = project_state.apply_project_init_activation_to_state(
+                project_state.default_state(root),
+                [service],
+                target_client="codex",
+                client_config_plan=config_plan,
+                validation_plan=binding.build_project_init_validation_plan(
+                    [service],
+                    validation_mode="installed",
+                    target_client="codex",
+                ),
+                validation_results={},
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            job_id = state["project_init"]["current_job_id"]
+            state["project_init"]["activation_jobs"][job_id]["x_client_reload_fsm"] = {
+                "client_type": "codex",
+                "state": "tools_registered_observed",
+                "observed_at": "2026-06-22T02:00:00Z",
+                "proof_ref": "codex-session-start-readback",
+            }
+            project_state.write_state_atomic(root, state)
+
+            def fake_request(method: str, path: str, *, token=None, body=None):
+                if path.startswith("/resources?"):
+                    return {
+                        "items": [
+                            {
+                                "id": "resource-context7-abstract",
+                                "uri": "contextforge://service-specs/context7/abstract/v1",
+                            }
+                        ]
+                    }
+                if path == "/resources/resource-context7-abstract":
+                    return {"text": "# Context7 Documentation\n\nUse Context7 for current docs.\n"}
+                raise AssertionError(path)
+
+            with (
+                mock.patch.object(init_hook.gateway, "_read_env", return_value={"PLATFORM_ADMIN_EMAIL": "admin", "PLATFORM_ADMIN_PASSWORD": "pw"}),
+                mock.patch.object(init_hook.gateway, "_token", return_value="token"),
+                mock.patch.object(init_hook.gateway, "_request", side_effect=fake_request),
+            ):
+                context = init_hook.service_abstract_specs_context(root, target_client="codex")
+
+            self.assertIn("<contextforge-service-abstract-specs>", context)
+            self.assertIn("Use Context7 for current docs", context)
+            state_after_normalization = project_state.load_state(root)
+            client_state = state_after_normalization["project_init"]["client_states"]["codex"]
+            self.assertEqual("tools_registered_observed", client_state["reload_status"])
+            self.assertEqual("installed", client_state["validation_status"])
+
     def test_codex_uncataloged_service_onboarding_prompt_uses_source_only_guidance(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
             root = Path(tmp).resolve()

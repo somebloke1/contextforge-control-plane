@@ -31,6 +31,11 @@
             "Serena is project-scoped and must not be treated as a shared global service."
           ]
         },
+        "abstract_service_spec": {
+          "summary": "Use Serena for project-scoped code intelligence tied to one explicit workspace.",
+          "workflow": "Activate the project-specific backend, then use its code navigation and symbol tools only for that project root.",
+          "lazy_detail": "Load detailed guidance before project activation, indexing, or write-sensitive code operations."
+        },
         "footprint_plan": {
           "service_slug": "serena-cf-controlplane-d46fe58a2a20",
           "files": [
@@ -85,6 +90,11 @@
             "description": "later approved turn should prove the project-scoped Serena backend is provisioned before any runtime or client mutation"
           }
         ],
+        "abstract_service_spec": {
+          "summary": "Use Serena for project-scoped code intelligence once the project backend is explicitly provisioned.",
+          "workflow": "Keep provisioning abeyant until approved, then activate and use the backend only for the matching project root.",
+          "lazy_detail": "Load detailed guidance before provisioning, project activation, indexing, or write-sensitive code operations."
+        },
         "footprint_plan": {
           "service_slug": "serena-cf-controlplane-d46fe58a2a20",
           "files": [
@@ -128,6 +138,11 @@
           "transport_type": "streamable_http",
           "state_type": "stateless",
           "approval_type": "source_only"
+        },
+        "abstract_service_spec": {
+          "summary": "Use docs-search for shared documentation lookup through a native HTTP MCP transport.",
+          "workflow": "Search or query documentation sources, then answer from returned source material with scope limits.",
+          "lazy_detail": "Load detailed guidance when source selection, citation, or extraction bounds matter."
         }
       }
     },
@@ -153,6 +168,11 @@
           "transport_type": "stdio",
           "state_type": "local_filesystem_state",
           "approval_type": "docker_dev_surface"
+        },
+        "abstract_service_spec": {
+          "summary": "Use local-stdio-mcp as a shared stdio MCP backend only after a bridge exposes ContextForge-compatible transports.",
+          "workflow": "Prove the bridge/transceiver first, then register the service through ContextForge with bounded rollback.",
+          "lazy_detail": "Load detailed guidance before bridge launch, dev Docker proof, or registry mutation."
         },
         "footprint_plan": {
           "service_slug": "local-stdio-mcp",
@@ -191,6 +211,11 @@
           "transport_type": "streamable_http",
           "state_type": "credential_state",
           "approval_type": "contextforge_dev_registry"
+        },
+        "abstract_service_spec": {
+          "summary": "Use GitHub for repository, issue, pull request, branch, file, and code-search work within a scoped credential boundary.",
+          "workflow": "Read first, confirm repository and branch identity, and require explicit intent before mutating GitHub state.",
+          "lazy_detail": "Load detailed guidance before file writes, issue changes, branch creation, reviews, or merges."
         },
         "footprint_plan": {
           "service_slug": "github",
@@ -231,6 +256,11 @@
           "transport_type": "stdio",
           "state_type": "runtime_evidence_state",
           "approval_type": "local_ignored_state"
+        },
+        "abstract_service_spec": {
+          "summary": "Use ssh-tmux-session for client/session-local shell control without claiming durable project ownership.",
+          "workflow": "List sessions, inspect snapshots, then send bounded commands only within the live session scope.",
+          "lazy_detail": "Load detailed guidance before raw keys, file transfer, cleanup, or session closure."
         },
         "footprint_plan": {
           "service_slug": "ssh-tmux-session",
@@ -273,6 +303,11 @@
           "transport_type": "streamable_http",
           "state_type": "stateless",
           "approval_type": "source_only"
+        },
+        "abstract_service_spec": {
+          "summary": "Use OpenZeppelin Solidity Contracts to generate Wizard-based Solidity contract source.",
+          "workflow": "Select the contract family, provide concrete feature options, and review generated code and warnings before any deployment use.",
+          "lazy_detail": "Load detailed guidance for the exact contract generator before selecting features or interpreting generated Solidity."
         },
         "footprint_plan": {
           "service_slug": "openzeppelin-solidity-contracts",
