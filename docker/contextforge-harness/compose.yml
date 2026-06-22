@@ -220,6 +220,7 @@ services:
       context: ../..
       dockerfile: docker/contextforge-harness/npm-stdio-host/Dockerfile
     image: contextforge-harness-npm-stdio-host:latest
+    user: "${CONTEXTFORGE_HARNESS_UID:-1000}:${CONTEXTFORGE_HARNESS_GID:-1000}"
     environment:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"

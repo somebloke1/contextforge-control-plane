@@ -21,6 +21,8 @@ import npm_stdio_host_records
 
 RUNTIME_SCHEMA_URI = "contextforge://control-plane/npm-stdio-host-runtime/v1"
 SERVICES_ROOT = Path("server-instances") / npm_stdio_host_records.HOST_SERVICE_ID / "services"
+NPM_STDIO_PORT_BASE = 20_000
+NPM_STDIO_PORT_SPAN = 30_000
 TRANSCEIVER_PYTHON = os.environ.get(
     "CONTEXTFORGE_TRANSCEIVER_PYTHON",
     "/opt/contextforge-transceiver-venv/bin/python",
@@ -49,7 +51,7 @@ def runtime_state_path(project_root: Path, service_binding: str) -> Path:
 
 def endpoint_port(service_binding: str) -> int:
     digest = hashlib.sha256(service_binding.encode("utf-8")).hexdigest()
-    return 9300 + (int(digest[:4], 16) % 500)
+    return NPM_STDIO_PORT_BASE + (int(digest[:8], 16) % NPM_STDIO_PORT_SPAN)
 
 
 def default_endpoint(service_binding: str) -> dict[str, Any]:
@@ -113,6 +115,14 @@ def endpoint(record: Mapping[str, Any], service_binding: str) -> dict[str, Any]:
     return merged
 
 
+def process_cmdline(pid: int) -> str:
+    try:
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return ""
+    return raw.replace(b"\x00", b" ").decode(errors="replace")
+
+
 def pid_running(pid: int) -> bool:
     if pid <= 0:
         return False
@@ -123,6 +133,20 @@ def pid_running(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def bridge_state_running(state: Mapping[str, Any] | None) -> bool:
+    if not state:
+        return False
+    pid = int(state.get("pid") or 0)
+    if not pid_running(pid):
+        return False
+    cmdline = process_cmdline(pid)
+    if not cmdline:
+        return False
+    endpoint_value = state.get("endpoint") if isinstance(state.get("endpoint"), Mapping) else {}
+    port = str(endpoint_value.get("port") or "")
+    return "mcpgateway.translate" in cmdline and (not port or f"--port {port}" in cmdline)
 
 
 def stop_pid(pid: int, *, timeout: float = 5.0) -> bool:
@@ -145,6 +169,31 @@ def read_state(project_root: Path, service_binding: str) -> dict[str, Any] | Non
         return None
     data = read_json(path)
     return data if isinstance(data, dict) else None
+
+
+def runtime_environment(record: Mapping[str, Any], runtime_dir: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    package_bin = runtime_dir / "package" / "node_modules" / ".bin"
+    env["PATH"] = f"{package_bin}{os.pathsep}{env.get('PATH', '')}"
+    environment = record.get("environment") if isinstance(record.get("environment"), Mapping) else {}
+    raw_values = environment.get("values") if isinstance(environment.get("values"), Mapping) else {}
+    for key, value in raw_values.items():
+        name = str(key).strip()
+        if name and value is not None:
+            env[name] = str(value)
+    variables = environment.get("variables")
+    if isinstance(variables, Sequence) and not isinstance(variables, (str, bytes, bytearray)):
+        for item in variables:
+            if not isinstance(item, Mapping):
+                continue
+            name = str(item.get("name") or item.get("key") or "").strip()
+            if not name:
+                continue
+            secret = bool(item.get("secret") or item.get("is_secret") or item.get("isSecret"))
+            value = item.get("value")
+            if not secret and value is not None:
+                env[name] = str(value)
+    return env
 
 
 def install_package(record: Mapping[str, Any], runtime_dir: Path, *, runner=subprocess.run) -> dict[str, Any]:
@@ -178,9 +227,7 @@ def launch_bridge(
 ) -> dict[str, Any]:
     bridge_endpoint = endpoint(record, service_binding)
     port = int(bridge_endpoint["port"])
-    env = os.environ.copy()
-    package_bin = runtime_dir / "package" / "node_modules" / ".bin"
-    env["PATH"] = f"{package_bin}{os.pathsep}{env.get('PATH', '')}"
+    env = runtime_environment(record, runtime_dir)
     cmd = [
         TRANSCEIVER_PYTHON,
         "-m",
@@ -207,6 +254,97 @@ def launch_bridge(
     return {"pid": int(process.pid), "command": cmd, "log_path": str(log_path), "endpoint": bridge_endpoint}
 
 
+def record_port_conflicts(project_root: Path, service_binding: str, record: Mapping[str, Any]) -> list[dict[str, Any]]:
+    desired_port = int(endpoint(record, service_binding)["port"])
+    conflicts: list[dict[str, Any]] = []
+    root = project_root.resolve(strict=False)
+    records_root = root / "server-instances" / npm_stdio_host_records.HOST_SERVICE_ID / "services"
+    for path in records_root.glob("*/runtime-state.json"):
+        try:
+            state = read_json(path)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(state, Mapping) or state.get("service_binding") == service_binding:
+            continue
+        raw_endpoint = state.get("endpoint") if isinstance(state.get("endpoint"), Mapping) else {}
+        if int(raw_endpoint.get("port") or -1) == desired_port and bridge_state_running(state):
+            conflicts.append({"service_binding": state.get("service_binding"), "port": desired_port, "pid": state.get("pid")})
+    index = npm_stdio_host_records.load_index(root)
+    for other_binding, entry in (index.get("records") or {}).items():
+        if other_binding == service_binding or not isinstance(entry, Mapping):
+            continue
+        try:
+            other_path = (root / str(entry["record_path"])).resolve(strict=False)
+            other_record = read_json(other_path)
+        except (KeyError, OSError, json.JSONDecodeError):
+            continue
+        if isinstance(other_record, Mapping):
+            other_endpoint = endpoint(other_record, str(other_binding))
+            if int(other_endpoint.get("port") or -1) == desired_port:
+                conflicts.append({"service_binding": other_binding, "port": desired_port, "record_path": str(other_path)})
+    return conflicts
+
+
+def runtime_state(
+    *,
+    service_binding: str,
+    record_path: Path,
+    runtime_dir: Path,
+    record: Mapping[str, Any],
+    content_digest: str,
+    install: Mapping[str, Any],
+    bridge: Mapping[str, Any],
+    action: str,
+    mutation_performed: bool,
+) -> dict[str, Any]:
+    return {
+        "schema_uri": RUNTIME_SCHEMA_URI,
+        "service_binding": service_binding,
+        "record_path": str(record_path),
+        "runtime_dir": str(runtime_dir),
+        "content_digest": content_digest,
+        "record_snapshot": dict(record),
+        "pid": bridge["pid"],
+        "running": True,
+        "install": dict(install),
+        "endpoint": bridge["endpoint"],
+        "bridge_command": bridge["command"],
+        "log_path": bridge["log_path"],
+        "action": action,
+        "mutation_performed": mutation_performed,
+    }
+
+
+def restore_previous_runtime(
+    previous_state: Mapping[str, Any],
+    *,
+    project_root: Path,
+    service_binding: str,
+    record_path: Path,
+    runtime_dir: Path,
+    runner=subprocess.run,
+    popen=subprocess.Popen,
+) -> dict[str, Any] | None:
+    record = previous_state.get("record_snapshot") if isinstance(previous_state.get("record_snapshot"), Mapping) else None
+    if not record:
+        return None
+    install = install_package(record, runtime_dir, runner=runner)
+    bridge = launch_bridge(record, service_binding, runtime_dir, popen=popen)
+    restored = runtime_state(
+        service_binding=service_binding,
+        record_path=record_path,
+        runtime_dir=runtime_dir,
+        record=record,
+        content_digest=str(previous_state.get("content_digest") or stable_digest(record)),
+        install=install,
+        bridge=bridge,
+        action="rollback_restored_previous_runtime",
+        mutation_performed=True,
+    )
+    write_json_atomic(runtime_state_path(project_root, service_binding), restored)
+    return restored
+
+
 def apply_service(project_root: str | Path, service_binding: str, *, runner=subprocess.run, popen=subprocess.Popen) -> dict[str, Any]:
     root = Path(project_root).resolve(strict=False)
     record, record_path = record_for_binding(root, service_binding)
@@ -216,31 +354,55 @@ def apply_service(project_root: str | Path, service_binding: str, *, runner=subp
     runtime_dir.mkdir(parents=True, exist_ok=True)
     desired_digest = stable_digest(record)
     previous_state = read_state(root, service_binding)
-    if previous_state and previous_state.get("content_digest") == desired_digest and pid_running(int(previous_state.get("pid") or 0)):
+    if previous_state and previous_state.get("content_digest") == desired_digest and bridge_state_running(previous_state):
         previous_state["action"] = "already_applied"
         previous_state["record_path"] = str(record_path)
         previous_state["running"] = True
         previous_state["mutation_performed"] = False
         return previous_state
-    if previous_state and previous_state.get("pid"):
-        stop_pid(int(previous_state["pid"]))
+    conflicts = record_port_conflicts(root, service_binding, record)
+    if conflicts:
+        raise RuntimeError(f"managed npm-stdio endpoint port conflict for {service_binding}: {conflicts}")
     install = install_package(record, runtime_dir, runner=runner)
-    bridge = launch_bridge(record, service_binding, runtime_dir, popen=popen)
-    state = {
-        "schema_uri": RUNTIME_SCHEMA_URI,
-        "service_binding": service_binding,
-        "record_path": str(record_path),
-        "runtime_dir": str(runtime_dir),
-        "content_digest": desired_digest,
-        "pid": bridge["pid"],
-        "running": True,
-        "install": install,
-        "endpoint": bridge["endpoint"],
-        "bridge_command": bridge["command"],
-        "log_path": bridge["log_path"],
-        "action": "updated" if previous_state else "created",
-        "mutation_performed": True,
-    }
+    stopped_previous = False
+    if previous_state and previous_state.get("pid") and bridge_state_running(previous_state):
+        stopped_previous = stop_pid(int(previous_state["pid"]))
+    try:
+        bridge = launch_bridge(record, service_binding, runtime_dir, popen=popen)
+    except Exception as exc:
+        restored = None
+        if previous_state and stopped_previous:
+            try:
+                restored = restore_previous_runtime(
+                    previous_state,
+                    project_root=root,
+                    service_binding=service_binding,
+                    record_path=record_path,
+                    runtime_dir=runtime_dir,
+                    runner=runner,
+                    popen=popen,
+                )
+            except Exception as restore_exc:
+                raise RuntimeError(
+                    "bridge launch failed and previous runtime restoration failed: "
+                    f"{exc}; restore_error={restore_exc}"
+                ) from exc
+        raise RuntimeError(
+            "bridge launch failed; previous runtime restored"
+            if restored
+            else f"bridge launch failed before any previous runtime could be restored: {exc}"
+        ) from exc
+    state = runtime_state(
+        service_binding=service_binding,
+        record_path=record_path,
+        runtime_dir=runtime_dir,
+        record=record,
+        content_digest=desired_digest,
+        install=install,
+        bridge=bridge,
+        action="updated" if previous_state else "created",
+        mutation_performed=True,
+    )
     write_json_atomic(runtime_state_path(root, service_binding), state)
     return state
 
@@ -249,7 +411,7 @@ def view_service(project_root: str | Path, service_binding: str) -> dict[str, An
     root = Path(project_root).resolve(strict=False)
     record_view = npm_stdio_host_records.view_service_record(root, service_binding)
     state = read_state(root, service_binding)
-    running = bool(state and pid_running(int(state.get("pid") or 0)))
+    running = bridge_state_running(state)
     return {
         "schema_uri": RUNTIME_SCHEMA_URI,
         "service_binding": service_binding,
@@ -266,8 +428,11 @@ def delete_service(project_root: str | Path, service_binding: str) -> dict[str, 
     state = read_state(root, service_binding)
     actions: list[dict[str, Any]] = []
     if state and state.get("pid"):
-        ok = stop_pid(int(state["pid"]))
-        actions.append({"action": "stop_bridge_process", "target": str(state["pid"]), "ok": ok})
+        if bridge_state_running(state):
+            ok = stop_pid(int(state["pid"]))
+            actions.append({"action": "stop_bridge_process", "target": str(state["pid"]), "ok": ok})
+        else:
+            actions.append({"action": "stale_bridge_pid_not_running", "target": str(state["pid"]), "ok": True})
     runtime_dir = service_dir(root, service_binding)
     if runtime_dir.exists():
         shutil.rmtree(runtime_dir)

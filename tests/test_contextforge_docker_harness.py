@@ -824,6 +824,7 @@ console.log(JSON.stringify({{
         self.assertIn("npm-stdio-host:", compose)
         self.assertIn("docker/contextforge-harness/npm-stdio-host/Dockerfile", compose)
         self.assertIn("../../server-instances:/workspace/server-instances", compose)
+        self.assertIn('user: "${CONTEXTFORGE_HARNESS_UID:-1000}:${CONTEXTFORGE_HARNESS_GID:-1000}"', compose)
         self.assertIn("node:24-bookworm-slim", dockerfile)
         self.assertIn("mcp-contextforge-gateway", dockerfile)
         self.assertIn("npm_stdio_host_records.py", dockerfile)
@@ -832,6 +833,7 @@ console.log(JSON.stringify({{
         self.assertIn("Managed npm-stdio Host Substrate", readme)
         self.assertIn("managed-record plus runtime CRUD", readme)
         self.assertIn("managed bridge process inside the shared Docker host", readme)
+        self.assertIn("not root-owned on the host", readme)
         self.assertIn("does not yet claim", readme)
         self.assertIn("Pi/OpenCode/Codex target-client readiness", readme)
 

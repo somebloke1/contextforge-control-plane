@@ -532,26 +532,76 @@ def plan_result(
     }
 
 
+def rollback_contextforge_state(
+    client: ContextForgeClient,
+    *,
+    rollback_tokens: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    for token in reversed(rollback_tokens):
+        action = str(token.get("action") or "")
+        target_id = str(token.get("id") or "")
+        previous = token.get("previous")
+        try:
+            if action == "restore_previous_server" and target_id and isinstance(previous, Mapping):
+                client.request("PUT", f"/servers/{target_id}", dict(previous))
+                actions.append({"target": f"/servers/{target_id}", "action": action, "ok": True})
+            elif action == "delete_created_server" and target_id:
+                client.request("DELETE", f"/servers/{target_id}")
+                actions.append({"target": f"/servers/{target_id}", "action": action, "ok": True})
+            elif action == "restore_previous_gateway" and target_id and isinstance(previous, Mapping):
+                client.request("PUT", f"/gateways/{target_id}", dict(previous))
+                actions.append({"target": f"/gateways/{target_id}", "action": action, "ok": True})
+            elif action == "delete_created_gateway" and target_id:
+                client.request("DELETE", f"/gateways/{target_id}")
+                actions.append({"target": f"/gateways/{target_id}", "action": action, "ok": True})
+        except Exception as exc:  # pragma: no cover - defensive report path
+            target = f"/servers/{target_id}" if "server" in action else f"/gateways/{target_id}"
+            actions.append({"target": target, "action": action or "rollback_contextforge_state", "ok": False, "error": sanitize_error(exc)})
+    return actions
+
+
+def best_effort_delete(
+    client: ContextForgeClient,
+    method: str,
+    path: str,
+    *,
+    action: str,
+    target: str | None = None,
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {"target": target or path, "action": action}
+    if extra:
+        result.update(dict(extra))
+    try:
+        client.request(method, path)
+        result["ok"] = True
+    except Exception as exc:
+        result["ok"] = False
+        result["error"] = sanitize_error(exc)
+    return result
+
+
+def best_effort_items(client: ContextForgeClient, path: str, *, actions: list[dict[str, Any]], action: str) -> list[dict[str, Any]]:
+    try:
+        return client.items(path)
+    except Exception as exc:
+        actions.append({"target": path, "action": action, "ok": False, "error": sanitize_error(exc)})
+        return []
+
+
 def rollback_created_contextforge_state(
     client: ContextForgeClient,
     *,
     created_gateway_id: str,
     created_server_id: str,
 ) -> list[dict[str, Any]]:
-    actions: list[dict[str, Any]] = []
-    if created_server_id:
-        try:
-            client.request("DELETE", f"/servers/{created_server_id}")
-            actions.append({"target": f"/servers/{created_server_id}", "action": "delete_created_server", "ok": True})
-        except Exception as exc:  # pragma: no cover - defensive report path
-            actions.append({"target": f"/servers/{created_server_id}", "action": "delete_created_server", "ok": False, "error": sanitize_error(exc)})
+    tokens: list[dict[str, Any]] = []
     if created_gateway_id:
-        try:
-            client.request("DELETE", f"/gateways/{created_gateway_id}")
-            actions.append({"target": f"/gateways/{created_gateway_id}", "action": "delete_created_gateway", "ok": True})
-        except Exception as exc:  # pragma: no cover - defensive report path
-            actions.append({"target": f"/gateways/{created_gateway_id}", "action": "delete_created_gateway", "ok": False, "error": sanitize_error(exc)})
-    return actions
+        tokens.append({"action": "delete_created_gateway", "id": created_gateway_id})
+    if created_server_id:
+        tokens.append({"action": "delete_created_server", "id": created_server_id})
+    return rollback_contextforge_state(client, rollback_tokens=tokens)
 
 
 def apply_package(
@@ -569,6 +619,7 @@ def apply_package(
     created_server_id = ""
     failed_stage = "preflight"
     guidance_resource_rollback_tokens: list[dict[str, Any]] = []
+    contextforge_rollback_tokens: list[dict[str, Any]] = []
     try:
         gateways = client.items("/gateways?include_inactive=true&limit=1000")
         existing_gateway = by_name(gateways, gateway_name)
@@ -586,12 +637,16 @@ def apply_package(
                 )
         failed_stage = "gateway"
         if existing_gateway:
+            contextforge_rollback_tokens.append(
+                {"action": "restore_previous_gateway", "id": row_id(existing_gateway), "previous": dict(existing_gateway)}
+            )
             gateway = client.request("PUT", f"/gateways/{row_id(existing_gateway)}", gateway_body)
             gateway_action = "updated"
         else:
             gateway = client.request("POST", "/gateways", gateway_body)
             gateway_action = "created"
             created_gateway_id = row_id(gateway)
+            contextforge_rollback_tokens.append({"action": "delete_created_gateway", "id": created_gateway_id})
         gateway_id = row_id(gateway)
 
         selected_tools: list[dict[str, Any]] = []
@@ -634,6 +689,9 @@ def apply_package(
         failed_stage = "virtual_server"
         existing_server = by_name(client.items("/servers?include_inactive=true&limit=1000"), server_name)
         if existing_server:
+            contextforge_rollback_tokens.append(
+                {"action": "restore_previous_server", "id": row_id(existing_server), "previous": dict(existing_server)}
+            )
             payload = {
                 "associatedTools": tool_ids,
                 "associatedResources": unique_ids(
@@ -657,15 +715,10 @@ def apply_package(
             )
             server_action = "created"
             created_server_id = row_id(server)
+            contextforge_rollback_tokens.append({"action": "delete_created_server", "id": created_server_id})
     except Exception as exc:
         rollback_actions = rollback_guidance_resources(client, guidance_resource_rollback_tokens)
-        rollback_actions.extend(
-            rollback_created_contextforge_state(
-                client,
-                created_gateway_id=created_gateway_id,
-                created_server_id=created_server_id,
-            )
-        )
+        rollback_actions.extend(rollback_contextforge_state(client, rollback_tokens=contextforge_rollback_tokens))
         failure_report = {
             "failed_stage": failed_stage,
             "sanitized_error": sanitize_error(exc),
@@ -696,6 +749,7 @@ def apply_package(
         "rollback_boundary": {
             "created_gateway_id": created_gateway_id,
             "created_server_id": created_server_id,
+            "contextforge_rollback_actions": [token["action"] for token in contextforge_rollback_tokens],
             "guidance_resource_actions": [token["action"] for token in guidance_resource_rollback_tokens],
             "failure_policy": "rollback_created_contextforge_state_before_error_response",
         },
@@ -715,31 +769,51 @@ def delete_package(
     server_name: str,
 ) -> dict[str, Any]:
     actions: list[dict[str, Any]] = []
-    servers = client.items("/servers?include_inactive=true&limit=1000")
+    servers = best_effort_items(
+        client,
+        "/servers?include_inactive=true&limit=1000",
+        actions=actions,
+        action="list_virtual_servers_for_delete",
+    )
     existing_server = by_name(servers, server_name)
     if existing_server:
         server_id = row_id(existing_server)
-        client.request("DELETE", f"/servers/{server_id}")
-        actions.append({"target": f"/servers/{server_id}", "action": "delete_virtual_server", "ok": True})
+        actions.append(best_effort_delete(client, "DELETE", f"/servers/{server_id}", action="delete_virtual_server"))
     else:
         actions.append({"target": server_name, "action": "virtual_server_absent", "ok": True})
 
-    resources = client.items("/resources?include_inactive=true&limit=1000")
+    resources = best_effort_items(
+        client,
+        "/resources?include_inactive=true&limit=1000",
+        actions=actions,
+        action="list_prompt_library_resources_for_delete",
+    )
     for uri in service_guidance_resource_uris(package):
         existing_resource = by_uri(resources, uri)
         if existing_resource:
             rid = resource_id(existing_resource)
-            client.request("DELETE", f"/resources/{rid}")
-            actions.append({"target": f"/resources/{rid}", "action": "delete_prompt_library_resource", "ok": True, "uri": uri})
+            actions.append(
+                best_effort_delete(
+                    client,
+                    "DELETE",
+                    f"/resources/{rid}",
+                    action="delete_prompt_library_resource",
+                    extra={"uri": uri},
+                )
+            )
         else:
             actions.append({"target": uri, "action": "prompt_library_resource_absent", "ok": True})
 
-    gateways = client.items("/gateways?include_inactive=true&limit=1000")
+    gateways = best_effort_items(
+        client,
+        "/gateways?include_inactive=true&limit=1000",
+        actions=actions,
+        action="list_gateways_for_delete",
+    )
     existing_gateway = by_name(gateways, gateway_name)
     if existing_gateway:
         gateway_id = row_id(existing_gateway)
-        client.request("DELETE", f"/gateways/{gateway_id}")
-        actions.append({"target": f"/gateways/{gateway_id}", "action": "delete_gateway", "ok": True})
+        actions.append(best_effort_delete(client, "DELETE", f"/gateways/{gateway_id}", action="delete_gateway"))
     else:
         actions.append({"target": gateway_name, "action": "gateway_absent", "ok": True})
 
@@ -764,12 +838,22 @@ def delete_package(
             }
         )
 
-    host_delete = npm_stdio_host_records.delete_service_record(
-        npm_stdio_host_records.project_root_from_package(package),
-        package_service_binding(package),
-    )
-    host_action = "delete_npm_stdio_host_record" if host_delete.get("actions") else "npm_stdio_host_record_absent"
-    actions.append({"target": host_delete["service_binding"], "action": host_action, "ok": host_delete["ok"], "details": host_delete["actions"]})
+    try:
+        host_delete = npm_stdio_host_records.delete_service_record(
+            npm_stdio_host_records.project_root_from_package(package),
+            package_service_binding(package),
+        )
+        host_action = "delete_npm_stdio_host_record" if host_delete.get("actions") else "npm_stdio_host_record_absent"
+        actions.append({"target": host_delete["service_binding"], "action": host_action, "ok": host_delete["ok"], "details": host_delete["actions"]})
+    except Exception as exc:
+        actions.append(
+            {
+                "target": package_service_binding(package),
+                "action": "delete_npm_stdio_host_record",
+                "ok": False,
+                "error": sanitize_error(exc),
+            }
+        )
     mutation_performed = any("absent" not in str(action.get("action") or "") for action in actions)
     return {
         "schema_uri": SCHEMA_URI,

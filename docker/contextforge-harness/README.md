@@ -329,6 +329,10 @@ It can materialize a managed record into an installed npm package plus a
 managed bridge process inside the shared Docker host. It does not yet claim
 Pi/OpenCode/Codex target-client readiness.
 
+The Compose service defaults to `CONTEXTFORGE_HARNESS_UID:GID` or `1000:1000`
+so managed records, npm installs, runtime state, and cleanup artifacts written
+through the mounted `server-instances` tree are not root-owned on the host.
+
 ```sh
 docker compose -f compose.yml up -d --build npm-stdio-host
 docker compose -f compose.yml exec npm-stdio-host \

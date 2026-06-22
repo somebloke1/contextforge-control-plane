@@ -252,6 +252,22 @@ class FailingServerClient(FakeClient):
         return super().request(method, path, body)
 
 
+class FailingResourceCreateClient(FakeClient):
+    def request(self, method: str, path: str, body: dict | None = None):
+        if method == "POST" and path == "/resources":
+            self.requests.append((method, path, body))
+            raise RuntimeError("simulated resource creation failure")
+        return super().request(method, path, body)
+
+
+class FailingDeleteClient(FakeClient):
+    def request(self, method: str, path: str, body: dict | None = None):
+        if method == "DELETE" and (path.startswith("/resources/") or path.startswith("/gateways/")):
+            self.requests.append((method, path, body))
+            raise RuntimeError(f"simulated delete failure for {path}")
+        return super().request(method, path, body)
+
+
 class FakeHostRuntime:
     def __init__(self, *, fail_apply: bool = False) -> None:
         self.fail_apply = fail_apply
@@ -463,6 +479,36 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             self.assertIn("delete_created_resource", actions)
             self.assertIn("rollback_npm_stdio_host_record", actions)
 
+    def test_apply_restores_existing_gateway_when_later_stage_fails(self) -> None:
+        executor = load_executor()
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            write_time_package(package_path, root)
+            client = FailingResourceCreateClient()
+            host_runtime = FakeHostRuntime()
+            original_gateway = {"id": "gateway-existing", "name": "time-gateway", "url": "http://old-time/mcp", "tags": ["old"]}
+            client.gateways.append(dict(original_gateway))
+            client.tools.append({"id": "tool-current", "name": "time-dev-docker-get-current-time", "gateway_id": "gateway-existing"})
+            client.tools.append({"id": "tool-convert", "name": "time-dev-docker-convert-time", "gateway_id": "gateway-existing"})
+
+            with self.assertRaises(executor.RuntimeApplyError) as ctx:
+                executor.run(
+                    package_path=package_path,
+                    gateway_name="time-gateway",
+                    server_name="time-server",
+                    apply=True,
+                    client=client,
+                    host_runtime=host_runtime,
+                    wait_attempts=1,
+                )
+
+            self.assertEqual(original_gateway["url"], client.gateways[0]["url"])
+            self.assertEqual(original_gateway["tags"], client.gateways[0]["tags"])
+            self.assertEqual(["apply", "delete"], host_runtime.calls)
+            actions = [action.get("action") for action in ctx.exception.failure_report["rollback_actions_attempted"]]
+            self.assertIn("restore_previous_gateway", actions)
+
     def test_delete_removes_server_prompt_library_resources_gateway_and_host_record(self) -> None:
         executor = load_executor()
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -546,6 +592,41 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             self.assertIn("prompt_library_resource_absent", absent_actions)
             self.assertIn("gateway_absent", absent_actions)
             self.assertIn("npm_stdio_host_record_absent", absent_actions)
+
+    def test_delete_continues_after_contextforge_delete_failure(self) -> None:
+        executor = load_executor()
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            created = write_time_package(package_path, root)
+            client = FailingDeleteClient()
+            host_runtime = FakeHostRuntime()
+            executor.run(
+                package_path=package_path,
+                gateway_name="time-gateway",
+                server_name="time-server",
+                apply=True,
+                client=client,
+                host_runtime=host_runtime,
+                wait_attempts=1,
+            )
+            record_path = Path(created["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["path"])
+
+            deleted = executor.run(
+                package_path=package_path,
+                gateway_name="time-gateway",
+                server_name="time-server",
+                delete=True,
+                client=client,
+                host_runtime=host_runtime,
+            )
+
+            self.assertFalse(record_path.exists())
+            self.assertEqual(["apply", "delete"], host_runtime.calls)
+            self.assertTrue(any(action["action"] == "delete_gateway" and not action["ok"] for action in deleted["delete_actions"]))
+            self.assertTrue(any(action["action"] == "delete_prompt_library_resource" and not action["ok"] for action in deleted["delete_actions"]))
+            self.assertTrue(any(action["action"] == "delete_npm_stdio_host_record" and action["ok"] for action in deleted["delete_actions"]))
+            self.assertEqual("delete action failed", deleted["rollback_boundary"]["residual_cleanup_risk"])
 
     def test_apply_waits_for_delayed_expected_tool_visibility(self) -> None:
         executor = load_executor()
@@ -926,6 +1007,78 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             deleted = runtime.delete_service(root, "time:canonical")
             self.assertEqual("passed", deleted["rollback_result"])
             self.assertFalse(Path(applied["runtime_dir"]).exists())
+
+    def test_npm_stdio_host_runtime_restores_previous_bridge_after_failed_modify_launch(self) -> None:
+        runtime = load_executor().npm_stdio_host_runtime
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            package = write_time_package(package_path, root)
+            runtime.npm_stdio_host_records.upsert_from_runtime_package(package)
+
+            def fake_run(command, **_kwargs):
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            def fake_popen_ok(command, **kwargs):
+                return FakeProcess()
+
+            original_running = runtime.bridge_state_running
+            try:
+                runtime.bridge_state_running = lambda state: bool(state)
+                applied = runtime.apply_service(root, "time:canonical", runner=fake_run, popen=fake_popen_ok)
+                updated_package = json.loads(json.dumps(package))
+                updated_record = updated_package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]
+                updated_record["content"]["stdio"]["args"] = ["mcp-server-time", "--local-timezone", "America/Chicago"]
+                runtime.npm_stdio_host_records.upsert_from_runtime_package(updated_package)
+                calls = {"count": 0}
+
+                class FailedProcess:
+                    pid = 1000000
+                    returncode = 2
+
+                    def poll(self):
+                        return 2
+
+                def fake_popen_fail_then_ok(command, **kwargs):
+                    calls["count"] += 1
+                    return FailedProcess() if calls["count"] == 1 else FakeProcess()
+
+                with self.assertRaisesRegex(RuntimeError, "previous runtime restored"):
+                    runtime.apply_service(root, "time:canonical", runner=fake_run, popen=fake_popen_fail_then_ok)
+
+                state = runtime.read_state(root, "time:canonical")
+                self.assertEqual("rollback_restored_previous_runtime", state["action"])
+                self.assertEqual(applied["content_digest"], state["content_digest"])
+            finally:
+                runtime.bridge_state_running = original_running
+
+    def test_npm_stdio_endpoint_allocation_avoids_existing_record_port(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            first = surfaces.npm_stdio_endpoint_port("service12:canonical")
+            index_dir = root / "server-instances" / "npm-stdio-host"
+            other_record = root / "server-instances" / "service12-canonical" / "npm-stdio-service.json"
+            other_record.parent.mkdir(parents=True, exist_ok=True)
+            other_record.write_text(json.dumps({"endpoint": {"port": first}}), encoding="utf-8")
+            index_dir.mkdir(parents=True, exist_ok=True)
+            (index_dir / "index.json").write_text(
+                json.dumps(
+                    {
+                        "records": {
+                            "service12:canonical": {
+                                "record_path": str(other_record.relative_to(root)),
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertNotEqual(first, surfaces.npm_stdio_endpoint_port("service13:canonical", project_root=root))
+            self.assertNotEqual(
+                surfaces.npm_stdio_endpoint_port("service12:canonical"),
+                surfaces.npm_stdio_endpoint_port("service13:canonical"),
+            )
 
 
 if __name__ == "__main__":
