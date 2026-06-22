@@ -944,6 +944,43 @@ print(json.dumps(outputs))
         self.assertEqual(flash_lite["id"], explicit["id"])
         self.assertNotIn(flash_lite["id"], {profile["id"] for profile in random_candidates})
 
+    def test_ssh_tmux_live_target_prompt_uses_alias_not_real_host(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "comprehensive_mcp_service_dialogue",
+            ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            env_dir = repo_root / "server-instances" / "ssh-tmux"
+            env_dir.mkdir(parents=True)
+            (env_dir / ".env").write_text(
+                "\n".join(
+                    [
+                        "CONTEXTFORGE_SSH_TMUX_TEST_HOST=10.0.0.42",
+                        "CONTEXTFORGE_SSH_TMUX_TEST_ALIAS=contextforge-live-target",
+                        "CONTEXTFORGE_SSH_TMUX_TEST_REMOTE_PROBE_COMMAND=printf ok",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            prompt = module.service_test_prompt(
+                "ssh-tmux",
+                "ssh-tmux",
+                309,
+                316,
+                repo_root=repo_root,
+            )
+
+        self.assertIn("contextforge-live-target", prompt)
+        self.assertIn("printf ok", prompt)
+        self.assertNotIn("10.0.0.42", prompt)
+
     def test_pi_openrouter_profiles_without_route_use_generic_provider(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "comprehensive_mcp_service_dialogue",

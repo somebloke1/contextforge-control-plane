@@ -76,7 +76,32 @@ def default_session_id(client: str, service: str, phase: str, timestamp: str) ->
     return f"mcp-{service}-{phase}-{timestamp}"
 
 
-def service_test_prompt(service: str, display: str, issue: int, global_issue: int) -> str:
+def ssh_tmux_live_target_prompt(repo_root: Path | None) -> str | None:
+    if repo_root is None:
+        return None
+    env_path = repo_root / "server-instances" / "ssh-tmux" / ".env"
+    if not env_path.exists():
+        return None
+    env = read_env(env_path)
+    if not env.get("CONTEXTFORGE_SSH_TMUX_TEST_HOST"):
+        return None
+    alias = env.get("CONTEXTFORGE_SSH_TMUX_TEST_ALIAS") or "contextforge-live-target"
+    probe_command = env.get("CONTEXTFORGE_SSH_TMUX_TEST_REMOTE_PROBE_COMMAND") or "printf 'contextforge-ssh-tmux-ok\\n'"
+    return (
+        f"Please connect to the live SSH test target alias `{alias}`, "
+        f"run `{probe_command}`, report what happened, and close the session. "
+        "Keep the answer concise."
+    )
+
+
+def service_test_prompt(
+    service: str,
+    display: str,
+    issue: int,
+    global_issue: int,
+    *,
+    repo_root: Path | None = None,
+) -> str:
     if service == "context7":
         return (
             "Please use this project's documentation lookup capability to answer: "
@@ -89,6 +114,9 @@ def service_test_prompt(service: str, display: str, issue: int, global_issue: in
             "Keep the answer concise and mention the source you used."
         )
     if service == "ssh-tmux":
+        live_prompt = ssh_tmux_live_target_prompt(repo_root)
+        if live_prompt is not None:
+            return live_prompt
         return (
             "Please inspect this project's active terminal session and report the visible terminal screen. "
             "If there is no active session, say so. Keep the answer concise."
@@ -711,7 +739,13 @@ def main(argv: list[str] | None = None) -> int:
 
         service_test_executed = False
         if activation_postcondition["returncode"] == 0:
-            prompt = service_test_prompt(args.service, str(service["display"]), int(service["issue"]), global_issue)
+            prompt = service_test_prompt(
+                args.service,
+                str(service["display"]),
+                int(service["issue"]),
+                global_issue,
+                repo_root=repo_root,
+            )
             command = uc1.target_client_command(
                 args.client,
                 test_session,
