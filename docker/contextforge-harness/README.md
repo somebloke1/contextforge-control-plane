@@ -323,9 +323,11 @@ client config, or record env-file values.
 
 `npm-stdio-host` is the shared Docker substrate for the managed npm-stdio
 onboarding path. This substrate gives the host a concrete image, Compose
-service, shared `server-instances` mount, Node/npm runtime, and idempotent
-managed-record CLI with add/update, view, and delete operations. It does not
-yet claim full dynamic package start/bridge behavior or target-client readiness.
+service, shared `server-instances` mount, Node/npm runtime, stock ContextForge
+stdio translation support, and idempotent managed-record plus runtime CRUD.
+It can materialize a managed record into an installed npm package plus a
+managed bridge process inside the shared Docker host. It does not yet claim
+Pi/OpenCode/Codex target-client readiness.
 
 ```sh
 docker compose -f compose.yml up -d --build npm-stdio-host
@@ -336,18 +338,23 @@ docker compose -f compose.yml exec npm-stdio-host \
   python3 /opt/contextforge/npm_stdio_host_records.py view \
     --project-root /workspace \
     --service-binding time:canonical
+docker compose -f compose.yml exec npm-stdio-host \
+  python3 /opt/contextforge/npm_stdio_host_runtime.py apply \
+    --project-root /workspace \
+    --service-binding time:canonical
 ```
 
 The runtime/apply executor now materializes the managed
-`npm-stdio-service.json` record before ContextForge registration, publishes the
-runtime package's abstract and detail service guidance as ContextForge
-resources, and associates those resources with the virtual server. On failure
-after partial mutation, it attempts to remove newly-created ContextForge
-gateway/server/resource state and restore or delete the npm-stdio host record
-before returning the error. The same package can be passed with `--view` for
-non-mutating readback or `--delete` to idempotently remove the virtual server,
-service guidance resources, gateway, and host record; already-absent artifacts
-are reported as successful no-ops.
+`npm-stdio-service.json` record, starts or converges the shared-host runtime,
+publishes the runtime package's abstract and detail service guidance as
+ContextForge resources, and associates those resources with the virtual server.
+On failure after partial mutation, it attempts to remove newly-created
+ContextForge gateway/server/resource state, stop/remove the npm-stdio runtime,
+and restore or delete the npm-stdio host record before returning the error.
+The same package can be passed with `--view` for non-mutating readback or
+`--delete` to idempotently remove the virtual server, service guidance
+resources, gateway, shared-host runtime, and host record; already-absent
+artifacts are reported as successful no-ops.
 
 `scripts/probe-time-dev.py` validates both surfaces. The direct probe lists
 tools from `http://127.0.0.1:9209/mcp` and calls `get_current_time` with

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 import time
 import urllib.error
@@ -19,6 +20,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import npm_stdio_host_records
+import npm_stdio_host_runtime
 
 DEFAULT_ENV_FILE = ROOT / "env" / "contextforge.env"
 DEFAULT_BASE_URL = "http://127.0.0.1:4445"
@@ -32,6 +34,17 @@ class ContextForgeClient(Protocol):
         ...
 
     def items(self, path: str) -> list[dict[str, Any]]:
+        ...
+
+
+class NpmStdioHostRuntime(Protocol):
+    def apply(self, package: Mapping[str, Any]) -> dict[str, Any]:
+        ...
+
+    def view(self, package: Mapping[str, Any]) -> dict[str, Any]:
+        ...
+
+    def delete(self, package: Mapping[str, Any]) -> dict[str, Any]:
         ...
 
 
@@ -63,6 +76,52 @@ class HttpContextForgeClient:
 
     def items(self, path: str) -> list[dict[str, Any]]:
         return items(self.request("GET", path))
+
+
+class DockerComposeNpmStdioHostRuntime:
+    def __init__(self, *, compose_file: Path | None = None):
+        self.compose_file = compose_file or (ROOT / "compose.yml")
+
+    def _run(self, command: str, package: Mapping[str, Any]) -> dict[str, Any]:
+        service_binding = package_service_binding(package)
+        result = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                str(self.compose_file),
+                "exec",
+                "-T",
+                "npm-stdio-host",
+                "python3",
+                "/opt/contextforge/npm_stdio_host_runtime.py",
+                command,
+                "--project-root",
+                "/workspace",
+                "--service-binding",
+                service_binding,
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"npm-stdio-host {command} failed: {result.stderr.strip() or result.stdout.strip()}")
+        payload = json.loads(result.stdout)
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"npm-stdio-host {command} returned non-object JSON")
+        return payload
+
+    def apply(self, package: Mapping[str, Any]) -> dict[str, Any]:
+        return self._run("apply", package)
+
+    def view(self, package: Mapping[str, Any]) -> dict[str, Any]:
+        return self._run("view", package)
+
+    def delete(self, package: Mapping[str, Any]) -> dict[str, Any]:
+        return self._run("delete", package)
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -190,6 +249,24 @@ def package_service_name(package: Mapping[str, Any]) -> str:
         or descriptor.get("candidate_service")
         or package_service_binding(package).split(":", 1)[0]
     )
+
+
+def package_record_content(package: Mapping[str, Any]) -> Mapping[str, Any]:
+    artifact = npm_stdio_host_records.npm_record_artifact(package)
+    content = artifact.get("content")
+    if not isinstance(content, Mapping):
+        raise RuntimeError("npm_stdio_service_record.content is required")
+    return content
+
+
+def package_upstream_url(package: Mapping[str, Any]) -> str:
+    content = package_record_content(package)
+    endpoint = content.get("endpoint") if isinstance(content.get("endpoint"), Mapping) else {}
+    value = endpoint.get("streamable_http_url") or endpoint.get("container_url")
+    if not isinstance(value, str) or not value.strip():
+        binding = package_service_binding(package)
+        value = npm_stdio_host_runtime.default_endpoint(binding)["streamable_http_url"]
+    return str(value)
 
 
 def default_names(package: Mapping[str, Any]) -> tuple[str, str]:
@@ -422,6 +499,7 @@ def plan_result(
         "record_path": str(npm_stdio_host_records.record_path(package)),
         "service_binding": package_service_binding(package),
         "content_digest": npm_stdio_host_records.stable_digest(artifact["content"]),
+        "runtime_endpoint": package_upstream_url(package),
     }
     return {
         "schema_uri": SCHEMA_URI,
@@ -632,6 +710,7 @@ def delete_package(
     package: Mapping[str, Any],
     *,
     client: ContextForgeClient,
+    host_runtime: NpmStdioHostRuntime,
     gateway_name: str,
     server_name: str,
 ) -> dict[str, Any]:
@@ -663,6 +742,27 @@ def delete_package(
         actions.append({"target": f"/gateways/{gateway_id}", "action": "delete_gateway", "ok": True})
     else:
         actions.append({"target": gateway_name, "action": "gateway_absent", "ok": True})
+
+    try:
+        host_runtime_delete = host_runtime.delete(package)
+        host_runtime_action = "delete_npm_stdio_host_runtime" if host_runtime_delete.get("mutation_performed") else "npm_stdio_host_runtime_absent"
+        actions.append(
+            {
+                "target": package_service_binding(package),
+                "action": host_runtime_action,
+                "ok": bool(host_runtime_delete.get("rollback_result", "passed") == "passed"),
+                "details": host_runtime_delete,
+            }
+        )
+    except Exception as exc:
+        actions.append(
+            {
+                "target": package_service_binding(package),
+                "action": "delete_npm_stdio_host_runtime",
+                "ok": False,
+                "error": sanitize_error(exc),
+            }
+        )
 
     host_delete = npm_stdio_host_records.delete_service_record(
         npm_stdio_host_records.project_root_from_package(package),
@@ -697,6 +797,7 @@ def view_package(
     package: Mapping[str, Any],
     *,
     client: ContextForgeClient,
+    host_runtime: NpmStdioHostRuntime,
     gateway_name: str,
     server_name: str,
 ) -> dict[str, Any]:
@@ -719,6 +820,10 @@ def view_package(
         npm_stdio_host_records.project_root_from_package(package),
         package_service_binding(package),
     )
+    try:
+        runtime = host_runtime.view(package)
+    except Exception as exc:
+        runtime = {"ok": False, "error": sanitize_error(exc), "mutation_performed": False}
     return {
         "schema_uri": SCHEMA_URI,
         "mutation_performed": False,
@@ -730,6 +835,7 @@ def view_package(
             "catalog_plan_id": package.get("contextforge_registration_plan", {}).get("plan_id"),
         },
         "host_record": host,
+        "host_runtime": runtime,
         "contextforge": {
             "gateway": {"name": gateway_name, "present": gateway is not None, "id": row_id(gateway) if gateway else ""},
             "virtual_server": {"name": server_name, "present": server is not None, "id": row_id(server) if server else ""},
@@ -754,6 +860,7 @@ def run(
     delete: bool = False,
     view: bool = False,
     client: ContextForgeClient | None = None,
+    host_runtime: NpmStdioHostRuntime | None = None,
     base_url: str = DEFAULT_BASE_URL,
     env_file: Path = DEFAULT_ENV_FILE,
     wait_attempts: int = 12,
@@ -766,20 +873,21 @@ def run(
     if sum(1 for selected in selected_operations if selected) > 1:
         raise RuntimeError("--apply, --delete, and --view are mutually exclusive")
     expected = expected_tools(package, expected_tool_names)
+    active_host_runtime = host_runtime or DockerComposeNpmStdioHostRuntime()
     if view:
         active_client = client or load_target_client(base_url, env_file)
-        result = view_package(package, client=active_client, gateway_name=gateway, server_name=server)
+        result = view_package(package, client=active_client, host_runtime=active_host_runtime, gateway_name=gateway, server_name=server)
         result["target"] = {"base_url": base_url, "env_file": str(env_file), "env_values_recorded": False}
         return result
     if delete:
         active_client = client or load_target_client(base_url, env_file)
-        result = delete_package(package, client=active_client, gateway_name=gateway, server_name=server)
+        result = delete_package(package, client=active_client, host_runtime=active_host_runtime, gateway_name=gateway, server_name=server)
         result["target"] = {"base_url": base_url, "env_file": str(env_file), "env_values_recorded": False}
         return result
     if not expected:
         raise RuntimeError("expected tools are required; pass --expected-tool or include expected_tools in the package descriptor")
     if not upstream_url:
-        raise RuntimeError("upstream_url is required")
+        upstream_url = package_upstream_url(package)
     if not apply:
         return plan_result(
             package,
@@ -792,6 +900,22 @@ def run(
             apply=apply,
         )
     host_record, host_rollback_token = npm_stdio_host_records.upsert_from_runtime_package(package)
+    try:
+        host_runtime_result = active_host_runtime.apply(package)
+    except Exception as exc:
+        host_rollback = npm_stdio_host_records.rollback_upsert(host_rollback_token)
+        report = {
+            "failed_stage": "npm_stdio_host_runtime",
+            "sanitized_error": sanitize_error(exc),
+            "rollback_actions_attempted": [
+                {"target": host_record["record_path"], "action": "rollback_npm_stdio_host_record", "ok": host_rollback["ok"], "details": host_rollback["actions"]}
+            ],
+            "rollback_result": "passed" if host_rollback["ok"] else "partial",
+            "residual_cleanup_risk": host_rollback.get("residual_cleanup_risk") or "",
+        }
+        raise RuntimeApplyError(f"runtime/apply failed at npm_stdio_host_runtime: {sanitize_error(exc)}", failure_report=report) from exc
+    runtime_endpoint = host_runtime_result.get("endpoint") if isinstance(host_runtime_result.get("endpoint"), Mapping) else {}
+    upstream_url = str(runtime_endpoint.get("streamable_http_url") or runtime_endpoint.get("container_url") or upstream_url)
     active_client = client or load_target_client(base_url, env_file)
     try:
         result = apply_package(
@@ -804,18 +928,35 @@ def run(
             wait_attempts=wait_attempts,
         )
     except RuntimeApplyError as exc:
+        try:
+            host_runtime_delete = active_host_runtime.delete(package)
+            host_runtime_cleanup = {
+                "target": package_service_binding(package),
+                "action": "rollback_npm_stdio_host_runtime",
+                "ok": host_runtime_delete.get("rollback_result") == "passed",
+                "details": host_runtime_delete,
+            }
+        except Exception as runtime_exc:
+            host_runtime_cleanup = {
+                "target": package_service_binding(package),
+                "action": "rollback_npm_stdio_host_runtime",
+                "ok": False,
+                "error": sanitize_error(runtime_exc),
+            }
         host_rollback = npm_stdio_host_records.rollback_upsert(host_rollback_token)
         report = dict(exc.failure_report)
         report.setdefault("rollback_actions_attempted", [])
         report["rollback_actions_attempted"] = list(report["rollback_actions_attempted"]) + [
+            host_runtime_cleanup,
             {"target": host_record["record_path"], "action": "rollback_npm_stdio_host_record", "ok": host_rollback["ok"], "details": host_rollback["actions"]}
         ]
-        report["rollback_result"] = "passed" if host_rollback["ok"] and report.get("rollback_result") == "passed" else "partial"
+        report["rollback_result"] = "passed" if host_rollback["ok"] and host_runtime_cleanup.get("ok") and report.get("rollback_result") == "passed" else "partial"
         if host_rollback.get("residual_cleanup_risk"):
             report["residual_cleanup_risk"] = host_rollback["residual_cleanup_risk"]
         raise RuntimeApplyError(str(exc), failure_report=report) from exc
     result["target"] = {"base_url": base_url, "env_file": str(env_file), "env_values_recorded": False}
     result["npm_stdio_host_record"] = host_record
+    result["npm_stdio_host_runtime"] = host_runtime_result
     return result
 
 

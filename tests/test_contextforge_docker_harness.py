@@ -825,10 +825,15 @@ console.log(JSON.stringify({{
         self.assertIn("docker/contextforge-harness/npm-stdio-host/Dockerfile", compose)
         self.assertIn("../../server-instances:/workspace/server-instances", compose)
         self.assertIn("node:24-bookworm-slim", dockerfile)
+        self.assertIn("mcp-contextforge-gateway", dockerfile)
         self.assertIn("npm_stdio_host_records.py", dockerfile)
+        self.assertIn("npm_stdio_host_runtime.py", dockerfile)
+        self.assertIn("npm_stdio_host_runtime.py", compose)
         self.assertIn("Managed npm-stdio Host Substrate", readme)
-        self.assertIn("add/update, view, and delete operations", readme)
-        self.assertIn("full dynamic package start/bridge behavior", readme)
+        self.assertIn("managed-record plus runtime CRUD", readme)
+        self.assertIn("managed bridge process inside the shared Docker host", readme)
+        self.assertIn("does not yet claim", readme)
+        self.assertIn("Pi/OpenCode/Codex target-client readiness", readme)
 
     def test_time_onboarding_foil_cleanup_readback_identifies_all_required_artifact_scopes(self) -> None:
         cleanup = _load_script_module(
