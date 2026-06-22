@@ -444,16 +444,96 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("do not call cf_project_init_list_capabilities", pi_source)
         self.assertIn("do not present the existing service activation menu", pi_source)
         self.assertIn("cf_project_service_onboarding_plan", pi_source)
+        self.assertIn("cf_project_service_onboarding_continue", pi_source)
         self.assertIn("copy assistant_visible_response/message exactly", pi_source)
         self.assertIn("Do not reformat it into tables, expose enum names, add helper fields", pi_source)
         self.assertIn("asksForUncatalogedServiceOnboarding", opencode_source)
-        self.assertIn("build_service_onboarding_plan", opencode_source)
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", opencode_source)
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_continue", opencode_source)
         self.assertIn("serviceOnboardingIntakeResponse", opencode_source)
-        self.assertIn("serviceOnboardingPlanResponse", opencode_source)
+        self.assertIn("serviceOnboardingPlanInstruction", opencode_source)
+        self.assertIn("serviceOnboardingPlannedSessions.has(String(sessionID))", opencode_source)
+        self.assertIn("serviceOnboardingPlannedSessions.add(String(sessionID))", opencode_source)
+        self.assertIn("only facts visible in this conversation", opencode_source)
+        self.assertIn("Do not use canned service content", opencode_source)
+        self.assertNotIn("calendar-notes", opencode_source)
         self.assertIn("produce a no-mutation source-only", pi_rules)
         self.assertIn("do not restart project initialization", pi_rules)
         self.assertIn("produce a no-mutation source-only", opencode_rules)
         self.assertIn("do not restart project initialization", opencode_rules)
+        self.assertNotIn("asksForApprovedUncatalogedServiceContinuation", opencode_source)
+        self.assertNotIn("uncataloged catalog promotion", pi_rules)
+        self.assertNotIn("uncataloged catalog promotion", opencode_rules)
+        self.assertNotIn("service-onboarding continuation tool instead", opencode_source)
+
+    def test_opencode_uncataloged_onboarding_transform_preserves_user_source_facts(self) -> None:
+        plugin_uri = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").as_uri()
+        user_text = (
+            "Please onboard this MCP service: "
+            "https://github.com/modelcontextprotocol/servers/tree/main/src/time. "
+            "It is the Time MCP service, stdio, shared canonical, stateless, "
+            "no credentials, expected tools get_current_time and convert_time."
+        )
+        script = f"""
+const mod = await import({json.dumps(plugin_uri)});
+const plugin = await mod.ContextForgeProjectInit({{ directory: "/workspace" }});
+const hook = plugin["experimental.chat.messages.transform"];
+const userText = {json.dumps(user_text)};
+const first = {{
+  messages: [
+    {{
+      info: {{ id: "msg-1", role: "user", sessionID: "session-1" }},
+      parts: [{{ type: "text", text: userText }}],
+    }},
+  ],
+}};
+await hook({{}}, first);
+const second = {{
+  messages: [
+    ...first.messages,
+    {{
+      info: {{ id: "msg-2", role: "assistant", sessionID: "session-1" }},
+      parts: [{{ type: "text", text: "I have a source-only onboarding plan." }}],
+    }},
+    {{
+      info: {{ id: "msg-3", role: "user", sessionID: "session-1" }},
+      parts: [{{ type: "text", text: "approve" }}],
+    }},
+  ],
+}};
+await hook({{}}, second);
+const flatten = (messages) => messages
+  .flatMap((message) => message.parts || [])
+  .map((part) => part.text || "")
+  .join("\\n");
+console.log(JSON.stringify({{
+  firstCount: first.messages.length,
+  firstRoute: first.messages[0].parts[0].text,
+  firstVisibleContext: flatten(first.messages),
+  secondCount: second.messages.length,
+  secondRoute: second.messages[0].parts[0].text,
+  secondVisibleContext: flatten(second.messages),
+}}));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", script],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        parsed = json.loads(result.stdout)
+        self.assertEqual(2, parsed["firstCount"])
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", parsed["firstRoute"])
+        self.assertIn("https://github.com/modelcontextprotocol/servers/tree/main/src/time", parsed["firstVisibleContext"])
+        self.assertIn("get_current_time", parsed["firstVisibleContext"])
+        self.assertNotIn("Reply with exactly the following text", parsed["firstRoute"])
+        self.assertGreaterEqual(parsed["secondCount"], 4)
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_continue", parsed["secondRoute"])
+        self.assertIn("https://github.com/modelcontextprotocol/servers/tree/main/src/time", parsed["secondVisibleContext"])
+        self.assertIn("approve", parsed["secondVisibleContext"])
 
     def test_onboarding_semantic_process_gate_uses_real_clients_and_composite_persona(self) -> None:
         gate = (ROOT / "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md").read_text(encoding="utf-8")
@@ -491,6 +571,10 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
 
         self.assertIn("real Pi or OpenCode client session", gate)
         self.assertIn("Codex-only onboarding run proves nothing", gate)
+        self.assertIn("installer equivalence", gate)
+        self.assertIn("Harness-only, AGENTS-only, hidden, or otherwise non-product", gate)
+        self.assertIn("preserve installer equivalence", method)
+        self.assertIn("installer equivalence", onboarding_skill)
         self.assertIn("randomly compose a", gate)
         self.assertIn("five-dimensional disposition space", gate)
         self.assertIn("stable for the whole dialogue", gate)

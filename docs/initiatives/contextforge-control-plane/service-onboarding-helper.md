@@ -192,6 +192,36 @@ The CLI reads a JSON descriptor and emits a deterministic onboarding record. It
 does not write session state, register services, call ContextForge, start
 containers, edit client config, or mutate runtime state.
 
+## Approved Continuation Boundary
+
+When a client transcript already contains a source-only onboarding plan and the
+operator explicitly approves implementation, registration, or runtime
+continuation for an uncataloged service, the project-init continuation route is
+the wrong abstraction. The client should use the uncataloged-service
+continuation helper instead. That helper consumes only source-derived facts
+already present in the dialogue and emits a service-management handoff plus a
+non-mutating catalog plan.
+
+The continuation is still fail-closed:
+
+- it does not call ContextForge APIs;
+- it does not start, stop, build, or rebuild Docker containers;
+- it does not write client or project activation config;
+- it does not claim target-client-visible service availability.
+
+Its purpose is to route the conversation from `source_ready` into the
+service-management workflow without falling back to cataloged project-init
+activation. Runtime provisioning, ContextForge registry mutation, reload or
+new-session handling, target-client-visible list-tools, and safe calls remain
+separate approved surfaces until a later generic apply path produces evidence.
+Approval language such as "approve catalog promotion" or "metadata-only
+promotion" for an uncataloged service remains inside this service-management
+continuation boundary. It must not be interpreted as a cataloged project-init
+approval, and clients must not respond by showing the existing-service
+activation menu. Until a separate service-management apply surface exists, the
+correct outcome is an honest plan-only boundary and a reusable generic-support
+gap, not a fallback to project activation.
+
 ## Source-Only Resume Envelope
 
 Resumption is explicit and still no-mutation. The emitted `current_state`,
