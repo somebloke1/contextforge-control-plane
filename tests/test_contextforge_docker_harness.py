@@ -56,13 +56,19 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("CONTEXTFORGE_SSH_TMUX_TEST_HOST", wrapper)
+        self.assertIn("CONTEXTFORGE_SSH_TMUX_TEST_ALIAS", wrapper)
         self.assertIn("CONTEXTFORGE_SSH_TMUX_TEST_AUTH_MODE", wrapper)
         self.assertIn("CONTEXTFORGE_SSH_TMUX_TEST_PASSWORD", wrapper)
+        self.assertIn("HostName=$TARGET_HOST", wrapper)
+        self.assertIn("-l \"$TARGET_USER\"", wrapper)
         self.assertIn("sshpass -e", wrapper)
         self.assertIn("SSHPASS=$TARGET_PASSWORD", wrapper)
         self.assertIn("UserKnownHostsFile=$KNOWN_HOSTS", wrapper)
         self.assertIn("StrictHostKeyChecking=$STRICT_HOST_KEY_CHECKING", wrapper)
         self.assertIn("-i \"$PRIVATE_KEY\"", wrapper)
+
+        env_example = (ROOT / "server-instances/ssh-tmux/.env.example").read_text(encoding="utf-8")
+        self.assertIn("CONTEXTFORGE_SSH_TMUX_TEST_ALIAS=contextforge-live-target", env_example)
 
     def test_compose_defines_dev_context7_transceiver_sidecar(self) -> None:
         compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
