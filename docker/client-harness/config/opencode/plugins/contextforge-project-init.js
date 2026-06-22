@@ -17,6 +17,7 @@ const APPROVAL_SOURCE =
 let governancePromptActiveUntil = 0
 const projectDocsLookupGuidanceActiveSessions = new Set()
 const serviceOnboardingPlannedSessions = new Set()
+let serviceOnboardingHowToCache = undefined
 
 const textFromParts = (parts) => {
   return parts
@@ -160,7 +161,11 @@ const asksForProjectCapabilities = (text) => {
 const asksForUncatalogedServiceOnboarding = (text) => {
   const lowered = String(text ?? "").toLowerCase()
   return (
-    (lowered.includes("onboard") || lowered.includes("add a new") || lowered.includes("new mcp service")) &&
+    (lowered.includes("onboard") ||
+      lowered.includes("add a new") ||
+      lowered.includes("add this") ||
+      lowered.includes("add the") ||
+      lowered.includes("new mcp service")) &&
     (lowered.includes("mcp") || lowered.includes("service"))
   )
 }
@@ -290,31 +295,70 @@ const helperResponseWithPayload = (cwd, operation, payload) => {
   }
 }
 
+const helperPayload = (cwd, operation, payload) => {
+  const helper = process.env.CONTEXTFORGE_PROJECT_INIT_HELPER_CLI ?? "/repo/scripts/pi_project_init_helper_cli.py"
+  const result = spawnSync(
+    PYTHON,
+    [
+      helper,
+      "--operation",
+      operation,
+      "--payload-json",
+      JSON.stringify({ project_root: String(cwd), client_type: "opencode", ...payload }),
+    ],
+    {
+      encoding: "utf8",
+      timeout: 10000,
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  )
+  if (result.status !== 0 || !result.stdout?.trim()) return {}
+  try {
+    const payload = JSON.parse(result.stdout)
+    return payload && typeof payload === "object" ? payload : {}
+  } catch {
+    return {}
+  }
+}
+
 const availabilityResponse = (cwd) => helperResponse(cwd, "get_project_tool_availability")
 const capabilitySummaryResponse = (cwd) => helperResponse(cwd, "get_project_capability_summary")
 const stateReadbackResponse = (cwd) => helperResponse(cwd, "get_project_state_readback")
 const recordReloadIfPending = (cwd) => helperResponseWithPayload(cwd, "record_project_init_client_reload", {})
+const serviceOnboardingHowTo = (cwd) => {
+  if (typeof serviceOnboardingHowToCache === "string") return serviceOnboardingHowToCache
+  const payload = helperPayload(cwd, "get_service_onboarding_how_to", {})
+  serviceOnboardingHowToCache = String(payload?.agent_hidden_onboarding_how_to || "")
+  return serviceOnboardingHowToCache
+}
 const serviceOnboardingPlanInstruction = (cwd) =>
   [
     "The user is asking to onboard an uncataloged MCP service in an already initialized ContextForge project.",
-    "If the visible conversation already contains enough source-derived facts for a source-only plan, call `contextforge-helper_cf_project_service_onboarding_plan` with the current project root and only facts visible in this conversation.",
+    serviceOnboardingHowTo(cwd),
+    "If the user provided a URL or other source lead, use available read-only source-research tools against that lead before asking the user for facts that should be discoverable from the source. If no source-research tool is available, say that source-research support is missing and ask only for the facts needed to proceed.",
+    "After source evidence or user answers provide enough source-derived facts for a source-only plan, call `contextforge-helper_cf_project_service_onboarding_plan` with the current project root and only source-derived or user-visible facts.",
     `Use project_root: "${String(cwd)}".`,
     "Use empty strings or empty arrays for unknown fields; do not invent package names, commands, tools, transports, credentials, or implementation facts.",
+    "For list fields such as expected_tools, pass a JSON array of strings, never a comma-separated string.",
     "When the helper returns `assistant_visible_response` or `message`, copy that value exactly as the complete visible reply and stop.",
     "If required facts are missing, ask concise practical intake questions instead.",
     "Do not install, register, start, expose, validate, probe, import, or claim the candidate is available during the source-only planning step.",
+    "If source research or runtime/apply support is unavailable, say so directly as a generic support gap; do not write direct client-local MCP config as a workaround.",
     "Do not use canned service content, examples, or prior test fixtures as a substitute for the user's service.",
   ].join("\n")
 
 const serviceOnboardingContinuationInstruction = (cwd) =>
   [
     "The user is approving continuation for an uncataloged MCP service onboarding that is already active in this session.",
+    serviceOnboardingHowTo(cwd),
     "Do not use project-init activation or the existing service menu for this uncataloged service.",
     "Call `contextforge-helper_cf_project_service_onboarding_continue` with the current project root and only source-derived facts already visible in this conversation.",
     `Use project_root: "${String(cwd)}".`,
     "Use empty strings or empty arrays for unknown fields; do not invent package names, commands, tools, transports, credentials, or implementation facts.",
+    "For list fields such as expected_tools, pass a JSON array of strings, never a comma-separated string.",
     "When the helper returns `assistant_visible_response` or `message`, copy that value exactly as the complete visible reply and stop.",
     "Do not install, register, start, expose, validate, probe, import, or claim the candidate is available unless a later service-management apply surface actually performs that mutation.",
+    "User approval to create arbitrary local client config is not a ContextForge runtime/apply surface; do not use bash, write, or edit to create direct MCP config as a workaround.",
   ].join("\n")
 
 const serviceOnboardingIntakeResponse = () =>
@@ -428,21 +472,29 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         !exactCapabilityResponse && serviceOnboardingPlannedSessions.has(String(sessionID)) && asksForApproval(latestText)
           ? serviceOnboardingContinuationInstruction(cwd)
           : ""
+      const serviceOnboardingActiveRoute =
+        !exactCapabilityResponse &&
+        !serviceOnboardingContinuationRoute &&
+        serviceOnboardingPlannedSessions.has(String(sessionID))
+          ? serviceOnboardingPlanInstruction(cwd)
+          : ""
       const serviceOnboardingPlanRoute =
         !exactCapabilityResponse &&
         !serviceOnboardingContinuationRoute &&
+        !serviceOnboardingActiveRoute &&
         suppliesSourceOnlyOnboardingDetails(latestText)
           ? serviceOnboardingPlanInstruction(cwd)
           : ""
       const exactServiceOnboardingIntakeResponse =
         !exactCapabilityResponse &&
         !serviceOnboardingContinuationRoute &&
+        !serviceOnboardingActiveRoute &&
         !serviceOnboardingPlanRoute &&
         asksForUncatalogedServiceOnboarding(latestText)
           ? serviceOnboardingIntakeResponse()
           : ""
-      const exactStateReadbackResponse = !exactCapabilityResponse && !serviceOnboardingContinuationRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && asksForProjectStateReadback(latestText) ? stateReadbackResponse(cwd) : ""
-      const exactAvailabilityResponse = !exactCapabilityResponse && !serviceOnboardingContinuationRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && !exactStateReadbackResponse && asksForContextForgeTools(latestText) ? availabilityResponse(cwd) : ""
+      const exactStateReadbackResponse = !exactCapabilityResponse && !serviceOnboardingContinuationRoute && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && asksForProjectStateReadback(latestText) ? stateReadbackResponse(cwd) : ""
+      const exactAvailabilityResponse = !exactCapabilityResponse && !serviceOnboardingContinuationRoute && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && !exactStateReadbackResponse && asksForContextForgeTools(latestText) ? availabilityResponse(cwd) : ""
       const exactProjectDocsLookupCapabilityResponse =
         !exactCapabilityResponse &&
         !exactStateReadbackResponse &&
@@ -450,8 +502,8 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         (projectDocsLookupGuidanceActiveSessions.has(String(sessionID)) || asksHowToUseProjectDocsLookupCapability(latestText))
           ? projectDocsLookupCapabilityResponse()
           : ""
-      if (serviceOnboardingContinuationRoute || serviceOnboardingPlanRoute || exactServiceOnboardingIntakeResponse) {
-        const route = serviceOnboardingContinuationRoute || serviceOnboardingPlanRoute
+      if (serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute || exactServiceOnboardingIntakeResponse) {
+        const route = serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute
         const response = exactServiceOnboardingIntakeResponse
         if (serviceOnboardingPlanRoute) {
           serviceOnboardingPlannedSessions.add(String(sessionID))

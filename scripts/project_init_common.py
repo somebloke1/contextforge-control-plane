@@ -31,6 +31,9 @@ PROJECT_INIT_RESOURCE_URI = f"contextforge://cf-controlplane/project-init/{PROMP
 SERENA_GUIDANCE_PROMPT_NAME = "serena_project_instance_guidance"
 SERENA_GUIDANCE_RESOURCE_NAME = f"serena_project_instance_guidance_resource_{PROMPT_VERSION}"
 SERENA_GUIDANCE_RESOURCE_URI = f"contextforge://cf-controlplane/serena-project-instance-guidance/{PROMPT_VERSION}"
+SERVICE_ONBOARDING_HOW_TO_URL_ENV = "CONTEXTFORGE_SERVICE_ONBOARDING_HOW_TO_URL"
+SERVICE_ONBOARDING_HOW_TO_DEFAULT_PATH = REPO_ROOT / "docs" / "initiatives" / "contextforge-control-plane" / "service-onboarding-how-to-prompt.md"
+SERVICE_ONBOARDING_HOW_TO_DEFAULT_URL = SERVICE_ONBOARDING_HOW_TO_DEFAULT_PATH.as_uri()
 
 ENV_PROJECT_INIT_STATUS = "CONTEXTFORGE_PROJECT_INIT_DIALOGUE_STATUS"
 ENV_SERENA_DECISION = "CONTEXTFORGE_SERENA_DECISION"

@@ -21,6 +21,15 @@ change the tested model/profile or add behavioral steering to pass a recent
 transcript. Fix the product surface, helper/tool contract, runner, evaluator,
 or environment instead.
 
+The service-onboarding how-to prompt is part of the product/helper contract
+when it is fetched by the helper from
+`CONTEXTFORGE_SERVICE_ONBOARDING_HOW_TO_URL` or the repo-default URL and
+injected by the target client as hidden route context before onboarding tool
+calls. Ordinary onboarding tool outputs should not carry the how-to text when
+the client has a hidden prompt path. It must not be copied into user-visible
+prose. Do not publish or upsert this how-to during ordinary onboarding tool
+use.
+
 ## Roles
 
 - Tested assistant: a real Pi or OpenCode client session launched through the
@@ -81,15 +90,12 @@ that persona stable for the whole dialogue:
 - technical fluency: nontechnical, command-comfortable, or architecture-aware;
 - interaction style: terse, cooperative, or demanding.
 
-The sampled dimensions compose one persona vector. That vector defines what the
-responder may know and how it answers.
-For example, an ignorant but strict user may provide only the URL and insist
-that the assistant avoid global mutation; an architecture-aware user may state
-preferences for stock ContextForge mechanisms and rollback boundaries when
-asked. Persona answers must be natural and bounded. They may answer a question,
-decline if the persona would not know, or ask the assistant to decide from
-research. They must not volunteer low-level facts the tested assistant did not
-ask for.
+The sampled dimensions compose one persona vector. The simulator prompt should
+define the human's situation, goal, knowledge, and voice, then let the
+model-backed human run. Do not turn the simulated human into an idealized
+compliance actor with a rule stack. If that human is demanding, overconfident,
+imprecise, or pushes for a shortcut, that is part of the behavior space the
+product must survive unless the runner itself leaked hidden controller facts.
 
 Acceptance-matrix runs should use a reactive simulated-human responder that
 reads the tested assistant's previous visible output and produces the next
@@ -199,7 +205,8 @@ be surface-labeled and justified.
 The evaluator must judge:
 
 - whether the tested assistant stayed behind the veil;
-- whether the simulated human answered consistently with its persona;
+- whether the simulated human identity and knowledge context were supplied
+  without leaking hidden controller facts;
 - whether implementation decisions were surfaced methodically;
 - whether the assistant used generic ContextForge onboarding support rather
   than controller memory or direct upstream shortcuts;
@@ -210,7 +217,7 @@ The evaluator must judge:
 - whether user-facing copy was concise and non-noisy;
 - whether the interaction was efficient relative to the persona and task
   complexity, with no gratuitous turns and no omitted required outcome;
-- whether any failure is a runner defect, simulated-human defect,
+- whether any failure is a runner defect,
   tested-client behavior defect, generic-support gap, model inadequacy,
   service-specific issue, or environment/setup defect.
 

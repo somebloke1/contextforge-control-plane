@@ -3,11 +3,64 @@
 from __future__ import annotations
 
 import re
+import os
+import urllib.error
+import urllib.request
 from typing import Any, Mapping, Sequence
 
 import control_plane_service_handoffs as service_handoffs
 import control_plane_service_management as service_management
 import control_plane_service_onboarding_helper as service_onboarding
+from project_init_common import (
+    SERVICE_ONBOARDING_HOW_TO_DEFAULT_URL,
+    SERVICE_ONBOARDING_HOW_TO_URL_ENV,
+)
+
+
+MAX_ONBOARDING_HOW_TO_BYTES = 20_000
+_ONBOARDING_HOW_TO_CACHE: dict[str, dict[str, Any]] = {}
+
+
+def onboarding_how_to_url(data: Mapping[str, Any] | None = None) -> str:
+    if data:
+        value = data.get("onboarding_how_to_url") or data.get("onboardingHowToUrl")
+        if value:
+            return str(value)
+    return os.environ.get(SERVICE_ONBOARDING_HOW_TO_URL_ENV, SERVICE_ONBOARDING_HOW_TO_DEFAULT_URL)
+
+
+def load_onboarding_how_to_prompt(data: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    url = onboarding_how_to_url(data)
+    cached = _ONBOARDING_HOW_TO_CACHE.get(url)
+    if cached:
+        return dict(cached)
+    result: dict[str, Any] = {
+        "url": url,
+        "loaded": False,
+        "text": "",
+        "error": "",
+    }
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "cf-controlplane-onboarding-helper/1"})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            raw = response.read(MAX_ONBOARDING_HOW_TO_BYTES + 1)
+        if len(raw) > MAX_ONBOARDING_HOW_TO_BYTES:
+            raise ValueError(f"onboarding how-to prompt exceeds {MAX_ONBOARDING_HOW_TO_BYTES} bytes")
+        text = raw.decode("utf-8")
+        result.update({"loaded": True, "text": text, "chars": len(text)})
+    except (OSError, UnicodeDecodeError, urllib.error.URLError, ValueError) as exc:
+        result.update({"error": f"{exc.__class__.__name__}: {exc}"})
+    _ONBOARDING_HOW_TO_CACHE[url] = dict(result)
+    return result
+
+
+def hidden_onboarding_guidance(data: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    prompt = load_onboarding_how_to_prompt(data)
+    source = {key: prompt[key] for key in ("url", "loaded", "error", "chars") if key in prompt}
+    return {
+        "agent_hidden_onboarding_how_to": prompt.get("text", ""),
+        "agent_hidden_onboarding_how_to_source": source,
+    }
 
 
 def service_onboarding_descriptor(data: Mapping[str, Any]) -> dict[str, Any]:
@@ -130,6 +183,7 @@ def build_service_onboarding_plan(project_root: str, data: Mapping[str, Any]) ->
         "mutation_allowed": False,
         "assistant_visible_response": visible,
         "message": visible,
+        **hidden_onboarding_guidance(data),
         "record": record,
         "non_actions": record.get("non_actions") or [],
     }
@@ -157,6 +211,7 @@ def build_service_onboarding_continuation(project_root: str, data: Mapping[str, 
         "mutation_allowed": False,
         "assistant_visible_response": visible,
         "message": visible,
+        **hidden_onboarding_guidance(data),
         "handoff": handoff,
         "service_management_result": result,
         "non_actions": [
