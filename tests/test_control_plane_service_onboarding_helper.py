@@ -270,6 +270,54 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertIn("draft abstract_service_spec", " ".join(research["required_outputs"]))  # type: ignore[index]
         self.assertIn("read-only research pass", record["next_questions"][0])  # type: ignore[index]
 
+    def test_time_is_first_development_foil_and_blocks_fetch_until_verified(self) -> None:
+        record = helper.build_onboarding_record(
+            {
+                "candidate_service": "time",
+                "operator_goal": "Develop the first onboarding foil from the Time MCP service.",
+                "source_leads": ["https://github.com/modelcontextprotocol/servers/tree/main/src/time"],
+            },
+            project_root=PROJECT_ROOT,
+            issue="#353",
+        )
+
+        sequence = record["onboarding_sequence"]
+        self.assertTrue(sequence["strict_order"])  # type: ignore[index]
+        self.assertIn("development foils", sequence["purpose"])  # type: ignore[index]
+        self.assertIn("not a canonical", sequence["purpose"])  # type: ignore[index]
+        self.assertEqual("time", sequence["current_foil"]["service"])  # type: ignore[index]
+        self.assertEqual([], sequence["prerequisites"])  # type: ignore[index]
+        self.assertEqual("fetch", sequence["next_foil_locked_until_current_verified"]["service"])  # type: ignore[index]
+        self.assertIn("target-client-visible list-tools plus safe call", sequence["advance_condition"])  # type: ignore[index]
+
+    def test_implementation_decision_brief_names_user_review_categories(self) -> None:
+        record = self.record("native_http_shared_docs_source_only")
+
+        brief = record["implementation_decision_brief"]
+        self.assertEqual("requires_user_review_before_runtime", brief["status"])  # type: ignore[index]
+        self.assertFalse(brief["mutation_allowed"])  # type: ignore[index]
+        self.assertTrue(brief["required_before_runtime"])  # type: ignore[index]
+        self.assertIn("approval or amendment", brief["review_instruction"])  # type: ignore[index]
+        self.assertEqual(
+            [
+                "canonical_identity",
+                "backend_home",
+                "transport_bridge_strategy",
+                "scope_locality",
+                "state_footprint",
+                "credential_auth_boundary",
+                "contextforge_registration_plan",
+                "client_exposure_plan",
+                "reset_and_proof_strategy",
+                "rollback_cleanup",
+            ],
+            [item["id"] for item in brief["decision_categories"]],  # type: ignore[index]
+        )
+        registration = next(
+            item for item in brief["decision_categories"] if item["id"] == "contextforge_registration_plan"  # type: ignore[index]
+        )
+        self.assertIn("bounded registration surface", registration["user_prompt"])  # type: ignore[index]
+
     def test_github_url_lead_is_typed_for_research_plan(self) -> None:
         record = helper.build_onboarding_record(
             {

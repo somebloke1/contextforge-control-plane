@@ -259,7 +259,7 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         ]:
             self.assertIn(phrase, self.doc)
 
-    def test_doc_records_ordered_onboarding_proof_ladder(self) -> None:
+    def test_doc_records_ordered_onboarding_development_foil_ladder(self) -> None:
         expected_order = [
             "`time` - stateless baseline",
             "`fetch` - basic network I/O",
@@ -271,6 +271,11 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         ]
         positions = [self.doc.index(item) for item in expected_order]
         self.assertEqual(positions, sorted(positions))
+        self.assertIn("development foils", self.doc)
+        self.assertIn("This is not a", self.doc)
+        self.assertIn("canonical post-development service set", self.doc)
+        self.assertIn("`time` must be completed before `fetch`", self.doc)
+        self.assertIn("begins.", self.doc)
         for url in [
             "github.com/modelcontextprotocol/servers/tree/main/src/time",
             "github.com/modelcontextprotocol/servers/tree/main/src/fetch",
@@ -281,6 +286,23 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "github.com/ckreiling/mcp-server-docker",
         ]:
             self.assertIn(url, self.doc)
+
+    def test_doc_records_pre_implementation_decision_gate(self) -> None:
+        for phrase in [
+            "Before implementation or runtime/client work",
+            "present them methodically for user",
+            "canonical service identity",
+            "backend home",
+            "transport and bridge strategy",
+            "scope and locality",
+            "state footprint",
+            "credential and auth boundary",
+            "ContextForge registration plan",
+            "client exposure plan",
+            "reset and proof strategy",
+            "rollback and cleanup",
+        ]:
+            self.assertIn(phrase, self.doc)
 
 
 if __name__ == "__main__":

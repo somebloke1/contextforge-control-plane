@@ -22,6 +22,51 @@ RESEARCH_PACKET_SCHEMA_URI = "contextforge://control-plane/schemas/service-onboa
 DEFAULT_SESSION_DIR = Path("run/service-onboarding-sessions")
 LOCAL_SESSION_STORAGE_MODE = "local_ignored_session_file"
 
+ONBOARDING_DEVELOPMENT_FOIL_LADDER = [
+    {
+        "order": 1,
+        "service": "time",
+        "complexity": "stateless baseline",
+        "source_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+    },
+    {
+        "order": 2,
+        "service": "fetch",
+        "complexity": "basic network I/O",
+        "source_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
+    },
+    {
+        "order": 3,
+        "service": "sequentialthinking",
+        "complexity": "state persistence",
+        "source_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking",
+    },
+    {
+        "order": 4,
+        "service": "filesystem",
+        "complexity": "local security constraints",
+        "source_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+    },
+    {
+        "order": 5,
+        "service": "sqlite",
+        "complexity": "structured data handling",
+        "source_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite",
+    },
+    {
+        "order": 6,
+        "service": "kubernetes",
+        "complexity": "dynamic massive schemas and advanced auth",
+        "source_url": "https://github.com/feiskyer/mcp-kubernetes-server",
+    },
+    {
+        "order": 7,
+        "service": "docker",
+        "complexity": "system daemon mounting and external process orchestration",
+        "source_url": "https://github.com/ckreiling/mcp-server-docker",
+    },
+]
+
 DIALOGUE_STATES = (
     "intake",
     "research_plan",
@@ -186,6 +231,18 @@ def build_onboarding_record(
         status = "approval_required"
     else:
         status = "ready_for_handoff"
+    onboarding_sequence = _onboarding_sequence(candidate_service)
+    implementation_decision_brief = _implementation_decision_brief(
+        source,
+        candidate_service,
+        source_evidence,
+        classification,
+        strategy,
+        footprint,
+        guidance_plan,
+        approvals,
+        pre_runtime_gate,
+    )
 
     record = {
         "schema_version": HELPER_VERSION,
@@ -201,12 +258,14 @@ def build_onboarding_record(
         "operator_goal": operator_goal,
         "source_evidence": source_evidence,
         "research_plan": research_plan,
+        "onboarding_sequence": onboarding_sequence,
         "unresolved_source_questions": [blocker["question"] for blocker in blockers if blocker["field"].startswith("source_")],
         "classification": classification,
         "feasibility": feasibility,
         "integration_strategy": strategy,
         "footprint_plan": footprint,
         "guidance_plan": guidance_plan,
+        "implementation_decision_brief": implementation_decision_brief,
         "approval_gate": approvals,
         "pre_runtime_workflow_gate": pre_runtime_gate,
         "dialogue_session": _dialogue_session(
@@ -575,6 +634,189 @@ def build_research_packet(record: Mapping[str, Any], *, session_record_path: str
     }
     _validate_no_secret_leaks(packet)
     return packet
+
+
+def _onboarding_sequence(candidate_service: str | None) -> dict[str, Any]:
+    normalized = _slug(candidate_service)
+    current = next((item for item in ONBOARDING_DEVELOPMENT_FOIL_LADDER if item["service"] == normalized), None)
+    prerequisites = [
+        _json_compatible_copy(item)
+        for item in ONBOARDING_DEVELOPMENT_FOIL_LADDER
+        if current is not None and int(item["order"]) < int(current["order"])
+    ]
+    next_item = next(
+        (
+            _json_compatible_copy(item)
+            for item in ONBOARDING_DEVELOPMENT_FOIL_LADDER
+            if current is not None and int(item["order"]) == int(current["order"]) + 1
+        ),
+        None,
+    )
+    return {
+        "strict_order": True,
+        "purpose": "development foils for building and proving the onboarding process; not a canonical post-development service set",
+        "rule": "perfect onboarding of the current foil before starting the next foil in the ladder",
+        "development_foil_ladder": _json_compatible_copy(ONBOARDING_DEVELOPMENT_FOIL_LADDER),
+        "current_foil": _json_compatible_copy(current) if current else None,
+        "prerequisites": prerequisites,
+        "next_foil_locked_until_current_verified": next_item,
+        "advance_condition": (
+            "current foil has approved decisions, implementation, runtime proof, "
+            "target-client-visible list-tools plus safe call, operator trace, residual-risk ledger, "
+            "and semantic evaluator verdict where language behavior matters"
+        ),
+    }
+
+
+def _implementation_decision_brief(
+    source: Mapping[str, Any],
+    candidate_service: str | None,
+    source_evidence: list[dict[str, Any]],
+    classification: Mapping[str, Mapping[str, str | None]],
+    strategy: Mapping[str, Any],
+    footprint: Mapping[str, Any],
+    guidance_plan: Mapping[str, Any],
+    approvals: Mapping[str, Any],
+    pre_runtime_gate: Mapping[str, Any],
+) -> dict[str, Any]:
+    known = _known_classifications(classification)
+    service_slug = _first_string(footprint.get("service_slug"))
+    abstract_spec = _mapping(guidance_plan.get("abstract_service_spec"))
+    credential_boundary = _first_string(
+        source.get("credential_boundary"),
+        source.get("credential_scope"),
+        source.get("account_boundary"),
+        source.get("tenant_boundary"),
+        source.get("token_boundary"),
+        source.get("installation_boundary"),
+    )
+    state_footprint = _first_string(
+        _mapping(source.get("footprint_plan")).get("state_footprint"),
+        source.get("state_footprint"),
+    )
+
+    decisions = [
+        _decision_item(
+            "canonical_identity",
+            "Canonical service identity",
+            {"candidate_service": candidate_service, "service_slug": service_slug},
+            "approve or amend the canonical service name and stable slug",
+            ["source-backed service identity", "stable ContextForge service slug"],
+        ),
+        _decision_item(
+            "backend_home",
+            "Backend home",
+            {
+                "server_instance_home": _first_string(footprint.get("server_instance_home")),
+                "documented_equivalent": _first_string(footprint.get("documented_equivalent")),
+            },
+            "approve or amend the backend home or explicitly documented equivalent",
+            ["server-instances/<service-slug>/ path or documented equivalent"],
+        ),
+        _decision_item(
+            "transport_bridge_strategy",
+            "Transport and bridge strategy",
+            {
+                "transport_type": known.get("transport_type"),
+                "primary_paradigm": strategy.get("primary_paradigm"),
+                "secondary_validation_paradigms": strategy.get("secondary_validation_paradigms", []),
+            },
+            "approve or amend native registration versus package bridge/transceiver strategy",
+            ["native transport evidence", "bridge command evidence when a transport is missing"],
+        ),
+        _decision_item(
+            "scope_locality",
+            "Scope and locality",
+            {"localization_type": known.get("localization_type")},
+            "approve or amend shared, project, user, credential, remote, dev, or client-local scope",
+            ["source-backed locality and multiplexing boundary"],
+        ),
+        _decision_item(
+            "state_footprint",
+            "State footprint",
+            {"state_type": known.get("state_type"), "state_footprint": state_footprint},
+            "approve or amend statelessness or concrete local/cache/registry/runtime state",
+            ["stateless declaration or concrete state footprint evidence"],
+        ),
+        _decision_item(
+            "credential_auth_boundary",
+            "Credential and auth boundary",
+            {"approval_type": known.get("approval_type"), "credential_boundary": credential_boundary},
+            "approve or amend account, tenant, token, installation, or no-secret boundary",
+            ["credential boundary evidence when credentials scope the service"],
+        ),
+        _decision_item(
+            "contextforge_registration_plan",
+            "ContextForge registration plan",
+            {
+                "runtime_work_allowed": bool(pre_runtime_gate.get("runtime_work_allowed")),
+                "gate_status": _first_string(pre_runtime_gate.get("gate_status")),
+                "required_approval_types": _string_list(approvals.get("required_approval_types")),
+            },
+            "approve or amend the bounded registration surface before any ContextForge mutation",
+            ["approval packet", "registry/API mutation boundary", "post-write readback plan"],
+        ),
+        _decision_item(
+            "client_exposure_plan",
+            "Client exposure plan",
+            {
+                "abstract_service_spec_uri": _first_string(abstract_spec.get("resource_uri")),
+                "client_loading_requirement": _first_string(guidance_plan.get("client_loading_requirement")),
+            },
+            "approve or amend proactive abstract spec loading and lazy detailed guidance plan",
+            ["published abstract spec", "client reload/refresh boundary", "target-client-visible tool list"],
+        ),
+        _decision_item(
+            "reset_and_proof_strategy",
+            "Reset and proof strategy",
+            {
+                "planned_probe_layers": _compact_pre_runtime_workflow_gate(pre_runtime_gate)["planned_validation_probe_layers"],
+                "source_evidence_count": len(source_evidence),
+            },
+            "approve or amend idempotent reset, runtime proof, client proof, and semantic evaluator plan",
+            ["deterministic reset postconditions", "target-client safe call", "semantic evaluator criteria when language matters"],
+        ),
+        _decision_item(
+            "rollback_cleanup",
+            "Rollback and cleanup",
+            {
+                "cleanup_or_rollback": _string_list(footprint.get("cleanup_or_rollback")),
+                "non_actions": list(NON_MUTATION_DEFAULTS),
+            },
+            "approve or amend cleanup, rollback, and non-action boundaries",
+            ["exact rollback or compensating action before runtime mutation"],
+        ),
+    ]
+    return {
+        "status": "requires_user_review_before_runtime",
+        "mutation_allowed": False,
+        "required_before_runtime": True,
+        "review_instruction": "present these decisions methodically to the user for approval or amendment before implementation/runtime/client mutation",
+        "decision_categories": decisions,
+        "unresolved_decisions": [
+            item["id"]
+            for item in decisions
+            if item["status"] != "known"
+        ],
+    }
+
+
+def _decision_item(
+    identifier: str,
+    title: str,
+    current_decision: Mapping[str, Any],
+    user_prompt: str,
+    required_evidence: list[str],
+) -> dict[str, Any]:
+    known = any(value not in (None, "", [], {}) for value in current_decision.values())
+    return {
+        "id": identifier,
+        "title": title,
+        "status": "known" if known else "needs_decision",
+        "current_decision": _redact_for_record(_json_compatible_copy(dict(current_decision))),
+        "user_prompt": user_prompt,
+        "required_evidence": required_evidence,
+    }
 
 
 def _decision_log(
