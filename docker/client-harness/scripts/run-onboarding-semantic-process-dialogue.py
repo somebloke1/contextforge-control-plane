@@ -25,9 +25,20 @@ TURN_BUDGET_POLICY = (
 )
 RESPONDER_CONTEXT_CHAR_LIMIT = 16000
 DEFAULT_PI_RESPONDER_IMAGE = "contextforge-client-pi:human-sim-authenticated"
-DEFAULT_PI_RESPONDER_PROVIDER = "openai"
+DEFAULT_PI_RESPONDER_PROVIDER = "openai-codex"
 DEFAULT_PI_RESPONDER_MODEL = "gpt-5.5"
 DEFAULT_PI_RESPONDER_THINKING = "low"
+PI_RESPONDER_FORBIDDEN_API_KEY_ENVS = (
+    "OPENAI_API_KEY",
+    "CODEX_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENROUTER_API_KEY",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "PERPLEXITY_API_KEY",
+    "EXA_API_KEY",
+    "CONTEXT7_API_KEY",
+)
 
 
 def load_script_module(filename: str, module_name: str) -> Any:
@@ -828,6 +839,9 @@ def main(argv: list[str] | None = None) -> int:
                 "--name",
                 responder_container,
                 "-d",
+            ]
+            + [item for key in PI_RESPONDER_FORBIDDEN_API_KEY_ENVS for item in ("--env", f"{key}=")]
+            + [
                 responder_config["image"],
                 "sleep",
                 "infinity",
