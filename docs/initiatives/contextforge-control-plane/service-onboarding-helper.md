@@ -335,6 +335,16 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboard
 - final stepwise narrative requirement so the controller can distinguish
   research-agent execution problems from package or client behavior.
 
+The research agent must assume the seed lead is all it knows at handoff time.
+Starting from that URL, package, path, issue, phrase, or other concrete clue, it
+must perform enough read-only source research to infer package identity,
+executable or bridge entrypoints, native transport, tool contracts, configuration
+knobs, state footprint, auth boundary, upstream tests, implementation decision
+candidates, unresolved questions, and the compact abstract spec. These facts
+must be cited to source evidence and returned as descriptor-ready output; the
+agent must not substitute controller memory, runtime probes, registry reads, or
+client behavior for source research.
+
 The research packet is source-only. It must not be used to claim
 `backend_ready`, `contextforge_ready`, `target_client_ready`, verified runtime
 behavior, operator workflow success, or semantic acceptance.
