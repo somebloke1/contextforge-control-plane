@@ -79,7 +79,7 @@ WantedBy={STACK_TARGET}
 def target_unit() -> str:
     return """[Unit]
 Description=ContextForge local stack
-Wants=contextforge-gateway.service contextforge-mentality.service contextforge-ssh-tmux.service contextforge-context7.service contextforge-playwright.service contextforge-exa-search.service contextforge-github.service contextforge-web-search.service contextforge-serena-cf-controlplane-d46fe58a2a20.service
+Wants=contextforge-gateway.service contextforge-mentality.service contextforge-ssh-tmux.service contextforge-context7.service contextforge-playwright.service contextforge-exa-search.service contextforge-github.service contextforge-web-search.service contextforge-time.service contextforge-serena-cf-controlplane-d46fe58a2a20.service
 After=network.target
 
 [Install]
@@ -121,6 +121,11 @@ def units() -> dict[str, str]:
             "ContextForge web_search MCP bridge",
             f"{REPO_ROOT / 'server-instances' / 'web-search' / 'run-bridge.sh'}",
             env_files=[REPO_ROOT / "server-instances" / "web-search" / ".env"],
+        ),
+        "contextforge-time.service": service_unit(
+            "ContextForge Time MCP bridge",
+            f"{REPO_ROOT / 'server-instances' / 'time' / 'run-bridge.sh'}",
+            env_files=[REPO_ROOT / "server-instances" / "time" / ".env"],
         ),
         "contextforge-serena-cf-controlplane-d46fe58a2a20.service": service_unit(
             "ContextForge Serena MCP server for cf-controlplane",

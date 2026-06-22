@@ -1,0 +1,77 @@
+{
+  "name": "time",
+  "slug": "time",
+  "service": "time",
+  "service_binding": "time:canonical",
+  "client": "canonical",
+  "source": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+  "config_path": null,
+  "enabled": true,
+  "kind": "mcp",
+  "scope": {
+    "requires_local_project_scope": false,
+    "scope_type": "global_time_timezone_lookup",
+    "configuration_signal": "tool arguments timezone, source_timezone, target_timezone, and HH:MM time",
+    "notes": "The Time MCP service is stateless and scoped by IANA timezone arguments plus the configured local timezone default."
+  },
+  "backend": {
+    "transport": "stdio",
+    "command": "uvx",
+    "args": [
+      "mcp-server-time",
+      "--local-timezone",
+      "UTC"
+    ],
+    "env": "server-instances/time/.env",
+    "env_vars": [
+      "LOCAL_TIMEZONE"
+    ]
+  },
+  "bridge": {
+    "needed": true,
+    "provider": "mcpgateway.translate",
+    "reason": "mcp-server-time is a stdio MCP server; ContextForge registration needs HTTP/SSE exposure",
+    "host": "127.0.0.1",
+    "port": 9109,
+    "streamable_http_url": "http://127.0.0.1:9109/mcp",
+    "sse_url": "http://127.0.0.1:9109/sse"
+  },
+  "contextforge": {
+    "gateway": {
+      "name": "time",
+      "url": "http://localhost:9109/mcp",
+      "transport": "STREAMABLEHTTP",
+      "id": null
+    },
+    "virtual_server": {
+      "name": "time_server",
+      "grouping": "development_foil",
+      "id": null
+    }
+  },
+  "registration": {
+    "status": "planned",
+    "registered_tools": [],
+    "expected_tools": [
+      "get_current_time",
+      "convert_time"
+    ],
+    "safe_probe": {
+      "safe_probe_id": "get-current-time",
+      "tool_name_hint": "time-get-current-time",
+      "arguments": {
+        "timezone": "UTC"
+      }
+    },
+    "verified": {},
+    "review_completed": [
+      "source research identified mcp-server-time package, stdio transport, get_current_time and convert_time tools, stateless behavior, LOCAL_TIMEZONE/--local-timezone configuration, and upstream tests"
+    ]
+  },
+  "development_foil": {
+    "order": 1,
+    "complexity": "stateless baseline",
+    "purpose": "build and prove the onboarding process before advancing to fetch",
+    "not_canonical_post_development_set": true
+  }
+}

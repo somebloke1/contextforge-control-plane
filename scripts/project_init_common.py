@@ -447,6 +447,50 @@ def safe_validation_policy(service_family: str) -> dict[str, Any]:
             },
             "requires_mutation_approval": False,
         },
+        "time": {
+            "mode": "safe_call",
+            "description": "list tools and call a non-mutating current-time lookup with an IANA timezone",
+            "safe_operations": ["get-current-time", "convert-time"],
+            "probe_contract": {
+                "status": "known_safe_probe",
+                "target_client_proof_layers": ["list_tools", "call_tool"],
+                "allowed_tool_name_patterns": [
+                    "time-get-current-time",
+                    "time-convert-time",
+                    "get_current_time",
+                    "convert_time",
+                ],
+                "default_probe": {
+                    "safe_probe_id": "get-current-time",
+                    "tool_name_hint": "time-get-current-time",
+                    "arguments": {"timezone": "UTC"},
+                    "expected_result": "non-error current-time result for the requested IANA timezone",
+                },
+                "accepted_proof_kinds": [
+                    "target_client_safe_probe_result",
+                    "pi_safe_probe_result",
+                ],
+                "validation_result_shape": {
+                    "status": "passed",
+                    "target_client_visible": True,
+                    "proof_kind": "target_client_safe_probe_result",
+                    "safe_probe_result": "passed",
+                    "safe_probe_id": "get-current-time",
+                    "verification_trace_refs": [
+                        "contextforge://control-plane/traces/time-target-client"
+                    ],
+                },
+                "forbidden_substitutions": [
+                    "local date command",
+                    "Python datetime call",
+                    "backend health",
+                    "direct bridge call",
+                    "ContextForge registry readback",
+                    "model knowledge of current time",
+                ],
+            },
+            "requires_mutation_approval": False,
+        },
         "mentality": {
             "mode": "read_only",
             "description": "list or read governance entries only",
