@@ -15,6 +15,11 @@ from typing import Any, Mapping, Protocol
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+
+import npm_stdio_host_records
+
 DEFAULT_ENV_FILE = ROOT / "env" / "contextforge.env"
 DEFAULT_BASE_URL = "http://127.0.0.1:4445"
 OWNER = "admin@contextforge-harness.dev"
@@ -28,6 +33,12 @@ class ContextForgeClient(Protocol):
 
     def items(self, path: str) -> list[dict[str, Any]]:
         ...
+
+
+class RuntimeApplyError(RuntimeError):
+    def __init__(self, message: str, *, failure_report: dict[str, Any]):
+        super().__init__(message)
+        self.failure_report = failure_report
 
 
 class HttpContextForgeClient:
@@ -126,6 +137,10 @@ def associated_ids(existing: Mapping[str, Any], camel: str, snake: str) -> list[
     return [str(value) for value in values if isinstance(value, str)]
 
 
+def sanitize_error(exc: BaseException) -> str:
+    return re.sub(r"Bearer\s+[A-Za-z0-9._~+/=-]+", "Bearer <redacted>", str(exc))
+
+
 def load_package(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -143,6 +158,10 @@ def validate_package(package: Mapping[str, Any]) -> None:
         raise RuntimeError("runtime/apply package is missing service_provision_plan")
     if not isinstance(package.get("contextforge_registration_plan"), Mapping):
         raise RuntimeError("runtime/apply package is missing contextforge_registration_plan")
+    if not isinstance(package.get("install_artifact_contract"), Mapping):
+        raise RuntimeError("runtime/apply package is missing install_artifact_contract")
+    npm_stdio_host_records.npm_record_artifact(package)
+    npm_stdio_host_records.record_path(package)
 
 
 def package_descriptor(package: Mapping[str, Any]) -> dict[str, Any]:
@@ -248,6 +267,13 @@ def plan_result(
     env_file: Path,
     apply: bool,
 ) -> dict[str, Any]:
+    artifact = npm_stdio_host_records.npm_record_artifact(package)
+    host_record_request = {
+        "host_service": npm_stdio_host_records.HOST_SERVICE_ID,
+        "record_path": str(npm_stdio_host_records.record_path(package)),
+        "service_binding": package_service_binding(package),
+        "content_digest": npm_stdio_host_records.stable_digest(artifact["content"]),
+    }
     return {
         "schema_uri": SCHEMA_URI,
         "mutation_performed": False,
@@ -270,12 +296,35 @@ def plan_result(
             "expected_tools": expected_tool_names,
             "gateway_payload": gateway_payload(package, gateway_name=gateway_name, upstream_url=upstream_url),
         },
+        "npm_stdio_host_request": host_record_request,
         "non_actions": [
             "dry-run; no ContextForge API calls",
             "dry-run; no Docker, process, systemd, project-state, client config, or secret mutation",
             "dry-run; no env-file contents read",
         ],
     }
+
+
+def rollback_created_contextforge_state(
+    client: ContextForgeClient,
+    *,
+    created_gateway_id: str,
+    created_server_id: str,
+) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    if created_server_id:
+        try:
+            client.request("DELETE", f"/servers/{created_server_id}")
+            actions.append({"target": f"/servers/{created_server_id}", "action": "delete_created_server", "ok": True})
+        except Exception as exc:  # pragma: no cover - defensive report path
+            actions.append({"target": f"/servers/{created_server_id}", "action": "delete_created_server", "ok": False, "error": sanitize_error(exc)})
+    if created_gateway_id:
+        try:
+            client.request("DELETE", f"/gateways/{created_gateway_id}")
+            actions.append({"target": f"/gateways/{created_gateway_id}", "action": "delete_created_gateway", "ok": True})
+        except Exception as exc:  # pragma: no cover - defensive report path
+            actions.append({"target": f"/gateways/{created_gateway_id}", "action": "delete_created_gateway", "ok": False, "error": sanitize_error(exc)})
+    return actions
 
 
 def apply_package(
@@ -289,71 +338,94 @@ def apply_package(
     wait_attempts: int = 12,
 ) -> dict[str, Any]:
     gateway_body = gateway_payload(package, gateway_name=gateway_name, upstream_url=upstream_url)
-    gateways = client.items("/gateways?include_inactive=true&limit=1000")
-    existing_gateway = by_name(gateways, gateway_name)
-    url_match = by_url(gateways, upstream_url)
-    if existing_gateway and url_match and row_id(url_match) != row_id(existing_gateway):
-        raise RuntimeError(
-            "upstream URL already belongs to gateway "
-            f"{url_match.get('name')!r}; refusing to also assign it to {gateway_name!r}"
-        )
-    if not existing_gateway:
-        if url_match:
+    created_gateway_id = ""
+    created_server_id = ""
+    failed_stage = "preflight"
+    try:
+        gateways = client.items("/gateways?include_inactive=true&limit=1000")
+        existing_gateway = by_name(gateways, gateway_name)
+        url_match = by_url(gateways, upstream_url)
+        if existing_gateway and url_match and row_id(url_match) != row_id(existing_gateway):
             raise RuntimeError(
                 "upstream URL already belongs to gateway "
-                f"{url_match.get('name')!r}; refusing to rename or retag it as {gateway_name!r}"
+                f"{url_match.get('name')!r}; refusing to also assign it to {gateway_name!r}"
             )
-    if existing_gateway:
-        gateway = client.request("PUT", f"/gateways/{row_id(existing_gateway)}", gateway_body)
-        gateway_action = "updated"
-    else:
-        gateway = client.request("POST", "/gateways", gateway_body)
-        gateway_action = "created"
-    gateway_id = row_id(gateway)
+        if not existing_gateway:
+            if url_match:
+                raise RuntimeError(
+                    "upstream URL already belongs to gateway "
+                    f"{url_match.get('name')!r}; refusing to rename or retag it as {gateway_name!r}"
+                )
+        failed_stage = "gateway"
+        if existing_gateway:
+            gateway = client.request("PUT", f"/gateways/{row_id(existing_gateway)}", gateway_body)
+            gateway_action = "updated"
+        else:
+            gateway = client.request("POST", "/gateways", gateway_body)
+            gateway_action = "created"
+            created_gateway_id = row_id(gateway)
+        gateway_id = row_id(gateway)
 
-    selected_tools: list[dict[str, Any]] = []
-    last_tool_error: RuntimeError | None = None
-    for attempt in range(wait_attempts):
-        try:
-            client.request("POST", f"/gateways/{gateway_id}/tools/refresh")
-        except RuntimeError as exc:
-            last_tool_error = exc
+        selected_tools: list[dict[str, Any]] = []
+        last_tool_error: RuntimeError | None = None
+        failed_stage = "tool_refresh"
+        for attempt in range(wait_attempts):
+            try:
+                client.request("POST", f"/gateways/{gateway_id}/tools/refresh")
+            except RuntimeError as exc:
+                last_tool_error = exc
+                if attempt + 1 < wait_attempts:
+                    time.sleep(1)
+                    continue
+                raise
+            gateway_tools = [tool for tool in client.items("/tools?include_inactive=true&limit=1000") if tool_gateway_id(tool) == gateway_id]
+            try:
+                selected_tools = filter_expected_tools(gateway_tools, expected_tool_names)
+                last_tool_error = None
+            except RuntimeError as exc:
+                selected_tools = []
+                last_tool_error = exc
+            if selected_tools:
+                break
             if attempt + 1 < wait_attempts:
                 time.sleep(1)
-                continue
-            raise
-        gateway_tools = [tool for tool in client.items("/tools?include_inactive=true&limit=1000") if tool_gateway_id(tool) == gateway_id]
-        try:
-            selected_tools = filter_expected_tools(gateway_tools, expected_tool_names)
-            last_tool_error = None
-        except RuntimeError as exc:
-            selected_tools = []
-            last_tool_error = exc
-        if selected_tools:
-            break
-        if attempt + 1 < wait_attempts:
-            time.sleep(1)
-    if not selected_tools:
-        if last_tool_error:
-            raise last_tool_error
-        raise RuntimeError(f"gateway {gateway_name} ({gateway_id}) did not expose tools after refresh")
+        if not selected_tools:
+            if last_tool_error:
+                raise last_tool_error
+            raise RuntimeError(f"gateway {gateway_name} ({gateway_id}) did not expose tools after refresh")
 
-    tool_ids = [row_id(tool) for tool in selected_tools]
-    existing_server = by_name(client.items("/servers?include_inactive=true&limit=1000"), server_name)
-    if existing_server:
-        payload = {
-            "associatedTools": tool_ids,
-            "associatedResources": associated_ids(existing_server, "associatedResources", "associatedResourceIds"),
-            "associatedPrompts": associated_ids(existing_server, "associatedPrompts", "associatedPromptIds"),
-            "associatedA2aAgents": associated_ids(existing_server, "associatedA2aAgents", "associatedA2aAgentIds"),
-            "ownerEmail": OWNER,
-            "visibility": VISIBILITY,
+        tool_ids = [row_id(tool) for tool in selected_tools]
+        failed_stage = "virtual_server"
+        existing_server = by_name(client.items("/servers?include_inactive=true&limit=1000"), server_name)
+        if existing_server:
+            payload = {
+                "associatedTools": tool_ids,
+                "associatedResources": associated_ids(existing_server, "associatedResources", "associatedResourceIds"),
+                "associatedPrompts": associated_ids(existing_server, "associatedPrompts", "associatedPromptIds"),
+                "associatedA2aAgents": associated_ids(existing_server, "associatedA2aAgents", "associatedA2aAgentIds"),
+                "ownerEmail": OWNER,
+                "visibility": VISIBILITY,
+            }
+            server = client.request("PUT", f"/servers/{row_id(existing_server)}", payload)
+            server_action = "updated"
+        else:
+            server = client.request("POST", "/servers", {"server": server_payload(package, server_name=server_name, tool_ids=tool_ids), "visibility": VISIBILITY})
+            server_action = "created"
+            created_server_id = row_id(server)
+    except Exception as exc:
+        rollback_actions = rollback_created_contextforge_state(
+            client,
+            created_gateway_id=created_gateway_id,
+            created_server_id=created_server_id,
+        )
+        failure_report = {
+            "failed_stage": failed_stage,
+            "sanitized_error": sanitize_error(exc),
+            "rollback_actions_attempted": rollback_actions,
+            "rollback_result": "passed" if all(action.get("ok") for action in rollback_actions) else "partial",
+            "residual_cleanup_risk": "" if all(action.get("ok") for action in rollback_actions) else "ContextForge cleanup action failed",
         }
-        server = client.request("PUT", f"/servers/{row_id(existing_server)}", payload)
-        server_action = "updated"
-    else:
-        server = client.request("POST", "/servers", {"server": server_payload(package, server_name=server_name, tool_ids=tool_ids), "visibility": VISIBILITY})
-        server_action = "created"
+        raise RuntimeApplyError(f"runtime/apply failed at {failed_stage}: {sanitize_error(exc)}", failure_report=failure_report) from exc
 
     return {
         "schema_uri": SCHEMA_URI,
@@ -369,6 +441,11 @@ def apply_package(
         "server": {"action": server_action, "id": row_id(server), "name": server_name},
         "tool_count": len(selected_tools),
         "tool_names": [str(tool.get("name")) for tool in selected_tools],
+        "rollback_boundary": {
+            "created_gateway_id": created_gateway_id,
+            "created_server_id": created_server_id,
+            "failure_policy": "rollback_created_contextforge_state_before_error_response",
+        },
         "non_actions": [
             "no Docker, process, systemd, project-state, client config, or secret mutation by this registry executor",
             "env-file values not recorded",
@@ -409,17 +486,31 @@ def run(
             env_file=env_file,
             apply=apply,
         )
+    host_record, host_rollback_token = npm_stdio_host_records.upsert_from_runtime_package(package)
     active_client = client or load_target_client(base_url, env_file)
-    result = apply_package(
-        package,
-        client=active_client,
-        gateway_name=gateway,
-        server_name=server,
-        upstream_url=upstream_url,
-        expected_tool_names=expected,
-        wait_attempts=wait_attempts,
-    )
+    try:
+        result = apply_package(
+            package,
+            client=active_client,
+            gateway_name=gateway,
+            server_name=server,
+            upstream_url=upstream_url,
+            expected_tool_names=expected,
+            wait_attempts=wait_attempts,
+        )
+    except RuntimeApplyError as exc:
+        host_rollback = npm_stdio_host_records.rollback_upsert(host_rollback_token)
+        report = dict(exc.failure_report)
+        report.setdefault("rollback_actions_attempted", [])
+        report["rollback_actions_attempted"] = list(report["rollback_actions_attempted"]) + [
+            {"target": host_record["record_path"], "action": "rollback_npm_stdio_host_record", "ok": host_rollback["ok"], "details": host_rollback["actions"]}
+        ]
+        report["rollback_result"] = "passed" if host_rollback["ok"] and report.get("rollback_result") == "passed" else "partial"
+        if host_rollback.get("residual_cleanup_risk"):
+            report["residual_cleanup_risk"] = host_rollback["residual_cleanup_risk"]
+        raise RuntimeApplyError(str(exc), failure_report=report) from exc
     result["target"] = {"base_url": base_url, "env_file": str(env_file), "env_values_recorded": False}
+    result["npm_stdio_host_record"] = host_record
     return result
 
 
@@ -457,6 +548,9 @@ def main(argv: list[str] | None = None) -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except RuntimeApplyError as exc:
+        print(json.dumps({"ok": False, "error": sanitize_error(exc), "failure_report": exc.failure_report}, indent=2, sort_keys=True), file=sys.stderr)
+        raise SystemExit(1)
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1)
