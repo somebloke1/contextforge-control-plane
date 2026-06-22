@@ -49,6 +49,9 @@ registration targets used by the gateway from inside the Compose network.
 - Web Search successor MCP sidecar: `web-search-transceiver` on host
   `http://127.0.0.1:9207` and compose-network
   `http://web-search-transceiver:9207`
+- Time development-foil MCP sidecar: `time-transceiver` on host
+  `http://127.0.0.1:9209` and compose-network
+  `http://time-transceiver:9209`
 - Serena cf-controlplane host proxy: `serena-cf-controlplane-proxy` on Docker
   host-gateway `http://172.17.0.1:9208`, forwarding to host loopback
   `http://127.0.0.1:9108`
@@ -278,6 +281,34 @@ python ../../scripts/plan_contextforge_docker_migration.py
 The migration planner targets the compose-network URL
 `http://web-search-transceiver:9207/mcp`. Registry apply remains a separate
 explicit step after credential-env preflight and direct reachability evidence.
+
+## Time Development-Foil MCP Transceiver
+
+The Time sidecar fronts `mcp-server-time` through the stock ContextForge bridge
+on reserved port `9209`. It is the first onboarding development foil, not a
+canonical post-development service set decision. It uses a Docker-local
+`LOCAL_TIMEZONE`, defaulting to `UTC`, and does not require credentials.
+
+```sh
+docker compose -f compose.yml up -d --build contextforge-gateway time-transceiver
+PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/probe-time-dev.py --direct-only
+PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/register_time_dev.py
+PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/probe-time-dev.py
+```
+
+`scripts/register_time_dev.py` registers
+`http://time-transceiver:9209/mcp` as `time-dev-docker` and
+`time_dev_docker_server` in the development gateway. It is idempotent by
+gateway and virtual-server name and reads credentials only from ignored
+`env/contextforge.env`.
+
+`scripts/probe-time-dev.py` validates both surfaces. The direct probe lists
+tools from `http://127.0.0.1:9209/mcp` and calls `get_current_time` with
+`timezone=UTC`. The virtual probe creates a one-day scoped token for the Time
+server, lists tools through `/servers/{server_id}/mcp/`, calls the same safe
+tool, and revokes the probe token before exiting. This proves only the
+development gateway surface it exercised; target-client readiness still needs
+Pi/OpenCode/Codex-visible list-tools plus safe-call evidence.
 
 ## Serena cf-controlplane Host Proxy
 

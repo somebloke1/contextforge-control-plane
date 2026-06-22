@@ -365,6 +365,17 @@ runtime or target-client proof is attempted. Perfect onboarding of the current
 foil before starting the next one; `time` must be completed before `fetch`
 begins.
 
+The foil output is prototype evidence for the factory method, not a service-
+specific blueprint to memorize. When Time is brought from seed URL to running
+ContextForge service, the controller must extract the generic operations that a
+future onboarding agent needs to perform from only a seed lead: source research,
+package and executable discovery, transport and bridge choice, sidecar or
+equivalent runtime generation, registration script generation, direct and
+virtual probe generation, target-client proof planning, evidence capture, and
+claim-boundary recording. Any step that depends on controller prior knowledge
+instead of source evidence becomes an onboarding-factory gap to encode before
+advancing to the next foil.
+
 1. `time` - stateless baseline:
    <https://github.com/modelcontextprotocol/servers/tree/main/src/time>
 2. `fetch` - basic network I/O:
