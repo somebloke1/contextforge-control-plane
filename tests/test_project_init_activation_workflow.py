@@ -148,6 +148,57 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("client", by_alias["context7"])
         self.assertIn("do not create a per-project backend", by_alias["context7"]["non_actions"])
 
+    def test_capability_menu_omits_missing_manifest_services_when_live_readback_supplied(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as project_tmp, tempfile.TemporaryDirectory(dir=REPO_ROOT) as instances_tmp:
+            root = Path(project_tmp).resolve()
+            instances = Path(instances_tmp)
+            for service in ("context7", "time"):
+                instance = instances / service
+                instance.mkdir()
+                (instance / "instance.json").write_text(
+                    json.dumps(
+                        {
+                            "enabled": True,
+                            "name": service,
+                            "slug": service,
+                            "service": service,
+                            "contextforge": {
+                                "gateway": {"name": f"{service}-gateway"},
+                                "virtual_server": {"name": f"{common.normalize_codex_alias(service)}_server"},
+                            },
+                            "backend": {"transport": "stdio"},
+                            "scope": {"scope_type": "shared_canonical"},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            capabilities = helper.list_available_capabilities(
+                project_root=root,
+                contextforge_servers=[{"name": "context7_server", "id": "vs-context7"}],
+                server_instances_root=instances,
+            )
+
+        service_ids = {service["service_binding"] for service in capabilities["available_services"]}
+        choice_ids = {choice["id"] for choice in capabilities["next_turn"]["choices"]}
+        self.assertIn("context7:canonical", service_ids)
+        self.assertIn("context7:canonical", choice_ids)
+        self.assertNotIn("time:canonical", service_ids)
+        self.assertNotIn("time:canonical", choice_ids)
+
+    def test_capability_menu_keeps_project_scoped_serena_provisioning_with_live_readback(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as project_tmp, tempfile.TemporaryDirectory(dir=REPO_ROOT) as instances_tmp:
+            root = Path(project_tmp).resolve()
+            identity = common.project_identity(root)
+            capabilities = helper.list_available_capabilities(
+                project_root=root,
+                contextforge_servers=[],
+                server_instances_root=instances_tmp,
+            )
+
+        service_ids = {service["service_binding"] for service in capabilities["available_services"]}
+        self.assertIn(f"serena:{identity.hash}", service_ids)
+
     def test_discovery_adds_unprovisioned_serena_candidate_for_new_workspace_project(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()

@@ -267,7 +267,9 @@ def discover_contextforge_hosted_services(
             if manifest_provisioning_required
             else ("matched" if live_server else ("not_checked" if contextforge_servers is None else "missing"))
         )
-        provisioning_required = manifest_provisioning_required or status in {"missing", "stale"}
+        provisioning_required = manifest_provisioning_required or (
+            service_family == "serena" and status in {"missing", "stale"}
+        )
         scope = manifest.get("scope") if isinstance(manifest.get("scope"), dict) else {}
         if provisioning_required and not scope and canonical_project_root:
             scope = _serena_project_scope(canonical_path(str(canonical_project_root)), provisioned=False)

@@ -332,9 +332,45 @@ def contextforge_foil_preflight(
         result["error"] = "foil requires preexisting ContextForge artifact preflight but defines no forbidden bindings"
         return result
 
+    registry_readback_path = output_root / "preflight-contextforge-foil-clean-readback.json"
+    registry_result = uc1.run(
+        [
+            sys.executable,
+            str(repo_root / "docker" / "contextforge-harness" / "scripts" / "clean_onboarding_foil.py"),
+            "--foil",
+            str(foil.get("id") or "time"),
+            "--output",
+            str(registry_readback_path),
+        ],
+        cwd=repo_root,
+        timeout=120,
+        commands=commands,
+    )
+    registry_parsed = uc1.parse_json_or_text(str(registry_result.get("stdout") or ""))
+    if not registry_readback_path.exists():
+        write_json(registry_readback_path, registry_parsed)
+    result["structured_registry_readback"] = {
+        "returncode": registry_result["returncode"],
+        "timeout": registry_result["timeout"],
+        "path": str(registry_readback_path),
+        "status": registry_parsed.get("status") if isinstance(registry_parsed, dict) else None,
+        "counts": registry_parsed.get("counts") if isinstance(registry_parsed, dict) else None,
+    }
+    if not isinstance(registry_parsed, dict) or registry_result["timeout"]:
+        result["status"] = "failed"
+        result["error"] = "could not prove foil absence from structured ContextForge registry readback"
+        return result
+    if registry_parsed.get("status") != "clean":
+        result["status"] = "invalid_preexisting_foil_artifacts"
+        result["error"] = "foil is already visible in structured ContextForge registry readback before onboarding dialogue"
+        result["structured_registry_status"] = registry_parsed.get("status")
+        result["structured_registry_counts"] = registry_parsed.get("counts")
+        return result
+
     payload = {
         "project_root": workspace_from_reset(reset_json, harness_root),
         "client_type": args.client,
+        "contextforge_servers": registry_parsed.get("contextforge_servers") or [],
     }
     helper_result = uc1.run(
         [

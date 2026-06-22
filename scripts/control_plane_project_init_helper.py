@@ -694,12 +694,17 @@ def list_available_capabilities(
                 "root_attestation": readiness["root_attestation"],
                 **alignment_offer,
             }
+    live_contextforge_readback_supplied = contextforge_servers is not None
     services = discover_contextforge_hosted_services(
         project_root=project_root,
         contextforge_servers=contextforge_servers,
         **({"server_instances_root": server_instances_root} if server_instances_root is not None else {}),
     )
-    candidates = [_candidate(service, client_type=client_type) for service in services]
+    candidates = [
+        _candidate(service, client_type=client_type)
+        for service in services
+        if _service_visible_in_activation_menu(service, live_contextforge_readback_supplied=live_contextforge_readback_supplied)
+    ]
     return {
         "client_type": client_type,
         "root_attestation": readiness["root_attestation"],
@@ -2526,6 +2531,20 @@ def _candidate(service: Mapping[str, Any], *, client_type: str = "codex") -> dic
             contextforge_server_id=service.get("contextforge_server_id"),
         ),
     }
+
+
+def _service_visible_in_activation_menu(
+    service: Mapping[str, Any],
+    *,
+    live_contextforge_readback_supplied: bool,
+) -> bool:
+    if not live_contextforge_readback_supplied:
+        return True
+    status = str(service.get("contextforge_readback_status") or "")
+    provisioning = service.get("provisioning") if isinstance(service.get("provisioning"), Mapping) else {}
+    if status in {"missing", "stale"} and provisioning.get("status") != "required":
+        return False
+    return True
 
 
 def _service_identity_id(

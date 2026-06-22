@@ -46,10 +46,12 @@ The development ContextForge surface must also be clean for the selected foil
 at the beginning of an acceptance run. If the foil already exists as an MCP
 service, service tool set, virtual server, service-bound prompt, service-bound
 resource, or client activation-menu entry, the onboarding run is invalid
-because the tested assistant can start from already-onboarded state. Current
-runners must fail closed on any visible foil exposure they can deterministically
-read, and the cleanup/readback practice must co-evolve as ContextForge exposes
-additional artifact APIs.
+because the tested assistant can start from already-onboarded state. Runners
+must fail closed unless structured ContextForge registry readback and
+activation-menu readback both prove the foil is absent. Preparing the dev
+surface is a separate explicit step; use the foil cleanup/readback utility with
+`--apply` only when deliberately resetting the development surface before a
+new acceptance attempt.
 
 The runner may know evaluator criteria and evidence routing, but that
 information must stay outside prompts sent to the tested assistant.
@@ -138,8 +140,10 @@ The runner must:
 - reset target-client container, home, workspace, scoped token files, and
   evidence root idempotently;
 - preflight the declared ContextForge development surface for preexisting foil
-  exposure before dialogue begins, including at least available-capabilities
-  readback, and stop as invalid if the foil is already visible;
+  exposure before dialogue begins, including structured registry readback for
+  MCP service, tools, virtual server, prompts, and resources plus
+  available-capabilities readback for activation-menu exposure; stop as invalid
+  if the foil is already visible;
 - choose one semantic-test model profile for the full run;
 - start non-ephemeral Pi/OpenCode containers;
 - maintain distinct session ids for tested assistant and simulated human;

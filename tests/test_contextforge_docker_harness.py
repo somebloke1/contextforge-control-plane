@@ -574,7 +574,9 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("agent_supplied_prompt_file", dialogue_runner)
         self.assertIn("runner seeded prompts are structural scaffolding", dialogue_runner)
         self.assertIn("invalid_preexisting_foil_artifacts", dialogue_runner)
+        self.assertIn("preflight-contextforge-foil-clean-readback.json", dialogue_runner)
         self.assertIn("preflight-contextforge-available-capabilities.json", dialogue_runner)
+        self.assertIn('"contextforge_servers": registry_parsed.get("contextforge_servers") or []', dialogue_runner)
         self.assertIn("dry_run", dialogue_runner)
         self.assertIn("if not args.dry_run", dialogue_runner)
         self.assertIn("MIN_MODEL_QUORUM = 3", quorum_runner)
@@ -644,6 +646,233 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/register_time_dev.py", readme)
         self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/probe-time-dev.py", readme)
         self.assertIn("target-client readiness still needs", readme)
+
+    def test_time_onboarding_foil_cleanup_readback_identifies_all_required_artifact_scopes(self) -> None:
+        cleanup = _load_script_module(
+            ROOT / "docker/contextforge-harness/scripts/clean_onboarding_foil.py",
+            "clean_onboarding_foil_test",
+        )
+        live = {
+            "gateways": [{"id": "gateway-time", "name": "time-dev-docker", "enabled": True}],
+            "tools": [
+                {
+                    "id": "tool-time",
+                    "name": "time-dev-docker-get-current-time",
+                    "gatewayId": "gateway-time",
+                    "enabled": True,
+                }
+            ],
+            "servers": [
+                {
+                    "id": "server-time",
+                    "name": "time_dev_docker_server",
+                    "associatedToolIds": ["tool-time"],
+                    "associatedPromptIds": ["prompt-time"],
+                    "associatedResourceIds": ["resource-time"],
+                    "enabled": True,
+                }
+            ],
+            "prompts": [{"id": "prompt-time", "name": "time-abstract-spec", "enabled": True}],
+            "resources": [
+                {
+                    "id": "resource-time",
+                    "name": "time abstract spec",
+                    "uri": "contextforge://time/abstract-spec",
+                    "enabled": True,
+                }
+            ],
+        }
+
+        manifest = cleanup.build_manifest(
+            foil_id="time",
+            base_url="http://127.0.0.1:4445",
+            live=live,
+            apply=False,
+        )
+
+        self.assertEqual("dirty", manifest["status"])
+        self.assertEqual(
+            {
+                "mcp_service": 1,
+                "service_bound_prompts": 1,
+                "service_bound_resources": 1,
+                "service_tools": 1,
+                "virtual_server": 1,
+            },
+            manifest["counts"],
+        )
+        self.assertEqual(
+            ["virtual_server", "service_bound_prompts", "service_bound_resources", "service_tools", "mcp_service"],
+            [operation["scope"] for operation in manifest["planned_operations"]],
+        )
+        self.assertEqual(
+            [{"enabled": True, "id": "server-time", "name": "time_dev_docker_server"}],
+            manifest["contextforge_servers"],
+        )
+        self.assertFalse(manifest["live_mutation_performed"])
+
+    def test_time_onboarding_foil_cleanup_cli_fixture_fails_closed_when_dirty(self) -> None:
+        live = {
+            "gateways": [{"id": "gateway-time", "name": "time-dev-docker", "enabled": True}],
+            "tools": [],
+            "servers": [],
+            "prompts": [],
+            "resources": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            live_json = root / "live.json"
+            output = root / "readback.json"
+            live_json.write_text(json.dumps(live), encoding="utf-8")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "docker/contextforge-harness/scripts/clean_onboarding_foil.py"),
+                    "--foil",
+                    "time",
+                    "--live-json",
+                    str(live_json),
+                    "--output",
+                    str(output),
+                ],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+            )
+            manifest = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(2, result.returncode, result.stdout)
+        self.assertEqual("", result.stderr)
+        self.assertEqual("dirty", manifest["status"])
+        self.assertEqual(1, manifest["counts"]["mcp_service"])
+
+    def test_time_onboarding_foil_cleanup_cli_fixture_passes_when_clean(self) -> None:
+        live = {
+            "gateways": [],
+            "tools": [],
+            "servers": [{"id": "server-context7", "name": "context7_local_server", "enabled": True}],
+            "prompts": [],
+            "resources": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            live_json = root / "live.json"
+            output = root / "readback.json"
+            live_json.write_text(json.dumps(live), encoding="utf-8")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "docker/contextforge-harness/scripts/clean_onboarding_foil.py"),
+                    "--foil",
+                    "time",
+                    "--live-json",
+                    str(live_json),
+                    "--output",
+                    str(output),
+                ],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+            )
+            manifest = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("clean", manifest["status"])
+        self.assertEqual(0, sum(manifest["counts"].values()))
+        self.assertEqual(
+            [{"enabled": True, "id": "server-context7", "name": "context7_local_server"}],
+            manifest["contextforge_servers"],
+        )
+
+    def test_onboarding_foil_preflight_passes_live_server_readback_to_capability_menu(self) -> None:
+        dialogue = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+            "onboarding_semantic_dialogue_preflight_test",
+        )
+        live_servers = [{"id": "server-context7", "name": "context7_local_server", "enabled": True}]
+
+        class FakeUseCaseRunner:
+            def __init__(self) -> None:
+                self.calls: list[list[str]] = []
+                self.payloads: list[dict[str, Any]] = []
+
+            def run(self, command: list[str], **_: Any) -> dict[str, Any]:
+                self.calls.append(command)
+                if "clean_onboarding_foil.py" in " ".join(command):
+                    return {
+                        "returncode": 0,
+                        "timeout": False,
+                        "stdout": json.dumps(
+                            {
+                                "status": "clean",
+                                "counts": {
+                                    "mcp_service": 0,
+                                    "service_tools": 0,
+                                    "virtual_server": 0,
+                                    "service_bound_prompts": 0,
+                                    "service_bound_resources": 0,
+                                },
+                                "contextforge_servers": live_servers,
+                            }
+                        ),
+                    }
+                payload = json.loads(command[command.index("--payload-json") + 1])
+                self.payloads.append(payload)
+                return {
+                    "returncode": 0,
+                    "timeout": False,
+                    "stdout": json.dumps(
+                        {
+                            "ok": True,
+                            "available_services": [{"service_binding": "context7:canonical"}],
+                            "next_turn": {"choices": [{"id": "context7:canonical"}, {"id": "none"}]},
+                        }
+                    ),
+                }
+
+            @staticmethod
+            def parse_json_or_text(text: str) -> Any:
+                return json.loads(text)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            args = type(
+                "Args",
+                (),
+                {
+                    "allow_preexisting_foil_artifacts": False,
+                    "client": "pi",
+                },
+            )()
+            fake = FakeUseCaseRunner()
+            result = dialogue.contextforge_foil_preflight(
+                foil={
+                    "id": "time",
+                    "invalid_if_preexisting_contextforge_artifacts": True,
+                    "forbidden_existing_contextforge_bindings": ["time:canonical"],
+                    "preexisting_contextforge_artifact_scope": [
+                        "mcp_service",
+                        "service_tools",
+                        "virtual_server",
+                        "service_bound_prompts",
+                        "service_bound_resources",
+                        "client_activation_menu_entries",
+                    ],
+                },
+                args=args,
+                repo_root=ROOT,
+                harness_root=ROOT / "docker/client-harness",
+                output_root=Path(tmp),
+                reset_json={"workspace": "/workspace"},
+                uc1=fake,
+                commands=[],
+            )
+
+        self.assertEqual("passed", result["status"])
+        self.assertEqual(live_servers, fake.payloads[0]["contextforge_servers"])
 
     def test_mentality_manifest_records_dev_docker_surface(self) -> None:
         manifest = (ROOT / "server-instances/mentality/instance.json").read_text(encoding="utf-8")
