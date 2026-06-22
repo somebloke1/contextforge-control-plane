@@ -16,6 +16,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from semantic_model_host_proxy import API_KEY_ENV_NAMES, DUMMY_API_KEY, start_openrouter_proxy
+
 
 DEFAULT_ONBOARDING_TURNS = 8
 TURN_BUDGET_POLICY = (
@@ -582,6 +588,7 @@ def main(argv: list[str] | None = None) -> int:
     isolated_reset: dict[str, Any] | None = None
     reset_json: Any = None
     lock_file = None
+    semantic_host_proxy = None
 
     if not args.dry_run:
         if args.isolation_root is not None:
@@ -632,14 +639,23 @@ def main(argv: list[str] | None = None) -> int:
             available_model_env,
         )
     secret_env_keys = sorted(set(selected_secret_env_keys))
-    secret_env_values = {
-        key: value
-        for key in secret_env_keys
-        for value in [os.environ.get(key) or available_model_env.get(key)]
-        if value
-    }
-    secret_env_keys_to_pass = sorted(secret_env_values)
-    docker_run_env = {**compose_env, **secret_env_values}
+    if selected_profile is not None and str(selected_profile.get("provider_kind") or "") == "openrouter":
+        api_key_env = str(selected_profile.get("api_key_env") or "OPENROUTER_API_KEY")
+        upstream_base_url = (
+            os.environ.get(str(selected_profile.get("base_url_env") or ""))
+            or available_model_env.get(str(selected_profile.get("base_url_env") or ""))
+            or str(selected_profile.get("default_base_url") or "https://openrouter.ai/api/v1")
+        )
+        if not args.dry_run:
+            semantic_host_proxy = start_openrouter_proxy(
+                script_path=harness_root / "scripts" / "semantic_model_host_proxy.py",
+                api_key_env=api_key_env,
+                upstream_base_url=upstream_base_url,
+                host_env=available_model_env,
+            )
+            semantic_overrides["OPENROUTER_BASE_URL"] = semantic_host_proxy.container_base_url
+            semantic_overrides[api_key_env] = DUMMY_API_KEY
+    docker_run_env = {**compose_env, **{key: "" for key in API_KEY_ENV_NAMES}}
     semantic_profile = profile_summary(
         service_runner,
         selected_profile,
@@ -697,6 +713,8 @@ def main(argv: list[str] | None = None) -> int:
         "prompt_count_scope": "initial_or_dry_run_preview_until_final_summary_overrides",
         "prompts": prompts,
         "semantic_model_profile": semantic_profile,
+        "semantic_model_host_proxy": None if semantic_host_proxy is None else semantic_host_proxy.summary(),
+        "container_receives_real_semantic_model_api_key": False,
         "reset": reset_json,
         "isolation": isolated_reset,
         "gate_reference": "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md",
@@ -727,6 +745,8 @@ def main(argv: list[str] | None = None) -> int:
         summary = {**summary_base, "dry_run": True, "turns": [], "command_ledger": commands}
         write_json(output_root / "run-summary.json", summary)
         print(json.dumps(summary, indent=2, sort_keys=True))
+        if semantic_host_proxy is not None:
+            semantic_host_proxy.stop()
         if lock_file is not None:
             lock_file.close()
         return 0
@@ -755,6 +775,8 @@ def main(argv: list[str] | None = None) -> int:
         }
         write_json(output_root / "run-summary.json", summary)
         print(json.dumps(summary, indent=2, sort_keys=True))
+        if semantic_host_proxy is not None:
+            semantic_host_proxy.stop()
         if lock_file is not None:
             lock_file.close()
         return 1
@@ -788,6 +810,8 @@ def main(argv: list[str] | None = None) -> int:
             }
             write_json(output_root / "run-summary.json", summary)
             print(json.dumps(summary, indent=2, sort_keys=True))
+            if semantic_host_proxy is not None:
+                semantic_host_proxy.stop()
             if lock_file is not None:
                 lock_file.close()
             return 1
@@ -817,8 +841,6 @@ def main(argv: list[str] | None = None) -> int:
     ]
     for key, value in sorted(semantic_overrides.items()):
         launch_command.extend(["-e", f"{key}={value}"])
-    for key in secret_env_keys_to_pass:
-        launch_command.extend(["-e", key])
     launch_command.extend([uc1.compose_service_name(args.client), "sleep", "infinity"])
     launch = uc1.run(launch_command, cwd=repo_root, timeout=120, commands=commands, env=docker_run_env or None)
     runtime = uc1.run(
@@ -1005,6 +1027,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     write_json(output_root / "run-summary.json", summary)
     print(json.dumps(summary, indent=2, sort_keys=True))
+    if semantic_host_proxy is not None:
+        semantic_host_proxy.stop()
     if lock_file is not None:
         lock_file.close()
     responder_ok = all("error" not in turn for turn in responder_turns)

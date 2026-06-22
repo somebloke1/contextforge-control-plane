@@ -17,6 +17,12 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from semantic_model_host_proxy import API_KEY_ENV_NAMES, DUMMY_API_KEY, start_openrouter_proxy
+
 
 DEFAULT_SERENA_LANGUAGE = "python"
 DEFAULT_CONTEXTFORGE_HOST_BASE_URL = "http://127.0.0.1:4445"
@@ -337,13 +343,9 @@ def selected_profile_env(
             env["CONTEXTFORGE_TEST_PROVIDER_ROUTE"] = ""
         env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"] = (
             str(profile.get("pi_provider") or "").strip()
-            or (
-                os.environ.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
-                or available_env.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
-                or "openrouter-semantic-test"
-            )
-            if routes
-            else "openrouter"
+            or os.environ.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
+            or available_env.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
+            or "openrouter-semantic-test"
         )
         env["CONTEXTFORGE_PI_DEFAULT_MODEL"] = model
         env["CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"] = f"openrouter/{model}"
@@ -643,8 +645,8 @@ def main(argv: list[str] | None = None) -> int:
     selected_profile: dict[str, Any] | None = None
     semantic_overrides: dict[str, str] = {}
     semantic_secret_env_keys: list[str] = []
-    semantic_secret_env_keys_to_pass: list[str] = []
     semantic_profile_summary: dict[str, Any] = {}
+    semantic_host_proxy = None
 
     try:
         virtual_server_name = str(service.get("virtual_server") or "")
@@ -723,7 +725,21 @@ def main(argv: list[str] | None = None) -> int:
                 available_model_env,
             )
         semantic_secret_env_keys = sorted(set(selected_secret_env_keys))
-        semantic_secret_env_keys_to_pass = [key for key in semantic_secret_env_keys if os.environ.get(key)]
+        if selected_profile is not None and str(selected_profile.get("provider_kind") or "") == "openrouter":
+            api_key_env = str(selected_profile.get("api_key_env") or "OPENROUTER_API_KEY")
+            upstream_base_url = (
+                os.environ.get(str(selected_profile.get("base_url_env") or ""))
+                or available_model_env.get(str(selected_profile.get("base_url_env") or ""))
+                or str(selected_profile.get("default_base_url") or "https://openrouter.ai/api/v1")
+            )
+            semantic_host_proxy = start_openrouter_proxy(
+                script_path=harness_root / "scripts" / "semantic_model_host_proxy.py",
+                api_key_env=api_key_env,
+                upstream_base_url=upstream_base_url,
+                host_env=available_model_env,
+            )
+            semantic_overrides["OPENROUTER_BASE_URL"] = semantic_host_proxy.container_base_url
+            semantic_overrides[api_key_env] = DUMMY_API_KEY
         semantic_profile_summary = redacted_profile_summary(
             selected_profile,
             semantic_overrides,
@@ -755,15 +771,13 @@ def main(argv: list[str] | None = None) -> int:
         ]
         for key, value in sorted(semantic_overrides.items()):
             launch_command.extend(["-e", f"{key}={value}"])
-        for key in semantic_secret_env_keys_to_pass:
-            launch_command.extend(["-e", key])
         launch_command.extend([uc1.compose_service_name(args.client), "sleep", "infinity"])
         launch = uc1.run(
             launch_command,
             cwd=repo_root,
             timeout=120,
             commands=commands,
-            env=compose_env or None,
+            env={**compose_env, **{key: "" for key in API_KEY_ENV_NAMES}} or None,
         )
         runtime = uc1.run(
             ["docker", "exec", container, "bash", "-lc", uc1.runtime_readback_command(args.client)],
@@ -919,6 +933,8 @@ def main(argv: list[str] | None = None) -> int:
             "output_root": str(output_root),
             "semantic_model_env_overrides": semantic_overrides,
             "semantic_model_profile": semantic_profile_summary,
+            "semantic_model_host_proxy": None if semantic_host_proxy is None else semantic_host_proxy.summary(),
+            "container_receives_real_semantic_model_api_key": False,
             "contextforge": {
                 "host_base_url": args.contextforge_host_base_url,
                 "container_base_url": args.contextforge_container_base_url,
@@ -1017,6 +1033,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"warning: failed to revoke probe token {scoped_token_id}: {exc}", file=sys.stderr)
         if lock_file is not None:
             lock_file.close()
+        if semantic_host_proxy is not None:
+            semantic_host_proxy.stop()
 
 
 if __name__ == "__main__":
