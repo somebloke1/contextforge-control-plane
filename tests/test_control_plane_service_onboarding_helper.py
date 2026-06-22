@@ -883,6 +883,122 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
                 )
                 self.assertNotEqual(0, result.returncode)
 
+    def test_build_research_packet_seals_read_only_source_handoff(self) -> None:
+        record = helper.build_onboarding_record(
+            {
+                "candidate_service": "possible-docs-service",
+                "operator_goal": "Investigate whether this lead can become a ContextForge service.",
+                "source_leads": ["possible-docs-mcp package"],
+            },
+            project_root=PROJECT_ROOT,
+            issue="#52",
+            session_id="research-packet-source-lead",
+        )
+
+        packet = helper.build_research_packet(record)
+
+        self.assertEqual("contextforge://control-plane/schemas/service-onboarding-research-packet/v1", packet["schema_uri"])
+        self.assertEqual("service_onboarding_research_packet", packet["summary_type"])
+        self.assertFalse(packet["mutation_allowed"])
+        self.assertTrue(packet["read_only"])
+        self.assertIn("source_ready research only", packet["claim_boundary"])
+        self.assertEqual("research-packet-source-lead", packet["session"]["session_id"])
+        self.assertEqual(
+            [{"type": "lead", "ref": "possible-docs-mcp package"}],
+            packet["seed_leads"],
+        )
+        self.assertIn("do not call ContextForge registry", " ".join(packet["forbidden_actions"]))
+        self.assertIn("draft abstract_service_spec", " ".join(packet["required_outputs"]))
+        self.assertIn("source_leads", packet["descriptor_patch_contract"])
+        self.assertIn("abstract_service_spec", packet["descriptor_patch_contract"])
+        self.assertIn("final_narrative", packet["submission_shape"])
+        self.assertIn("state explicitly that no runtime", " ".join(packet["final_narrative_requirement"]))
+
+    def test_cli_research_packet_reads_store_without_rewriting_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
+            session_id = "svc-onboarding-research-packet-cli"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--descriptor",
+                    "-",
+                    "--project-root",
+                    str(project_root),
+                    "--issue",
+                    "#52",
+                    "--session-id",
+                    session_id,
+                    "--save-session",
+                ],
+                input=json.dumps(
+                    {
+                        "candidate_service": "possible-docs-service",
+                        "operator_goal": "Investigate whether this lead can become a ContextForge service.",
+                        "source_leads": ["possible-docs-mcp package"],
+                    }
+                ),
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            session_path = project_root / "run/service-onboarding-sessions" / f"{session_id}.json"
+            before = session_path.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                    "--project-root",
+                    str(project_root),
+                    "--research-packet",
+                    session_id,
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            after = session_path.read_text(encoding="utf-8")
+            output = json.loads(result.stdout)
+
+        self.assertEqual("", result.stderr)
+        self.assertEqual(before, after)
+        self.assertEqual("service_onboarding_research_packet", output["summary_type"])
+        self.assertEqual(session_id, output["session"]["session_id"])
+        self.assertFalse(output["mutation_allowed"])
+        self.assertTrue(output["read_only"])
+        self.assertIn("possible-docs-mcp package", json.dumps(output["seed_leads"]))
+
+    def test_cli_research_packet_rejects_descriptor_status_list_resume_template_or_write_combinations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            for extra_args in [
+                ["--descriptor", str(FIXTURE)],
+                ["--save-session"],
+                ["--resume-session", "same-session"],
+                ["--previous-record", str(FIXTURE)],
+                ["--session-status", "same-session"],
+                ["--session-template", "same-session"],
+                ["--list-sessions"],
+            ]:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(REPO_ROOT / "scripts/control_plane_service_onboarding_helper.py"),
+                        "--project-root",
+                        tmp,
+                        "--research-packet",
+                        "same-session",
+                        *extra_args,
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                self.assertNotEqual(0, result.returncode)
+
     def test_descriptor_must_be_mapping(self) -> None:
         with self.assertRaises(helper.ServiceOnboardingInputError):
             helper.build_onboarding_record(["not", "a", "mapping"])  # type: ignore[arg-type]

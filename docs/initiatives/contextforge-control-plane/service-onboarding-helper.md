@@ -314,11 +314,57 @@ It is read-only, does not rewrite the session record, and cannot be combined
 with descriptor input, previous-record input, session resume input,
 single-session status input, list input, or `--save-session`.
 
+Saved sessions can also emit a sealed read-only research packet for a delegated
+research agent:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/control_plane_service_onboarding_helper.py \
+  --project-root /home/dgk/workspace/cf-controlplane \
+  --research-packet svc-onboarding-example
+```
+
+`--research-packet` returns a deterministic
+`service_onboarding_research_packet` containing:
+
+- session context and source-level claim boundary;
+- seed leads and research-agent instruction;
+- allowed read-only actions and forbidden mutations;
+- required evidence outputs;
+- descriptor patch contract for rerunning the helper after research;
+- final stepwise narrative requirement so the controller can distinguish
+  research-agent execution problems from package or client behavior.
+
+The research packet is source-only. It must not be used to claim
+`backend_ready`, `contextforge_ready`, `target_client_ready`, verified runtime
+behavior, operator workflow success, or semantic acceptance.
+
 This local store is for resumable planning records only. It is not a daemon,
 registry, service runtime, Docker state, client installation, secret store,
 hook state, or approval bypass. Long-running helper behavior and richer
 session management remain later slices that need their own evidence and
 approval boundaries.
+
+## Onboarding Proof Ladder
+
+Use this ordered MCP service ladder as the initial onboarding-factory proof
+corpus, from simplest to most complex. Each service should first pass through
+the source-lead research packet and deterministic onboarding record before any
+runtime or target-client proof is attempted.
+
+1. `time` - stateless baseline:
+   <https://github.com/modelcontextprotocol/servers/tree/main/src/time>
+2. `fetch` - basic network I/O:
+   <https://github.com/modelcontextprotocol/servers/tree/main/src/fetch>
+3. `sequentialthinking` - state persistence:
+   <https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking>
+4. `filesystem` - local security constraints:
+   <https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem>
+5. `sqlite` - structured data handling:
+   <https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite>
+6. `kubernetes` - dynamic massive schemas and advanced auth:
+   <https://github.com/feiskyer/mcp-kubernetes-server>
+7. `docker` - system daemon mounting and external process orchestration:
+   <https://github.com/ckreiling/mcp-server-docker>
 
 ## Fixture Coverage
 

@@ -18,6 +18,7 @@ import control_plane_redaction as redaction
 HELPER_VERSION = 1
 SCHEMA_URI = "contextforge://control-plane/schemas/service-onboarding-record/v1"
 SESSION_SCHEMA_URI = "contextforge://control-plane/schemas/service-onboarding-session/v1"
+RESEARCH_PACKET_SCHEMA_URI = "contextforge://control-plane/schemas/service-onboarding-research-packet/v1"
 DEFAULT_SESSION_DIR = Path("run/service-onboarding-sessions")
 LOCAL_SESSION_STORAGE_MODE = "local_ignored_session_file"
 
@@ -503,6 +504,77 @@ def build_session_template(record: Mapping[str, Any], *, session_record_path: st
     }
     _validate_no_secret_leaks(result)
     return result
+
+
+def build_research_packet(record: Mapping[str, Any], *, session_record_path: str | None = None) -> dict[str, Any]:
+    """Build a sealed no-mutation packet for a read-only source research pass."""
+
+    if not isinstance(record, Mapping):
+        raise ServiceOnboardingInputError("session record must be a mapping")
+
+    status = build_session_status(record, session_record_path=session_record_path)
+    template = build_session_template(record, session_record_path=session_record_path)
+    research_plan = _mapping(record.get("research_plan"))
+    seed_leads = _as_list(research_plan.get("seed_leads"))
+    required_outputs = _string_list(research_plan.get("required_outputs")) or [
+        "source_evidence entries with exact URLs, package names, repository references, local paths, or issue links",
+        "classification values or explicitly unresolved dimensions",
+        "transport and state boundary evidence",
+        "draft abstract_service_spec with summary, workflow, and lazy_detail",
+    ]
+    instruction = _first_string(research_plan.get("research_agent_instruction")) or (
+        "Use the seed leads to gather source evidence, transport facts, credential/state boundaries, "
+        "likely tool families, and a draft compact abstract service spec. Do not register, run, probe, "
+        "or mutate services from this research pass."
+    )
+
+    packet = {
+        "schema_uri": RESEARCH_PACKET_SCHEMA_URI,
+        "summary_type": "service_onboarding_research_packet",
+        "packet_version": HELPER_VERSION,
+        "mutation_allowed": False,
+        "read_only": True,
+        "claim_boundary": "source_ready research only; no backend_ready, contextforge_ready, target_client_ready, or verified claim may be made from this packet alone",
+        "session": status,
+        "candidate_service": _first_string(record.get("candidate_service")),
+        "operator_goal": _first_string(record.get("operator_goal")),
+        "seed_leads": seed_leads,
+        "research_agent_instruction": instruction,
+        "allowed_read_only_actions": [
+            "read upstream documentation, repositories, package metadata, issue references, and explicitly provided local paths",
+            "inspect source files and manifests without executing service code or installers",
+            "classify transport, credential, locality, and state boundaries from cited source evidence",
+            "draft a compact abstract service spec for proactive ContextForge client loading",
+            "name unresolved questions explicitly when source evidence is insufficient",
+        ],
+        "forbidden_actions": _unique(
+            list(NON_MUTATION_DEFAULTS)
+            + [
+                "do not call ContextForge registry, admin, gateway, or hosted service endpoints",
+                "do not install packages, build images, start services, run service binaries, or probe live transports",
+                "do not request, print, copy, or infer secrets, OAuth state, bearer tokens, passwords, or API keys",
+                "do not claim runtime, target-client, operator-workflow, or semantic acceptance from this source research packet",
+            ]
+        ),
+        "required_outputs": required_outputs,
+        "descriptor_patch_contract": template["descriptor_patch_template"],
+        "final_narrative_requirement": [
+            "summarize the research path step by step from the research agent perspective",
+            "cite the evidence source for each classification or boundary claim",
+            "separate resolved facts from unresolved questions",
+            "state explicitly that no runtime, ContextForge, client, or semantic validation was performed",
+        ],
+        "submission_shape": {
+            "source_evidence": "append exact source evidence entries suitable for rerunning the onboarding helper",
+            "classification": "fill known classification values or leave dimensions unresolved with evidence notes",
+            "abstract_service_spec": "provide summary, ordinary workflow, and lazy_detail text grounded in source evidence",
+            "unresolved_questions": "list remaining questions without guessing",
+            "final_narrative": "include the required stepwise research narrative with evidence",
+        },
+        "rerun_guidance": template["rerun_guidance"],
+    }
+    _validate_no_secret_leaks(packet)
+    return packet
 
 
 def _decision_log(
@@ -1398,6 +1470,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--session-status", default=None, help="Emit a compact no-mutation status summary for a saved session")
     parser.add_argument("--list-sessions", action="store_true", help="List compact no-mutation summaries for saved sessions")
     parser.add_argument("--session-template", default=None, help="Emit a no-mutation descriptor patch scaffold for a saved session")
+    parser.add_argument("--research-packet", default=None, help="Emit a sealed read-only research packet for a saved session")
     parser.add_argument("--session-id", default=None, help="Stable session id to include in dialogue metadata")
     parser.add_argument("--session-dir", default=str(DEFAULT_SESSION_DIR), help="Project-local ignored session directory under run/")
     parser.add_argument("--save-session", action="store_true", help="Persist the emitted record to the local ignored session store")
@@ -1412,6 +1485,7 @@ def main(argv: list[str] | None = None) -> int:
             or args.resume_session
             or args.session_status
             or args.session_template
+            or args.research_packet
             or args.save_session
         ):
             raise ServiceOnboardingInputError("--list-sessions cannot be combined with descriptor, resume, status, or write options")
@@ -1428,7 +1502,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.session_template:
-        if args.descriptor or args.case or args.previous_record or args.resume_session or args.session_status or args.save_session:
+        if args.descriptor or args.case or args.previous_record or args.resume_session or args.session_status or args.research_packet or args.save_session:
             raise ServiceOnboardingInputError("--session-template cannot be combined with descriptor, resume, status, list, or write options")
         session_dir = resolve_session_dir(args.session_dir, project_root=args.project_root)
         path = session_record_path(session_dir, args.session_template)
@@ -1443,8 +1517,24 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    if args.research_packet:
+        if args.descriptor or args.case or args.previous_record or args.resume_session or args.session_status or args.session_template or args.save_session:
+            raise ServiceOnboardingInputError("--research-packet cannot be combined with descriptor, resume, status, template, list, or write options")
+        session_dir = resolve_session_dir(args.session_dir, project_root=args.project_root)
+        path = session_record_path(session_dir, args.research_packet)
+        print(
+            json.dumps(
+                build_research_packet(load_session_record(session_dir, args.research_packet), session_record_path=str(path)),
+                indent=2 if args.pretty else None,
+                sort_keys=True,
+            )
+            + "\n",
+            end="",
+        )
+        return 0
+
     if args.session_status:
-        if args.descriptor or args.case or args.previous_record or args.resume_session or args.session_template or args.save_session:
+        if args.descriptor or args.case or args.previous_record or args.resume_session or args.session_template or args.research_packet or args.save_session:
             raise ServiceOnboardingInputError("--session-status cannot be combined with descriptor, resume, or write options")
         session_dir = resolve_session_dir(args.session_dir, project_root=args.project_root)
         path = session_record_path(session_dir, args.session_status)

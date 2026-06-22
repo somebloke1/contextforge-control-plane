@@ -243,6 +243,45 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         ]:
             self.assertIn(phrase, self.doc)
 
+    def test_doc_records_research_packet_readback_contract(self) -> None:
+        for phrase in [
+            "--research-packet",
+            "`service_onboarding_research_packet`",
+            "source-level claim boundary",
+            "seed leads and research-agent instruction",
+            "allowed read-only actions and forbidden mutations",
+            "descriptor patch contract",
+            "final stepwise narrative requirement",
+            "`backend_ready`",
+            "`contextforge_ready`",
+            "`target_client_ready`",
+            "semantic acceptance",
+        ]:
+            self.assertIn(phrase, self.doc)
+
+    def test_doc_records_ordered_onboarding_proof_ladder(self) -> None:
+        expected_order = [
+            "`time` - stateless baseline",
+            "`fetch` - basic network I/O",
+            "`sequentialthinking` - state persistence",
+            "`filesystem` - local security constraints",
+            "`sqlite` - structured data handling",
+            "`kubernetes` - dynamic massive schemas and advanced auth",
+            "`docker` - system daemon mounting and external process orchestration",
+        ]
+        positions = [self.doc.index(item) for item in expected_order]
+        self.assertEqual(positions, sorted(positions))
+        for url in [
+            "github.com/modelcontextprotocol/servers/tree/main/src/time",
+            "github.com/modelcontextprotocol/servers/tree/main/src/fetch",
+            "github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking",
+            "github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+            "github.com/modelcontextprotocol/servers/tree/main/src/sqlite",
+            "github.com/feiskyer/mcp-kubernetes-server",
+            "github.com/ckreiling/mcp-server-docker",
+        ]:
+            self.assertIn(url, self.doc)
+
 
 if __name__ == "__main__":
     unittest.main()
