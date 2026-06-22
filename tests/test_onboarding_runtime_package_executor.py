@@ -260,6 +260,18 @@ class FailingResourceCreateClient(FakeClient):
         return super().request(method, path, body)
 
 
+class SwitchableResourceFailureClient(FakeClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail_resource_mutation = False
+
+    def request(self, method: str, path: str, body: dict | None = None):
+        if self.fail_resource_mutation and method in {"POST", "PUT"} and path.startswith("/resources"):
+            self.requests.append((method, path, body))
+            raise RuntimeError("simulated resource mutation failure")
+        return super().request(method, path, body)
+
+
 class FailingDeleteClient(FakeClient):
     def request(self, method: str, path: str, body: dict | None = None):
         if method == "DELETE" and (path.startswith("/resources/") or path.startswith("/gateways/")):
@@ -508,6 +520,51 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             self.assertEqual(["apply", "delete"], host_runtime.calls)
             actions = [action.get("action") for action in ctx.exception.failure_report["rollback_actions_attempted"]]
             self.assertIn("restore_previous_gateway", actions)
+
+    def test_apply_failure_restores_existing_host_runtime_instead_of_deleting_it(self) -> None:
+        executor = load_executor()
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            package = write_time_package(package_path, root)
+            client = SwitchableResourceFailureClient()
+            host_runtime = FakeHostRuntime()
+
+            executor.run(
+                package_path=package_path,
+                gateway_name="time-gateway",
+                server_name="time-server",
+                apply=True,
+                client=client,
+                host_runtime=host_runtime,
+                wait_attempts=1,
+            )
+            record_path = Path(package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["path"])
+            self.assertEqual("1.0.0", json.loads(record_path.read_text(encoding="utf-8"))["version_policy"])
+
+            updated_package = json.loads(json.dumps(package))
+            updated_record = updated_package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]
+            updated_record["content"]["version_policy"] = "1.0.1"
+            updated_record["content"]["prompt_library"]["abstract_prompt"] = "Updated prompt content."
+            package_path.write_text(json.dumps(updated_package), encoding="utf-8")
+            client.fail_resource_mutation = True
+
+            with self.assertRaises(executor.RuntimeApplyError) as ctx:
+                executor.run(
+                    package_path=package_path,
+                    gateway_name="time-gateway",
+                    server_name="time-server",
+                    apply=True,
+                    client=client,
+                    host_runtime=host_runtime,
+                    wait_attempts=1,
+                )
+
+            self.assertEqual("1.0.0", json.loads(record_path.read_text(encoding="utf-8"))["version_policy"])
+            self.assertEqual(["apply", "apply", "apply"], host_runtime.calls)
+            self.assertNotIn("delete", host_runtime.calls)
+            actions = [action.get("action") for action in ctx.exception.failure_report["rollback_actions_attempted"]]
+            self.assertIn("rollback_npm_stdio_host_runtime_to_previous", actions)
 
     def test_delete_removes_server_prompt_library_resources_gateway_and_host_record(self) -> None:
         executor = load_executor()
@@ -955,6 +1012,7 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
 
             self.assertEqual(0, delete.returncode, delete.stderr)
             self.assertFalse(record_path.exists())
+            self.assertFalse(record_path.parent.exists())
             self.assertTrue(json.loads(delete.stdout)["ok"])
 
     def test_npm_stdio_host_runtime_materializes_record_into_bridge_state(self) -> None:
@@ -963,6 +1021,18 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             root = Path(tmp).resolve()
             package_path = root / "time-package.json"
             package = write_time_package(package_path, root)
+            record_content = package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["content"]
+            record_content["environment"] = {
+                "required_secret_names": ["SECRET_ENV"],
+                "variables": [
+                    {"name": "VISIBLE_ENV", "secret": False, "value": "visible-value"},
+                    {"name": "SECOND_VISIBLE_ENV", "secret": False, "value": "second-value"},
+                    {"name": "SECRET_ENV", "secret": True, "value": "do-not-pass"},
+                ],
+                "values": {"VISIBLE_ENV": "visible-value"},
+                "non_secret_placeholders_only": True,
+            }
+            package_path.write_text(json.dumps(package), encoding="utf-8")
             record_result, _rollback = runtime.npm_stdio_host_records.upsert_from_runtime_package(package)
             calls: list[list[str]] = []
             popen_envs: list[dict[str, str]] = []
@@ -976,7 +1046,12 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
                 popen_envs.append(dict(kwargs.get("env") or {}))
                 return FakeProcess()
 
-            applied = runtime.apply_service(root, "time:canonical", runner=fake_run, popen=fake_popen)
+            original_wait = runtime.wait_for_bridge_endpoint
+            runtime.wait_for_bridge_endpoint = lambda endpoint, process: {"ready": True, "attempts": 1}
+            try:
+                applied = runtime.apply_service(root, "time:canonical", runner=fake_run, popen=fake_popen)
+            finally:
+                runtime.wait_for_bridge_endpoint = original_wait
 
             self.assertEqual("created", applied["action"])
             self.assertEqual("time:canonical", applied["service_binding"])
@@ -989,12 +1064,19 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             self.assertIn("mcpgateway.translate", calls[1])
             self.assertIn("uvx mcp-server-time --local-timezone UTC", calls[1])
             self.assertIn(str(Path(applied["runtime_dir"]) / "package" / "node_modules" / ".bin"), popen_envs[0]["PATH"])
+            self.assertEqual("visible-value", popen_envs[0]["VISIBLE_ENV"])
+            self.assertEqual("second-value", popen_envs[0]["SECOND_VISIBLE_ENV"])
+            self.assertNotEqual("do-not-pass", popen_envs[0].get("SECRET_ENV"))
 
             updated_package = json.loads(json.dumps(package))
             updated_record = updated_package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]
             updated_record["content"]["stdio"]["args"] = ["mcp-server-time", "--local-timezone", "America/Chicago"]
             runtime.npm_stdio_host_records.upsert_from_runtime_package(updated_package)
-            updated = runtime.apply_service(root, "time:canonical", runner=fake_run, popen=fake_popen)
+            runtime.wait_for_bridge_endpoint = lambda endpoint, process: {"ready": True, "attempts": 1}
+            try:
+                updated = runtime.apply_service(root, "time:canonical", runner=fake_run, popen=fake_popen)
+            finally:
+                runtime.wait_for_bridge_endpoint = original_wait
 
             self.assertEqual("updated", updated["action"])
             self.assertNotEqual(applied["content_digest"], updated["content_digest"])
@@ -1007,6 +1089,24 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             deleted = runtime.delete_service(root, "time:canonical")
             self.assertEqual("passed", deleted["rollback_result"])
             self.assertFalse(Path(applied["runtime_dir"]).exists())
+
+    def test_service_guidance_resources_shape_contextforge_scanner_trigger_words(self) -> None:
+        executor = load_executor()
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            package = write_time_package(package_path, root)
+            record = package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["content"]
+            record["prompt_library"]["abstract_prompt"] = "Select time tools and delete stale assumptions."
+            record["prompt_library"]["detail_prompts"]["usage"] = "Delete nothing; select one timezone."
+
+            resources = executor.service_guidance_resource_bodies(package, gateway_id="gateway-1")
+
+        contents = "\n".join(resource["content"] for resource in resources).lower()
+        self.assertNotIn("select ", contents)
+        self.assertNotIn("delete ", contents)
+        self.assertIn("choose time tools", contents)
+        self.assertIn("remove stale assumptions", contents)
 
     def test_npm_stdio_host_runtime_restores_previous_bridge_after_failed_modify_launch(self) -> None:
         runtime = load_executor().npm_stdio_host_runtime
@@ -1023,8 +1123,10 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
                 return FakeProcess()
 
             original_running = runtime.bridge_state_running
+            original_wait = runtime.wait_for_bridge_endpoint
             try:
                 runtime.bridge_state_running = lambda state: bool(state)
+                runtime.wait_for_bridge_endpoint = lambda endpoint, process: {"ready": True, "attempts": 1}
                 applied = runtime.apply_service(root, "time:canonical", runner=fake_run, popen=fake_popen_ok)
                 updated_package = json.loads(json.dumps(package))
                 updated_record = updated_package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]
@@ -1050,6 +1152,7 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
                 self.assertEqual("rollback_restored_previous_runtime", state["action"])
                 self.assertEqual(applied["content_digest"], state["content_digest"])
             finally:
+                runtime.wait_for_bridge_endpoint = original_wait
                 runtime.bridge_state_running = original_running
 
     def test_npm_stdio_endpoint_allocation_avoids_existing_record_port(self) -> None:

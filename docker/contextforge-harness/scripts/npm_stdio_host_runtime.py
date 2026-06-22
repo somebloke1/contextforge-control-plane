@@ -10,6 +10,7 @@ import os
 import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -163,6 +164,35 @@ def stop_pid(pid: int, *, timeout: float = 5.0) -> bool:
     return not pid_running(pid)
 
 
+def bridge_probe_host(host: str) -> str:
+    return "127.0.0.1" if host in {"", "0.0.0.0", "::"} else host
+
+
+def wait_for_bridge_endpoint(
+    bridge_endpoint: Mapping[str, Any],
+    process: subprocess.Popen,
+    *,
+    timeout: float = 10.0,
+    interval: float = 0.1,
+) -> dict[str, Any]:
+    host = bridge_probe_host(str(bridge_endpoint.get("host") or "127.0.0.1"))
+    port = int(bridge_endpoint["port"])
+    deadline = time.time() + timeout
+    attempts = 0
+    last_error = ""
+    while time.time() < deadline:
+        attempts += 1
+        if process.poll() is not None:
+            raise RuntimeError(f"bridge process exited during readiness wait with code {process.returncode}")
+        try:
+            with socket.create_connection((host, port), timeout=1.0):
+                return {"ready": True, "host": host, "port": port, "attempts": attempts}
+        except OSError as exc:
+            last_error = str(exc)
+            time.sleep(interval)
+    raise RuntimeError(f"bridge endpoint did not become reachable at {host}:{port}: {last_error}")
+
+
 def read_state(project_root: Path, service_binding: str) -> dict[str, Any] | None:
     path = runtime_state_path(project_root, service_binding)
     if not path.exists():
@@ -247,11 +277,16 @@ def launch_bridge(
     log_handle = log_path.open("ab")
     process = popen(cmd, cwd=runtime_dir, stdout=log_handle, stderr=subprocess.STDOUT, start_new_session=True, env=env)
     time.sleep(0.2)
-    if process.poll() is not None:
+    try:
+        if process.poll() is not None:
+            raise RuntimeError(f"bridge process exited during startup with code {process.returncode}")
+        readiness = wait_for_bridge_endpoint(bridge_endpoint, process)
+    except Exception:
         log_handle.close()
-        raise RuntimeError(f"bridge process exited during startup with code {process.returncode}")
+        stop_pid(int(process.pid))
+        raise
     log_handle.close()
-    return {"pid": int(process.pid), "command": cmd, "log_path": str(log_path), "endpoint": bridge_endpoint}
+    return {"pid": int(process.pid), "command": cmd, "log_path": str(log_path), "endpoint": bridge_endpoint, "readiness": readiness}
 
 
 def record_port_conflicts(project_root: Path, service_binding: str, record: Mapping[str, Any]) -> list[dict[str, Any]]:
