@@ -483,6 +483,50 @@ def extract_opencode_session_id(text: str) -> str:
     return match.group(0) if match else ""
 
 
+def timeout_cleanup_command(cmd: list[str]) -> list[str] | None:
+    if len(cmd) < 4 or cmd[0:2] != ["docker", "exec"]:
+        return None
+    container = cmd[2]
+    command_text = shell_join(cmd)
+    if "opencode run" in command_text:
+        return ["docker", "exec", container, "pkill", "-TERM", "-f", "opencode run"]
+    if " pi " in f" {command_text} " and "pi --" in command_text:
+        return ["docker", "exec", container, "pkill", "-TERM", "-f", "pi --"]
+    return None
+
+
+def run_timeout_cleanup(cmd: list[str], *, cwd: Path, env: dict[str, str] | None) -> dict[str, Any] | None:
+    cleanup = timeout_cleanup_command(cmd)
+    if cleanup is None:
+        return None
+    try:
+        completed = subprocess.run(
+            cleanup,
+            cwd=str(cwd),
+            env=None if env is None else {**os.environ, **env},
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=15,
+            check=False,
+        )
+        return {
+            "command_text": shell_join(cleanup),
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "timeout": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "command_text": shell_join(cleanup),
+            "returncode": 124,
+            "stdout": coerce_process_text(exc.stdout),
+            "stderr": coerce_process_text(exc.stderr),
+            "timeout": True,
+        }
+
+
 def run(
     cmd: list[str],
     *,
@@ -522,7 +566,14 @@ def run(
             "stderr": coerce_process_text(exc.stderr),
             "timeout": True,
         }
+        cleanup = run_timeout_cleanup(cmd, cwd=cwd, env=env)
+        if cleanup is not None:
+            result["timeout_cleanup"] = cleanup
     commands.append({key: result[key] for key in ("command_text", "cwd", "returncode", "timeout")})
+    if result.get("timeout_cleanup"):
+        cleanup = dict(result["timeout_cleanup"])
+        cleanup["cwd"] = str(cwd)
+        commands.append({key: cleanup[key] for key in ("command_text", "cwd", "returncode", "timeout")})
     return result
 
 

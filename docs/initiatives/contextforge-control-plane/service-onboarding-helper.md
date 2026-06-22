@@ -133,6 +133,7 @@ secondary validation paradigms:
 | --- | --- | --- |
 | Direct native registration | The backend already exposes validated SSE or streamable HTTP. | Register native endpoints through ContextForge only after approval. |
 | Package-provided bridge/transceiver | The backend is stdio-only, SSE-only, or HTTP-only and needs a missing transport exposed. | Run the transceiver beside the backend, not inside the gateway image by default. |
+| Managed npm-stdio host | The service is an npm-published MCP server with stdio transport and no service-specific host isolation requirement. | One shared Docker service owns npm package install/run/bridge lifecycle; helper CRUD manages per-service records and transparently registers exposed endpoints in ContextForge. |
 | Dev Docker sidecar | The service needs repeatable isolated development validation before live registration. | ContextForge dev Docker surface only. |
 | Project-scoped backend | The service reads or writes project-local state such as source files, project metadata, code indexes, or language-server state. | One backend or transceiver per project. |
 | Credential-scoped backend | The service cannot safely multiplex credentials or account-local state. | One backend or transceiver per credential or user boundary. |
@@ -182,6 +183,60 @@ Runtime registration or client readiness remains incomplete until the compact
 abstract service spec is published as a ContextForge resource and associated
 with the service. Clients then load that abstract spec proactively and load
 detailed tool guidance only when a specific task requires it.
+
+## Managed npm-stdio Host Target
+
+The current first implementation target is a single Docker service that hosts
+npm-published stdio MCP services centrally. The helper should treat this as the
+default path when source or MCP Registry metadata shows:
+
+- `packages[].registryType == "npm"`;
+- `packages[].transport.type == "stdio"`;
+- package identity, version or version policy, runtime hint, command
+  arguments, and required environment variables are known or explicitly marked
+  as questions.
+
+The helper owns CRUD for these hosted service records, including onboarding,
+update, disable, delete, and readback. A CRUD operation must also plan or carry
+the corresponding ContextForge registration changes: gateway registration or
+update, gateway tool refresh/readback, virtual-server creation or update, and
+rollback targets. The helper must not imply that the stock ContextForge API
+installs npm packages directly. ContextForge registers reachable HTTP/SSE or
+streamable-HTTP endpoints; the shared Docker host is the runtime substrate that
+installs/runs npm stdio packages and bridges them into ContextForge-consumable
+endpoints.
+
+Per-service onboarding should normally emit a managed npm-stdio service record
+plus a ContextForge API JSON plan. A Dockerfile is required for the reusable
+host substrate itself, not for every npm service hosted by that substrate.
+
+The helper is a gate, not the researcher. It may remind the code assistant
+which fields are required and why they matter, but it must not perform source
+research on the assistant's behalf during install/register packaging. Before
+onboarding, the assistant must supply source-derived values for the exact npm
+package, package registry type, version policy, transport, package/runtime
+arguments, environment variables, required secret names, tool schemas, and
+prompt-library content. The standard prompt-library content is mandatory:
+one compact abstract prompt for proactive loading and one or more lazy-loaded
+detail prompts for specific use guidance.
+
+If a hosted install, start, bridge, ContextForge registration, tool refresh, or
+virtual-server association fails, the helper should return the observed or
+sanitized error and the failed stage. It must not tell the assistant which
+service-specific package argument, env var, tool schema, or prompt content to
+change. The assistant remains responsible for researching and determining the
+correction, then resubmitting a complete field set.
+
+All hosted-service CRUD must be idempotent. Repeating create/update/delete with
+the same target record must converge on the same state without duplicate npm
+installs, duplicate bridge endpoints, duplicate ContextForge gateways, duplicate
+virtual servers, or duplicate prompt-library entries. Runtime/apply must be
+transactional: if any step fails after partial mutation, the executor must
+cleanly uninstall/remove the partially created hosted npm service, bridge
+endpoint, ContextForge gateway/tool/server associations, and prompt-library
+entries before returning the error. The returned failure report must include
+the failed stage, sanitized error, rollback actions attempted, rollback result,
+and any residual cleanup risk.
 
 ## Source Helper CLI
 

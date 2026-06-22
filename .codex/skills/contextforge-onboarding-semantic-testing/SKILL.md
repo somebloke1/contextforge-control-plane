@@ -63,6 +63,29 @@ where the client has a hidden prompt path. Do not publish or upsert this
 how-to on every service-onboarding use, and do not show it as user-visible
 prose.
 
+Current onboarding target: first support npm-published stdio MCP services
+through one shared Docker-hosted `npm-stdio-host` runtime. For such services,
+the helper should guide assistants toward a managed npm-stdio service record
+and a ContextForge API registration JSON plan, not a bespoke Dockerfile per
+service. The stock ContextForge API registers reachable endpoints; it does not
+itself install npm packages. The shared host owns npm install/run/bridge CRUD,
+while the helper transparently manages ContextForge gateway/tool-refresh/
+virtual-server registration.
+
+The helper may require a complete standard field set and fail closed when it is
+missing: confirmed npm package, registry type, version policy, stdio transport,
+package/runtime arguments, env vars, secret names, tool schemas, abstract
+prompt, and lazy-loaded detail prompts. The helper should prompt/remind the
+tested assistant to research those fields, but must not research or infer them
+for the tested assistant. On runtime failure, the helper returns the failed
+stage plus observed/sanitized error only; it must not prescribe the
+service-specific correction.
+Runtime/apply operations must be idempotent and transactional. If installation
+or registration fails, the executor must uninstall/remove any partial hosted
+npm service, bridge endpoint, ContextForge gateway/tool/server association, and
+prompt-library content before returning the error. Evidence must record
+rollback actions and residual cleanup risk.
+
 ## Role Split
 
 - Controller: owns branch/GitHub state, runner package readiness, remediation,

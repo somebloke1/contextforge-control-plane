@@ -106,6 +106,10 @@ def _build_service_onboarding_runtime_apply_package(project_root: str, data: Map
     return service_onboarding_surfaces.build_service_onboarding_runtime_apply_package(project_root, data)
 
 
+def _research_service_onboarding_source(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
+    return service_onboarding_surfaces.research_service_onboarding_source(project_root, data)
+
+
 def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
     project_root = _project_root(
         data,
@@ -136,6 +140,8 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
         )
     if operation == "build_service_onboarding_plan":
         return _ok(_build_service_onboarding_plan(project_root, data))
+    if operation in {"research_service_onboarding_source", "cf_project_service_onboarding_research_source"}:
+        return _ok(_research_service_onboarding_source(project_root, data))
     if operation in {"build_service_onboarding_continuation", "build_service_onboarding_continue", "cf_project_service_onboarding_continue"}:
         return _ok(_build_service_onboarding_continuation(project_root, data))
     if operation in {"build_service_onboarding_runtime_apply_package", "build_service_onboarding_runtime_apply", "cf_project_service_onboarding_runtime_apply"}:
@@ -157,6 +163,17 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
             credential_boundary=str(data.get("credential_boundary") or data.get("credentialBoundary") or ""),
             approval_type=str(data.get("approval_type") or data.get("approvalType") or ""),
             expected_tools=data.get("expected_tools") or data.get("expectedTools") or [],
+            package_registry_type=str(data.get("package_registry_type") or data.get("packageRegistryType") or ""),
+            package_version=str(data.get("package_version") or data.get("packageVersion") or ""),
+            runtime_hint=str(data.get("runtime_hint") or data.get("runtimeHint") or ""),
+            npm_package_confirmed=bool(data.get("npm_package_confirmed") or data.get("npmPackageConfirmed") or False),
+            environment_variables_reviewed=bool(data.get("environment_variables_reviewed") or data.get("environmentVariablesReviewed") or False),
+            package_arguments_reviewed=bool(data.get("package_arguments_reviewed") or data.get("packageArgumentsReviewed") or False),
+            environment_variables=data.get("environment_variables") or data.get("environmentVariables") or [],
+            package_arguments=data.get("package_arguments") or data.get("packageArguments") or [],
+            required_secret_names=data.get("required_secret_names") or data.get("requiredSecretNames") or [],
+            tool_schemas=data.get("tool_schemas") or data.get("toolSchemas") or {},
+            prompt_library=data.get("prompt_library") or data.get("promptLibrary") or {},
             issue=str(data.get("issue") or data.get("issue_number") or data.get("issueNumber") or ""),
             client_type=client_type,
         )

@@ -131,6 +131,24 @@ it reads the tested assistant's previous visible output and produces the next
 persona-consistent user message. Seeded prompt sequences are debug scaffolding,
 not a substitute for the simulated human answering the actual interaction.
 
+Evaluator distinction: normal code-assistant behavior is not a defect merely
+because it produces files, plans, tables, managed npm-stdio service records,
+ContextForge API JSON, Docker substrate files, or other artifacts. The important
+question is whether those artifacts are
+assistant-authored, source-derived, within the user's approval boundary, and
+then used to advance the generic ContextForge onboarding path. The preferred
+implementation artifacts for the npm-stdio target are a per-service managed
+npm-stdio host record and a ContextForge API JSON definition for
+gateway/tool-refresh/virtual-server registration. The shared Dockerfile is a
+substrate artifact, not a per-service requirement. For exact artifact paths and
+JSON shape, the assistant should use
+the helper-returned `install_artifact_contract` from the non-mutating
+runtime/apply package rather than inventing a workspace schema. It is a failure
+if the runner or controller prebuilt the
+artifacts, if the assistant substitutes them for ContextForge
+continuation/runtime-apply, or if the dialogue ends at local documentation
+while claiming service availability.
+
 Acceptance requires Pi and OpenCode coverage across at least three distinct
 eligible semantic-test model profiles per target client. Deterministic runner
 checks may package setup, commands, JSON, files, endpoints, and transcripts,
