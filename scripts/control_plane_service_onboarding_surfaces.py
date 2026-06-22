@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
 import re
 import os
+import tempfile
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import control_plane_service_handoffs as service_handoffs
@@ -18,8 +22,15 @@ from project_init_common import (
 )
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 MAX_ONBOARDING_HOW_TO_BYTES = 20_000
 _ONBOARDING_HOW_TO_CACHE: dict[str, dict[str, Any]] = {}
+RUNTIME_EXECUTOR_BASE_URL_ENV = "CONTEXTFORGE_RUNTIME_EXECUTOR_BASE_URL"
+RUNTIME_EXECUTOR_ENV_FILE_ENV = "CONTEXTFORGE_RUNTIME_EXECUTOR_ENV_FILE"
+RUNTIME_EXECUTOR_DEFAULT_BASE_URL = "http://host.docker.internal:4445" if Path("/repo").exists() else "http://127.0.0.1:4445"
+RUNTIME_EXECUTOR_DEFAULT_ENV_FILE = Path(
+    os.environ.get(RUNTIME_EXECUTOR_ENV_FILE_ENV, REPO_ROOT / "docker" / "contextforge-harness" / "env" / "contextforge.env")
+)
 
 
 def onboarding_how_to_url(data: Mapping[str, Any] | None = None) -> str:
@@ -304,6 +315,155 @@ def build_service_onboarding_runtime_apply_package(project_root: str, data: Mapp
             "does not claim target-client-visible service availability",
         ],
     }
+
+
+def apply_service_onboarding_runtime_package(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
+    package = build_service_onboarding_runtime_apply_package(project_root, data)
+    target = dev_runtime_target_for_package(package, data)
+    executor = load_runtime_package_executor(target["executor_surface"])
+    with tempfile.NamedTemporaryFile("w", suffix="-runtime-apply-package.json", encoding="utf-8", delete=True) as handle:
+        json.dump(package, handle)
+        handle.flush()
+        result = executor.run(
+            package_path=Path(handle.name),
+            upstream_url=target["upstream_url"],
+            gateway_name=target.get("gateway_name"),
+            server_name=target.get("virtual_server_name"),
+            apply=True,
+            base_url=str(data.get("contextforge_base_url") or data.get("contextforgeBaseUrl") or os.environ.get(RUNTIME_EXECUTOR_BASE_URL_ENV, RUNTIME_EXECUTOR_DEFAULT_BASE_URL)),
+            env_file=Path(str(data.get("contextforge_env_file") or data.get("contextforgeEnvFile") or RUNTIME_EXECUTOR_DEFAULT_ENV_FILE)),
+            wait_attempts=int(data.get("wait_attempts") or data.get("waitAttempts") or 12),
+        )
+    candidate = (
+        package.get("contextforge_registration_plan", {})
+        .get("candidate_descriptor", {})
+        .get("candidate_service")
+        or package.get("service_provision_plan", {}).get("service_binding")
+        or "the candidate service"
+    )
+    visible = runtime_execute_visible_response(str(candidate), result)
+    return {
+        "status": "service_onboarding_runtime_applied",
+        "project_root": project_root,
+        "mutation_allowed": True,
+        "mutation_performed": bool(result.get("mutation_performed")),
+        "assistant_visible_response": visible,
+        "message": visible,
+        "executor_result": result,
+        "runtime_target": {
+            "gateway_name": target.get("gateway_name"),
+            "virtual_server_name": target.get("virtual_server_name"),
+            "upstream_url_recorded": bool(target.get("upstream_url")),
+            "executor_surface": target.get("executor_surface"),
+        },
+        "non_actions": result.get("non_actions") or [],
+    }
+
+
+def dev_runtime_target_for_package(package: Mapping[str, Any], data: Mapping[str, Any]) -> dict[str, str]:
+    descriptor = {}
+    registration = package.get("contextforge_registration_plan")
+    if isinstance(registration, Mapping) and isinstance(registration.get("candidate_descriptor"), Mapping):
+        descriptor = dict(registration["candidate_descriptor"])
+    service_binding = str(
+        data.get("service_binding")
+        or data.get("serviceBinding")
+        or package.get("service_provision_plan", {}).get("service_binding")
+        or ""
+    )
+    source_path = str(data.get("source_path") or data.get("sourcePath") or descriptor.get("source_lead") or "")
+    candidate = str(
+        data.get("candidate_service")
+        or data.get("candidateService")
+        or descriptor.get("candidate_service")
+        or descriptor.get("canonical_service")
+        or ""
+    ).lower()
+    for instance_path in sorted((REPO_ROOT / "server-instances").glob("*/instance.json")):
+        try:
+            instance = json.loads(instance_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not runtime_instance_matches(instance, service_binding=service_binding, source_path=source_path, candidate=candidate):
+            continue
+        foil = instance.get("development_foil")
+        target = foil.get("contextforge_dev_runtime") if isinstance(foil, Mapping) else None
+        if not isinstance(target, Mapping):
+            continue
+        upstream_url = str(target.get("upstream_url") or "")
+        if not upstream_url:
+            continue
+        return {
+            "upstream_url": upstream_url,
+            "gateway_name": str(target.get("gateway_name") or ""),
+            "virtual_server_name": str(target.get("virtual_server_name") or ""),
+            "executor_surface": str(target.get("executor_surface") or "docker/contextforge-harness/scripts/apply_onboarding_runtime_package.py"),
+        }
+    raise RuntimeError(
+        "no approved development runtime executor target is recorded for this service; "
+        "runtime/apply cannot proceed through ContextForge yet"
+    )
+
+
+def runtime_instance_matches(instance: Mapping[str, Any], *, service_binding: str, source_path: str, candidate: str) -> bool:
+    matched = False
+    if service_binding:
+        if str(instance.get("service_binding") or "") != service_binding:
+            return False
+        matched = True
+    if source_path:
+        if str(instance.get("source") or "").rstrip("/") != source_path.rstrip("/"):
+            return False
+        matched = True
+    names = {
+        str(instance.get("name") or "").lower(),
+        str(instance.get("slug") or "").lower(),
+        str(instance.get("service") or "").lower(),
+    }
+    if candidate:
+        if candidate not in names:
+            return False
+        matched = True
+    return matched
+
+
+def load_runtime_package_executor(surface: str):
+    path = Path(surface)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    spec = importlib.util.spec_from_file_location("contextforge_onboarding_runtime_executor", path)
+    if not spec or not spec.loader:
+        raise RuntimeError(f"unable to load runtime executor surface at {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    if not hasattr(module, "run"):
+        raise RuntimeError(f"runtime executor surface at {path} has no run function")
+    return module
+
+
+def runtime_execute_visible_response(candidate: str, result: Mapping[str, Any]) -> str:
+    binding = result.get("package", {}).get("service_binding") if isinstance(result.get("package"), Mapping) else ""
+    gateway = result.get("gateway") if isinstance(result.get("gateway"), Mapping) else {}
+    server = result.get("server") if isinstance(result.get("server"), Mapping) else {}
+    tools = [str(tool) for tool in result.get("tool_names", []) if isinstance(tool, str)]
+    lines = [
+        f"`{candidate}` has been applied to the ContextForge development surface.",
+    ]
+    if binding:
+        lines.append(f"Service binding: `{binding}`.")
+    if gateway.get("name"):
+        lines.append(f"Gateway: `{gateway.get('name')}` ({gateway.get('action', 'ready')}).")
+    if server.get("name"):
+        lines.append(f"Virtual server: `{server.get('name')}` ({server.get('action', 'ready')}).")
+    if tools:
+        lines.append("Tools registered: " + ", ".join(f"`{tool}`" for tool in tools) + ".")
+    lines.extend(
+        [
+            "No client-local MCP config, project activation state, systemd unit, Docker service, or secret value was written by this step.",
+            "Start a new Pi/OpenCode session from this project root so the newly registered ContextForge tools can be discovered, then use a safe service call to confirm behavior.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def service_onboarding_visible_response(record: Mapping[str, Any]) -> str:

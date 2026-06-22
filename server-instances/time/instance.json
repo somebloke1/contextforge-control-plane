@@ -72,6 +72,12 @@
     "order": 1,
     "complexity": "stateless baseline",
     "purpose": "build and prove the onboarding process before advancing to fetch",
-    "not_canonical_post_development_set": true
+    "not_canonical_post_development_set": true,
+    "contextforge_dev_runtime": {
+      "upstream_url": "http://time-transceiver:9209/mcp",
+      "gateway_name": "time-dev-docker",
+      "virtual_server_name": "time_dev_docker_server",
+      "executor_surface": "docker/contextforge-harness/scripts/apply_onboarding_runtime_package.py"
+    }
   }
 }
