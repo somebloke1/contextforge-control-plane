@@ -114,6 +114,14 @@ Work toward a systemd-controlled ContextForge installation that:
 - Use current local files, command output, service state, and HTTP probes as
   authority.
 - Verify the clean stock server before registering any external services.
+- Semantic usability tests must satisfy installer equivalence: if a random
+  user installs the product, their tested code assistant must receive the same
+  product surfaces used in the test. Do not add harness-only, AGENTS-only,
+  hidden, or otherwise non-product "cheat prompts" to make Pi, OpenCode, Codex,
+  or other tested assistants pass. Improve helper/tool output or product
+  guidance only when that surface is genuinely shipped to ordinary users. The
+  realm of the fraudulent is the lowest rung of hell in Dante's Inferno. I take
+  that as a signal, I don't want to be in hell.
 - Short of direct user involvement, usability claims require broad, diverse
   semantic test bundles run through actual target clients by dispatched
   sub-agent runners. These bundles must deliberately explore plausible user

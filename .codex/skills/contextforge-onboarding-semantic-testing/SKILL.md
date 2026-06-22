@@ -36,6 +36,14 @@ probe succeeded. Acceptance requires evidence that real Pi and real OpenCode
 target-client assistants progressed through the generic onboarding process and
 then saw and safely used the onboarded service through ContextForge.
 
+Semantic onboarding tests must satisfy installer equivalence. If a random user
+installs the product, their Pi or OpenCode assistant must receive the same
+product surfaces used by the tested assistant. Do not add harness-only,
+AGENTS-only, hidden, or otherwise non-product prompts, steering, behavioral
+prohibitions, or model/profile changes to make a tested assistant avoid a
+recent failure. Improve only shipped helper/tool output, shipped product
+guidance, runner correctness, evaluator criteria, or real product capability.
+
 If the foil is already present in the target ContextForge surface before the
 run starts, the run is invalid. "Present" includes an MCP service, service
 tools, virtual server, service-bound prompt, service-bound resource, or any

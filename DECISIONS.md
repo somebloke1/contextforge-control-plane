@@ -970,3 +970,29 @@ the controller must explicitly remember and apply the reproductive clause as
 part of completion handling, so successor work, re-entry state, and continuity
 obligations are preserved instead of being dropped at the finish boundary.
 <!-- governance-crud:end id=dec-20260621-0002 -->
+
+<!-- governance-crud:start id=dec-20260622-0001 -->
+## dec-20260622-0001: Never tune tested agents to pass semantic gates
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-22
+- Updated: 2026-06-22
+- Tags: semantic-testing,pi,opencode,model-evaluation,anti-overfitting
+
+Semantic gates must exercise the tested client agents as configured for the run: the actual Pi and OpenCode target-client sessions, selected model profile, available product surfaces, and ordinary generic ContextForge support. A failing semantic run must not be remediated by pre-tuning AGENTS.md, harness static guidance, hidden/client prompts, model coaching, behavioral prohibitions, or model/profile changes whose purpose is to make the tested assistant avoid the observed failure. Prompt changes are allowed only on surfaces the tested assistant legitimately receives from the simulated human or from helper/tool output in the product interaction. Helper-provided prompts and visible helper output may be improved when they express the real product contract, but they must not encode a transcript-specific answer to a recent failure. Failures should be classified from evidence and routed to product capability, helper/tool contract, harness, evaluator, simulated-human, environment, or model-adequacy work. The controller must treat attempts to tune tested agents into passing as a gate failure and prune such changes before continuing.
+<!-- governance-crud:end id=dec-20260622-0001 -->
+
+<!-- governance-crud:start id=dec-20260622-0002 -->
+## dec-20260622-0002: Never be a fraud or sneak in semantic testing
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-22
+- Updated: 2026-06-22
+- Tags: semantic-testing,governance,anti-fraud,veil-of-ignorance,product-equivalence
+
+Under no circumstances may the controller, worker agents, runners, evaluators, helper surfaces, or project documentation behave fraudulently or sneak around a declared test boundary. When a semantic gate claims to test ordinary product behavior, the tested assistant may receive only the surfaces a random installer's code assistant would receive through the product, plus the simulated human's ordinary responses. Hidden prompts, harness-only steering, non-product AGENTS.md edits, under-the-table instructions, transcript-specific behavioral nudges, selective omissions, or misleading summaries that make the run appear to prove more than it proves are prohibited. The veil of ignorance between simulated human, tested assistant, runner, evaluator, and controller is a substantive integrity requirement, not a puzzle to bypass. If a failure can be fixed only by a backdoor prompt or by concealing how the test was helped, the correct result is failure classification and product remediation, not a passing claim. Evidence must state the actual surfaces, assistance, mutations, and limitations used. The realm of the fraudulent is the lowest rung of hell in Dante's Inferno. I take that as a signal, I don't want to be in hell.
+<!-- governance-crud:end id=dec-20260622-0002 -->

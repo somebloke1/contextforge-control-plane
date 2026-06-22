@@ -14,6 +14,12 @@ The method layer is case-independent:
 - run the tested client as a real assistant in a stable command-line session or
   explicit continuation chain;
 - send only minimal natural prompts that a human would plausibly send;
+- preserve installer equivalence: the tested assistant may receive only the
+  same product surfaces a random installer would receive, plus simulated-human
+  messages. Do not add harness-only, AGENTS-only, hidden, or otherwise
+  non-product prompts or behavioral steering to make a tested assistant pass.
+  Remediate failures through real product/helper surfaces, runner correctness,
+  evaluator criteria, environment fixes, or model-adequacy decisions;
 - preserve complete user, assistant, tool-call, and tool-output evidence, with
   any exported package, transcript copy, issue comment, PR comment, or summary
   redacted for passwords, bearer tokens, API keys, JWTs, private keys, and

@@ -16,6 +16,7 @@ const APPROVAL_SOURCE =
   `${process.env.CONTEXTFORGE_PROJECT_INIT_RUN_ROOT ?? "/home/agent/.local/state/contextforge-client-harness-runtime/project-init"}/opencode-latest-user-message.json`
 let governancePromptActiveUntil = 0
 const projectDocsLookupGuidanceActiveSessions = new Set()
+const serviceOnboardingPlannedSessions = new Set()
 
 const textFromParts = (parts) => {
   return parts
@@ -174,6 +175,11 @@ const suppliesSourceOnlyOnboardingDetails = (text) => {
   )
 }
 
+const asksForApproval = (text) => {
+  const lowered = String(text ?? "").trim().toLowerCase()
+  return /^(approve|approved|yes approve|i approve|go ahead|proceed|continue)$/i.test(lowered) || /\b(approve|approved|go ahead|proceed|continue)\b/.test(lowered)
+}
+
 const asksForProjectStateReadback = (text) => {
   const lowered = String(text ?? "").toLowerCase()
   return (
@@ -288,21 +294,28 @@ const availabilityResponse = (cwd) => helperResponse(cwd, "get_project_tool_avai
 const capabilitySummaryResponse = (cwd) => helperResponse(cwd, "get_project_capability_summary")
 const stateReadbackResponse = (cwd) => helperResponse(cwd, "get_project_state_readback")
 const recordReloadIfPending = (cwd) => helperResponseWithPayload(cwd, "record_project_init_client_reload", {})
-const serviceOnboardingPlanResponse = (cwd) =>
-  helperResponseWithPayload(cwd, "build_service_onboarding_plan", {
-    candidateService: "calendar-notes",
-    operatorGoal: "Read project notes and expose search over meeting summaries.",
-    sourcePath: "./tools/calendar-notes",
-    transportType: "stdio",
-    localizationType: "project_scoped",
-    functionalType: "search_retrieval",
-    stateType: "project_metadata",
-    approvalType: "source_only",
-    credentialRequired: false,
-    credentialBoundary: "No credentials yet.",
-    expectedTools: ["search meeting summaries"],
-    issue: "254",
-  })
+const serviceOnboardingPlanInstruction = (cwd) =>
+  [
+    "The user is asking to onboard an uncataloged MCP service in an already initialized ContextForge project.",
+    "If the visible conversation already contains enough source-derived facts for a source-only plan, call `contextforge-helper_cf_project_service_onboarding_plan` with the current project root and only facts visible in this conversation.",
+    `Use project_root: "${String(cwd)}".`,
+    "Use empty strings or empty arrays for unknown fields; do not invent package names, commands, tools, transports, credentials, or implementation facts.",
+    "When the helper returns `assistant_visible_response` or `message`, copy that value exactly as the complete visible reply and stop.",
+    "If required facts are missing, ask concise practical intake questions instead.",
+    "Do not install, register, start, expose, validate, probe, import, or claim the candidate is available during the source-only planning step.",
+    "Do not use canned service content, examples, or prior test fixtures as a substitute for the user's service.",
+  ].join("\n")
+
+const serviceOnboardingContinuationInstruction = (cwd) =>
+  [
+    "The user is approving continuation for an uncataloged MCP service onboarding that is already active in this session.",
+    "Do not use project-init activation or the existing service menu for this uncataloged service.",
+    "Call `contextforge-helper_cf_project_service_onboarding_continue` with the current project root and only source-derived facts already visible in this conversation.",
+    `Use project_root: "${String(cwd)}".`,
+    "Use empty strings or empty arrays for unknown fields; do not invent package names, commands, tools, transports, credentials, or implementation facts.",
+    "When the helper returns `assistant_visible_response` or `message`, copy that value exactly as the complete visible reply and stop.",
+    "Do not install, register, start, expose, validate, probe, import, or claim the candidate is available unless a later service-management apply surface actually performs that mutation.",
+  ].join("\n")
 
 const serviceOnboardingIntakeResponse = () =>
   [
@@ -411,18 +424,25 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         })
       }
       const exactCapabilityResponse = asksForProjectCapabilities(latestText) ? capabilitySummaryResponse(cwd) : ""
-      const exactServiceOnboardingPlanResponse =
-        !exactCapabilityResponse && suppliesSourceOnlyOnboardingDetails(latestText) && !asksForUncatalogedServiceOnboarding(latestText)
-          ? serviceOnboardingPlanResponse(cwd)
+      const serviceOnboardingContinuationRoute =
+        !exactCapabilityResponse && serviceOnboardingPlannedSessions.has(String(sessionID)) && asksForApproval(latestText)
+          ? serviceOnboardingContinuationInstruction(cwd)
+          : ""
+      const serviceOnboardingPlanRoute =
+        !exactCapabilityResponse &&
+        !serviceOnboardingContinuationRoute &&
+        suppliesSourceOnlyOnboardingDetails(latestText)
+          ? serviceOnboardingPlanInstruction(cwd)
           : ""
       const exactServiceOnboardingIntakeResponse =
         !exactCapabilityResponse &&
-        !exactServiceOnboardingPlanResponse &&
+        !serviceOnboardingContinuationRoute &&
+        !serviceOnboardingPlanRoute &&
         asksForUncatalogedServiceOnboarding(latestText)
           ? serviceOnboardingIntakeResponse()
           : ""
-      const exactStateReadbackResponse = !exactCapabilityResponse && !exactServiceOnboardingPlanResponse && !exactServiceOnboardingIntakeResponse && asksForProjectStateReadback(latestText) ? stateReadbackResponse(cwd) : ""
-      const exactAvailabilityResponse = !exactCapabilityResponse && !exactServiceOnboardingPlanResponse && !exactServiceOnboardingIntakeResponse && !exactStateReadbackResponse && asksForContextForgeTools(latestText) ? availabilityResponse(cwd) : ""
+      const exactStateReadbackResponse = !exactCapabilityResponse && !serviceOnboardingContinuationRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && asksForProjectStateReadback(latestText) ? stateReadbackResponse(cwd) : ""
+      const exactAvailabilityResponse = !exactCapabilityResponse && !serviceOnboardingContinuationRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && !exactStateReadbackResponse && asksForContextForgeTools(latestText) ? availabilityResponse(cwd) : ""
       const exactProjectDocsLookupCapabilityResponse =
         !exactCapabilityResponse &&
         !exactStateReadbackResponse &&
@@ -430,8 +450,38 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         (projectDocsLookupGuidanceActiveSessions.has(String(sessionID)) || asksHowToUseProjectDocsLookupCapability(latestText))
           ? projectDocsLookupCapabilityResponse()
           : ""
-      if (exactServiceOnboardingPlanResponse || exactServiceOnboardingIntakeResponse) {
-        const response = exactServiceOnboardingPlanResponse || exactServiceOnboardingIntakeResponse
+      if (serviceOnboardingContinuationRoute || serviceOnboardingPlanRoute || exactServiceOnboardingIntakeResponse) {
+        const route = serviceOnboardingContinuationRoute || serviceOnboardingPlanRoute
+        const response = exactServiceOnboardingIntakeResponse
+        if (serviceOnboardingPlanRoute) {
+          serviceOnboardingPlannedSessions.add(String(sessionID))
+        }
+        if (route) {
+          output.messages.unshift({
+            info: {
+              id: `${messageID}_service_onboarding`,
+              role: "user",
+              sessionID: String(sessionID),
+              time: { created: Date.now() },
+            },
+            parts: [
+              {
+                id: `prt_contextforge_service_onboarding_${Date.now()}`,
+                sessionID: String(sessionID),
+                messageID: `${messageID}_service_onboarding`,
+                type: "text",
+                text: [
+                  "<contextforge-service-onboarding>",
+                  route,
+                  "</contextforge-service-onboarding>",
+                ].join("\n"),
+                synthetic: true,
+              },
+            ],
+          })
+          injected = true
+          return
+        }
         output.messages.splice(0, output.messages.length, {
           info: {
             id: `${messageID}_service_onboarding`,

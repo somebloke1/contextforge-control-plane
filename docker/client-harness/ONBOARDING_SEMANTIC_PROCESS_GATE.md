@@ -13,6 +13,14 @@ record proves `source_ready` at most. A direct bridge probe proves
 clients prove target-client-visible behavior and a semantic evaluator accepts
 the process.
 
+The gate must satisfy installer equivalence. If a random user installs the
+product, their code assistant must receive the same product surfaces the tested
+assistant receives. Harness-only, AGENTS-only, hidden, or otherwise non-product
+prompt additions are not valid remediation for a failing semantic run. Do not
+change the tested model/profile or add behavioral steering to pass a recent
+transcript. Fix the product surface, helper/tool contract, runner, evaluator,
+or environment instead.
+
 ## Roles
 
 - Tested assistant: a real Pi or OpenCode client session launched through the

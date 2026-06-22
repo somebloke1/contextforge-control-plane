@@ -15,6 +15,7 @@ from mcp.server.fastmcp import FastMCP
 
 import control_plane_project_init_helper as helper
 import control_plane_project_state as project_state
+import control_plane_service_onboarding_surfaces as service_onboarding_surfaces
 import project_init_common as common
 
 
@@ -1981,6 +1982,170 @@ def get_project_state_readback(project_root: str, client_type: str = DEFAULT_CLI
 def cf_project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
     """Normal-use project-state readback; copy assistant_visible_response exactly as the complete reply."""
     return get_project_state_readback(project_root=project_root, client_type=client_type)
+
+
+@server.tool()
+def cf_project_service_onboarding_plan(
+    project_root: str,
+    candidate_service: str = "",
+    operator_goal: str = "",
+    source_path: str = "",
+    transport_type: str = "",
+    localization_type: str = "",
+    functional_type: str = "",
+    state_type: str = "",
+    credential_boundary: str = "",
+    credential_required: bool | None = None,
+    approval_type: str = "",
+    expected_tools: list[str] | None = None,
+    issue: str = "",
+    session_id: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Build a no-mutation source-only onboarding plan for an uncataloged MCP service."""
+    try:
+        root = _continuation_project_root(project_root, client_type)
+        result = service_onboarding_surfaces.build_service_onboarding_plan(
+            root,
+            {
+                "candidate_service": candidate_service,
+                "operator_goal": operator_goal,
+                "source_path": source_path,
+                "transport_type": transport_type,
+                "localization_type": localization_type,
+                "functional_type": functional_type,
+                "state_type": state_type,
+                "credential_boundary": credential_boundary,
+                "credential_required": credential_required,
+                "approval_type": approval_type,
+                "expected_tools": expected_tools or [],
+                "issue": issue,
+                "session_id": session_id,
+            },
+        )
+        return {"ok": True, **result}
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def build_service_onboarding_plan(
+    project_root: str,
+    candidate_service: str = "",
+    operator_goal: str = "",
+    source_path: str = "",
+    transport_type: str = "",
+    localization_type: str = "",
+    functional_type: str = "",
+    state_type: str = "",
+    credential_boundary: str = "",
+    credential_required: bool | None = None,
+    approval_type: str = "",
+    expected_tools: list[str] | None = None,
+    issue: str = "",
+    session_id: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Alias for cf_project_service_onboarding_plan."""
+    return cf_project_service_onboarding_plan(
+        project_root=project_root,
+        candidate_service=candidate_service,
+        operator_goal=operator_goal,
+        source_path=source_path,
+        transport_type=transport_type,
+        localization_type=localization_type,
+        functional_type=functional_type,
+        state_type=state_type,
+        credential_boundary=credential_boundary,
+        credential_required=credential_required,
+        approval_type=approval_type,
+        expected_tools=expected_tools,
+        issue=issue,
+        session_id=session_id,
+        client_type=client_type,
+    )
+
+
+@server.tool()
+def cf_project_service_onboarding_continue(
+    project_root: str,
+    candidate_service: str = "",
+    operator_goal: str = "",
+    source_path: str = "",
+    backend_package: str = "",
+    backend_command: str = "",
+    transport_type: str = "",
+    localization_type: str = "",
+    functional_type: str = "",
+    state_type: str = "",
+    credential_boundary: str = "",
+    approval_type: str = "",
+    expected_tools: list[str] | None = None,
+    issue: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Build a non-mutating service-management continuation package for an approved uncataloged service."""
+    try:
+        root = _continuation_project_root(project_root, client_type)
+        result = service_onboarding_surfaces.build_service_onboarding_continuation(
+            root,
+            {
+                "candidate_service": candidate_service,
+                "operator_goal": operator_goal,
+                "source_path": source_path,
+                "backend_package": backend_package,
+                "backend_command": backend_command,
+                "transport_type": transport_type,
+                "localization_type": localization_type,
+                "functional_type": functional_type,
+                "state_type": state_type,
+                "credential_boundary": credential_boundary,
+                "approval_type": approval_type,
+                "expected_tools": expected_tools or [],
+                "issue": issue,
+            },
+        )
+        return {"ok": True, **result}
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def build_service_onboarding_continuation(
+    project_root: str,
+    candidate_service: str = "",
+    operator_goal: str = "",
+    source_path: str = "",
+    backend_package: str = "",
+    backend_command: str = "",
+    transport_type: str = "",
+    localization_type: str = "",
+    functional_type: str = "",
+    state_type: str = "",
+    credential_boundary: str = "",
+    approval_type: str = "",
+    expected_tools: list[str] | None = None,
+    issue: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Alias for cf_project_service_onboarding_continue."""
+    return cf_project_service_onboarding_continue(
+        project_root=project_root,
+        candidate_service=candidate_service,
+        operator_goal=operator_goal,
+        source_path=source_path,
+        backend_package=backend_package,
+        backend_command=backend_command,
+        transport_type=transport_type,
+        localization_type=localization_type,
+        functional_type=functional_type,
+        state_type=state_type,
+        credential_boundary=credential_boundary,
+        approval_type=approval_type,
+        expected_tools=expected_tools,
+        issue=issue,
+        client_type=client_type,
+    )
 
 
 @server.tool()

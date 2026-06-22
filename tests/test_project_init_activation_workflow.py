@@ -1908,6 +1908,124 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Please provide the source reference or local path", parsed["assistant_visible_response"])
         self.assertIn("No service has been installed, registered, started, exposed, imported, validated, probed, or made available", parsed["assistant_visible_response"])
 
+    def test_contextforge_helper_mcp_exposes_uncataloged_service_onboarding_plan(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.cf_project_service_onboarding_plan(
+                project_root=str(root),
+                candidate_service="time",
+                operator_goal="Add the Time MCP service.",
+                source_path="https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+                transport_type="stdio",
+                localization_type="shared_canonical",
+                functional_type="time_timezone",
+                state_type="stateless",
+                credential_boundary="no credentials required",
+                credential_required=False,
+                approval_type="source_only",
+                expected_tools=["get_current_time", "convert_time"],
+                issue="356",
+                client_type="opencode",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("source_only_onboarding_plan", result["status"])
+        self.assertFalse(result["mutation_allowed"])
+        self.assertEqual(
+            [{"type": "github_url", "ref": "https://github.com/modelcontextprotocol/servers/tree/main/src/time"}],
+            result["record"]["source_evidence"],
+        )
+        self.assertEqual("source_only", result["record"]["classification"]["approval_type"]["value"])
+        credential_decision = next(
+            item
+            for item in result["record"]["implementation_decision_brief"]["decision_categories"]
+            if item["id"] == "credential_auth_boundary"
+        )
+        self.assertEqual(
+            "no credentials required",
+            credential_decision["current_decision"]["authority_boundary"],
+        )
+        self.assertIn("source-only onboarding plan", result["assistant_visible_response"])
+        self.assertIn("No service has been installed, registered, started, exposed, imported, or made available", result["assistant_visible_response"])
+
+    def test_pi_helper_cli_service_onboarding_continuation_builds_service_management_plan(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/pi_project_init_helper_cli.py"),
+                    "--operation",
+                    "build_service_onboarding_continuation",
+                    "--payload-json",
+                    json.dumps(
+                        {
+                            "project_root": str(root),
+                            "candidateService": "time",
+                            "operatorGoal": "Add the Time MCP service.",
+                            "sourcePath": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+                            "backendPackage": "mcp-server-time",
+                            "backendCommand": "mcp-server-time",
+                            "transportType": "stdio",
+                            "localizationType": "shared_canonical",
+                            "functionalType": "time_timezone",
+                            "stateType": "stateless",
+                            "credentialBoundary": "no credentials required",
+                            "expectedTools": ["get_current_time", "convert_time"],
+                            "issue": "356",
+                        }
+                    ),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=REPO_ROOT,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        parsed = json.loads(result.stdout)
+        self.assertTrue(parsed["ok"])
+        self.assertEqual("service_onboarding_continuation_plan", parsed["status"])
+        self.assertFalse(parsed["mutation_allowed"])
+        self.assertEqual("plan_only", parsed["service_management_result"]["status"])
+        self.assertFalse(parsed["service_management_result"]["x_completion_record_consumable"])
+        catalog_plan = parsed["service_management_result"]["x_catalog_plan"]
+        self.assertEqual("package_bridge_stdio_to_http_sse", catalog_plan["transport_decision"]["decision"])
+        self.assertIn("POST /gateways", {operation["api"] for operation in catalog_plan["contextforge_api_operations"]})
+        self.assertIn("This is not a project-init service activation menu", parsed["assistant_visible_response"])
+        self.assertIn("No service has been installed, registered, started, exposed, imported, or made available", parsed["assistant_visible_response"])
+        self.assertIn("stops before catalog promotion or runtime apply", parsed["assistant_visible_response"])
+        self.assertIn("Do not use project-init activation", parsed["assistant_visible_response"])
+
+    def test_contextforge_helper_mcp_exposes_uncataloged_service_onboarding_continuation(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.cf_project_service_onboarding_continue(
+                project_root=str(root),
+                candidate_service="time",
+                operator_goal="Add the Time MCP service.",
+                source_path="https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+                backend_package="mcp-server-time",
+                backend_command="mcp-server-time",
+                transport_type="stdio",
+                localization_type="shared_canonical",
+                functional_type="time_timezone",
+                state_type="stateless",
+                credential_boundary="no credentials required",
+                approval_type="source_only",
+                expected_tools=["get_current_time", "convert_time"],
+                issue="356",
+                client_type="opencode",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("service_onboarding_continuation_plan", result["status"])
+        self.assertFalse(result["mutation_allowed"])
+        self.assertEqual("plan_only", result["service_management_result"]["status"])
+        self.assertEqual("356", result["handoff"]["candidate_descriptor"]["issue"])
+        self.assertIn("not a project-init service activation menu", result["assistant_visible_response"])
+        self.assertIn("stops before catalog promotion or runtime apply", result["assistant_visible_response"])
+
     def test_contextforge_helper_mcp_exposes_cached_project_init_id_digest_tools(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()

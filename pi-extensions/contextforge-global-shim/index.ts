@@ -1052,7 +1052,7 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
       operation: "build_service_onboarding_plan",
       description: "Build a source-only no-mutation onboarding plan for an explicit user request to add or onboard an uncataloged MCP service. Use only user-supplied facts; do not install, register, expose, validate, probe, or mutate client/project/runtime state. After the call, copy assistant_visible_response/message exactly; do not reformat it, expose enum names, or strengthen 'no credentials yet' into 'credentials are not required'.",
       parameters: helperSchema({
-        candidateService: { type: "string", description: "Candidate service name supplied by the user, such as calendar-notes." },
+        candidateService: { type: "string", description: "Candidate service name supplied by the user." },
         operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
         sourcePath: { type: "string", description: "User-supplied source path, package, repository, or documentation reference." },
         transportType: { type: "string", description: "User-supplied transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required." },
@@ -1063,6 +1063,25 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
         credentialRequired: { type: "boolean", description: "Whether the user indicated credentials are required." },
         credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
         expectedTools: { type: "array", items: { type: "string" }, description: "User-supplied expected tool names or capabilities." },
+        issue: { type: "string", description: "Optional tracking issue id." },
+      }),
+    },
+    {
+      name: "cf_project_service_onboarding_continue",
+      operation: "build_service_onboarding_continuation",
+      description: "Continue an already planned uncataloged MCP service onboarding after explicit user approval for implementation, metadata-only catalog promotion, runtime, or registration. Use this again for uncataloged catalog-promotion approvals; never use cf_project_init_continue for approved uncataloged services. This builds a non-mutating service-management continuation package. It does not install, register, expose, probe, or claim target-client-visible availability; copy assistant_visible_response/message exactly.",
+      parameters: helperSchema({
+        candidateService: { type: "string", description: "Candidate service name from the source-only onboarding plan." },
+        operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
+        sourcePath: { type: "string", description: "Source path, package, repository, or documentation reference used for the source-only plan." },
+        backendPackage: { type: "string", description: "Source-derived backend package name, when known." },
+        backendCommand: { type: "string", description: "Source-derived backend command or executable, when known." },
+        transportType: { type: "string", description: "Source-derived transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required." },
+        localizationType: { type: "string", description: "Source-derived scope/locality such as project_scoped, shared_canonical, credential_scoped, user_scoped, or dev_only." },
+        functionalType: { type: "string", description: "Source-derived functional class such as time_timezone, search_retrieval, filesystem_content, code_intelligence, or remote_api_tool." },
+        stateType: { type: "string", description: "Source-derived state footprint such as stateless, local_filesystem_state, project_metadata, cache_index_state, credential_state, or runtime_evidence_state." },
+        credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
+        expectedTools: { type: "array", items: { type: "string" }, description: "Source-derived expected tool names or capabilities." },
         issue: { type: "string", description: "Optional tracking issue id." },
       }),
     },
@@ -1260,6 +1279,18 @@ function clientVisibleProjectInitResult(operation: string, result: JsonObject): 
     return {
       ok: result.ok ?? true,
       status: result.status || "source_only_onboarding_plan",
+      project_root: result.project_root,
+      mutation_allowed: false,
+      assistant_visible_response: visible,
+      message: visible,
+      non_actions: result.non_actions || [],
+    };
+  }
+  if (operation === "build_service_onboarding_continuation") {
+    const visible = String(result.assistant_visible_response || result.message || "").trim();
+    return {
+      ok: result.ok ?? true,
+      status: result.status || "service_onboarding_continuation_plan",
       project_root: result.project_root,
       mutation_allowed: false,
       assistant_visible_response: visible,
