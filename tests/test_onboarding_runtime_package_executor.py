@@ -88,6 +88,7 @@ class FakeClient:
         self.gateways: list[dict[str, Any]] = []
         self.servers: list[dict[str, Any]] = []
         self.tools: list[dict[str, Any]] = []
+        self.resources: list[dict[str, Any]] = []
         self.next_id = 1
 
     def _id(self, prefix: str) -> str:
@@ -136,6 +137,21 @@ class FakeClient:
             self.gateways = [gateway for gateway in self.gateways if gateway.get("id") != gateway_id]
             self.tools = [tool for tool in self.tools if tool.get("gateway_id") != gateway_id and tool.get("gatewayId") != gateway_id]
             return {"ok": True}
+        if method == "POST" and path == "/resources":
+            payload = dict((body or {})["resource"])
+            row = {"id": self._id("resource"), **payload}
+            self.resources.append(row)
+            return row
+        if method == "PUT" and path.startswith("/resources/"):
+            resource_id = path.rsplit("/", 1)[-1]
+            row = next(resource for resource in self.resources if resource["id"] == resource_id)
+            row.clear()
+            row.update({"id": resource_id, **(body or {})})
+            return row
+        if method == "DELETE" and path.startswith("/resources/"):
+            resource_id = path.rsplit("/", 1)[-1]
+            self.resources = [resource for resource in self.resources if resource.get("id") != resource_id]
+            return {"ok": True}
         raise AssertionError(f"unexpected request {method} {path}")
 
     def items(self, path: str) -> list[dict[str, Any]]:
@@ -145,6 +161,8 @@ class FakeClient:
             return list(self.tools)
         if path.startswith("/servers"):
             return list(self.servers)
+        if path.startswith("/resources"):
+            return list(self.resources)
         raise AssertionError(f"unexpected items path {path}")
 
 
@@ -226,6 +244,14 @@ class FailingRefreshClient(FakeClient):
         return super().request(method, path, body)
 
 
+class FailingServerClient(FakeClient):
+    def request(self, method: str, path: str, body: dict | None = None):
+        if method == "POST" and path == "/servers":
+            self.requests.append((method, path, body))
+            raise RuntimeError("simulated server creation failure")
+        return super().request(method, path, body)
+
+
 class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
     def test_dry_run_consumes_runtime_package_without_api_or_env_reads(self) -> None:
         executor = load_executor()
@@ -279,10 +305,22 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
                 [
                     ("POST", "/gateways"),
                     ("POST", "/gateways/gateway-1/tools/refresh"),
+                    ("POST", "/resources"),
+                    ("POST", "/resources"),
                     ("POST", "/servers"),
                 ],
                 [(method, path) for method, path, _body in client.requests],
             )
+            self.assertEqual(2, len(client.resources))
+            self.assertEqual(
+                [
+                    "contextforge://service-specs/time/abstract/v1",
+                    "contextforge://service-specs/time/details/usage/v1",
+                ],
+                [resource["uri"] for resource in client.resources],
+            )
+            server_post = next(body for method, path, body in client.requests if method == "POST" and path == "/servers")
+            self.assertEqual(["resource-5", "resource-6"], server_post["server"]["associated_resources"])
             record_path = Path(result["npm_stdio_host_record"]["record_path"])
             self.assertTrue(record_path.exists())
             self.assertEqual("created", result["npm_stdio_host_record"]["action"])
@@ -332,6 +370,112 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             self.assertTrue(
                 any(action.get("action") == "rollback_npm_stdio_host_record" for action in report["rollback_actions_attempted"])
             )
+
+    def test_apply_rolls_back_prompt_library_resources_on_server_failure(self) -> None:
+        executor = load_executor()
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            write_time_package(package_path, root)
+            client = FailingServerClient()
+
+            with self.assertRaises(executor.RuntimeApplyError) as ctx:
+                executor.run(
+                    package_path=package_path,
+                    upstream_url="http://time-transceiver:9209/mcp",
+                    gateway_name="time-dev-docker",
+                    server_name="time_dev_docker_server",
+                    apply=True,
+                    client=client,
+                    wait_attempts=1,
+                )
+
+            self.assertEqual([], client.resources)
+            self.assertEqual([], client.gateways)
+            report = ctx.exception.failure_report
+            self.assertEqual("virtual_server", report["failed_stage"])
+            self.assertEqual("passed", report["rollback_result"])
+            actions = [action.get("action") for action in report["rollback_actions_attempted"]]
+            self.assertIn("delete_created_resource", actions)
+            self.assertIn("rollback_npm_stdio_host_record", actions)
+
+    def test_delete_removes_server_prompt_library_resources_gateway_and_host_record(self) -> None:
+        executor = load_executor()
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "time-package.json"
+            write_time_package(package_path, root)
+            client = FakeClient()
+            empty_view = executor.run(
+                package_path=package_path,
+                gateway_name="time-dev-docker",
+                server_name="time_dev_docker_server",
+                view=True,
+                client=client,
+            )
+            self.assertFalse(empty_view["mutation_performed"])
+            self.assertFalse(empty_view["host_record"]["record_exists"])
+            self.assertFalse(empty_view["contextforge"]["gateway"]["present"])
+            self.assertFalse(empty_view["contextforge"]["virtual_server"]["present"])
+            created = executor.run(
+                package_path=package_path,
+                upstream_url="http://time-transceiver:9209/mcp",
+                gateway_name="time-dev-docker",
+                server_name="time_dev_docker_server",
+                apply=True,
+                client=client,
+                wait_attempts=1,
+            )
+            record_path = Path(created["npm_stdio_host_record"]["record_path"])
+            self.assertTrue(record_path.exists())
+            self.assertEqual(1, len(client.gateways))
+            self.assertEqual(1, len(client.servers))
+            self.assertEqual(2, len(client.resources))
+            applied_view = executor.run(
+                package_path=package_path,
+                gateway_name="time-dev-docker",
+                server_name="time_dev_docker_server",
+                view=True,
+                client=client,
+            )
+            self.assertFalse(applied_view["mutation_performed"])
+            self.assertTrue(applied_view["host_record"]["record_exists"])
+            self.assertTrue(applied_view["contextforge"]["gateway"]["present"])
+            self.assertTrue(applied_view["contextforge"]["virtual_server"]["present"])
+            self.assertEqual([True, True], [item["present"] for item in applied_view["contextforge"]["prompt_library_resources"]])
+
+            deleted = executor.run(
+                package_path=package_path,
+                gateway_name="time-dev-docker",
+                server_name="time_dev_docker_server",
+                delete=True,
+                client=client,
+            )
+
+            self.assertTrue(deleted["mutation_performed"])
+            self.assertEqual([], client.gateways)
+            self.assertEqual([], client.servers)
+            self.assertEqual([], client.resources)
+            self.assertFalse(record_path.exists())
+            actions = [action["action"] for action in deleted["delete_actions"]]
+            self.assertIn("delete_virtual_server", actions)
+            self.assertIn("delete_prompt_library_resource", actions)
+            self.assertIn("delete_gateway", actions)
+            self.assertIn("delete_npm_stdio_host_record", actions)
+
+            deleted_again = executor.run(
+                package_path=package_path,
+                gateway_name="time-dev-docker",
+                server_name="time_dev_docker_server",
+                delete=True,
+                client=client,
+            )
+            self.assertFalse(deleted_again["mutation_performed"])
+            absent_actions = [action["action"] for action in deleted_again["delete_actions"]]
+            self.assertIn("virtual_server_absent", absent_actions)
+            self.assertIn("prompt_library_resource_absent", absent_actions)
+            self.assertIn("gateway_absent", absent_actions)
+            self.assertIn("npm_stdio_host_record_absent", absent_actions)
 
     def test_apply_waits_for_delayed_expected_tool_visibility(self) -> None:
         executor = load_executor()
@@ -410,7 +554,7 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
         self.assertEqual("updated", result["gateway"]["action"])
         self.assertEqual("updated", result["server"]["action"])
         server_put = next(body for method, path, body in client.requests if method == "PUT" and path == "/servers/server-existing")
-        self.assertEqual(["resource-id"], server_put["associatedResources"])
+        self.assertEqual(["resource-id", "resource-1", "resource-2"], server_put["associatedResources"])
         self.assertEqual(["prompt-id"], server_put["associatedPrompts"])
         self.assertEqual(["agent-id"], server_put["associatedA2aAgents"])
         self.assertEqual(["tool-time-current", "tool-time-convert"], server_put["associatedTools"])
@@ -564,6 +708,17 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
         self.assertFalse(data["mutation_performed"])
         self.assertEqual("time-dev-docker", data["registry_request"]["gateway_name"])
 
+    def test_runtime_package_parser_allows_view_and_delete_without_upstream_url(self) -> None:
+        executor = load_executor()
+
+        view_args = executor.build_parser().parse_args(["--package-json", "time-package.json", "--view"])
+        delete_args = executor.build_parser().parse_args(["--package-json", "time-package.json", "--delete"])
+
+        self.assertEqual("", view_args.upstream_url)
+        self.assertTrue(view_args.view)
+        self.assertEqual("", delete_args.upstream_url)
+        self.assertTrue(delete_args.delete)
+
     def test_npm_stdio_host_records_cli_upserts_and_deletes_record(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -585,6 +740,21 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             record_path = Path(upsert_payload["record_path"])
             self.assertTrue(record_path.exists())
             self.assertEqual("created", upsert_payload["action"])
+
+            view = subprocess.run(
+                [sys.executable, str(script), "view", "--project-root", str(root), "--service-binding", "time:canonical"],
+                cwd=REPO_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=20,
+            )
+
+            self.assertEqual(0, view.returncode, view.stderr)
+            view_payload = json.loads(view.stdout)
+            self.assertFalse(view_payload["mutation_performed"])
+            self.assertTrue(view_payload["record_exists"])
+            self.assertEqual("mcp-server-time", view_payload["record"]["package"])
 
             delete = subprocess.run(
                 [sys.executable, str(script), "delete", "--project-root", str(root), "--service-binding", "time:canonical"],

@@ -827,7 +827,8 @@ console.log(JSON.stringify({{
         self.assertIn("node:24-bookworm-slim", dockerfile)
         self.assertIn("npm_stdio_host_records.py", dockerfile)
         self.assertIn("Managed npm-stdio Host Substrate", readme)
-        self.assertIn("does not yet claim full dynamic package", readme)
+        self.assertIn("add/update, view, and delete operations", readme)
+        self.assertIn("full dynamic package start/bridge behavior", readme)
 
     def test_time_onboarding_foil_cleanup_readback_identifies_all_required_artifact_scopes(self) -> None:
         cleanup = _load_script_module(

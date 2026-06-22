@@ -201,6 +201,33 @@ def delete_service_record(project_root: str | Path, service_binding: str) -> dic
     return {"ok": True, "service_binding": service_binding, "actions": actions}
 
 
+def view_service_record(project_root: str | Path, service_binding: str) -> dict[str, Any]:
+    root = Path(project_root).resolve(strict=False)
+    idx_path = index_path(root)
+    index = load_index(root)
+    entry = index.get("records", {}).get(service_binding)
+    record: Any = None
+    record_path_value = ""
+    record_exists = False
+    if isinstance(entry, Mapping) and entry.get("record_path"):
+        path = (root / str(entry["record_path"])).resolve(strict=False)
+        record_path_value = str(path)
+        record_exists = path.exists()
+        if record_exists:
+            record = read_json(path)
+    return {
+        "ok": True,
+        "service_binding": service_binding,
+        "index_path": str(idx_path),
+        "index_exists": idx_path.exists(),
+        "index_entry": entry if isinstance(entry, Mapping) else None,
+        "record_path": record_path_value,
+        "record_exists": record_exists,
+        "record": record,
+        "mutation_performed": False,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -209,6 +236,9 @@ def build_parser() -> argparse.ArgumentParser:
     delete = subparsers.add_parser("delete", help="Delete a managed npm-stdio service record by service binding.")
     delete.add_argument("--project-root", type=Path, required=True)
     delete.add_argument("--service-binding", required=True)
+    view = subparsers.add_parser("view", help="Read a managed npm-stdio service record and index entry by service binding.")
+    view.add_argument("--project-root", type=Path, required=True)
+    view.add_argument("--service-binding", required=True)
     return parser
 
 
@@ -219,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
         result, _rollback_token = upsert_from_runtime_package(package)
     elif args.command == "delete":
         result = delete_service_record(args.project_root, args.service_binding)
+    elif args.command == "view":
+        result = view_service_record(args.project_root, args.service_binding)
     else:  # pragma: no cover - argparse enforces this
         raise RuntimeError(f"unsupported command: {args.command}")
     print(json.dumps(result, indent=2, sort_keys=True))
