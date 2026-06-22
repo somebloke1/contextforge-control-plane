@@ -83,6 +83,18 @@ def write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
     tmp.replace(path)
 
 
+def remove_empty_record_parent(path: Path, root: Path, actions: list[dict[str, Any]], *, action: str) -> None:
+    parent = path.parent.resolve(strict=False)
+    instances_root = (root / "server-instances").resolve(strict=False)
+    if instances_root not in (parent, *parent.parents):
+        return
+    try:
+        parent.rmdir()
+        actions.append({"target": str(parent), "action": action, "ok": True})
+    except OSError:
+        return
+
+
 def relative_to_root(project_root: Path, path: Path) -> str:
     return str(path.resolve(strict=False).relative_to(project_root))
 
@@ -150,6 +162,7 @@ def upsert_from_runtime_package(package: Mapping[str, Any]) -> tuple[dict[str, A
 
 def rollback_upsert(rollback_token: Mapping[str, Any]) -> dict[str, Any]:
     path = Path(str(rollback_token["record_path"]))
+    root = Path(str(rollback_token["project_root"])).resolve(strict=False)
     idx_path = Path(str(rollback_token["index_path"]))
     previous_record = rollback_token.get("previous_record")
     previous_index = rollback_token.get("previous_index")
@@ -161,6 +174,7 @@ def rollback_upsert(rollback_token: Mapping[str, Any]) -> dict[str, Any]:
         elif path.exists():
             path.unlink()
             actions.append({"target": str(path), "action": "removed_created_record", "ok": True})
+            remove_empty_record_parent(path, root, actions, action="removed_empty_created_record_parent")
         if isinstance(previous_index, Mapping):
             write_json_atomic(idx_path, dict(previous_index))
             actions.append({"target": str(idx_path), "action": "restored_previous_index", "ok": True})
@@ -192,6 +206,7 @@ def delete_service_record(project_root: str | Path, service_binding: str) -> dic
         if path.exists():
             path.unlink()
             actions.append({"target": str(path), "action": "removed_record", "ok": True})
+            remove_empty_record_parent(path, root, actions, action="removed_empty_record_parent")
     if index.get("records"):
         write_json_atomic(idx_path, index)
         actions.append({"target": str(idx_path), "action": "updated_index", "ok": True})

@@ -2245,6 +2245,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("npm-stdio-service.json", contract["artifacts"]["npm_stdio_service_record"]["path"])
         npm_record = contract["artifacts"]["npm_stdio_service_record"]["content"]
         self.assertEqual("mcp-server-time", npm_record["package"])
+        self.assertEqual({"command": "uvx", "args": ["mcp-server-time", "--local-timezone", "UTC"]}, npm_record["stdio"])
+        self.assertEqual(onboarding_surfaces.npm_stdio_endpoint("time:canonical"), npm_record["endpoint"])
         self.assertEqual("rollback_partial_state_before_error_response", npm_record["idempotency"]["failure_policy"])
         self.assertIn("rollback_actions_attempted", npm_record["idempotency"]["failure_report_must_include"])
         self.assertTrue(npm_record["prompt_library"]["publication_required"])
@@ -2265,7 +2267,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("ContextForge API JSON target", parsed["assistant_visible_response"])
         self.assertIn("explicit approval for this exact recorded apply surface", parsed["assistant_visible_response"])
         self.assertIn("Recorded executor surface: `docker/contextforge-harness/scripts/apply_onboarding_runtime_package.py`", parsed["assistant_visible_response"])
-        self.assertIn("Recorded ContextForge gateway: `time-dev-docker`", parsed["assistant_visible_response"])
+        self.assertIn("Recorded ContextForge gateway: `time-gateway`", parsed["assistant_visible_response"])
         self.assertIn("No runtime, registry, client config, or project activation mutation", parsed["assistant_visible_response"])
         self.assertIn("target-client-visible list-tools", parsed["assistant_visible_response"])
 
@@ -2274,7 +2276,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             root = Path(tmp).resolve()
             approval_source = root / "latest-user.json"
             approval_source.write_text(
-                json.dumps({"cwd": str(root), "text": "approve runtime execute for time through time-dev-docker"}),
+                json.dumps({"cwd": str(root), "text": "approve runtime execute for time through time-gateway"}),
                 encoding="utf-8",
             )
             with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False):
@@ -2312,7 +2314,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("contextforge_registration_plan", result)
         self.assertIn("runtime-apply package", result["assistant_visible_response"])
         self.assertIn("explicit approval for this exact recorded apply surface", result["assistant_visible_response"])
-        self.assertIn("Recorded ContextForge gateway: `time-dev-docker`", result["assistant_visible_response"])
+        self.assertIn("Recorded ContextForge gateway: `time-gateway`", result["assistant_visible_response"])
         self.assertTrue(result["copy_as_complete_visible_response"])
         self.assertTrue(result["assistant_response_policy"]["direct_client_config_is_not_contextforge_onboarding"])
         self.assertIn("Do not write direct client-local MCP configuration", result["assistant_visible_response"])
@@ -2322,7 +2324,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             root = Path(tmp).resolve()
             approval_source = root / "latest-user.json"
             approval_source.write_text(
-                json.dumps({"cwd": str(root), "text": "approve runtime execute for time through time-dev-docker"}),
+                json.dumps({"cwd": str(root), "text": "approve runtime execute for time through time-gateway"}),
                 encoding="utf-8",
             )
             with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False):
@@ -2355,15 +2357,15 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         class FakeExecutor:
             @staticmethod
             def run(**kwargs: Any) -> dict[str, Any]:
-                self.assertEqual("http://time-transceiver:9209/mcp", kwargs["upstream_url"])
-                self.assertEqual("time-dev-docker", kwargs["gateway_name"])
-                self.assertEqual("time_dev_docker_server", kwargs["server_name"])
+                self.assertEqual(onboarding_surfaces.npm_stdio_endpoint("time:canonical")["streamable_http_url"], kwargs["upstream_url"])
+                self.assertEqual("time-gateway", kwargs["gateway_name"])
+                self.assertEqual("time-server", kwargs["server_name"])
                 self.assertTrue(kwargs["apply"])
                 return {
                     "mutation_performed": True,
                     "package": {"service_binding": "time:canonical"},
-                    "gateway": {"action": "created", "name": "time-dev-docker"},
-                    "server": {"action": "created", "name": "time_dev_docker_server"},
+                    "gateway": {"action": "created", "name": "time-gateway"},
+                    "server": {"action": "created", "name": "time-server"},
                     "tool_names": ["time-dev-docker-get-current-time", "time-dev-docker-convert-time"],
                     "non_actions": [
                         "no Docker, process, systemd, project-state, client config, or secret mutation by this registry executor"
@@ -2374,7 +2376,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             root = Path(tmp).resolve()
             approval_source = root / "latest-user.json"
             approval_source.write_text(
-                json.dumps({"cwd": str(root), "text": "approve runtime execute for time through time-dev-docker"}),
+                json.dumps({"cwd": str(root), "text": "approve runtime execute for time through time-gateway"}),
                 encoding="utf-8",
             )
             with (
@@ -2441,15 +2443,15 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         class FakeExecutor:
             @staticmethod
             def run(**kwargs: Any) -> dict[str, Any]:
-                self.assertEqual("http://time-transceiver:9209/mcp", kwargs["upstream_url"])
-                self.assertEqual("time-dev-docker", kwargs["gateway_name"])
-                self.assertEqual("time_dev_docker_server", kwargs["server_name"])
+                self.assertEqual(onboarding_surfaces.npm_stdio_endpoint("time:canonical")["streamable_http_url"], kwargs["upstream_url"])
+                self.assertEqual("time-gateway", kwargs["gateway_name"])
+                self.assertEqual("time-server", kwargs["server_name"])
                 self.assertTrue(kwargs["apply"])
                 return {
                     "mutation_performed": True,
                     "package": {"service_binding": "time:canonical"},
-                    "gateway": {"action": "ready", "name": "time-dev-docker"},
-                    "server": {"action": "ready", "name": "time_dev_docker_server"},
+                    "gateway": {"action": "ready", "name": "time-gateway"},
+                    "server": {"action": "ready", "name": "time-server"},
                     "tool_names": ["time-dev-docker-get-current-time", "time-dev-docker-convert-time"],
                     "non_actions": [
                         "no Docker, process, systemd, project-state, client config, or secret mutation by this registry executor"
@@ -2460,7 +2462,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             root = Path(tmp).resolve()
             approval_source = root / "latest-user.json"
             approval_source.write_text(
-                json.dumps({"cwd": str(root), "text": "approve runtime execute for mcp-server-time through time-dev-docker"}),
+                json.dumps({"cwd": str(root), "text": "approve runtime execute for mcp-server-time through time-gateway"}),
                 encoding="utf-8",
             )
             with (

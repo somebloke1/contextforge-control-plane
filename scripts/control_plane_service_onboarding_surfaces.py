@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import re
 import os
@@ -37,11 +38,60 @@ RUNTIME_EXECUTOR_DEFAULT_BASE_URL = "http://host.docker.internal:4445" if Path("
 RUNTIME_EXECUTOR_DEFAULT_ENV_FILE = Path(
     os.environ.get(RUNTIME_EXECUTOR_ENV_FILE_ENV, REPO_ROOT / "docker" / "contextforge-harness" / "env" / "contextforge.env")
 )
+NPM_STDIO_PORT_BASE = 20_000
+NPM_STDIO_PORT_SPAN = 30_000
 SERVICE_BINDING_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*:[a-z0-9][a-z0-9_.-]*$")
 GITHUB_TREE_RE = re.compile(r"^https?://github\.com/([^/]+)/([^/]+)/(tree|blob)/([^/]+)/(.+)$")
 SOURCE_RESEARCH_ALLOWED_FILENAMES = {"Dockerfile", "README", "README.md", "pyproject.toml", "package.json"}
 SOURCE_RESEARCH_ALLOWED_SUFFIXES = {".py", ".ts", ".js", ".json", ".toml", ".yaml", ".yml", ".md", ".txt"}
 SOURCE_RESEARCH_SKIP_NAMES = {"uv.lock", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "poetry.lock"}
+
+
+def npm_stdio_existing_ports(project_root: str | Path | None, service_binding: str) -> set[int]:
+    if not project_root:
+        return set()
+    root = Path(project_root).resolve(strict=False)
+    index_path = root / "server-instances" / "npm-stdio-host" / "index.json"
+    if not index_path.exists():
+        return set()
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    ports: set[int] = set()
+    for other_binding, entry in (index.get("records") or {}).items():
+        if other_binding == service_binding or not isinstance(entry, Mapping):
+            continue
+        try:
+            record_path = (root / str(entry["record_path"])).resolve(strict=False)
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            endpoint = record.get("endpoint") if isinstance(record.get("endpoint"), Mapping) else {}
+            ports.add(int(endpoint.get("port")))
+        except (KeyError, OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+    return ports
+
+
+def npm_stdio_endpoint_port(service_binding: str, *, project_root: str | Path | None = None) -> int:
+    digest = hashlib.sha256(service_binding.encode("utf-8")).hexdigest()
+    start = NPM_STDIO_PORT_BASE + (int(digest[:8], 16) % NPM_STDIO_PORT_SPAN)
+    used = npm_stdio_existing_ports(project_root, service_binding)
+    for offset in range(NPM_STDIO_PORT_SPAN):
+        candidate = NPM_STDIO_PORT_BASE + ((start - NPM_STDIO_PORT_BASE + offset) % NPM_STDIO_PORT_SPAN)
+        if candidate not in used:
+            return candidate
+    raise RuntimeError("no available npm-stdio host endpoint ports remain")
+
+
+def npm_stdio_endpoint(service_binding: str, *, project_root: str | Path | None = None) -> dict[str, Any]:
+    port = npm_stdio_endpoint_port(service_binding, project_root=project_root)
+    return {
+        "host": "0.0.0.0",
+        "port": port,
+        "container_url": f"http://npm-stdio-host:{port}/mcp",
+        "streamable_http_url": f"http://npm-stdio-host:{port}/mcp",
+        "sse_url": f"http://npm-stdio-host:{port}/sse",
+    }
 
 
 def onboarding_how_to_url(data: Mapping[str, Any] | None = None) -> str:
@@ -577,6 +627,11 @@ def build_service_onboarding_runtime_apply_package(project_root: str, data: Mapp
                 "does not write client-local MCP config",
             ],
         }
+    service_binding = service_binding_for_descriptor(data, descriptor)
+    canonical_family = service_binding.split(":", 1)[0]
+    descriptor = dict(descriptor)
+    descriptor["canonical_service"] = canonical_family
+    descriptor["service_family"] = canonical_family
     handoff = service_handoffs.build_catalog_candidate_handoff(
         descriptor,
         project_root=project_root,
@@ -585,7 +640,6 @@ def build_service_onboarding_runtime_apply_package(project_root: str, data: Mapp
     )
     management_result = service_management.plan_service_management_from_handoff(handoff)
     catalog_plan = management_result.get("x_catalog_plan") if isinstance(management_result.get("x_catalog_plan"), Mapping) else {}
-    service_binding = service_binding_for_descriptor(data, descriptor)
     backend_command = backend_command_for_descriptor(data, descriptor)
     backend_home = service_provision.backend_home_path(project_root, service_binding)
     provision_plan = service_provision.build_service_provision_plan(
@@ -631,6 +685,8 @@ def build_service_onboarding_runtime_apply_package(project_root: str, data: Mapp
         provision_plan=provision_plan,
         catalog_plan=catalog_plan,
         runtime_target=runtime_target,
+        backend_command=backend_command,
+        project_root=project_root,
     )
     visible = runtime_apply_visible_response(
         candidate=str(candidate),
@@ -685,6 +741,8 @@ def install_artifact_contract(
     provision_plan: Mapping[str, Any],
     catalog_plan: Mapping[str, Any],
     runtime_target: Mapping[str, str],
+    backend_command: Sequence[str],
+    project_root: str | Path | None = None,
 ) -> dict[str, Any]:
     backend_home = str(provision_plan.get("x_backend_home") or "")
     service = str(
@@ -706,6 +764,37 @@ def install_artifact_contract(
         or f"{service.replace(':', '-')}-server"
     )
     upstream_url = str(runtime_target.get("upstream_url") or "<service-container-streamable-http-url>")
+    package_arguments = [
+        str(item)
+        for item in backend.get("package_arguments", [])
+        if isinstance(item, str) and item.strip()
+    ]
+    required_secret_names = [
+        str(item)
+        for item in descriptor.get("required_secret_names", [])
+        if str(item).strip()
+    ]
+    environment_variables = []
+    environment_values: dict[str, str] = {}
+    for item in backend.get("environment_variables", []):
+        if isinstance(item, Mapping):
+            name = str(item.get("name") or item.get("key") or "").strip()
+            if not name:
+                continue
+            secret = bool(item.get("secret") or item.get("is_secret") or item.get("isSecret") or name in required_secret_names)
+            entry: dict[str, Any] = {"name": name, "secret": secret}
+            if item.get("description"):
+                entry["description"] = str(item["description"])
+            value = item.get("value")
+            if not secret and value is not None:
+                entry["value"] = str(value)
+                environment_values[name] = str(value)
+            environment_variables.append(entry)
+        else:
+            name = str(item).strip()
+            if name:
+                environment_variables.append({"name": name, "secret": name in required_secret_names})
+    endpoint = npm_stdio_endpoint(service_binding, project_root=project_root)
     return {
         "schema_uri": "contextforge://control-plane/service-onboarding-install-artifact-contract/v1",
         "service_binding": service_binding,
@@ -764,6 +853,12 @@ def install_artifact_contract(
                         or "source-verified-or-pinned"
                     ),
                     "transport": "stdio",
+                    "stdio": {
+                        "command": backend_command[0] if backend_command else "",
+                        "args": backend_command[1:] if len(backend_command) > 1 else package_arguments,
+                    },
+                    "package_arguments": package_arguments,
+                    "endpoint": endpoint,
                     "expected_tools": expected,
                     "tool_schemas": descriptor.get("tool_schemas") if isinstance(descriptor.get("tool_schemas"), Mapping) else {},
                     "prompt_library": {
@@ -775,11 +870,9 @@ def install_artifact_contract(
                     },
                     "credential_boundary": str(descriptor.get("credential_boundary") or "unknown"),
                     "environment": {
-                        "required_secret_names": [
-                            str(item)
-                            for item in descriptor.get("required_secret_names", [])
-                            if item
-                        ],
+                        "required_secret_names": required_secret_names,
+                        "variables": environment_variables,
+                        "values": environment_values,
                         "non_secret_placeholders_only": True,
                     },
                 },
@@ -887,13 +980,52 @@ def dev_runtime_target_for_package(package: Mapping[str, Any], data: Mapping[str
     registration = package.get("contextforge_registration_plan")
     if isinstance(registration, Mapping) and isinstance(registration.get("candidate_descriptor"), Mapping):
         descriptor = dict(registration["candidate_descriptor"])
+    backend = descriptor.get("backend") if isinstance(descriptor.get("backend"), Mapping) else {}
     service_binding = canonical_binding(
-        data.get("service_binding")
+        package.get("service_provision_plan", {}).get("service_binding")
+        or data.get("service_binding")
         or data.get("serviceBinding")
-        or package.get("service_provision_plan", {}).get("service_binding")
         or ""
     )
     source_path = str(data.get("source_path") or data.get("sourcePath") or descriptor.get("source_lead") or "")
+    candidate_values = [
+        data.get("candidate_service"),
+        data.get("candidateService"),
+        descriptor.get("candidate_service"),
+        descriptor.get("canonical_service"),
+        descriptor.get("service_family"),
+        data.get("backend_package"),
+        data.get("backendPackage"),
+        backend.get("package"),
+    ]
+    candidate_aliases = {package_alias(value) for value in candidate_values if value}
+    for instance in iter_service_instances():
+        instance_binding = canonical_binding(instance.get("service_binding"))
+        identity_matches = bool(service_binding and instance_binding == service_binding)
+        if not identity_matches and candidate_aliases:
+            identity_matches = bool(candidate_aliases & instance_identity_aliases(instance))
+        if not identity_matches or not source_path:
+            continue
+        instance_source = str(instance.get("source") or "").rstrip("/")
+        if instance_source and instance_source != source_path.rstrip("/"):
+            raise RuntimeError(
+                "no approved development runtime executor target is recorded for this service; "
+                "source identity conflicts with an existing service instance"
+            )
+    if (
+        service_binding
+        and str(backend.get("package_registry_type") or "").lower() == "npm"
+        and str(backend.get("transport") or "").lower() == "stdio"
+    ):
+        canonical = registration.get("canonical_names") if isinstance(registration, Mapping) else {}
+        endpoint = npm_stdio_endpoint(service_binding, project_root=package.get("project_root") if isinstance(package.get("project_root"), str) else None)
+        service = service_binding.split(":", 1)[0]
+        return {
+            "upstream_url": str(endpoint["streamable_http_url"]),
+            "gateway_name": str(canonical.get("gateway") if isinstance(canonical, Mapping) else "") or f"{service.replace(':', '-')}-gateway",
+            "virtual_server_name": str(canonical.get("virtual_server") if isinstance(canonical, Mapping) else "") or f"{service.replace(':', '-')}-server",
+            "executor_surface": "docker/contextforge-harness/scripts/apply_onboarding_runtime_package.py",
+        }
     candidate = str(
         data.get("candidate_service")
         or data.get("candidateService")

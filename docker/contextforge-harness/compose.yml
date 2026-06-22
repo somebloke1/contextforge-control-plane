@@ -220,6 +220,7 @@ services:
       context: ../..
       dockerfile: docker/contextforge-harness/npm-stdio-host/Dockerfile
     image: contextforge-harness-npm-stdio-host:latest
+    user: "${CONTEXTFORGE_HARNESS_UID:-1000}:${CONTEXTFORGE_HARNESS_GID:-1000}"
     environment:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
@@ -230,7 +231,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "command -v node >/dev/null && test -f /opt/contextforge/npm_stdio_host_records.py",
+          "command -v node >/dev/null && test -x /opt/contextforge-transceiver-venv/bin/python && test -f /opt/contextforge/npm_stdio_host_records.py && test -f /opt/contextforge/npm_stdio_host_runtime.py",
         ]
       interval: 10s
       timeout: 5s
