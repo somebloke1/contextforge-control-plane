@@ -134,6 +134,21 @@ The runner may help create, execute, package, and index these bundles. It must
 not score the meaning of prose. Semantic evaluation belongs to the SO or a
 gpt-5.5/non-Spark evaluator.
 
+## Service-Onboarding Process Bundles
+
+Onboarding process bundles are out of scope for ordinary comprehensive
+service-use testing. When the work starts from a source lead and must prove
+that generic ContextForge onboarding can produce target-client-visible service
+use, switch to `contextforge-onboarding-semantic-testing`.
+
+Do not use a Codex subagent as the tested assistant for that gate. Codex may
+compose the runner, maintain GitHub, or evaluate evidence, but the system under
+test is the real Pi or OpenCode client session. The onboarding-process gate
+uses a random composite simulated-human persona with the dimensions domain
+knowledge, goal specificity, risk posture, technical fluency, and interaction
+style, and requires at least three eligible semantic-test model profiles per
+target client.
+
 Use `docker/client-harness/scripts/run-comprehensive-mcp-model-quorum.py` for
 acceptance-oriented execution. It selects or accepts at least three distinct
 eligible model profiles, calls the single-profile dialogue runner once per

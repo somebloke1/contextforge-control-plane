@@ -431,6 +431,85 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("produce a no-mutation source-only", opencode_rules)
         self.assertIn("do not restart project initialization", opencode_rules)
 
+    def test_onboarding_semantic_process_gate_uses_real_clients_and_composite_persona(self) -> None:
+        gate = (ROOT / "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md").read_text(encoding="utf-8")
+        method = (ROOT / "docker/client-harness/DIALOGUE_EVALUATION_METHOD.md").read_text(encoding="utf-8")
+        comprehensive_skill = (ROOT / ".codex/skills/comprehensive-mcp-testing/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        comprehensive_method = (
+            ROOT / ".codex/skills/comprehensive-mcp-testing/references/method.md"
+        ).read_text(encoding="utf-8")
+        dialogue_skill = (ROOT / ".codex/skills/code-assistant-dialogue-validation/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        onboarding_skill = (
+            ROOT / ".codex/skills/contextforge-onboarding-semantic-testing/SKILL.md"
+        ).read_text(encoding="utf-8")
+        scenarios = json.loads(
+            (ROOT / "docker/client-harness/onboarding-semantic-process-scenarios.json").read_text(encoding="utf-8")
+        )
+
+        self.assertIn("real Pi or OpenCode client session", gate)
+        self.assertIn("Codex-only onboarding run proves nothing", gate)
+        self.assertIn("randomly compose a", gate)
+        self.assertIn("five-dimensional disposition space", gate)
+        self.assertIn("stable for the whole dialogue", gate)
+        self.assertIn("must not evaluate generated assistant meaning through", gate)
+        self.assertIn("string or regex matching", gate)
+        self.assertEqual(["pi", "opencode"], scenarios["target_clients"])
+        self.assertEqual(3, scenarios["minimum_model_quorum_per_client"])
+        self.assertEqual(
+            "random_composition_per_client_model_run",
+            scenarios["persona_sampling"]["selection_scope"],
+        )
+        self.assertEqual(
+            "five_dimensional_persona_vector",
+            scenarios["persona_sampling"]["composition_model"],
+        )
+        self.assertEqual(
+            [
+                "domain_knowledge",
+                "goal_specificity",
+                "risk_posture",
+                "technical_fluency",
+                "interaction_style",
+            ],
+            [dimension["id"] for dimension in scenarios["persona_sampling"]["dimensions"]],
+        )
+        self.assertIn(
+            "does not use Codex subagents as tested-client substitutes",
+            scenarios["runner_non_actions"],
+        )
+        self.assertIn("Use this skill for onboarding-process proof", onboarding_skill)
+        self.assertIn("not for already-registered MCP service-use proof", onboarding_skill)
+        self.assertIn("For ordinary service-use proof", onboarding_skill)
+        self.assertIn("contextforge-onboarding-semantic-testing", comprehensive_skill)
+        self.assertIn("contextforge-onboarding-semantic-testing", comprehensive_method)
+        self.assertIn("contextforge-onboarding-semantic-testing", dialogue_skill)
+        self.assertIn("contextforge-onboarding-semantic-testing", method)
+        for source in [method, comprehensive_skill, comprehensive_method, dialogue_skill, onboarding_skill]:
+            normalized_source = " ".join(source.split())
+            self.assertIn("Pi or OpenCode", normalized_source)
+            self.assertIn("Codex subagent", normalized_source)
+            self.assertIn("three", normalized_source)
+            self.assertIn("semantic-test model profiles", normalized_source)
+        for source in [gate, method, comprehensive_method]:
+            normalized_source = " ".join(source.split())
+            self.assertIn("domain knowledge", normalized_source)
+            self.assertIn("goal specificity", normalized_source)
+            self.assertIn("risk posture", normalized_source)
+            self.assertIn("technical fluency", normalized_source)
+            self.assertIn("interaction style", normalized_source)
+        for persona_dimension in [
+            "`domain_knowledge`",
+            "`goal_specificity`",
+            "`risk_posture`",
+            "`technical_fluency`",
+            "`interaction_style`",
+        ]:
+            self.assertIn(persona_dimension, onboarding_skill)
+
     def test_dev_harness_env_allows_compose_network_upstreams(self) -> None:
         env_example = (ROOT / "docker/contextforge-harness/env/contextforge.env.example").read_text(encoding="utf-8")
 

@@ -1,0 +1,78 @@
+{
+  "schema_uri": "contextforge://client-harness/onboarding-semantic-process-scenarios/v1",
+  "semantic_acceptance": "requires_non_spark_evaluator",
+  "deterministic_semantic_oracles_allowed": false,
+  "minimum_model_quorum_per_client": 3,
+  "target_clients": ["pi", "opencode"],
+  "persona_sampling": {
+    "selection_scope": "random_composition_per_client_model_run",
+    "stability_rule": "randomly compose once before the run and keep the persona fixed for the whole tested-assistant dialogue",
+    "composition_model": "five_dimensional_persona_vector",
+    "random_seed_recording_required": true,
+    "dimensions": [
+      {
+        "id": "domain_knowledge",
+        "values": ["ignorant", "generally_technical", "mcp_contextforge_aware"],
+        "rule": "controls what the simulated human already understands before the tested assistant researches the source lead"
+      },
+      {
+        "id": "goal_specificity",
+        "values": ["vague", "outcome_oriented", "detailed_requirements"],
+        "rule": "controls whether the human gives only a broad desire, an outcome, or explicit requirements when asked"
+      },
+      {
+        "id": "risk_posture",
+        "values": ["trusting", "cautious", "strict_approval_rollback"],
+        "rule": "controls how strongly the human asks for approval boundaries, reversibility, and no global mutation"
+      },
+      {
+        "id": "technical_fluency",
+        "values": ["nontechnical", "command_comfortable", "architecture_aware"],
+        "rule": "controls the language level of answers, not hidden service implementation knowledge"
+      },
+      {
+        "id": "interaction_style",
+        "values": ["terse", "cooperative", "demanding"],
+        "rule": "controls response length, patience, and willingness to ask the assistant to decide from research"
+      }
+    ],
+    "coverage_requirements": [
+      "at least one low-knowledge persona across the accepted matrix",
+      "at least one higher-knowledge persona across the accepted matrix",
+      "at least two distinct risk_posture values across the accepted matrix",
+      "all persona answers remain bounded by the source lead plus questions asked by the tested assistant"
+    ],
+    "forbidden_persona_behavior": [
+      "volunteering package names, tool names, bridge commands, probe payloads, or implementation shape",
+      "answering with controller memory or artifacts from another branch",
+      "revealing evaluator criteria or pass/fail rubrics to the tested assistant",
+      "turning a failing tested-assistant question into a coached implementation hint"
+    ]
+  },
+  "foils": [
+    {
+      "id": "time",
+      "order": 1,
+      "source_lead": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+      "source_lead_only": true,
+      "no_service_specific_facts_in_runner_prompt": true,
+      "completion_gate": "pi_and_opencode_each_pass_three_model_semantic_process_matrix_before_fetch"
+    }
+  ],
+  "process_layers": [
+    "source_research",
+    "decision_record",
+    "implementation_plan",
+    "dev_runtime_proof",
+    "contextforge_registration_proof",
+    "target_client_visible_safe_use",
+    "semantic_evaluator_verdict"
+  ],
+  "runner_non_actions": [
+    "does not score generated prose",
+    "does not coach tested assistants with service-specific facts",
+    "does not use Codex subagents as tested-client substitutes",
+    "does not mutate live legacy ContextForge",
+    "does not reuse stale target-client home or workspace state"
+  ]
+}

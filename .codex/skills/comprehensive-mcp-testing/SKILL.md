@@ -26,6 +26,13 @@ Package semantic-test evidence manifest-first: provide compact metadata, stepwis
 generation reports, targeted excerpts, and raw transcript paths instead of
 pasting large transcripts or multi-service histories into one prompt.
 
+This skill is for service-use testing/proof after a service is already
+registered or deliberately targeted. For source-lead-only MCP onboarding
+process proof, use `contextforge-onboarding-semantic-testing`; that distinct
+gate tests real Pi or OpenCode target-client assistants, not Codex subagents,
+with a random composite simulated-human persona, at least three eligible
+semantic-test model profiles per client, and semantic evaluator review.
+
 ## Operating Loop
 
 1. Re-anchor on the current branch, issue map, runner, and evidence paths.

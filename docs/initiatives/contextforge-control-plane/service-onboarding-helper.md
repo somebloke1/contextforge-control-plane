@@ -376,6 +376,23 @@ claim-boundary recording. Any step that depends on controller prior knowledge
 instead of source evidence becomes an onboarding-factory gap to encode before
 advancing to the next foil.
 
+A foil is not complete merely because the controller or an informed agent can
+build it. Completion requires a blind semantic end-to-end onboarding trial: a
+real Pi and OpenCode target-client assistants receive only the source lead and
+generic onboarding support, while a separate simulated human responder answers
+only questions those assistants ask. The responder must have a declared
+knowledge persona, ranging from an ignorant user who asks the assistant to
+decide from research to an expert user who can state detailed requirements or
+preferences when asked. The trial must succeed from source research through
+decision record, implementation, runtime proof, ContextForge registration
+proof, target-client-visible safe use, and semantic evaluator narrative across
+at least three eligible semantic-test model profiles per target client. The
+trial may validate structure, command status, JSON, endpoints, and files
+deterministically, but it must not evaluate generated assistant meaning through
+string or regex matching. If the blind trial needs Time-specific facts that are
+not discoverable from the source lead or generic supports, the foil is not
+complete; the missing generic support must be encoded before moving to Fetch.
+
 1. `time` - stateless baseline:
    <https://github.com/modelcontextprotocol/servers/tree/main/src/time>
 2. `fetch` - basic network I/O:
