@@ -568,6 +568,8 @@ print(json.dumps(redact_value(payload), sort_keys=True))
         self.assertIn("Please use this project's documentation lookup capability", runner)
         self.assertIn("MENTALITY_FIXTURE_TASK_ID", runner)
         self.assertIn("Please check the details recorded for task", runner)
+        self.assertIn("Please inspect this project's active terminal session", runner)
+        self.assertIn("report the visible terminal screen", runner)
         self.assertIn("TASKS.md", runner)
         self.assertTrue(all("service_binding" in service for service in services["services"]))
         self.assertIn("SEMANTIC_MODEL_OVERRIDE_KEYS", runner)
@@ -775,6 +777,18 @@ print(json.dumps(outputs))
         self.assertIn("Refusing unsafe CONTEXTFORGE_PI_SHIM_INSTALL_DIR", bootstrap)
         self.assertNotIn("/home/dgk/.pi", dockerfile + wrapper + bootstrap)
 
+    def test_pi_shim_clarifies_ssh_tmux_session_list_results(self) -> None:
+        shim = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
+
+        self.assertIn("function importedToolDescription", shim)
+        self.assertIn('non-empty result lines such as "- bash" are active session IDs', shim)
+        self.assertIn("call the ssh-tmux get-snapshot tool with that session_id", shim)
+        self.assertIn("async function normalizeSshTmuxToolResult", shim)
+        self.assertIn("await route.client.callTool(snapshotName", shim)
+        self.assertIn("ssh-tmux active sessions:", shim)
+        self.assertIn("- session_id: ${sessionId}", shim)
+        self.assertIn("Visible terminal screen for session_id ${firstSessionId}:", shim)
+
     def test_pi_and_opencode_default_to_openrouter_semantic_model_profile(self) -> None:
         pi_models = json.loads((ROOT / "docker/client-harness/config/pi/models.json").read_text(encoding="utf-8"))
         opencode_config = json.loads((ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8"))
@@ -864,11 +878,57 @@ print(json.dumps(outputs))
         self.assertIn("profile_context_window(profile) >= MIN_SEMANTIC_CONTEXT_WINDOW", runner)
         self.assertIn("route_preferences(profile)", runner)
         self.assertIn('env["OPENROUTER_PROVIDER_ROUTE"] = ""', runner)
+        self.assertIn('else "openrouter"', runner)
         self.assertIn('"selection_scope": "per_test_run"', runner)
         self.assertIn('"minimum_context_window"', runner)
         self.assertIn('"api_key_present"', runner)
         self.assertIn('launch_command.extend(["-e", key])', runner)
         self.assertNotIn('launch_command.extend(["-e", f"{key}={os.environ[key]}"])', runner)
+
+    def test_pi_openrouter_profiles_without_route_use_generic_provider(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "comprehensive_mcp_service_dialogue",
+            ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        routed_env, _ = module.selected_profile_env(
+            {
+                "id": "routed",
+                "provider_kind": "openrouter",
+                "provider_label": "OpenRouter",
+                "model": "google/gemini-2.5-flash-lite",
+                "display_name": "Gemini routed",
+                "context_window": 1048576,
+                "api_key_env": "OPENROUTER_API_KEY",
+                "base_url_env": "OPENROUTER_BASE_URL",
+                "route_preferences": ["google-ai-studio"],
+            },
+            "pi",
+            {},
+        )
+        unrouted_env, _ = module.selected_profile_env(
+            {
+                "id": "unrouted",
+                "provider_kind": "openrouter",
+                "provider_label": "OpenRouter",
+                "model": "qwen/qwen3-coder-next",
+                "display_name": "Qwen via OpenRouter",
+                "context_window": 262144,
+                "api_key_env": "OPENROUTER_API_KEY",
+                "base_url_env": "OPENROUTER_BASE_URL",
+                "route_preferences": [],
+            },
+            "pi",
+            {"CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openrouter-gemini-flash-lite"},
+        )
+
+        self.assertEqual("openrouter-gemini-flash-lite", routed_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
+        self.assertEqual("openrouter", unrouted_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
+        self.assertEqual("", unrouted_env["OPENROUTER_PROVIDER_ROUTES"])
+        self.assertEqual("", unrouted_env["OPENROUTER_PROVIDER_ROUTE"])
 
     def test_comprehensive_mcp_semantic_tests_require_three_model_quorum(self) -> None:
         skill = (ROOT / ".codex/skills/comprehensive-mcp-testing/SKILL.md").read_text(encoding="utf-8")

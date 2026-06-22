@@ -757,6 +757,7 @@ function registerImportedTool(pi: ExtensionAPI, client: JsonRpcStdioClient, serv
   if (!mcpName) return;
   const piName = stableRouteToolName(service, mcpTool);
   const blockedByDefault = isBlockedByDefault(service, mcpName);
+  const description = importedToolDescription(service, mcpName, String(mcpTool.description || `Call ContextForge MCP tool ${mcpName}.`));
   toolRoutes.set(piName, { client, mcpName, serviceBinding: service.serviceBinding, blockedByDefault });
   readback.tools.push({
     piName,
@@ -769,7 +770,7 @@ function registerImportedTool(pi: ExtensionAPI, client: JsonRpcStdioClient, serv
   registerToolOnce(pi, {
     name: piName,
     label: `ContextForge / ${service.serviceFamily} / ${mcpName}`,
-    description: String(mcpTool.description || `Call ContextForge MCP tool ${mcpName}.`),
+    description,
     parameters: (mcpTool.inputSchema || { type: "object", properties: {} }) as any,
     renderShell: "self",
     renderCall: renderNothing,
@@ -787,12 +788,28 @@ function registerImportedTool(pi: ExtensionAPI, client: JsonRpcStdioClient, serv
       }
       try {
         const result = await route.client.callTool(route.mcpName, asObject(params));
-        return normalizeToolResult(result);
+        return await normalizeRouteToolResult(result, route);
       } catch (error) {
         return textResult(errorMessage(error), true);
       }
     },
   });
+}
+
+function importedToolDescription(service: ProjectService, mcpName: string, description: string): string {
+  if (!service.serviceBinding.toLowerCase().startsWith("ssh-tmux:")) return description;
+  const tool = mcpName.toLowerCase();
+  if (tool.includes("list-sessions")) {
+    return [
+      description,
+      'For ssh-tmux, non-empty result lines such as "- bash" are active session IDs.',
+      'When the user asks what is visible in a session, call the ssh-tmux get-snapshot tool with that session_id.',
+    ].join(" ");
+  }
+  if (tool.includes("get-snapshot")) {
+    return [description, "Use a session_id returned by ssh-tmux list-sessions to inspect the visible terminal screen."].join(" ");
+  }
+  return description;
 }
 
 async function lookupGuidance(params: JsonObject): Promise<JsonObject> {
@@ -1547,9 +1564,50 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+async function normalizeRouteToolResult(result: JsonObject, route: ToolRoute): Promise<any> {
+  const sshTmuxResult = await normalizeSshTmuxToolResult(result, route);
+  if (sshTmuxResult) return sshTmuxResult;
+  return normalizeToolResult(result);
+}
+
 function normalizeToolResult(result: JsonObject): any {
   const content = Array.isArray(result.content) ? result.content : [{ type: "text", text: JSON.stringify(result) }];
   return { content, isError: result.isError === true, details: {} };
+}
+
+async function normalizeSshTmuxToolResult(result: JsonObject, route: ToolRoute): Promise<any | undefined> {
+  if (!route.serviceBinding.toLowerCase().startsWith("ssh-tmux:")) return undefined;
+  if (!route.mcpName.toLowerCase().includes("list-sessions")) return undefined;
+  const text = toolResultText(result).trim();
+  if (!text) {
+    return textResult("ssh-tmux sessions: none.", result.isError === true);
+  }
+  const sessionIds = text
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[-*]\s*/, ""))
+    .filter(Boolean);
+  if (sessionIds.length === 0) {
+    return textResult("ssh-tmux sessions: none.", result.isError === true);
+  }
+  const firstSessionId = sessionIds[0];
+  const snapshotName = route.mcpName.replace(/list[-_]sessions/i, "get-snapshot");
+  let snapshotText = "";
+  try {
+    const snapshot = await route.client.callTool(snapshotName, { session_id: firstSessionId, lines: 20 });
+    snapshotText = toolResultText(snapshot).trim();
+  } catch (error) {
+    snapshotText = `Snapshot unavailable: ${errorMessage(error)}`;
+  }
+  return textResult(
+    [
+      "ssh-tmux active sessions:",
+      ...sessionIds.map((sessionId) => `- session_id: ${sessionId}`),
+      "",
+      `Visible terminal screen for session_id ${firstSessionId}:`,
+      snapshotText || "(no visible terminal output returned)",
+    ].join("\n"),
+    result.isError === true,
+  );
 }
 
 async function runHelperOperation(operation: string, payload: JsonObject) {
