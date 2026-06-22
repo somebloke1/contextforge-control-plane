@@ -290,6 +290,52 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("fetch", sequence["next_foil_locked_until_current_verified"]["service"])  # type: ignore[index]
         self.assertIn("target-client-visible list-tools plus safe call", sequence["advance_condition"])  # type: ignore[index]
 
+    def test_time_timezone_functional_type_supports_first_foil_record(self) -> None:
+        record = helper.build_onboarding_record(
+            {
+                "candidate_service": "time",
+                "operator_goal": "Onboard the Time MCP service as the first development foil.",
+                "source_evidence": [
+                    {
+                        "type": "github_url",
+                        "ref": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+                    },
+                    {
+                        "type": "source_file",
+                        "ref": "src/time/src/mcp_server_time/server.py",
+                    },
+                ],
+                "classification": {
+                    "plan_type": "source_only_scaffolding",
+                    "localization_type": "shared_canonical",
+                    "functional_type": "time_timezone",
+                    "transport_type": "stdio",
+                    "state_type": "stateless",
+                    "approval_type": "source_only",
+                },
+                "abstract_service_spec": {
+                    "summary": "Provides current time lookup and timezone conversion using IANA timezone names.",
+                    "workflow": "Use get_current_time for current time in a named timezone; use convert_time for timezone conversion.",
+                    "lazy_detail": "Load detailed guidance when choosing exact tool arguments or handling timezone errors.",
+                },
+                "validation_probe_plan": [
+                    {
+                        "layer": "bridge_transport_smoke_plan",
+                        "description": "Later verify a stock bridge exposes get_current_time and convert_time over the selected ContextForge surface.",
+                    }
+                ],
+            },
+            project_root=PROJECT_ROOT,
+            issue="#356",
+        )
+
+        self.assertEqual("ready_for_handoff", record["status"])
+        self.assertEqual("time_timezone", record["classification"]["functional_type"]["value"])  # type: ignore[index]
+        self.assertEqual("Package-provided bridge/transceiver", record["integration_strategy"]["primary_paradigm"])  # type: ignore[index]
+        self.assertEqual("time", record["onboarding_sequence"]["current_foil"]["service"])  # type: ignore[index]
+        self.assertEqual("ready_for_pre_runtime_handoff", record["pre_runtime_workflow_gate"]["gate_status"])  # type: ignore[index]
+        self.assertIn("bridge_transport_smoke_plan", _probe_layers(record["pre_runtime_workflow_gate"]))
+
     def test_implementation_decision_brief_names_user_review_categories(self) -> None:
         record = self.record("native_http_shared_docs_source_only")
 

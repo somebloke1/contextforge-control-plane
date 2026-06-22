@@ -83,6 +83,7 @@ Unknown values are acceptable only when paired with the next evidence step.
 - `model_inference`
 - `observability_diagnostics`
 - `service_management`
+- `time_timezone`
 
 ### `transport_type`
 

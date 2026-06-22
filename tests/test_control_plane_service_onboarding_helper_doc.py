@@ -48,6 +48,7 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "`client_local_session_scoped`",
             "`code_intelligence`",
             "`service_management`",
+            "`time_timezone`",
             "`streamable_http`",
             "`bridge_required`",
             "`project_metadata`",
