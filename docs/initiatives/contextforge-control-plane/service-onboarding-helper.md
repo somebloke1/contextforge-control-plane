@@ -344,12 +344,15 @@ hook state, or approval bypass. Long-running helper behavior and richer
 session management remain later slices that need their own evidence and
 approval boundaries.
 
-## Onboarding Proof Ladder
+## Onboarding Development Foil Ladder
 
-Use this ordered MCP service ladder as the initial onboarding-factory proof
-corpus, from simplest to most complex. Each service should first pass through
-the source-lead research packet and deterministic onboarding record before any
-runtime or target-client proof is attempted.
+Use this ordered MCP service ladder as development foils for building and
+proving the onboarding process, from simplest to most complex. This is not a
+canonical post-development service set. Each foil should first pass through the
+source-lead research packet and deterministic onboarding record before any
+runtime or target-client proof is attempted. Perfect onboarding of the current
+foil before starting the next one; `time` must be completed before `fetch`
+begins.
 
 1. `time` - stateless baseline:
    <https://github.com/modelcontextprotocol/servers/tree/main/src/time>
@@ -365,6 +368,21 @@ runtime or target-client proof is attempted.
    <https://github.com/feiskyer/mcp-kubernetes-server>
 7. `docker` - system daemon mounting and external process orchestration:
    <https://github.com/ckreiling/mcp-server-docker>
+
+Before implementation or runtime/client work for any foil, the helper must
+identify key implementation decisions and present them methodically for user
+approval or amendment:
+
+- canonical service identity;
+- backend home;
+- transport and bridge strategy;
+- scope and locality;
+- state footprint;
+- credential and auth boundary;
+- ContextForge registration plan;
+- client exposure plan;
+- reset and proof strategy;
+- rollback and cleanup.
 
 ## Fixture Coverage
 
