@@ -1624,9 +1624,21 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
         ):
             result[key] = _deep_merge(dict(result[key]), dict(value))
         elif key == "source_evidence" and isinstance(result.get(key), list) and isinstance(value, list):
-            result[key] = result[key] + value
+            result[key] = _dedupe_source_evidence(result[key] + value)
         else:
             result[key] = copy.deepcopy(value)
+    return result
+
+
+def _dedupe_source_evidence(items: list[Any]) -> list[Any]:
+    seen: set[str] = set()
+    result: list[Any] = []
+    for item in items:
+        key = json.dumps(_json_compatible_copy(item), sort_keys=True, separators=(",", ":"))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(copy.deepcopy(item))
     return result
 
 

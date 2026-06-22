@@ -469,6 +469,24 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
             {"type": "upstream_doc", "ref": "https://example.invalid/unknown-service"},
             resumed["source_evidence"],
         )
+        replayed = helper.build_onboarding_record(
+            {
+                "source_evidence": [{"type": "upstream_doc", "ref": "https://example.invalid/unknown-service"}],
+                "classification": {
+                    "plan_type": "source_only_scaffolding",
+                    "localization_type": "shared_canonical",
+                    "functional_type": "search_retrieval",
+                    "transport_type": "streamable_http",
+                    "state_type": "stateless",
+                    "approval_type": "source_only",
+                },
+            },
+            project_root=PROJECT_ROOT,
+            issue="#52",
+            previous_record=resumed,
+            session_id="svc-onboarding-unknown-service",
+        )
+        self.assertEqual(resumed["source_evidence"], replayed["source_evidence"])
 
     def test_output_is_json_compatible_and_no_mutation_recorded(self) -> None:
         record = self.record("serena_project_scoped_stdio_dev_docker_gate")
