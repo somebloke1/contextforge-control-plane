@@ -113,6 +113,7 @@ CLASSIFICATION_VALUES = {
         "model_inference",
         "observability_diagnostics",
         "service_management",
+        "time_timezone",
     },
     "transport_type": {
         "stdio",
