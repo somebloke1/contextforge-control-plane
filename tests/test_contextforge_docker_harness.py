@@ -445,6 +445,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("do not present the existing service activation menu", pi_source)
         self.assertIn("cf_project_service_onboarding_plan", pi_source)
         self.assertIn("cf_project_service_onboarding_continue", pi_source)
+        self.assertIn("get_service_onboarding_how_to", pi_source)
         self.assertIn("copy assistant_visible_response/message exactly", pi_source)
         self.assertIn("Do not reformat it into tables, expose enum names, add helper fields", pi_source)
         self.assertIn("asksForUncatalogedServiceOnboarding", opencode_source)
@@ -454,7 +455,10 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("serviceOnboardingPlanInstruction", opencode_source)
         self.assertIn("serviceOnboardingPlannedSessions.has(String(sessionID))", opencode_source)
         self.assertIn("serviceOnboardingPlannedSessions.add(String(sessionID))", opencode_source)
-        self.assertIn("only facts visible in this conversation", opencode_source)
+        self.assertIn("agent_hidden_onboarding_how_to", opencode_source)
+        self.assertIn("get_service_onboarding_how_to", opencode_source)
+        self.assertIn("use available read-only source-research tools against that lead", opencode_source)
+        self.assertIn("only source-derived or user-visible facts", opencode_source)
         self.assertIn("Do not use canned service content", opencode_source)
         self.assertNotIn("calendar-notes", opencode_source)
         self.assertIn("produce a no-mutation source-only", pi_rules)
@@ -469,7 +473,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
     def test_opencode_uncataloged_onboarding_transform_preserves_user_source_facts(self) -> None:
         plugin_uri = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").as_uri()
         user_text = (
-            "Please onboard this MCP service: "
+            "I want to add this MCP service to the project: "
             "https://github.com/modelcontextprotocol/servers/tree/main/src/time. "
             "It is the Time MCP service, stdio, shared canonical, stateless, "
             "no credentials, expected tools get_current_time and convert_time."
@@ -502,6 +506,20 @@ const second = {{
   ],
 }};
 await hook({{}}, second);
+const third = {{
+  messages: [
+    ...first.messages,
+    {{
+      info: {{ id: "msg-4", role: "assistant", sessionID: "session-1" }},
+      parts: [{{ type: "text", text: "I have a source-only onboarding plan." }}],
+    }},
+    {{
+      info: {{ id: "msg-5", role: "user", sessionID: "session-1" }},
+      parts: [{{ type: "text", text: "Use the source as truth and tell me the next step." }}],
+    }},
+  ],
+}};
+await hook({{}}, third);
 const flatten = (messages) => messages
   .flatMap((message) => message.parts || [])
   .map((part) => part.text || "")
@@ -513,6 +531,9 @@ console.log(JSON.stringify({{
   secondCount: second.messages.length,
   secondRoute: second.messages[0].parts[0].text,
   secondVisibleContext: flatten(second.messages),
+  thirdCount: third.messages.length,
+  thirdRoute: third.messages[0].parts[0].text,
+  thirdVisibleContext: flatten(third.messages),
 }}));
 """
         result = subprocess.run(
@@ -521,6 +542,11 @@ console.log(JSON.stringify({{
             check=False,
             capture_output=True,
             text=True,
+            env={
+                **os.environ,
+                "CONTEXTFORGE_HELPER_PYTHON": sys.executable,
+                "CONTEXTFORGE_PROJECT_INIT_HELPER_CLI": str(ROOT / "scripts/pi_project_init_helper_cli.py"),
+            },
         )
 
         self.assertEqual(0, result.returncode, result.stderr)
@@ -534,6 +560,11 @@ console.log(JSON.stringify({{
         self.assertIn("contextforge-helper_cf_project_service_onboarding_continue", parsed["secondRoute"])
         self.assertIn("https://github.com/modelcontextprotocol/servers/tree/main/src/time", parsed["secondVisibleContext"])
         self.assertIn("approve", parsed["secondVisibleContext"])
+        self.assertGreaterEqual(parsed["thirdCount"], 4)
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", parsed["thirdRoute"])
+        self.assertIn("ContextForge Service Onboarding How-To", parsed["thirdRoute"])
+        self.assertIn("use available read-only source-research tools", parsed["thirdRoute"])
+        self.assertNotIn("guidance_resource_uri", parsed["thirdRoute"])
 
     def test_onboarding_semantic_process_gate_uses_real_clients_and_composite_persona(self) -> None:
         gate = (ROOT / "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md").read_text(encoding="utf-8")

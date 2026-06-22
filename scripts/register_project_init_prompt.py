@@ -83,6 +83,7 @@ Optional read-only LSP capabilities, such as find implementations, are advisory.
 """.strip()
 
 
+
 def sanitize_scanner_text(text: str) -> str:
     text = text.replace("```", "~~~")
     text = SQL_TRIGGER_RE.sub(lambda match: f"{match.group(1)}_ ", text)

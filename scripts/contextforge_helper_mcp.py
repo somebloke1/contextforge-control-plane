@@ -434,6 +434,22 @@ def client_visible_project_init_payload(value: Any) -> Any:
     return value
 
 
+def client_visible_service_onboarding_payload(value: dict[str, Any]) -> dict[str, Any]:
+    """Return the narrow service-onboarding DTO intended for assistant tool use."""
+
+    visible = str(value.get("assistant_visible_response") or value.get("message") or "").strip()
+    public = {
+        "ok": value.get("ok", True),
+        "status": value.get("status"),
+        "project_root": value.get("project_root"),
+        "mutation_allowed": False,
+        "assistant_visible_response": visible,
+        "message": visible,
+        "non_actions": value.get("non_actions") or [],
+    }
+    return {key: item for key, item in public.items() if item not in (None, "")}
+
+
 def _tool_names_for_service(service_family: str) -> list[str]:
     policy = common.safe_validation_policy(service_family)
     contract = policy.get("probe_contract") if isinstance(policy.get("probe_contract"), Mapping) else {}
@@ -2023,7 +2039,7 @@ def cf_project_service_onboarding_plan(
                 "session_id": session_id,
             },
         )
-        return {"ok": True, **result}
+        return client_visible_service_onboarding_payload({"ok": True, **result})
     except Exception as exc:
         return _error(exc)
 
@@ -2105,7 +2121,7 @@ def cf_project_service_onboarding_continue(
                 "issue": issue,
             },
         )
-        return {"ok": True, **result}
+        return client_visible_service_onboarding_payload({"ok": True, **result})
     except Exception as exc:
         return _error(exc)
 

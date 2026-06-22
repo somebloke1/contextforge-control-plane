@@ -40,13 +40,13 @@
       "at least one low-knowledge persona across the accepted matrix",
       "at least one higher-knowledge persona across the accepted matrix",
       "at least two distinct risk_posture values across the accepted matrix",
-      "all persona answers remain bounded by the source lead plus questions asked by the tested assistant"
+      "the simulator receives a stable persona vector and conversation context for the whole run"
     ],
-    "forbidden_persona_behavior": [
-      "volunteering package names, tool names, bridge commands, probe payloads, or implementation shape",
-      "answering with controller memory or artifacts from another branch",
-      "revealing evaluator criteria or pass/fail rubrics to the tested assistant",
-      "turning a failing tested-assistant question into a coached implementation hint"
+    "runner_leakage_forbidden": [
+      "injecting service-specific implementation facts from controller memory into simulated-human prompts",
+      "injecting evaluator criteria or pass/fail rubrics into tested-assistant prompts",
+      "turning a failing tested-assistant question into controller-authored coaching",
+      "tuning the simulated human into an idealized compliance actor instead of a human persona"
     ]
   },
   "foils": [

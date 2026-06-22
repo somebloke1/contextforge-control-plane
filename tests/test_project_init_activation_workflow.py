@@ -1931,22 +1931,39 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("source_only_onboarding_plan", result["status"])
         self.assertFalse(result["mutation_allowed"])
-        self.assertEqual(
-            [{"type": "github_url", "ref": "https://github.com/modelcontextprotocol/servers/tree/main/src/time"}],
-            result["record"]["source_evidence"],
-        )
-        self.assertEqual("source_only", result["record"]["classification"]["approval_type"]["value"])
-        credential_decision = next(
-            item
-            for item in result["record"]["implementation_decision_brief"]["decision_categories"]
-            if item["id"] == "credential_auth_boundary"
-        )
-        self.assertEqual(
-            "no credentials required",
-            credential_decision["current_decision"]["authority_boundary"],
-        )
+        self.assertNotIn("agent_hidden_onboarding_how_to", result)
+        self.assertNotIn("agent_hidden_onboarding_how_to_source", result)
+        self.assertNotIn("record", result)
         self.assertIn("source-only onboarding plan", result["assistant_visible_response"])
         self.assertIn("No service has been installed, registered, started, exposed, imported, or made available", result["assistant_visible_response"])
+
+    def test_pi_helper_cli_service_onboarding_how_to_fetches_default_url(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts/pi_project_init_helper_cli.py"),
+                    "--operation",
+                    "get_service_onboarding_how_to",
+                    "--payload-json",
+                    json.dumps({"project_root": str(root), "client_type": "opencode"}),
+                ],
+                cwd=REPO_ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertIn("agent_hidden_onboarding_how_to", payload)
+        self.assertIn("The workflow is:", payload["agent_hidden_onboarding_how_to"])
+        self.assertTrue(payload["agent_hidden_onboarding_how_to_source"]["loaded"])
+        self.assertEqual(
+            common.SERVICE_ONBOARDING_HOW_TO_DEFAULT_URL,
+            payload["agent_hidden_onboarding_how_to_source"]["url"],
+        )
 
     def test_pi_helper_cli_service_onboarding_continuation_builds_service_management_plan(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2021,8 +2038,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("service_onboarding_continuation_plan", result["status"])
         self.assertFalse(result["mutation_allowed"])
-        self.assertEqual("plan_only", result["service_management_result"]["status"])
-        self.assertEqual("356", result["handoff"]["candidate_descriptor"]["issue"])
+        self.assertNotIn("agent_hidden_onboarding_how_to", result)
+        self.assertNotIn("agent_hidden_onboarding_how_to_source", result)
+        self.assertNotIn("handoff", result)
+        self.assertNotIn("service_management_result", result)
         self.assertIn("not a project-init service activation menu", result["assistant_visible_response"])
         self.assertIn("stops before catalog promotion or runtime apply", result["assistant_visible_response"])
 

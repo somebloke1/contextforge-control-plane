@@ -1952,6 +1952,7 @@ class SerenaManagerTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()) as stdout:
                 self.assertEqual(0, prompt_registration.main(["--dry-run"]))
             self.assertIn("would_register project_init_prompt", stdout.getvalue())
+            self.assertNotIn("service onboarding how-to resource", stdout.getvalue())
         finally:
             prompt_registration.gateway._read_env = original_read_env  # type: ignore[assignment]
 
@@ -2148,6 +2149,7 @@ class SerenaManagerTests(unittest.TestCase):
     def test_project_init_artifact_uris_track_semantic_prompt_version(self) -> None:
         self.assertTrue(common.PROJECT_INIT_RESOURCE_URI.endswith(f"/{common.PROMPT_VERSION}"))
         self.assertTrue(common.SERENA_GUIDANCE_RESOURCE_URI.endswith(f"/{common.PROMPT_VERSION}"))
+        self.assertTrue(common.SERVICE_ONBOARDING_HOW_TO_DEFAULT_URL.endswith("/service-onboarding-how-to-prompt.md"))
         self.assertIn(common.PROMPT_VERSION, common.PROJECT_INIT_RESOURCE_NAME)
         self.assertIn(common.PROMPT_VERSION, common.SERENA_GUIDANCE_RESOURCE_NAME)
         self.assertNotRegex(common.PROJECT_INIT_RESOURCE_URI, r"/v1(?:/|$)")

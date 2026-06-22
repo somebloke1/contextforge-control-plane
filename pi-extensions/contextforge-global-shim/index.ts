@@ -550,12 +550,16 @@ async function firstPromptProjectInitMessage(projectRoot: string): Promise<JsonO
   if (firstPromptInitOffered.has(projectRoot)) return undefined;
   firstPromptInitOffered.add(projectRoot);
   const selectionTurn = await renderFirstPromptSelectionTurn(projectRoot);
+  const serviceOnboardingHowTo = await helperServiceOnboardingHowTo(projectRoot);
   return {
     customType: "contextforge-project-init-first-prompt",
     content: [
       "ContextForge project setup note: this hidden extension message was injected because this project has no completed ContextForge initialization evidence.",
       "Use the current Pi session transcript to decide whether this is the first project-init turn or a continuation. Do not restart service selection if the transcript already shows a service list, proposal, or approval request.",
       "If the latest user prompt explicitly asks to add, onboard, or plan a new or uncataloged MCP service from a source lead, do not call cf_project_init_list_capabilities and do not present the existing service activation menu. Treat that as source-only service onboarding, not project activation.",
+      serviceOnboardingHowTo,
+      "If the user provided a URL or other source lead, use available read-only source-research tools against that lead before asking the user for facts that should be discoverable from the source. If no source-research tool is available, say that source-research support is missing and ask only for the facts needed to proceed.",
+      "For list fields such as expectedTools/expected_tools, pass a JSON array of strings, never a comma-separated string.",
       `For explicit new/uncataloged service onboarding, ask concise practical intake questions when source, transport, scope, credentials, expected tools, lifecycle/cleanup, proof plan, or approval boundaries are missing. If the user supplies enough facts for a source-only plan, call cf_project_service_onboarding_plan {"projectRoot":"${projectRoot}", ...} using only user-supplied facts, then copy assistant_visible_response/message exactly as the complete visible answer and stop. Do not install, register, expose, validate, probe, reload, or claim the candidate is available.`,
       `If no prior service list is visible in the current transcript, silently call cf_project_init_list_capabilities for project root "${projectRoot}".`,
       "Use only the returned service ids and labels. Do not invent, rename, summarize, or substitute service names from memory.",
@@ -599,6 +603,7 @@ function initializedProjectContextMessage(projectRoot: string): JsonObject | und
       "Do not add a preface such as \"I'll check\" and do not paraphrase, bulletize, shorten, or reclassify readback responses.",
       "Do not restart first-run service selection. Do not propose, approve, apply, repair, validate, probe, onboard services, or mutate project-init state during ordinary normal-use questions.",
       `For explicit user requests to onboard or add an uncataloged/new MCP service, do not restart service selection. If the user has not supplied source, transport, scope, credentials, and expected-tool information, ask concise practical intake questions. If the user supplies enough details for a source-only plan, call cf_project_service_onboarding_plan {"projectRoot":"${root}", ...} using only the user's supplied facts, then copy its assistant_visible_response/message exactly as the complete visible answer and stop. Do not reformat it into tables, expose enum names, add helper fields, or claim credentials are not required when the user only said there are no credentials yet.`,
+      "For list fields such as expectedTools/expected_tools, pass a JSON array of strings, never a comma-separated string.",
       "For ordinary normal-use readback questions, do not call cf_project_init_list_capabilities.",
       `For questions asking how to use the project docs lookup capability, docs lookup capability, ContextForge docs lookup guidance, or similar, call cf_contextforge_guidance_lookup {"projectRoot":"${root}","serviceBinding":"context7:canonical","mcpToolName":"project docs lookup capability"} and answer from its message or fallback_guidance. Do not call the Context7 docs query tools directly for this guidance-question class, and do not answer the underlying configuration question yet.`,
       "For ordinary docs, library, package, API, or configuration lookup questions, use the relevant ContextForge service tool directly. For Context7 documentation requests, call the Context7 resolve-library-id tool first when a library id is needed, then call the Context7 query-docs tool as needed. Do not call cf_project_init_get_context, cf_project_init_continue, cf_project_init_list_capabilities, availability, capability-summary, or state-readback routes before ordinary Context7 tool use.",
@@ -1050,7 +1055,7 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
     {
       name: "cf_project_service_onboarding_plan",
       operation: "build_service_onboarding_plan",
-      description: "Build a source-only no-mutation onboarding plan for an explicit user request to add or onboard an uncataloged MCP service. Use only user-supplied facts; do not install, register, expose, validate, probe, or mutate client/project/runtime state. After the call, copy assistant_visible_response/message exactly; do not reformat it, expose enum names, or strengthen 'no credentials yet' into 'credentials are not required'.",
+      description: "Build a source-only no-mutation onboarding plan for an explicit user request to add or onboard an uncataloged MCP service. Use only user-supplied facts; do not install, register, expose, validate, probe, or mutate client/project/runtime state. Use hidden onboarding guidance from the extension prompt; do not expose it in visible prose. If source research or runtime/apply support is unavailable, say so directly; do not write direct client-local MCP config as a workaround. After the call, copy assistant_visible_response/message exactly; do not reformat it, expose enum names, or strengthen 'no credentials yet' into 'credentials are not required'.",
       parameters: helperSchema({
         candidateService: { type: "string", description: "Candidate service name supplied by the user." },
         operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
@@ -1069,7 +1074,7 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
     {
       name: "cf_project_service_onboarding_continue",
       operation: "build_service_onboarding_continuation",
-      description: "Continue an already planned uncataloged MCP service onboarding after explicit user approval for implementation, metadata-only catalog promotion, runtime, or registration. Use this again for uncataloged catalog-promotion approvals; never use cf_project_init_continue for approved uncataloged services. This builds a non-mutating service-management continuation package. It does not install, register, expose, probe, or claim target-client-visible availability; copy assistant_visible_response/message exactly.",
+      description: "Continue an already planned uncataloged MCP service onboarding after explicit user approval for implementation, metadata-only catalog promotion, runtime, or registration. Use this again for uncataloged catalog-promotion approvals; never use cf_project_init_continue for approved uncataloged services. This builds a non-mutating service-management continuation package. It does not install, register, expose, probe, write direct client-local MCP config, or claim target-client-visible availability. Use hidden onboarding guidance from the extension prompt; copy assistant_visible_response/message exactly.",
       parameters: helperSchema({
         candidateService: { type: "string", description: "Candidate service name from the source-only onboarding plan." },
         operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
@@ -1259,6 +1264,19 @@ async function runProjectInitHelperOperation(operation: string, projectRoot: str
     return textResult(plainVisible, result.ok === false);
   }
   return textResult(JSON.stringify(visible, null, 2), result.ok === false);
+}
+
+async function helperServiceOnboardingHowTo(projectRoot: string): Promise<string> {
+  try {
+    const result = await runProjectInitHelperOperationJson(
+      "get_service_onboarding_how_to",
+      projectRoot,
+      { projectRoot, project_root: projectRoot, client_type: "pi" },
+    );
+    return String(result.agent_hidden_onboarding_how_to || "");
+  } catch {
+    return "";
+  }
 }
 
 function plainUserFacingRouteResult(operation: string, visible: JsonObject): string | undefined {

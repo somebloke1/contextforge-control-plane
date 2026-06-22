@@ -134,6 +134,8 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
         return _ok(_build_service_onboarding_plan(project_root, data))
     if operation in {"build_service_onboarding_continuation", "cf_project_service_onboarding_continue"}:
         return _ok(_build_service_onboarding_continuation(project_root, data))
+    if operation == "get_service_onboarding_how_to":
+        return _ok(service_onboarding_surfaces.hidden_onboarding_guidance(data))
     if operation == "list_available_capabilities":
         result = _ok(
             helper.list_available_capabilities(

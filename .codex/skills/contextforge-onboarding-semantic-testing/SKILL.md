@@ -54,6 +54,15 @@ readback for client-visible exposure before real dialogue begins.
 Codex subagents may build runners, package evidence, review GitHub state, or
 evaluate transcripts. They are never the tested assistant for this gate.
 
+The generic onboarding how-to prompt is a product/helper surface, not a harness
+cheat prompt. The helper should download it from
+`CONTEXTFORGE_SERVICE_ONBOARDING_HOW_TO_URL` or the repo-default URL and the
+client should inject it as hidden/internal route context before onboarding
+tool calls. Keep ordinary onboarding tool outputs free of the how-to text
+where the client has a hidden prompt path. Do not publish or upsert this
+how-to on every service-onboarding use, and do not show it as user-visible
+prose.
+
 ## Role Split
 
 - Controller: owns branch/GitHub state, runner package readiness, remediation,
@@ -101,9 +110,11 @@ these five dimensions and keep it stable for the whole dialogue:
 - `technical_fluency`
 - `interaction_style`
 
-Record the seed and vector. The persona may answer questions, say it does not
-know, or ask the tested assistant to decide from source research. It must not
-rescue the assistant with hidden implementation hints.
+Record the seed and vector. The simulator prompt should define the human's
+situation, goal, knowledge, and voice, then let the model-backed human run.
+Do not tune the simulated human into an idealized compliance actor. Imperfect,
+demanding, imprecise, or overconfident user behavior is part of the product
+behavior space unless the runner itself leaked hidden controller facts.
 
 ## Run Matrix
 
@@ -194,15 +205,14 @@ whether the tested assistant:
 - moved efficiently relative to persona, task complexity, and required outcome;
 - identified residual risks honestly.
 
-Classify failures as runner defect, simulated-human defect, tested-client
-behavior defect, generic-support gap, model inadequacy, service-specific
-defect, or environment/setup defect. Route each finding to the correct issue
-or remediation branch.
+Classify failures as runner defect, tested-client behavior defect,
+generic-support gap, model inadequacy, service-specific defect, or
+environment/setup defect. Route each finding to the correct issue or
+remediation branch.
 
 ## Refinement
 
-When a failure reveals a reusable lesson about source-lead packaging,
-question-answer persona behavior, runner isolation, model adequacy, evidence
-shape, or evaluator criteria, patch this skill or the referenced gate artifact
-before wider fan-out. Do not bury durable method lessons only in issue
-comments.
+When a failure reveals a reusable lesson about source-lead packaging, runner
+isolation, model adequacy, evidence shape, product continuation guidance, or
+evaluator criteria, patch this skill or the referenced gate artifact before
+wider fan-out. Do not bury durable method lessons only in issue comments.
