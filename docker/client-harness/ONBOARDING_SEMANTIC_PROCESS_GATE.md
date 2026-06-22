@@ -18,7 +18,10 @@ the process.
 - Tested assistant: a real Pi or OpenCode client session launched through the
   Docker client harness.
 - Simulated human responder: a separate model/persona that answers only the
-  tested assistant's user-facing questions.
+  tested assistant's user-facing questions. Acceptance-matrix runs use a Pi
+  gpt-5.5 authenticated simulator unless the controller records a specific
+  equivalent substitute; seeded or direct-provider responders are debug
+  scaffolding.
 - Deterministic runner: resets state, launches containers, records commands,
   captures transcripts, enforces role separation, and packages evidence.
 - Semantic evaluator: a non-Spark evaluator that reviews evidence and decides
