@@ -215,6 +215,14 @@ TypeScript sources into the image; inspect that checkout before treating runtime
 evidence as canonical. Use the ignored `server-instances/web-search/.env`
 boundary; do not persist secrets in tracked files.
 
+`time` follows the same compose-sidecar-locality for the first onboarding
+development foil: `time-transceiver` runs build-installed `mcp-server-time`
+through the stock bridge in the harness network and is registered through
+`http://time-transceiver:9209/mcp` only after direct reachability evidence. It
+is stateless except for the configured local timezone default and does not
+require credentials. Treat this as onboarding-factory proof material, not a
+canonical post-development service set decision.
+
 `serena-cf-controlplane-d46fe58a2a20` is project-scoped and remains owned by the
 canonical host project instance on `127.0.0.1:9108`. Because Docker cannot reach
 host loopback through `host.docker.internal`, the successor surface uses

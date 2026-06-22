@@ -167,6 +167,25 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("npm prune --omit=dev", dockerfile)
         self.assertIn("9207", dockerfile)
 
+    def test_compose_defines_time_development_foil_transceiver_sidecar(self) -> None:
+        compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/contextforge-harness/time-transceiver/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("time-transceiver:", compose)
+        self.assertIn("contextforge-harness-time-transceiver:latest", compose)
+        self.assertIn('"127.0.0.1:9209:9209"', compose)
+        self.assertIn("docker/contextforge-harness/time-transceiver/Dockerfile", compose)
+        self.assertIn('LOCAL_TIMEZONE: "${LOCAL_TIMEZONE:-UTC}"', compose)
+        self.assertIn("mcp-contextforge-gateway==${MCP_CONTEXTFORGE_GATEWAY_VERSION}", dockerfile)
+        self.assertIn("mcp-server-time", dockerfile)
+        self.assertIn("mcpgateway.translate", dockerfile)
+        self.assertIn("--stdio", dockerfile)
+        self.assertIn("mcp-server-time --local-timezone", dockerfile)
+        self.assertIn("--expose-sse", dockerfile)
+        self.assertIn("--expose-streamable-http", dockerfile)
+        self.assertIn("EXPOSE 9209", dockerfile)
+        self.assertIn("--port 9209", dockerfile)
+
     def test_compose_defines_serena_cf_controlplane_host_proxy(self) -> None:
         compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")
         dockerfile = (ROOT / "docker/contextforge-harness/serena-host-proxy/Dockerfile").read_text(encoding="utf-8")
@@ -221,6 +240,30 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('DEFAULT_DIRECT_URL = "http://127.0.0.1:9203/mcp"', source)
         self.assertIn('"libraryName": "python"', source)
         self.assertIn('"query": "standard library documentation lookup"', source)
+        self.assertIn("def create_probe_token", source)
+        self.assertIn("def revoke_probe_token", source)
+        self.assertIn('print(f"probe_token_id={probe_token_id}")', source)
+        self.assertIn("virtual_safe_probe_status=passed", source)
+        self.assertIn("terminate_on_close=False", source)
+        self.assertNotIn("print(probe_token", source)
+        self.assertNotIn("print(access_token", source)
+
+    def test_time_register_script_targets_dev_harness_names_and_network_url(self) -> None:
+        source = (ROOT / "docker/contextforge-harness/scripts/register_time_dev.py").read_text(encoding="utf-8")
+
+        self.assertIn('GATEWAY_NAME = "time-dev-docker"', source)
+        self.assertIn('SERVER_NAME = "time_dev_docker_server"', source)
+        self.assertIn('DEFAULT_UPSTREAM_URL = "http://time-transceiver:9209/mcp"', source)
+        self.assertIn('DEFAULT_GATEWAY_BASE = "http://127.0.0.1:4445"', source)
+        self.assertIn('"development-foil"', source)
+        self.assertNotIn("127.0.0.1:4444", source)
+
+    def test_time_probe_uses_safe_probe_and_revokes_token(self) -> None:
+        source = (ROOT / "docker/contextforge-harness/scripts/probe-time-dev.py").read_text(encoding="utf-8")
+
+        self.assertIn('DEFAULT_DIRECT_URL = "http://127.0.0.1:9209/mcp"', source)
+        self.assertIn('SAFE_TIME_ARGS = {"timezone": "UTC"}', source)
+        self.assertIn("get_current_time", source)
         self.assertIn("def create_probe_token", source)
         self.assertIn("def revoke_probe_token", source)
         self.assertIn('print(f"probe_token_id={probe_token_id}")', source)
@@ -412,6 +455,14 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("does not authenticate against the current dev gateway volume", source)
         self.assertIn("scripts/ensure-env-auth.sh", readme)
 
+    def test_time_harness_readme_uses_repo_venv_for_probe_scripts(self) -> None:
+        readme = (ROOT / "docker/contextforge-harness/README.md").read_text(encoding="utf-8")
+
+        self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/probe-time-dev.py --direct-only", readme)
+        self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/register_time_dev.py", readme)
+        self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/probe-time-dev.py", readme)
+        self.assertIn("target-client readiness still needs", readme)
+
     def test_mentality_manifest_records_dev_docker_surface(self) -> None:
         manifest = (ROOT / "server-instances/mentality/instance.json").read_text(encoding="utf-8")
 
@@ -428,6 +479,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("context7-transceiver", service_names)
         self.assertIn("github-transceiver", service_names)
         self.assertIn("exa-search-transceiver", service_names)
+        self.assertIn("time-transceiver", service_names)
 
     def test_service_locality_records_project_scoped_container_matrix(self) -> None:
         policy = (ROOT / "docker/contextforge-harness/SERVICE_LOCALITY.md").read_text(encoding="utf-8")
@@ -445,6 +497,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("explicit runtime approval boundary", policy)
         self.assertIn("Gateway-integrated services", policy)
         self.assertIn("Deferred exception", policy)
+        self.assertIn("`time` follows the same compose-sidecar-locality", policy)
+        self.assertIn("canonical post-development service set decision", policy)
 
     def test_opencode_dev_smoke_uses_ephemeral_contextforge_token(self) -> None:
         source = (ROOT / "docker/client-harness/scripts/smoke-opencode-contextforge-dev.sh").read_text(encoding="utf-8")

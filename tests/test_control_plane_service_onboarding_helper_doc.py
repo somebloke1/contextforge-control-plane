@@ -283,6 +283,12 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         self.assertIn("canonical post-development service set", self.doc)
         self.assertIn("`time` must be completed before `fetch`", self.doc)
         self.assertIn("begins.", self.doc)
+        self.assertIn("prototype evidence for the factory method", self.doc)
+        self.assertIn("not a service-", self.doc)
+        self.assertIn("specific blueprint to memorize", self.doc)
+        self.assertIn("future onboarding agent needs to perform from only a seed lead", self.doc)
+        self.assertIn("Any step that depends on controller prior knowledge", self.doc)
+        self.assertIn("onboarding-factory gap", self.doc)
         for url in [
             "github.com/modelcontextprotocol/servers/tree/main/src/time",
             "github.com/modelcontextprotocol/servers/tree/main/src/fetch",
