@@ -289,6 +289,16 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
         self.assertIn("future onboarding agent needs to perform from only a seed lead", self.doc)
         self.assertIn("Any step that depends on controller prior knowledge", self.doc)
         self.assertIn("onboarding-factory gap", self.doc)
+        self.assertIn("blind semantic end-to-end onboarding trial", self.doc)
+        self.assertIn("fresh agent with no service-specific project history", self.doc)
+        self.assertIn("only the source", self.doc)
+        self.assertIn("generic onboarding support", self.doc)
+        self.assertIn("ContextForge registration", self.doc)
+        self.assertIn("target-client-visible safe use", self.doc)
+        self.assertIn("semantic evaluator narrative", self.doc)
+        self.assertIn("must not evaluate generated assistant meaning through", self.doc)
+        self.assertIn("string or regex matching", self.doc)
+        self.assertIn("missing generic support must be encoded before moving to Fetch", self.doc)
         for url in [
             "github.com/modelcontextprotocol/servers/tree/main/src/time",
             "github.com/modelcontextprotocol/servers/tree/main/src/fetch",

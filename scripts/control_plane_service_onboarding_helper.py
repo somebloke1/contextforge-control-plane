@@ -667,14 +667,20 @@ def _onboarding_sequence(candidate_service: str | None) -> dict[str, Any]:
         "strict_order": True,
         "purpose": "development foils for building and proving the onboarding process; not a canonical post-development service set",
         "rule": "perfect onboarding of the current foil before starting the next foil in the ladder",
+        "semantic_onboarding_proof_required": True,
+        "blind_trial_requirement": (
+            "a fresh agent with no service-specific project history, given only the source lead and generic "
+            "onboarding support, must complete source research, decision record, implementation, runtime proof, "
+            "ContextForge registration proof, target-client-visible safe use, and semantic evaluator narrative"
+        ),
         "development_foil_ladder": _json_compatible_copy(ONBOARDING_DEVELOPMENT_FOIL_LADDER),
         "current_foil": _json_compatible_copy(current) if current else None,
         "prerequisites": prerequisites,
         "next_foil_locked_until_current_verified": next_item,
         "advance_condition": (
-            "current foil has approved decisions, implementation, runtime proof, "
-            "target-client-visible list-tools plus safe call, operator trace, residual-risk ledger, "
-            "and semantic evaluator verdict where language behavior matters"
+            "current foil has approved decisions, implementation, runtime proof, ContextForge registration proof, "
+            "target-client-visible list-tools plus safe call, operator trace, residual-risk ledger, and a blind "
+            "source-lead-only semantic end-to-end onboarding verdict from a non-Spark evaluator-capable agent"
         ),
     }
 

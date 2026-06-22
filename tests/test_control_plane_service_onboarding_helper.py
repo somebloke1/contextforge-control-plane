@@ -289,7 +289,12 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("time", sequence["current_foil"]["service"])  # type: ignore[index]
         self.assertEqual([], sequence["prerequisites"])  # type: ignore[index]
         self.assertEqual("fetch", sequence["next_foil_locked_until_current_verified"]["service"])  # type: ignore[index]
+        self.assertTrue(sequence["semantic_onboarding_proof_required"])  # type: ignore[index]
+        self.assertIn("fresh agent with no service-specific project history", sequence["blind_trial_requirement"])  # type: ignore[index]
+        self.assertIn("given only the source lead and generic onboarding support", sequence["blind_trial_requirement"])  # type: ignore[index]
+        self.assertIn("ContextForge registration proof", sequence["advance_condition"])  # type: ignore[index]
         self.assertIn("target-client-visible list-tools plus safe call", sequence["advance_condition"])  # type: ignore[index]
+        self.assertIn("blind source-lead-only semantic end-to-end onboarding verdict", sequence["advance_condition"])  # type: ignore[index]
 
     def test_time_timezone_functional_type_supports_first_foil_record(self) -> None:
         record = helper.build_onboarding_record(
