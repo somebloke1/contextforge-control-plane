@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -12,6 +13,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 VERIFIER = ROOT / "docker/client-harness/scripts/verify-use-case-1-e2e-evidence.py"
 RUNNER = ROOT / "docker/client-harness/scripts/run-use-case-1-dialogue.py"
+ONBOARDING_RUNNER = ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py"
 UC2_VERIFIER = ROOT / "docker/client-harness/scripts/verify-use-case-2-e2e-evidence.py"
 UC2_RUNNER = ROOT / "docker/client-harness/scripts/run-use-case-2-dialogue.py"
 UC3_VERIFIER = ROOT / "docker/client-harness/scripts/verify-use-case-3-e2e-evidence.py"
@@ -44,6 +46,22 @@ PIPELINE_SPEC = ROOT / "holistic_orchestrated_pipeline_spec.md"
 
 
 class UseCase1E2EGateTests(unittest.TestCase):
+    def load_runner_module(self):
+        spec = importlib.util.spec_from_file_location("uc1_runner_for_tests", RUNNER)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, str(RUNNER.parent))
+        spec.loader.exec_module(module)
+        return module
+
+    def load_onboarding_runner_module(self):
+        spec = importlib.util.spec_from_file_location("onboarding_runner_for_tests", ONBOARDING_RUNNER)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, str(ONBOARDING_RUNNER.parent))
+        spec.loader.exec_module(module)
+        return module
+
     def run_verifier(
         self,
         client: str,
@@ -80,7 +98,44 @@ class UseCase1E2EGateTests(unittest.TestCase):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-        return completed.returncode, json.loads(completed.stdout), completed.stderr
+            return completed.returncode, json.loads(completed.stdout), completed.stderr
+
+    def test_runner_timeout_cleanup_targets_lingering_opencode_process(self) -> None:
+        runner = self.load_runner_module()
+
+        cleanup = runner.timeout_cleanup_command(
+            [
+                "docker",
+                "exec",
+                "cf-onboard-time-opencode-example",
+                "bash",
+                "-lc",
+                "cd /workspace && opencode run --session ses_abc --format json 'prompt'",
+            ]
+        )
+
+        self.assertEqual(
+            ["docker", "exec", "cf-onboard-time-opencode-example", "pkill", "-TERM", "-f", "opencode run"],
+            cleanup,
+        )
+
+    def test_runner_timeout_cleanup_ignores_non_docker_exec_commands(self) -> None:
+        runner = self.load_runner_module()
+
+        self.assertIsNone(runner.timeout_cleanup_command(["python", "-m", "unittest"]))
+
+    def test_onboarding_responder_prompt_pursues_contextforge_usability_without_package_recipe(self) -> None:
+        runner = self.load_onboarding_runner_module()
+
+        prompt = runner.responder_system_prompt()
+
+        self.assertIn("use the MCP service", prompt)
+        self.assertIn("through ContextForge", prompt)
+        self.assertIn("source evidence", prompt)
+        self.assertIn("intermediate artifacts", prompt)
+        self.assertIn("usable ContextForge onboarding", prompt)
+        self.assertNotIn("mcp-server-time", prompt)
+        self.assertNotIn("time-dev-docker", prompt)
 
     def write_metadata_with_raw_artifacts(self, metadata: dict[str, Any], tmp_path: Path, metadata_path: Path) -> None:
         for step in metadata.get("generation_report", {}).get("step_generations", []):

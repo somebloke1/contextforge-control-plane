@@ -191,6 +191,19 @@ const asksForRuntimeApply = (text) => {
   return asksForApproval(text) && /\b(runtime|apply|implement|implementation|register|registration|install|start|execute)\b/.test(lowered)
 }
 
+const asksForDirectClientMcpConfig = (text) => {
+  const lowered = String(text ?? "").toLowerCase()
+  return (
+    lowered.includes(".opencode") ||
+    lowered.includes("mcp.json") ||
+    lowered.includes("mcpservers") ||
+    lowered.includes("mcp config") ||
+    lowered.includes("mcp settings") ||
+    (lowered.includes("client config") && /\b(edit|change|create|write|path|contents?)\b/.test(lowered)) ||
+    (lowered.includes("config file") && /\b(edit|change|create|write|path|contents?)\b/.test(lowered))
+  )
+}
+
 const asksForProjectStateReadback = (text) => {
   const lowered = String(text ?? "").toLowerCase()
   return (
@@ -341,14 +354,22 @@ const serviceOnboardingPlanInstruction = (cwd) =>
   [
     "The user is asking to onboard an uncataloged MCP service in an already initialized ContextForge project.",
     serviceOnboardingHowTo(cwd),
+    "This is a ContextForge service-onboarding route, not an OpenCode MCP configuration task.",
     "If the user provided a URL or other source lead, use available read-only source-research tools against that lead before asking the user for facts that should be discoverable from the source. If no source-research tool is available, say that source-research support is missing and ask only for the facts needed to proceed.",
     "After source evidence or user answers provide enough source-derived facts for a source-only plan, call `contextforge-helper_cf_project_service_onboarding_plan` with the current project root and only source-derived or user-visible facts.",
     `Use project_root: "${String(cwd)}".`,
     "Use empty strings or empty arrays for unknown fields; do not invent package names, commands, tools, transports, credentials, or implementation facts.",
     "For list fields such as expected_tools, pass a JSON array of strings, never a comma-separated string.",
-    "When the helper returns `assistant_visible_response` or `message`, copy that value exactly as the complete visible reply and stop.",
+    "When any ContextForge service-onboarding helper returns `assistant_visible_response`, `message`, or `copy_as_complete_visible_response`, copy that value exactly as the complete visible reply and stop. Do not continue reasoning into file edits or alternate implementation paths after such a tool result.",
     "If required facts are missing, ask concise practical intake questions instead.",
     "Do not install, register, start, expose, validate, probe, import, or claim the candidate is available during the source-only planning step.",
+    "For npm stdio onboarding, you must research and determine the exact npm package, package version policy, transport, package/runtime arguments, environment variables, secret names, tool schemas, and standard prompt-library content. Confirm the exact npm package with the user before install/register packaging.",
+    "The standard prompt-library content is mandatory: provide one compact abstract prompt for proactive loading and one or more lazy-loaded detail prompts for task-specific use guidance.",
+    "If the user approves implementation artifact drafting for an npm stdio service, ordinary code-assistant work may create a managed npm-stdio service record for the shared Docker host and a ContextForge API JSON service definition from source-derived facts. Those are onboarding artifacts, not direct client MCP config, and they still do not prove availability.",
+    "For exact artifact paths and JSON shape, retrieve the non-mutating runtime/apply package and use its `install_artifact_contract`; do not invent `.contextforge/services` paths or generic metadata catalog schemas from a blank workspace.",
+    "For this onboarding target, npm plus stdio means the service should normally be hosted by the shared npm-stdio Docker runtime, not by a bespoke per-service Dockerfile. Use a per-service Dockerfile only when the helper contract or source evidence explicitly requires a separate runtime.",
+    "Never propose, inspect, create, or edit direct client-local MCP config such as `.opencode`, `opencode.json`, `mcp.json`, `mcpServers`, or MCP settings as a substitute for ContextForge onboarding.",
+    "If the user asks for direct client-local MCP config, explain that this route cannot do that because it would bypass ContextForge, and ask whether to continue through the ContextForge service-onboarding path or stop at the source-only plan.",
     "If source research or runtime/apply support is unavailable, say so directly as a generic support gap; do not write direct client-local MCP config as a workaround.",
     "Do not use canned service content, examples, or prior test fixtures as a substitute for the user's service.",
   ].join("\n")
@@ -362,7 +383,11 @@ const serviceOnboardingContinuationInstruction = (cwd) =>
     `Use project_root: "${String(cwd)}".`,
     "Use empty strings or empty arrays for unknown fields; do not invent package names, commands, tools, transports, credentials, or implementation facts.",
     "For list fields such as expected_tools, pass a JSON array of strings, never a comma-separated string.",
-    "When the helper returns `assistant_visible_response` or `message`, copy that value exactly as the complete visible reply and stop.",
+    "When the helper returns `assistant_visible_response`, `message`, or `copy_as_complete_visible_response`, copy that value exactly as the complete visible reply and stop.",
+    "If the next approved step is implementation artifact drafting, first call `contextforge-helper_cf_project_service_onboarding_runtime_apply` to retrieve the non-mutating package and its `install_artifact_contract`; then create the managed npm-stdio service record and ContextForge API JSON definition for gateway/tool-refresh/virtual-server registration from that contract. Do not create direct client MCP config.",
+    "If the helper refuses because required fields are missing, research and determine those values from source evidence or ask the user only for facts that cannot be discovered, then retry with the complete field set.",
+    "Do not infer `.contextforge/services` paths or ad hoc JSON schema from workspace inspection. The artifact paths and JSON shape come from the helper's `install_artifact_contract`.",
+    "If the upstream is npm stdio, the shared npm-stdio Docker host packages and bridges that command; do not invent a bespoke service Dockerfile merely because the upstream command is stdio.",
     "Do not install, register, start, expose, validate, probe, import, or claim the candidate is available unless a later service-management apply surface actually performs that mutation.",
     "User approval to create arbitrary local client config is not a ContextForge runtime/apply surface; do not use bash, write, or edit to create direct MCP config as a workaround.",
   ].join("\n")
@@ -371,14 +396,23 @@ const serviceOnboardingRuntimeApplyInstruction = (cwd) =>
   [
     "The user is approving runtime/apply continuation for an uncataloged MCP service that already has a service-management continuation package in this session.",
     serviceOnboardingHowTo(cwd),
-    "Call `contextforge-helper_cf_project_service_onboarding_runtime_execute` with the current project root and only source-derived facts already visible in this conversation.",
+    "If the user is asking to draft, inspect, or review the managed npm-stdio service record or ContextForge API JSON first, call `contextforge-helper_cf_project_service_onboarding_runtime_apply` to retrieve the non-mutating package and its `install_artifact_contract`; do not execute mutation yet.",
+    "Only when the user explicitly approves the exact recorded executor surface after artifact review, call `contextforge-helper_cf_project_service_onboarding_runtime_execute` with the current project root and only source-derived facts already visible in this conversation.",
     `Use project_root: "${String(cwd)}".`,
     "Use empty strings or empty arrays for unknown fields; do not invent package names, commands, tools, transports, credentials, or implementation facts.",
     "For list fields such as expected_tools, pass a JSON array of strings, never a comma-separated string.",
-    "When the helper returns `assistant_visible_response` or `message`, copy that value exactly as the complete visible reply and stop.",
+    "When the helper returns `assistant_visible_response`, `message`, or `copy_as_complete_visible_response`, copy that value exactly as the complete visible reply and stop.",
+    "If a runtime/apply execution fails, use the stage and error information returned by the helper as evidence. Do not expect the helper to prescribe the fix; determine the correction from source evidence and retry with corrected fields.",
     "Do not use bash, write, edit, or direct client-local MCP config as a workaround. The helper executor is the approved runtime/apply surface for this route.",
     "After the helper reports success, tell the user only what was applied and that a new OpenCode session from this project root is required before newly registered tools can be discovered.",
     "User approval to create arbitrary local client config is not a ContextForge runtime/apply surface; do not use bash, write, or edit to create direct MCP config as a workaround.",
+  ].join("\n")
+
+const serviceOnboardingLocalConfigRefusalResponse = () =>
+  [
+    "I cannot create or plan direct client-local MCP configuration as a substitute for ContextForge onboarding.",
+    "This service can continue only through the ContextForge service-onboarding path, or we can stop at the source-only plan.",
+    "No files have been changed by this response.",
   ].join("\n")
 
 const serviceOnboardingIntakeResponse = () =>
@@ -496,10 +530,19 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         !exactCapabilityResponse && !serviceOnboardingRuntimeApplyRoute && serviceOnboardingPlannedSessions.has(String(sessionID)) && asksForApproval(latestText)
           ? serviceOnboardingContinuationInstruction(cwd)
           : ""
+      const exactServiceOnboardingLocalConfigRefusal =
+        !exactCapabilityResponse &&
+        !serviceOnboardingRuntimeApplyRoute &&
+        !serviceOnboardingContinuationRoute &&
+        serviceOnboardingPlannedSessions.has(String(sessionID)) &&
+        asksForDirectClientMcpConfig(latestText)
+          ? serviceOnboardingLocalConfigRefusalResponse()
+          : ""
       const serviceOnboardingActiveRoute =
         !exactCapabilityResponse &&
         !serviceOnboardingRuntimeApplyRoute &&
         !serviceOnboardingContinuationRoute &&
+        !exactServiceOnboardingLocalConfigRefusal &&
         serviceOnboardingPlannedSessions.has(String(sessionID))
           ? serviceOnboardingPlanInstruction(cwd)
           : ""
@@ -507,6 +550,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         !exactCapabilityResponse &&
         !serviceOnboardingRuntimeApplyRoute &&
         !serviceOnboardingContinuationRoute &&
+        !exactServiceOnboardingLocalConfigRefusal &&
         !serviceOnboardingActiveRoute &&
         suppliesSourceOnlyOnboardingDetails(latestText)
           ? serviceOnboardingPlanInstruction(cwd)
@@ -514,13 +558,14 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
       const exactServiceOnboardingIntakeResponse =
         !exactCapabilityResponse &&
         !serviceOnboardingContinuationRoute &&
+        !exactServiceOnboardingLocalConfigRefusal &&
         !serviceOnboardingActiveRoute &&
         !serviceOnboardingPlanRoute &&
         asksForUncatalogedServiceOnboarding(latestText)
           ? serviceOnboardingIntakeResponse()
           : ""
-      const exactStateReadbackResponse = !exactCapabilityResponse && !serviceOnboardingRuntimeApplyRoute && !serviceOnboardingContinuationRoute && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && asksForProjectStateReadback(latestText) ? stateReadbackResponse(cwd) : ""
-      const exactAvailabilityResponse = !exactCapabilityResponse && !serviceOnboardingRuntimeApplyRoute && !serviceOnboardingContinuationRoute && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && !exactStateReadbackResponse && asksForContextForgeTools(latestText) ? availabilityResponse(cwd) : ""
+      const exactStateReadbackResponse = !exactCapabilityResponse && !serviceOnboardingRuntimeApplyRoute && !serviceOnboardingContinuationRoute && !exactServiceOnboardingLocalConfigRefusal && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && asksForProjectStateReadback(latestText) ? stateReadbackResponse(cwd) : ""
+      const exactAvailabilityResponse = !exactCapabilityResponse && !serviceOnboardingRuntimeApplyRoute && !serviceOnboardingContinuationRoute && !exactServiceOnboardingLocalConfigRefusal && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && !exactStateReadbackResponse && asksForContextForgeTools(latestText) ? availabilityResponse(cwd) : ""
       const exactProjectDocsLookupCapabilityResponse =
         !exactCapabilityResponse &&
         !exactStateReadbackResponse &&
@@ -528,9 +573,9 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         (projectDocsLookupGuidanceActiveSessions.has(String(sessionID)) || asksHowToUseProjectDocsLookupCapability(latestText))
           ? projectDocsLookupCapabilityResponse()
           : ""
-      if (serviceOnboardingRuntimeApplyRoute || serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute || exactServiceOnboardingIntakeResponse) {
+      if (serviceOnboardingRuntimeApplyRoute || serviceOnboardingContinuationRoute || exactServiceOnboardingLocalConfigRefusal || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute || exactServiceOnboardingIntakeResponse) {
         const route = serviceOnboardingRuntimeApplyRoute || serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute
-        const response = exactServiceOnboardingIntakeResponse
+        const response = exactServiceOnboardingLocalConfigRefusal || exactServiceOnboardingIntakeResponse
         if (serviceOnboardingPlanRoute) {
           serviceOnboardingPlannedSessions.add(String(sessionID))
         }
@@ -538,7 +583,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
           serviceOnboardingContinuedSessions.add(String(sessionID))
         }
         if (route) {
-          output.messages.unshift({
+          output.messages.push({
             info: {
               id: `${messageID}_service_onboarding`,
               role: "user",

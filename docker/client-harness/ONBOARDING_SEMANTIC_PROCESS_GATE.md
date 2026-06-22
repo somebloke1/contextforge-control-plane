@@ -78,6 +78,38 @@ new acceptance attempt.
 The runner may know evaluator criteria and evidence routing, but that
 information must stay outside prompts sent to the tested assistant.
 
+The gate must not confuse ordinary code-assistant artifact work with a runner
+shortcut. A tested assistant may, when the simulated human approves it, draft
+workspace-local onboarding dossiers, source-evidence tables, managed npm-stdio
+service records, ContextForge API JSON definitions, or other auditable planning
+artifacts as part of normal assistant behavior. For the current npm-stdio
+target, the preferred implementation artifacts are a per-service managed
+npm-stdio host record plus a ContextForge API JSON definition for
+gateway/tool-refresh/virtual-server registration and rollback targets. A
+Dockerfile belongs to the reusable npm-stdio host substrate, not to every
+onboarded npm MCP service. Those
+artifacts are valid interaction evidence only if they are produced by the
+tested assistant inside the target-client session from source-derived facts.
+When exact artifact paths or JSON shape are needed, they should come from the
+ContextForge helper's non-mutating runtime/apply package
+`install_artifact_contract`, not from invented `.contextforge/services` paths
+or blank-workspace convention guessing.
+The helper may require a standard field set and refuse incomplete install or
+register attempts. That is not coaching. It is a product contract forcing the
+tested assistant to research and supply the npm package, transport, env vars,
+arguments, tool schemas, and prompt-library content. If a runtime attempt
+fails, the helper may return stage-labeled error information, but it must not
+tell the tested assistant the service-specific fix.
+Runtime/apply evidence must also prove idempotency at the operation boundary:
+failed install/register attempts clean up partial hosted-service,
+ContextForge, bridge, and prompt-library state before returning the error;
+repeat attempts must not accumulate duplicate state.
+They are not acceptance by themselves. The runner or controller must not
+prebuild them, feed them to the tested assistant, or treat their existence as a
+deterministic package proof. The accepted path still has to return to
+ContextForge continuation/runtime-apply, reload/new-session handling,
+target-client-visible tools, and a safe service call.
+
 ## Composite Simulated Human Persona Sampling
 
 Before each run, the agent invoking the runner must randomly compose a
@@ -139,7 +171,9 @@ Each tested assistant must progress through the generic process:
 2. Ask clarifying questions if needed.
 3. Conduct source research through generic onboarding support.
 4. Present key implementation decisions methodically to the simulated human.
-5. Produce or request approval for the bounded implementation plan.
+5. Produce or request approval for the bounded implementation plan, including
+   any assistant-authored managed npm-stdio service record and ContextForge API
+   JSON artifact if that is the natural approved intermediate step.
 6. Implement or drive the approved dev-surface onboarding work when the gate
    grants that surface.
 7. Prove runtime/backend behavior on the declared development surface.

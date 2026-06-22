@@ -445,8 +445,32 @@ def client_visible_service_onboarding_payload(value: dict[str, Any]) -> dict[str
         "mutation_allowed": False,
         "assistant_visible_response": visible,
         "message": visible,
+        "copy_as_complete_visible_response": bool(visible),
+        "do_not_summarize": bool(visible),
+        "assistant_response_policy": {
+            "copy_assistant_visible_response_exactly": bool(visible),
+            "stop_after_visible_response": bool(visible),
+            "do_not_write_direct_client_local_mcp_config": True,
+            "direct_client_config_is_not_contextforge_onboarding": True,
+        },
         "non_actions": value.get("non_actions") or [],
     }
+    if value.get("status") == "service_onboarding_source_research":
+        public.update(
+            {
+                "source_path": value.get("source_path"),
+                "source_kind": value.get("source_kind"),
+                "github": value.get("github"),
+                "source_files": value.get("source_files") or [],
+                "retrieved_file_count": value.get("retrieved_file_count"),
+                "retrieved_content_bytes": value.get("retrieved_content_bytes"),
+                "warnings": value.get("warnings") or [],
+            }
+        )
+    if value.get("status") == "service_onboarding_runtime_apply_package":
+        public["install_artifact_contract"] = value.get("install_artifact_contract")
+    if value.get("status") == "service_onboarding_runtime_apply_blocked":
+        public["required_inputs"] = value.get("required_inputs") or []
     return {key: item for key, item in public.items() if item not in (None, "")}
 
 
@@ -806,7 +830,7 @@ def project_tool_availability(
     """Read initialized project state and summarize client-visible ContextForge tools."""
 
     root = project_state.validate_project_root(project_root, require_workspace=True)
-    state = project_state.load_state(root)
+    state = project_state.read_or_default(root)
     services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
     available_tools: list[dict[str, Any]] = []
     project_services: list[dict[str, Any]] = []
@@ -1064,7 +1088,7 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
     """Read project state and catalog candidates into a normal-language capability summary."""
 
     root = project_state.validate_project_root(project_root, require_workspace=True)
-    state = project_state.load_state(root)
+    state = project_state.read_or_default(root)
     tool_report = project_tool_availability(project_root=str(root), client_type=client_type)
     approved = set(str(item) for item in tool_report.get("approved_service_bindings") or [])
     project_services = [
@@ -1319,7 +1343,7 @@ def project_state_readback(project_root: str, client_type: str = DEFAULT_CLIENT_
     """Read current project state and return an honest target-client readback."""
 
     root = project_state.validate_project_root(project_root, require_workspace=True)
-    state = project_state.load_state(root)
+    state = project_state.read_or_default(root)
     tool_report = project_tool_availability(project_root=str(root), client_type=client_type)
     services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
     session_boundary = _client_session_boundary(state, client_type)
@@ -2067,6 +2091,17 @@ def cf_project_service_onboarding_plan(
     credential_required: bool | None = None,
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     session_id: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
@@ -2088,6 +2123,17 @@ def cf_project_service_onboarding_plan(
                 "credential_required": credential_required,
                 "approval_type": approval_type,
                 "expected_tools": expected_tools or [],
+                "package_registry_type": package_registry_type,
+                "package_version": package_version,
+                "runtime_hint": runtime_hint,
+                "npm_package_confirmed": npm_package_confirmed,
+                "environment_variables_reviewed": environment_variables_reviewed,
+                "package_arguments_reviewed": package_arguments_reviewed,
+                "environment_variables": environment_variables or [],
+                "package_arguments": package_arguments or [],
+                "required_secret_names": required_secret_names or [],
+                "tool_schemas": tool_schemas or {},
+                "prompt_library": prompt_library or {},
                 "issue": issue,
                 "session_id": session_id,
             },
@@ -2111,6 +2157,17 @@ def build_service_onboarding_plan(
     credential_required: bool | None = None,
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     session_id: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
@@ -2129,8 +2186,54 @@ def build_service_onboarding_plan(
         credential_required=credential_required,
         approval_type=approval_type,
         expected_tools=expected_tools,
+        package_registry_type=package_registry_type,
+        package_version=package_version,
+        runtime_hint=runtime_hint,
+        npm_package_confirmed=npm_package_confirmed,
+        environment_variables_reviewed=environment_variables_reviewed,
+        package_arguments_reviewed=package_arguments_reviewed,
+        environment_variables=environment_variables,
+        package_arguments=package_arguments,
+        required_secret_names=required_secret_names,
+        tool_schemas=tool_schemas,
+        prompt_library=prompt_library,
         issue=issue,
         session_id=session_id,
+        client_type=client_type,
+    )
+
+
+@server.tool()
+def cf_project_service_onboarding_research_source(
+    project_root: str,
+    source_path: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Fetch read-only file-level source evidence for an uncataloged MCP service lead."""
+    try:
+        root = _continuation_project_root(project_root, client_type)
+        result = service_onboarding_surfaces.research_service_onboarding_source(
+            root,
+            {
+                "source_path": source_path,
+                "client_type": client_type,
+            },
+        )
+        return client_visible_service_onboarding_payload({"ok": True, **result})
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def research_service_onboarding_source(
+    project_root: str,
+    source_path: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+) -> dict[str, Any]:
+    """Alias for cf_project_service_onboarding_research_source."""
+    return cf_project_service_onboarding_research_source(
+        project_root=project_root,
+        source_path=source_path,
         client_type=client_type,
     )
 
@@ -2150,6 +2253,17 @@ def cf_project_service_onboarding_continue(
     credential_boundary: str = "",
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
@@ -2171,6 +2285,17 @@ def cf_project_service_onboarding_continue(
                 "credential_boundary": credential_boundary,
                 "approval_type": approval_type,
                 "expected_tools": expected_tools or [],
+                "package_registry_type": package_registry_type,
+                "package_version": package_version,
+                "runtime_hint": runtime_hint,
+                "npm_package_confirmed": npm_package_confirmed,
+                "environment_variables_reviewed": environment_variables_reviewed,
+                "package_arguments_reviewed": package_arguments_reviewed,
+                "environment_variables": environment_variables or [],
+                "package_arguments": package_arguments or [],
+                "required_secret_names": required_secret_names or [],
+                "tool_schemas": tool_schemas or {},
+                "prompt_library": prompt_library or {},
                 "issue": issue,
             },
         )
@@ -2194,6 +2319,17 @@ def build_service_onboarding_continuation(
     credential_boundary: str = "",
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
@@ -2212,6 +2348,17 @@ def build_service_onboarding_continuation(
         credential_boundary=credential_boundary,
         approval_type=approval_type,
         expected_tools=expected_tools,
+        package_registry_type=package_registry_type,
+        package_version=package_version,
+        runtime_hint=runtime_hint,
+        npm_package_confirmed=npm_package_confirmed,
+        environment_variables_reviewed=environment_variables_reviewed,
+        package_arguments_reviewed=package_arguments_reviewed,
+        environment_variables=environment_variables,
+        package_arguments=package_arguments,
+        required_secret_names=required_secret_names,
+        tool_schemas=tool_schemas,
+        prompt_library=prompt_library,
         issue=issue,
         client_type=client_type,
     )
@@ -2232,6 +2379,17 @@ def build_service_onboarding_continue(
     credential_boundary: str = "",
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
@@ -2250,6 +2408,17 @@ def build_service_onboarding_continue(
         credential_boundary=credential_boundary,
         approval_type=approval_type,
         expected_tools=expected_tools,
+        package_registry_type=package_registry_type,
+        package_version=package_version,
+        runtime_hint=runtime_hint,
+        npm_package_confirmed=npm_package_confirmed,
+        environment_variables_reviewed=environment_variables_reviewed,
+        package_arguments_reviewed=package_arguments_reviewed,
+        environment_variables=environment_variables,
+        package_arguments=package_arguments,
+        required_secret_names=required_secret_names,
+        tool_schemas=tool_schemas,
+        prompt_library=prompt_library,
         issue=issue,
         client_type=client_type,
     )
@@ -2272,6 +2441,17 @@ def cf_project_service_onboarding_runtime_apply(
     credential_boundary: str = "",
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
@@ -2302,6 +2482,17 @@ def cf_project_service_onboarding_runtime_apply(
                 "credential_boundary": credential_boundary,
                 "approval_type": approval_type,
                 "expected_tools": expected_tools or [],
+                "package_registry_type": package_registry_type,
+                "package_version": package_version,
+                "runtime_hint": runtime_hint,
+                "npm_package_confirmed": npm_package_confirmed,
+                "environment_variables_reviewed": environment_variables_reviewed,
+                "package_arguments_reviewed": package_arguments_reviewed,
+                "environment_variables": environment_variables or [],
+                "package_arguments": package_arguments or [],
+                "required_secret_names": required_secret_names or [],
+                "tool_schemas": tool_schemas or {},
+                "prompt_library": prompt_library or {},
                 "issue": issue,
             },
         )
@@ -2327,12 +2518,24 @@ def cf_project_service_onboarding_runtime_execute(
     credential_boundary: str = "",
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
     """Apply an approved runtime package through the recorded dev ContextForge executor surface."""
     try:
         root = _continuation_project_root(project_root, client_type)
+        approval_text = _read_latest_user_message_text(root)
         _require_runtime_apply_approval_text(
             root,
             candidate_service=candidate_service,
@@ -2357,7 +2560,20 @@ def cf_project_service_onboarding_runtime_execute(
                 "credential_boundary": credential_boundary,
                 "approval_type": approval_type,
                 "expected_tools": expected_tools or [],
+                "package_registry_type": package_registry_type,
+                "package_version": package_version,
+                "runtime_hint": runtime_hint,
+                "npm_package_confirmed": npm_package_confirmed,
+                "environment_variables_reviewed": environment_variables_reviewed,
+                "package_arguments_reviewed": package_arguments_reviewed,
+                "environment_variables": environment_variables or [],
+                "package_arguments": package_arguments or [],
+                "required_secret_names": required_secret_names or [],
+                "tool_schemas": tool_schemas or {},
+                "prompt_library": prompt_library or {},
                 "issue": issue,
+                "approval_text": approval_text,
+                "require_executor_surface_approval": True,
             },
         )
         visible = str(result.get("assistant_visible_response") or result.get("message") or "").strip()
@@ -2394,6 +2610,17 @@ def build_service_onboarding_runtime_apply_package(
     credential_boundary: str = "",
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
@@ -2414,6 +2641,17 @@ def build_service_onboarding_runtime_apply_package(
         credential_boundary=credential_boundary,
         approval_type=approval_type,
         expected_tools=expected_tools,
+        package_registry_type=package_registry_type,
+        package_version=package_version,
+        runtime_hint=runtime_hint,
+        npm_package_confirmed=npm_package_confirmed,
+        environment_variables_reviewed=environment_variables_reviewed,
+        package_arguments_reviewed=package_arguments_reviewed,
+        environment_variables=environment_variables,
+        package_arguments=package_arguments,
+        required_secret_names=required_secret_names,
+        tool_schemas=tool_schemas,
+        prompt_library=prompt_library,
         issue=issue,
         client_type=client_type,
     )
@@ -2436,6 +2674,17 @@ def build_service_onboarding_runtime_apply(
     credential_boundary: str = "",
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
@@ -2456,6 +2705,17 @@ def build_service_onboarding_runtime_apply(
         credential_boundary=credential_boundary,
         approval_type=approval_type,
         expected_tools=expected_tools,
+        package_registry_type=package_registry_type,
+        package_version=package_version,
+        runtime_hint=runtime_hint,
+        npm_package_confirmed=npm_package_confirmed,
+        environment_variables_reviewed=environment_variables_reviewed,
+        package_arguments_reviewed=package_arguments_reviewed,
+        environment_variables=environment_variables,
+        package_arguments=package_arguments,
+        required_secret_names=required_secret_names,
+        tool_schemas=tool_schemas,
+        prompt_library=prompt_library,
         issue=issue,
         client_type=client_type,
     )
@@ -2478,6 +2738,17 @@ def build_service_onboarding_runtime_execute(
     credential_boundary: str = "",
     approval_type: str = "",
     expected_tools: list[str] | None = None,
+    package_registry_type: str = "",
+    package_version: str = "",
+    runtime_hint: str = "",
+    npm_package_confirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    environment_variables: list[dict[str, Any]] | None = None,
+    package_arguments: list[dict[str, Any]] | None = None,
+    required_secret_names: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
@@ -2498,6 +2769,17 @@ def build_service_onboarding_runtime_execute(
         credential_boundary=credential_boundary,
         approval_type=approval_type,
         expected_tools=expected_tools,
+        package_registry_type=package_registry_type,
+        package_version=package_version,
+        runtime_hint=runtime_hint,
+        npm_package_confirmed=npm_package_confirmed,
+        environment_variables_reviewed=environment_variables_reviewed,
+        package_arguments_reviewed=package_arguments_reviewed,
+        environment_variables=environment_variables,
+        package_arguments=package_arguments,
+        required_secret_names=required_secret_names,
+        tool_schemas=tool_schemas,
+        prompt_library=prompt_library,
         issue=issue,
         client_type=client_type,
     )

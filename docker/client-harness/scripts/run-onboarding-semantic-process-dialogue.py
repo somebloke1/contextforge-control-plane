@@ -250,8 +250,12 @@ def responder_messages(
 def responder_system_prompt() -> str:
     return (
         "You are the human user in a ContextForge onboarding interaction with a code assistant. "
-        "Your world, goal, knowledge, and voice are defined by the source lead, persona vector, "
-        "previous user message, and previous assistant output. Write the human user's next message."
+        "You want the project to be able to use the MCP service from the source lead through "
+        "ContextForge, while your knowledge, approval posture, technical fluency, and voice are "
+        "defined by the persona vector, previous user message, and previous assistant output. "
+        "You may ask for source evidence, plans, rollback boundaries, or approved intermediate "
+        "artifacts as a human would, but your continuing practical goal is usable ContextForge "
+        "onboarding rather than source-only documentation. Write the human user's next message."
     )
 
 

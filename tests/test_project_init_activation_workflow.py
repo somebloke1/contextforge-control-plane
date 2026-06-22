@@ -80,6 +80,63 @@ def context7_safe_probe_validation(target_client: str = "codex") -> dict[str, An
     )
 
 
+def npm_stdio_required_payload() -> dict[str, Any]:
+    return {
+        "packageRegistryType": "npm",
+        "packageVersion": "1.0.0",
+        "runtimeHint": "npx",
+        "npmPackageConfirmed": True,
+        "environmentVariablesReviewed": True,
+        "packageArgumentsReviewed": True,
+        "environmentVariables": [],
+        "packageArguments": [],
+        "requiredSecretNames": [],
+        "toolSchemas": {
+            "get_current_time": {
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"timezone": {"type": "string"}},
+                    "required": ["timezone"],
+                }
+            },
+            "convert_time": {
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "source_timezone": {"type": "string"},
+                        "target_timezone": {"type": "string"},
+                        "time": {"type": "string"},
+                    },
+                    "required": ["source_timezone", "target_timezone", "time"],
+                }
+            },
+        },
+        "promptLibrary": {
+            "abstract_prompt": "Time provides current-time and timezone conversion tools. Use it when users ask about time or timezone conversion.",
+            "detail_prompts": {
+                "usage": "Ask for the timezone when it is missing. Prefer IANA timezone names. Do not guess user-local time."
+            },
+        },
+    }
+
+
+def npm_stdio_required_kwargs() -> dict[str, Any]:
+    payload = npm_stdio_required_payload()
+    return {
+        "package_registry_type": payload["packageRegistryType"],
+        "package_version": payload["packageVersion"],
+        "runtime_hint": payload["runtimeHint"],
+        "npm_package_confirmed": payload["npmPackageConfirmed"],
+        "environment_variables_reviewed": payload["environmentVariablesReviewed"],
+        "package_arguments_reviewed": payload["packageArgumentsReviewed"],
+        "environment_variables": payload["environmentVariables"],
+        "package_arguments": payload["packageArguments"],
+        "required_secret_names": payload["requiredSecretNames"],
+        "tool_schemas": payload["toolSchemas"],
+        "prompt_library": payload["promptLibrary"],
+    }
+
+
 def record_pi_reload(root: Path, *, validation_mode: str | None = None) -> dict[str, Any]:
     return helper.record_project_init_client_reload(project_root=root, client_type="pi", validation_mode=validation_mode)
 
@@ -1849,6 +1906,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("cf_project_init_apply", text)
         self.assertIn("ContextForge tools are installed", text)
 
+    def test_opencode_service_onboarding_route_is_latest_synthetic_message(self) -> None:
+        text = (REPO_ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").read_text(encoding="utf-8")
+
+        self.assertIn("const route = serviceOnboardingRuntimeApplyRoute || serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute", text)
+        self.assertIn("output.messages.push({", text)
+        self.assertIn("<contextforge-service-onboarding>", text)
+        self.assertIn("serviceOnboardingHowTo(cwd)", text)
+        self.assertIn("asksForDirectClientMcpConfig", text)
+        self.assertIn("serviceOnboardingLocalConfigRefusalResponse", text)
+        self.assertIn("I cannot create or plan direct client-local MCP configuration", text)
+        self.assertIn("install_artifact_contract", text)
+        self.assertIn("non-mutating runtime/apply package", text)
+        self.assertIn("do not invent `.contextforge/services` paths", text)
+        self.assertIn("copy_as_complete_visible_response", text)
+
     def test_pi_helper_cli_stdout_is_clean_json(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
@@ -1931,6 +2003,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 expected_tools=["get_current_time", "convert_time"],
                 issue="356",
                 client_type="opencode",
+                **npm_stdio_required_kwargs(),
             )
 
         self.assertTrue(result["ok"])
@@ -1941,6 +2014,73 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("record", result)
         self.assertIn("source-only onboarding plan", result["assistant_visible_response"])
         self.assertIn("No service has been installed, registered, started, exposed, imported, or made available", result["assistant_visible_response"])
+
+    def test_service_onboarding_source_research_fetches_github_files_with_anchors(self) -> None:
+        listing = [
+            {
+                "type": "file",
+                "name": "README.md",
+                "path": "src/time/README.md",
+                "download_url": "https://raw.example/README.md",
+                "html_url": "https://github.example/README.md",
+                "sha": "abc",
+                "size": 27,
+            }
+        ]
+
+        with mock.patch.object(onboarding_surfaces, "fetch_json_url", return_value=listing), mock.patch.object(
+            onboarding_surfaces,
+            "fetch_text_url",
+            return_value=("# Time\n\nRun with uvx mcp-server-time\n", False),
+        ):
+            result = onboarding_surfaces.research_service_onboarding_source(
+                "/workspace",
+                {"source_path": "https://github.com/modelcontextprotocol/servers/tree/main/src/time"},
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["mutation_allowed"])
+        self.assertEqual("service_onboarding_source_research", result["status"])
+        self.assertEqual(1, result["retrieved_file_count"])
+        self.assertEqual("modelcontextprotocol/servers:main:src/time/README.md", result["source_files"][0]["anchor"])
+        self.assertIn("Run with uvx", result["source_files"][0]["content"])
+        self.assertIn("source research only", result["assistant_visible_response"])
+
+    def test_contextforge_helper_mcp_exposes_source_research_payload_to_client(self) -> None:
+        listing = [
+            {
+                "type": "file",
+                "name": "server.py",
+                "path": "src/time/server.py",
+                "download_url": "https://raw.example/server.py",
+                "html_url": "https://github.example/server.py",
+                "sha": "def",
+                "size": 44,
+            }
+        ]
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            with mock.patch.object(onboarding_surfaces, "fetch_json_url", return_value=listing), mock.patch.object(
+                onboarding_surfaces,
+                "fetch_text_url",
+                return_value=("@mcp.tool()\ndef get_current_time(timezone: str):\n", False),
+            ):
+                result = contextforge_helper_mcp.cf_project_service_onboarding_research_source(
+                    project_root=str(root),
+                    source_path="https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+                    client_type="opencode",
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("service_onboarding_source_research", result["status"])
+        self.assertEqual(1, result["retrieved_file_count"])
+        self.assertEqual("src/time/server.py", result["source_files"][0]["path"])
+        self.assertIn("get_current_time", result["source_files"][0]["content"])
+        self.assertTrue(result["copy_as_complete_visible_response"])
+        self.assertTrue(result["do_not_summarize"])
+        self.assertTrue(result["assistant_response_policy"]["copy_assistant_visible_response_exactly"])
+        self.assertTrue(result["assistant_response_policy"]["do_not_write_direct_client_local_mcp_config"])
+        self.assertNotIn("record", result)
 
     def test_pi_helper_cli_service_onboarding_how_to_fetches_default_url(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1964,6 +2104,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertIn("agent_hidden_onboarding_how_to", payload)
         self.assertIn("The workflow is:", payload["agent_hidden_onboarding_how_to"])
+        self.assertIn("executable strings such as `uvx mcp-server-time` belong in backend command", payload["agent_hidden_onboarding_how_to"])
         self.assertTrue(payload["agent_hidden_onboarding_how_to_source"]["loaded"])
         self.assertEqual(
             common.SERVICE_ONBOARDING_HOW_TO_DEFAULT_URL,
@@ -1995,6 +2136,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                             "credentialBoundary": "no credentials required",
                             "expectedTools": ["get_current_time", "convert_time"],
                             "issue": "356",
+                            **npm_stdio_required_payload(),
                         }
                     ),
                 ],
@@ -2076,6 +2218,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                             "credentialBoundary": "no credentials required",
                             "expectedTools": ["get_current_time", "convert_time"],
                             "issue": "356",
+                            **npm_stdio_required_payload(),
                         }
                     ),
                 ],
@@ -2096,12 +2239,33 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             ["uvx", "mcp-server-time", "--local-timezone", "UTC"],
             parsed["service_provision_plan"]["x_desired_artifacts"]["backend_manifest"]["content"]["backend_command"],
         )
+        contract = parsed["install_artifact_contract"]
+        self.assertEqual("time:canonical", contract["service_binding"])
+        self.assertEqual("npm-stdio-host", contract["runtime_substrate"]["id"])
+        self.assertIn("npm-stdio-service.json", contract["artifacts"]["npm_stdio_service_record"]["path"])
+        npm_record = contract["artifacts"]["npm_stdio_service_record"]["content"]
+        self.assertEqual("mcp-server-time", npm_record["package"])
+        self.assertEqual("rollback_partial_state_before_error_response", npm_record["idempotency"]["failure_policy"])
+        self.assertIn("rollback_actions_attempted", npm_record["idempotency"]["failure_report_must_include"])
+        self.assertTrue(npm_record["prompt_library"]["publication_required"])
+        self.assertIn("usage", npm_record["prompt_library"]["detail_prompts"])
+        self.assertIn("contextforge-service.json", contract["artifacts"]["contextforge_api_json"]["path"])
+        self.assertEqual("/gateways", contract["artifacts"]["contextforge_api_json"]["content"]["gateway"]["path"])
+        self.assertEqual(
+            ["get_current_time", "convert_time"],
+            contract["artifacts"]["contextforge_api_json"]["content"]["expected_tools"],
+        )
         self.assertEqual(
             "package_bridge_stdio_to_http_sse",
             parsed["contextforge_registration_plan"]["transport_decision"]["decision"],
         )
         self.assertIn("runtime-apply package", parsed["assistant_visible_response"])
-        self.assertIn("explicit approval for the exact apply surface", parsed["assistant_visible_response"])
+        self.assertIn("managed npm-stdio service record", parsed["assistant_visible_response"])
+        self.assertIn("Managed npm-stdio service record target", parsed["assistant_visible_response"])
+        self.assertIn("ContextForge API JSON target", parsed["assistant_visible_response"])
+        self.assertIn("explicit approval for this exact recorded apply surface", parsed["assistant_visible_response"])
+        self.assertIn("Recorded executor surface: `docker/contextforge-harness/scripts/apply_onboarding_runtime_package.py`", parsed["assistant_visible_response"])
+        self.assertIn("Recorded ContextForge gateway: `time-dev-docker`", parsed["assistant_visible_response"])
         self.assertIn("No runtime, registry, client config, or project activation mutation", parsed["assistant_visible_response"])
         self.assertIn("target-client-visible list-tools", parsed["assistant_visible_response"])
 
@@ -2110,7 +2274,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             root = Path(tmp).resolve()
             approval_source = root / "latest-user.json"
             approval_source.write_text(
-                json.dumps({"cwd": str(root), "text": "approve runtime apply and registration for time"}),
+                json.dumps({"cwd": str(root), "text": "approve runtime execute for time through time-dev-docker"}),
                 encoding="utf-8",
             )
             with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False):
@@ -2131,18 +2295,61 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                     expected_tools=["get_current_time", "convert_time"],
                     issue="356",
                     client_type="opencode",
+                    **npm_stdio_required_kwargs(),
                 )
 
         self.assertTrue(result["ok"])
         self.assertEqual("service_onboarding_runtime_apply_package", result["status"])
         self.assertFalse(result["mutation_allowed"])
+        self.assertIn("install_artifact_contract", result)
+        self.assertEqual(
+            "/gateways",
+            result["install_artifact_contract"]["artifacts"]["contextforge_api_json"]["content"]["gateway"]["path"],
+        )
         self.assertNotIn("agent_hidden_onboarding_how_to", result)
         self.assertNotIn("handoff", result)
         self.assertNotIn("service_provision_plan", result)
         self.assertNotIn("contextforge_registration_plan", result)
         self.assertIn("runtime-apply package", result["assistant_visible_response"])
-        self.assertIn("explicit approval for the exact apply surface", result["assistant_visible_response"])
+        self.assertIn("explicit approval for this exact recorded apply surface", result["assistant_visible_response"])
+        self.assertIn("Recorded ContextForge gateway: `time-dev-docker`", result["assistant_visible_response"])
+        self.assertTrue(result["copy_as_complete_visible_response"])
+        self.assertTrue(result["assistant_response_policy"]["direct_client_config_is_not_contextforge_onboarding"])
         self.assertIn("Do not write direct client-local MCP configuration", result["assistant_visible_response"])
+
+    def test_contextforge_helper_mcp_runtime_apply_blocks_missing_npm_stdio_fields(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            approval_source = root / "latest-user.json"
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "approve runtime execute for time through time-dev-docker"}),
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False):
+                result = contextforge_helper_mcp.cf_project_service_onboarding_runtime_apply(
+                    project_root=str(root),
+                    candidate_service="time",
+                    source_path="https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+                    backend_package="mcp-server-time",
+                    backend_command="uvx",
+                    transport_type="stdio",
+                    localization_type="shared_canonical",
+                    functional_type="time_timezone",
+                    state_type="stateless",
+                    expected_tools=["get_current_time", "convert_time"],
+                    client_type="opencode",
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("service_onboarding_runtime_apply_blocked", result["status"])
+        self.assertFalse(result["mutation_allowed"])
+        fields = {item["field"] for item in result["required_inputs"]}
+        self.assertIn("npm_package_confirmed", fields)
+        self.assertIn("package_registry_type", fields)
+        self.assertIn("prompt_library.abstract_prompt", fields)
+        self.assertIn("prompt_library.detail_prompts", fields)
+        self.assertIn("tool_schemas", fields)
+        self.assertIn("does not research missing service facts", result["assistant_visible_response"])
 
     def test_contextforge_helper_mcp_runtime_execute_applies_through_recorded_dev_surface(self) -> None:
         class FakeExecutor:
@@ -2167,7 +2374,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             root = Path(tmp).resolve()
             approval_source = root / "latest-user.json"
             approval_source.write_text(
-                json.dumps({"cwd": str(root), "text": "approve runtime apply and registration for time"}),
+                json.dumps({"cwd": str(root), "text": "approve runtime execute for time through time-dev-docker"}),
                 encoding="utf-8",
             )
             with (
@@ -2191,6 +2398,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                     expected_tools=["get_current_time", "convert_time"],
                     issue="356",
                     client_type="opencode",
+                    **npm_stdio_required_kwargs(),
                 )
 
         self.assertTrue(result["ok"])
@@ -2202,6 +2410,114 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("executor_result", result)
         self.assertIn("ContextForge development surface", result["assistant_visible_response"])
         self.assertIn("new Pi/OpenCode session", result["assistant_visible_response"])
+
+    def test_runtime_apply_package_normalizes_command_shaped_binding_from_known_package_alias(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package = onboarding_surfaces.build_service_onboarding_runtime_apply_package(
+                str(root),
+                {
+                    "candidate_service": "mcp-server-time",
+                    "service_binding": "uvx mcp-server-time",
+                    "backend_package": "mcp-server-time",
+                    "backend_command": "uvx mcp-server-time",
+                    "transport_type": "stdio",
+                    "localization_type": "shared_canonical",
+                    "functional_type": "time_timezone",
+                    "state_type": "stateless",
+                    "expected_tools": ["get_current_time", "convert_time"],
+                    **npm_stdio_required_kwargs(),
+                },
+            )
+
+        self.assertEqual("time:canonical", package["service_provision_plan"]["service_binding"])
+        self.assertEqual(
+            ["uvx", "mcp-server-time"],
+            package["service_provision_plan"]["x_desired_artifacts"]["backend_manifest"]["content"]["backend_command"],
+        )
+        self.assertIn("Service binding: `time:canonical`", package["assistant_visible_response"])
+
+    def test_runtime_execute_resolves_known_package_alias_when_source_not_carried_forward(self) -> None:
+        class FakeExecutor:
+            @staticmethod
+            def run(**kwargs: Any) -> dict[str, Any]:
+                self.assertEqual("http://time-transceiver:9209/mcp", kwargs["upstream_url"])
+                self.assertEqual("time-dev-docker", kwargs["gateway_name"])
+                self.assertEqual("time_dev_docker_server", kwargs["server_name"])
+                self.assertTrue(kwargs["apply"])
+                return {
+                    "mutation_performed": True,
+                    "package": {"service_binding": "time:canonical"},
+                    "gateway": {"action": "ready", "name": "time-dev-docker"},
+                    "server": {"action": "ready", "name": "time_dev_docker_server"},
+                    "tool_names": ["time-dev-docker-get-current-time", "time-dev-docker-convert-time"],
+                    "non_actions": [
+                        "no Docker, process, systemd, project-state, client config, or secret mutation by this registry executor"
+                    ],
+                }
+
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            approval_source = root / "latest-user.json"
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "approve runtime execute for mcp-server-time through time-dev-docker"}),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False),
+                mock.patch.object(onboarding_surfaces, "load_runtime_package_executor", return_value=FakeExecutor),
+            ):
+                result = contextforge_helper_mcp.cf_project_service_onboarding_runtime_execute(
+                    project_root=str(root),
+                    candidate_service="mcp-server-time",
+                    service_binding="uvx mcp-server-time",
+                    backend_command="uvx mcp-server-time",
+                    transport_type="stdio",
+                    localization_type="shared_canonical",
+                    functional_type="time_timezone",
+                    state_type="stateless",
+                    expected_tools=["get_current_time", "convert_time"],
+                    client_type="opencode",
+                    backend_package="mcp-server-time",
+                    **npm_stdio_required_kwargs(),
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("service_onboarding_runtime_applied", result["status"])
+        self.assertEqual(["time-dev-docker-get-current-time", "time-dev-docker-convert-time"], result["tool_names"])
+        self.assertIn("ContextForge development surface", result["assistant_visible_response"])
+
+    def test_contextforge_helper_mcp_runtime_execute_requires_recorded_executor_surface_approval(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            approval_source = root / "latest-user.json"
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "approve runtime apply and registration for time"}),
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False):
+                result = contextforge_helper_mcp.cf_project_service_onboarding_runtime_execute(
+                    project_root=str(root),
+                    candidate_service="time",
+                    operator_goal="Add the Time MCP service.",
+                    source_path="https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+                    backend_package="mcp-server-time",
+                    backend_command="uvx",
+                    backend_args=["mcp-server-time", "--local-timezone", "UTC"],
+                    transport_type="stdio",
+                    localization_type="shared_canonical",
+                    functional_type="time_timezone",
+                    state_type="stateless",
+                    credential_boundary="no credentials required",
+                    approval_type="runtime_registration",
+                    expected_tools=["get_current_time", "convert_time"],
+                    issue="356",
+                    client_type="opencode",
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("PermissionError", result["error"]["type"])
+        self.assertIn("recorded runtime executor surface", result["error"]["message"])
 
     def test_contextforge_helper_mcp_runtime_execute_rejects_generic_runtime_approval_without_service_identity(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2245,6 +2561,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                         "functional_type": "time_timezone",
                         "state_type": "stateless",
                         "expected_tools": ["get_current_time", "convert_time"],
+                        **npm_stdio_required_kwargs(),
                     },
                 )
 
@@ -2308,6 +2625,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                             "functionalType": "time_timezone",
                             "stateType": "stateless",
                             "expectedTools": ["get_current_time", "convert_time"],
+                            **npm_stdio_required_payload(),
                         }
                     ),
                 ],
@@ -2360,6 +2678,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                     credential_boundary="no credentials required",
                     expected_tools=["get_current_time", "convert_time"],
                     client_type="opencode",
+                    **npm_stdio_required_kwargs(),
                 )
 
         self.assertEqual("service_onboarding_continuation_plan", continuation["status"])
@@ -3069,6 +3388,19 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("context7:canonical: context7-local-resolve-library-id, context7-local-query-docs", runtime_report["assistant_visible_response"])
         self.assertIn("mcp_available_or_partially_observed", runtime_report["assistant_visible_response"])
         self.assertIn("do not ask for another reload", runtime_report["assistant_visible_response"])
+
+    def test_readback_helpers_handle_uninitialized_project_state_without_attribute_error(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            availability = contextforge_helper_mcp.get_project_tool_availability(str(root), client_type="opencode")
+            readback = contextforge_helper_mcp.get_project_state_readback(str(root), client_type="opencode")
+
+        self.assertTrue(availability["ok"])
+        self.assertEqual("available_tools_report", availability["status"])
+        self.assertIn("none recorded", availability["assistant_visible_response"])
+        self.assertTrue(readback["ok"])
+        self.assertEqual("project_state_readback", readback["status"])
+        self.assertIn("- Status: uninitialized", readback["assistant_visible_response"])
 
     def test_pi_tool_availability_accepts_static_mentality_runtime_readback(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
