@@ -183,6 +183,15 @@ def package_service_slug(package: Mapping[str, Any]) -> str:
     return re.sub(r"[^a-z0-9_.-]+", "-", binding.lower().replace(":", "-")).strip(".-")
 
 
+def package_service_name(package: Mapping[str, Any]) -> str:
+    descriptor = package_descriptor(package)
+    return str(
+        descriptor.get("canonical_service")
+        or descriptor.get("candidate_service")
+        or package_service_binding(package).split(":", 1)[0]
+    )
+
+
 def default_names(package: Mapping[str, Any]) -> tuple[str, str]:
     registration = package["contextforge_registration_plan"]
     canonical = registration.get("canonical_names") if isinstance(registration, Mapping) else {}
@@ -217,13 +226,14 @@ def gateway_payload(package: Mapping[str, Any], *, gateway_name: str, upstream_u
     }
 
 
-def server_payload(package: Mapping[str, Any], *, server_name: str, tool_ids: list[str]) -> dict[str, Any]:
-    descriptor = package_descriptor(package)
-    service = str(descriptor.get("canonical_service") or descriptor.get("candidate_service") or package_service_slug(package))
+def server_payload(package: Mapping[str, Any], *, server_name: str, tool_ids: list[str], resource_ids: list[str] | None = None) -> dict[str, Any]:
+    service = package_service_name(package)
     return {
         "name": server_name,
         "description": f"ContextForge dev virtual server for onboarding service {service}.",
         "associated_tools": tool_ids,
+        "associated_resources": resource_ids or [],
+        "associated_prompts": [],
         "tags": ["contextforge", "dev-docker", "service-onboarding", service],
         "owner_email": OWNER,
         "visibility": VISIBILITY,
@@ -254,6 +264,145 @@ def filter_expected_tools(tools: list[dict[str, Any]], expected: list[str]) -> l
         names = sorted(str(tool.get("name")) for tool in tools)
         raise RuntimeError(f"gateway did not expose expected tools {missing}; observed {names}")
     return selected
+
+
+def unique_ids(values: list[str]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        if value and value not in result:
+            result.append(value)
+    return result
+
+
+def resource_id(resource: Mapping[str, Any]) -> str:
+    value = resource.get("id")
+    if not isinstance(value, str) or not value:
+        raise RuntimeError(f"resource missing string id: {resource}")
+    return value
+
+
+def package_prompt_library(package: Mapping[str, Any]) -> Mapping[str, Any]:
+    artifact = npm_stdio_host_records.npm_record_artifact(package)
+    content = artifact.get("content") if isinstance(artifact.get("content"), Mapping) else {}
+    prompt_library = content.get("prompt_library") if isinstance(content.get("prompt_library"), Mapping) else {}
+    if prompt_library.get("publication_required") is not True:
+        raise RuntimeError("npm_stdio_service_record.prompt_library.publication_required must be true")
+    abstract = str(prompt_library.get("abstract_prompt") or "").strip()
+    details = prompt_library.get("detail_prompts")
+    if not abstract:
+        raise RuntimeError("npm_stdio_service_record.prompt_library.abstract_prompt is required")
+    if not isinstance(details, Mapping) or not details:
+        raise RuntimeError("npm_stdio_service_record.prompt_library.detail_prompts is required")
+    return prompt_library
+
+
+def service_guidance_resource_bodies(package: Mapping[str, Any], *, gateway_id: str) -> list[dict[str, Any]]:
+    service = package_service_name(package)
+    prompt_library = package_prompt_library(package)
+    abstract_uri = str(prompt_library.get("abstract_prompt_uri") or "").strip()
+    detail_prefix = str(prompt_library.get("detail_prompt_uri_prefix") or "").strip()
+    if not abstract_uri:
+        raise RuntimeError("npm_stdio_service_record.prompt_library.abstract_prompt_uri is required")
+    if not detail_prefix:
+        raise RuntimeError("npm_stdio_service_record.prompt_library.detail_prompt_uri_prefix is required")
+    slug = package_service_slug(package)
+    resources = [
+        {
+            "uri": abstract_uri,
+            "name": f"{slug}-abstract-service-spec",
+            "title": f"{service} abstract service spec",
+            "description": f"Compact proactive service spec for onboarded service {service}.",
+            "mimeType": "text/markdown",
+            "content": str(prompt_library["abstract_prompt"]).strip(),
+            "tags": ["service-guidance", "abstract-service-spec", "service-onboarding", service],
+            "owner_email": OWNER,
+            "visibility": VISIBILITY,
+            "gateway_id": gateway_id,
+        }
+    ]
+    detail_prompts = prompt_library["detail_prompts"]
+    for key in sorted(detail_prompts):
+        raw_content = detail_prompts[key]
+        if not isinstance(raw_content, str) or not raw_content.strip():
+            raise RuntimeError(f"npm_stdio_service_record.prompt_library.detail_prompts.{key} is required")
+        detail_slug = re.sub(r"[^a-z0-9_.-]+", "-", str(key).lower()).strip(".-") or "detail"
+        resources.append(
+            {
+                "uri": f"{detail_prefix}{detail_slug}/v1",
+                "name": f"{slug}-{detail_slug}-detail-service-spec",
+                "title": f"{service} {detail_slug} detail service spec",
+                "description": f"Lazy-loaded detailed service guidance for onboarded service {service}.",
+                "mimeType": "text/markdown",
+                "content": raw_content.strip(),
+                "tags": ["service-guidance", "detail-service-spec", "service-onboarding", service],
+                "owner_email": OWNER,
+                "visibility": VISIBILITY,
+                "gateway_id": gateway_id,
+            }
+        )
+    return resources
+
+
+def service_guidance_resource_uris(package: Mapping[str, Any]) -> list[str]:
+    prompt_library = package_prompt_library(package)
+    abstract_uri = str(prompt_library.get("abstract_prompt_uri") or "").strip()
+    detail_prefix = str(prompt_library.get("detail_prompt_uri_prefix") or "").strip()
+    detail_prompts = prompt_library["detail_prompts"]
+    uris = [abstract_uri]
+    for key in sorted(detail_prompts):
+        detail_slug = re.sub(r"[^a-z0-9_.-]+", "-", str(key).lower()).strip(".-") or "detail"
+        uris.append(f"{detail_prefix}{detail_slug}/v1")
+    return uris
+
+
+def by_uri(rows: list[dict[str, Any]], uri: str) -> dict[str, Any] | None:
+    return next((row for row in rows if row.get("uri") == uri), None)
+
+
+def upsert_service_guidance_resources(
+    client: ContextForgeClient,
+    package: Mapping[str, Any],
+    *,
+    gateway_id: str,
+    rollback_tokens: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    resources_by_uri = client.items("/resources?include_inactive=true&limit=1000")
+    resource_ids: list[dict[str, Any]] = []
+    for body in service_guidance_resource_bodies(package, gateway_id=gateway_id):
+        existing = by_uri(resources_by_uri, str(body["uri"]))
+        if existing:
+            existing_id = resource_id(existing)
+            if all(existing.get(key) == body.get(key) for key in ("uri", "name", "title", "description", "mimeType", "content", "tags", "owner_email", "visibility", "gateway_id")):
+                resource = existing
+                action = "already_applied"
+            else:
+                rollback_tokens.append({"resource_id": existing_id, "previous": dict(existing), "action": "restore_previous_resource"})
+                resource = client.request("PUT", f"/resources/{existing_id}", body)
+                action = "updated"
+        else:
+            resource = client.request("POST", "/resources", {"resource": body, "visibility": VISIBILITY})
+            action = "created"
+            rollback_tokens.append({"resource_id": resource_id(resource), "action": "delete_created_resource"})
+        resource_ids.append({"id": resource_id(resource), "uri": str(body["uri"]), "action": action})
+    return resource_ids
+
+
+def rollback_guidance_resources(client: ContextForgeClient, rollback_tokens: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    for token in reversed(rollback_tokens):
+        resource = str(token.get("resource_id") or "")
+        if not resource:
+            continue
+        try:
+            if token.get("action") == "restore_previous_resource" and isinstance(token.get("previous"), Mapping):
+                client.request("PUT", f"/resources/{resource}", dict(token["previous"]))
+                actions.append({"target": f"/resources/{resource}", "action": "restore_previous_resource", "ok": True})
+            elif token.get("action") == "delete_created_resource":
+                client.request("DELETE", f"/resources/{resource}")
+                actions.append({"target": f"/resources/{resource}", "action": "delete_created_resource", "ok": True})
+        except Exception as exc:  # pragma: no cover - defensive report path
+            actions.append({"target": f"/resources/{resource}", "action": str(token.get("action") or "rollback_resource"), "ok": False, "error": sanitize_error(exc)})
+    return actions
 
 
 def plan_result(
@@ -341,6 +490,7 @@ def apply_package(
     created_gateway_id = ""
     created_server_id = ""
     failed_stage = "preflight"
+    guidance_resource_rollback_tokens: list[dict[str, Any]] = []
     try:
         gateways = client.items("/gateways?include_inactive=true&limit=1000")
         existing_gateway = by_name(gateways, gateway_name)
@@ -395,12 +545,22 @@ def apply_package(
             raise RuntimeError(f"gateway {gateway_name} ({gateway_id}) did not expose tools after refresh")
 
         tool_ids = [row_id(tool) for tool in selected_tools]
+        failed_stage = "prompt_library_resources"
+        guidance_resources = upsert_service_guidance_resources(
+            client,
+            package,
+            gateway_id=gateway_id,
+            rollback_tokens=guidance_resource_rollback_tokens,
+        )
+        guidance_resource_ids = [str(resource["id"]) for resource in guidance_resources]
         failed_stage = "virtual_server"
         existing_server = by_name(client.items("/servers?include_inactive=true&limit=1000"), server_name)
         if existing_server:
             payload = {
                 "associatedTools": tool_ids,
-                "associatedResources": associated_ids(existing_server, "associatedResources", "associatedResourceIds"),
+                "associatedResources": unique_ids(
+                    associated_ids(existing_server, "associatedResources", "associatedResourceIds") + guidance_resource_ids
+                ),
                 "associatedPrompts": associated_ids(existing_server, "associatedPrompts", "associatedPromptIds"),
                 "associatedA2aAgents": associated_ids(existing_server, "associatedA2aAgents", "associatedA2aAgentIds"),
                 "ownerEmail": OWNER,
@@ -409,14 +569,24 @@ def apply_package(
             server = client.request("PUT", f"/servers/{row_id(existing_server)}", payload)
             server_action = "updated"
         else:
-            server = client.request("POST", "/servers", {"server": server_payload(package, server_name=server_name, tool_ids=tool_ids), "visibility": VISIBILITY})
+            server = client.request(
+                "POST",
+                "/servers",
+                {
+                    "server": server_payload(package, server_name=server_name, tool_ids=tool_ids, resource_ids=guidance_resource_ids),
+                    "visibility": VISIBILITY,
+                },
+            )
             server_action = "created"
             created_server_id = row_id(server)
     except Exception as exc:
-        rollback_actions = rollback_created_contextforge_state(
-            client,
-            created_gateway_id=created_gateway_id,
-            created_server_id=created_server_id,
+        rollback_actions = rollback_guidance_resources(client, guidance_resource_rollback_tokens)
+        rollback_actions.extend(
+            rollback_created_contextforge_state(
+                client,
+                created_gateway_id=created_gateway_id,
+                created_server_id=created_server_id,
+            )
         )
         failure_report = {
             "failed_stage": failed_stage,
@@ -441,9 +611,14 @@ def apply_package(
         "server": {"action": server_action, "id": row_id(server), "name": server_name},
         "tool_count": len(selected_tools),
         "tool_names": [str(tool.get("name")) for tool in selected_tools],
+        "prompt_library_resources": {
+            "actions": guidance_resources,
+            "resource_ids": guidance_resource_ids,
+        },
         "rollback_boundary": {
             "created_gateway_id": created_gateway_id,
             "created_server_id": created_server_id,
+            "guidance_resource_actions": [token["action"] for token in guidance_resource_rollback_tokens],
             "failure_policy": "rollback_created_contextforge_state_before_error_response",
         },
         "non_actions": [
@@ -453,14 +628,131 @@ def apply_package(
     }
 
 
+def delete_package(
+    package: Mapping[str, Any],
+    *,
+    client: ContextForgeClient,
+    gateway_name: str,
+    server_name: str,
+) -> dict[str, Any]:
+    actions: list[dict[str, Any]] = []
+    servers = client.items("/servers?include_inactive=true&limit=1000")
+    existing_server = by_name(servers, server_name)
+    if existing_server:
+        server_id = row_id(existing_server)
+        client.request("DELETE", f"/servers/{server_id}")
+        actions.append({"target": f"/servers/{server_id}", "action": "delete_virtual_server", "ok": True})
+    else:
+        actions.append({"target": server_name, "action": "virtual_server_absent", "ok": True})
+
+    resources = client.items("/resources?include_inactive=true&limit=1000")
+    for uri in service_guidance_resource_uris(package):
+        existing_resource = by_uri(resources, uri)
+        if existing_resource:
+            rid = resource_id(existing_resource)
+            client.request("DELETE", f"/resources/{rid}")
+            actions.append({"target": f"/resources/{rid}", "action": "delete_prompt_library_resource", "ok": True, "uri": uri})
+        else:
+            actions.append({"target": uri, "action": "prompt_library_resource_absent", "ok": True})
+
+    gateways = client.items("/gateways?include_inactive=true&limit=1000")
+    existing_gateway = by_name(gateways, gateway_name)
+    if existing_gateway:
+        gateway_id = row_id(existing_gateway)
+        client.request("DELETE", f"/gateways/{gateway_id}")
+        actions.append({"target": f"/gateways/{gateway_id}", "action": "delete_gateway", "ok": True})
+    else:
+        actions.append({"target": gateway_name, "action": "gateway_absent", "ok": True})
+
+    host_delete = npm_stdio_host_records.delete_service_record(
+        npm_stdio_host_records.project_root_from_package(package),
+        package_service_binding(package),
+    )
+    host_action = "delete_npm_stdio_host_record" if host_delete.get("actions") else "npm_stdio_host_record_absent"
+    actions.append({"target": host_delete["service_binding"], "action": host_action, "ok": host_delete["ok"], "details": host_delete["actions"]})
+    mutation_performed = any("absent" not in str(action.get("action") or "") for action in actions)
+    return {
+        "schema_uri": SCHEMA_URI,
+        "mutation_performed": mutation_performed,
+        "delete_requested": True,
+        "package": {
+            "status": package.get("status"),
+            "service_binding": package_service_binding(package),
+            "provision_plan_id": package.get("service_provision_plan", {}).get("provision_plan_id"),
+            "catalog_plan_id": package.get("contextforge_registration_plan", {}).get("plan_id"),
+        },
+        "delete_actions": actions,
+        "rollback_boundary": {
+            "failure_policy": "delete_is_idempotent_absent_artifacts_are_success",
+            "residual_cleanup_risk": "" if all(action.get("ok") for action in actions) else "delete action failed",
+        },
+        "non_actions": [
+            "no client config mutation",
+            "env-file values not recorded",
+        ],
+    }
+
+
+def view_package(
+    package: Mapping[str, Any],
+    *,
+    client: ContextForgeClient,
+    gateway_name: str,
+    server_name: str,
+) -> dict[str, Any]:
+    gateways = client.items("/gateways?include_inactive=true&limit=1000")
+    servers = client.items("/servers?include_inactive=true&limit=1000")
+    resources = client.items("/resources?include_inactive=true&limit=1000")
+    gateway = by_name(gateways, gateway_name)
+    server = by_name(servers, server_name)
+    guidance = []
+    for uri in service_guidance_resource_uris(package):
+        existing = by_uri(resources, uri)
+        guidance.append(
+            {
+                "uri": uri,
+                "present": existing is not None,
+                "id": resource_id(existing) if existing else "",
+            }
+        )
+    host = npm_stdio_host_records.view_service_record(
+        npm_stdio_host_records.project_root_from_package(package),
+        package_service_binding(package),
+    )
+    return {
+        "schema_uri": SCHEMA_URI,
+        "mutation_performed": False,
+        "view_requested": True,
+        "package": {
+            "status": package.get("status"),
+            "service_binding": package_service_binding(package),
+            "provision_plan_id": package.get("service_provision_plan", {}).get("provision_plan_id"),
+            "catalog_plan_id": package.get("contextforge_registration_plan", {}).get("plan_id"),
+        },
+        "host_record": host,
+        "contextforge": {
+            "gateway": {"name": gateway_name, "present": gateway is not None, "id": row_id(gateway) if gateway else ""},
+            "virtual_server": {"name": server_name, "present": server is not None, "id": row_id(server) if server else ""},
+            "prompt_library_resources": guidance,
+        },
+        "non_actions": [
+            "view-only; no ContextForge API mutation",
+            "view-only; no Docker, process, systemd, project-state, client config, or secret mutation",
+            "env-file values not recorded",
+        ],
+    }
+
+
 def run(
     *,
     package_path: Path,
-    upstream_url: str,
+    upstream_url: str = "",
     gateway_name: str | None = None,
     server_name: str | None = None,
     expected_tool_names: list[str] | None = None,
     apply: bool = False,
+    delete: bool = False,
+    view: bool = False,
     client: ContextForgeClient | None = None,
     base_url: str = DEFAULT_BASE_URL,
     env_file: Path = DEFAULT_ENV_FILE,
@@ -470,7 +762,20 @@ def run(
     default_gateway, default_server = default_names(package)
     gateway = gateway_name or default_gateway
     server = server_name or default_server
+    selected_operations = [apply, delete, view]
+    if sum(1 for selected in selected_operations if selected) > 1:
+        raise RuntimeError("--apply, --delete, and --view are mutually exclusive")
     expected = expected_tools(package, expected_tool_names)
+    if view:
+        active_client = client or load_target_client(base_url, env_file)
+        result = view_package(package, client=active_client, gateway_name=gateway, server_name=server)
+        result["target"] = {"base_url": base_url, "env_file": str(env_file), "env_values_recorded": False}
+        return result
+    if delete:
+        active_client = client or load_target_client(base_url, env_file)
+        result = delete_package(package, client=active_client, gateway_name=gateway, server_name=server)
+        result["target"] = {"base_url": base_url, "env_file": str(env_file), "env_values_recorded": False}
+        return result
     if not expected:
         raise RuntimeError("expected tools are required; pass --expected-tool or include expected_tools in the package descriptor")
     if not upstream_url:
@@ -517,7 +822,7 @@ def run(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package-json", type=Path, required=True)
-    parser.add_argument("--upstream-url", required=True)
+    parser.add_argument("--upstream-url", default="")
     parser.add_argument("--gateway-name")
     parser.add_argument("--server-name")
     parser.add_argument("--expected-tool", action="append", dest="expected_tools")
@@ -525,6 +830,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-file", type=Path, default=DEFAULT_ENV_FILE)
     parser.add_argument("--wait-attempts", type=int, default=12)
     parser.add_argument("--apply", action="store_true", help="Call ContextForge APIs. Omit for dry-run planning.")
+    parser.add_argument("--delete", action="store_true", help="Delete the package's managed npm-stdio host, prompt-library, gateway, and server artifacts idempotently.")
+    parser.add_argument("--view", action="store_true", help="Read the package's managed npm-stdio host, prompt-library, gateway, and server artifact state without mutation.")
     return parser
 
 
@@ -537,6 +844,8 @@ def main(argv: list[str] | None = None) -> int:
         server_name=args.server_name,
         expected_tool_names=args.expected_tools,
         apply=args.apply,
+        delete=args.delete,
+        view=args.view,
         base_url=args.base_url,
         env_file=args.env_file,
         wait_attempts=args.wait_attempts,
