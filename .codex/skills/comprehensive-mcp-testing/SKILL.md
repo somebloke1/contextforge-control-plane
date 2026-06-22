@@ -77,6 +77,12 @@ Use the single-profile dialogue runner for debugging, candidate evidence, or
 isolating one model/provider failure. Do not treat it as acceptance evidence by
 itself.
 
+When a service needs more than one focused behavior bundle, pass a compact
+natural-language `--service-test-prompt` override to the dialogue or quorum
+runner. Use this for alternate ordinary user tasks over the same service/client
+surface; do not use it to inject evaluator criteria, tool-call names, expected
+call order, or low-level helper payloads into the tested assistant prompt.
+
 For client-visible ContextForge tool tests, provide an ignored harness env file with admin credentials so the runner can create a short-lived scoped token for the selected virtual server. The runner must not print or persist the raw token and must revoke it after the run.
 
 When proving a non-default ContextForge harness, explicitly set both the gateway base URL and an isolated token cache. Do not let helper defaults silently target the legacy 4444 server while the intended proof is against the Docker successor gateway, for example 4445.

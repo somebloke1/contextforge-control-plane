@@ -533,6 +533,10 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("CONTEXTFORGE_SEMANTIC_MODEL_PROFILE", "random"),
         help="Semantic model profile id, 'random' for per-test-run random choice, or 'env' to use explicit environment values.",
     )
+    parser.add_argument(
+        "--service-test-prompt",
+        help="Override the default natural service-test prompt for a focused behavior bundle.",
+    )
     parser.add_argument("--contextforge-host-base-url", default=os.environ.get("CONTEXTFORGE_HOST_BASE_URL", DEFAULT_CONTEXTFORGE_HOST_BASE_URL))
     parser.add_argument("--contextforge-container-base-url", default=os.environ.get("CONTEXTFORGE_CONTAINER_BASE_URL", DEFAULT_CONTEXTFORGE_CONTAINER_BASE_URL))
     parser.add_argument(
@@ -740,7 +744,7 @@ def main(argv: list[str] | None = None) -> int:
 
         service_test_executed = False
         if activation_postcondition["returncode"] == 0:
-            prompt = service_test_prompt(
+            prompt = args.service_test_prompt or service_test_prompt(
                 args.service,
                 str(service["display"]),
                 int(service["issue"]),
@@ -823,6 +827,7 @@ def main(argv: list[str] | None = None) -> int:
             "activation_session": activation_session,
             "test_session": test_session,
             "activation_prompts": prompts,
+            "service_test_prompt_override_used": bool(args.service_test_prompt),
             "output_root": str(output_root),
             "semantic_model_env_overrides": semantic_overrides,
             "semantic_model_profile": semantic_profile_summary,

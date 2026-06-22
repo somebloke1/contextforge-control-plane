@@ -142,6 +142,16 @@ profile, preserves each profile's raw output, and writes a quorum summary under
 only determines whether enough model-profile runs completed structurally; it
 does not score semantic pass/fail.
 
+Use `--service-test-prompt` when the same service/client pair needs a second or
+third focused behavior bundle. The override is for compact natural user intent
+only, such as asking to inspect an active terminal screen after a separate live
+open/send/close bundle has already passed. It must not smuggle evaluator
+criteria, required tool-call names, expected call order, hidden protocol keys,
+or pass/fail language into the tested assistant prompt. Record
+`service_test_prompt_override_used` and the exact prompt in the evidence ledger
+so reviewers can distinguish the default service fixture from localized bundle
+coverage.
+
 ## Three-Model Quorum
 
 Every semantic test must pass on at least three distinct eligible model

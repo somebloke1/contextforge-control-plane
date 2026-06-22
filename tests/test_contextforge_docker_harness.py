@@ -993,6 +993,21 @@ print(json.dumps(outputs))
         self.assertNotIn("should-not-leak", prompt)
         self.assertNotIn("10.0.0.42", prompt)
 
+    def test_comprehensive_mcp_runner_supports_prompt_override_for_behavior_bundles(self) -> None:
+        dialogue = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py").read_text(
+            encoding="utf-8"
+        )
+        quorum = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-model-quorum.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("--service-test-prompt", dialogue)
+        self.assertIn("args.service_test_prompt or service_test_prompt", dialogue)
+        self.assertIn('"service_test_prompt_override_used": bool(args.service_test_prompt)', dialogue)
+        self.assertIn("--service-test-prompt", quorum)
+        self.assertIn('command.extend(["--service-test-prompt", args.service_test_prompt])', quorum)
+        self.assertIn('"service_test_prompt_override_used": bool(args.service_test_prompt)', quorum)
+
     def test_pi_openrouter_profiles_without_route_use_generic_provider(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "comprehensive_mcp_service_dialogue",
@@ -1057,6 +1072,7 @@ print(json.dumps(outputs))
             "at least three distinct eligible semantic-test model profiles",
             "A one-model pass is useful slice evidence, not a test pass",
             "The quorum is about model diversity over the same behavior",
+            "--service-test-prompt",
         ]:
             self.assertIn(phrase, skill_line_wrapped)
         for phrase in [
@@ -1066,6 +1082,8 @@ print(json.dumps(outputs))
             "The three-model quorum does not permit deterministic prose scoring",
             "run-comprehensive-mcp-model-quorum.py",
             "does not score semantic pass/fail",
+            "`--service-test-prompt`",
+            "localized bundle coverage",
         ]:
             self.assertIn(phrase, method_line_wrapped)
         for phrase in [
