@@ -797,6 +797,11 @@ console.log(JSON.stringify({{
 
         self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/probe-time-dev.py --direct-only", readme)
         self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/register_time_dev.py", readme)
+        self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/apply_onboarding_runtime_package.py", readme)
+        self.assertIn("--package-json /path/to/runtime-apply-package.json", readme)
+        self.assertIn("--upstream-url http://time-transceiver:9209/mcp", readme)
+        self.assertIn("The script defaults to a dry run", readme)
+        self.assertIn("It does not create Docker", readme)
         self.assertIn("PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/probe-time-dev.py", readme)
         self.assertIn("target-client readiness still needs", readme)
 

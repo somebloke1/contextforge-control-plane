@@ -302,6 +302,23 @@ PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/probe-time-dev.py
 gateway and virtual-server name and reads credentials only from ignored
 `env/contextforge.env`.
 
+Generic onboarding runtime/apply packages should use
+`scripts/apply_onboarding_runtime_package.py` rather than a service-specific
+registrar when the runtime sidecar or equivalent upstream URL already exists:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 ../../.venv/bin/python scripts/apply_onboarding_runtime_package.py \
+  --package-json /path/to/runtime-apply-package.json \
+  --upstream-url http://time-transceiver:9209/mcp \
+  --gateway-name time-dev-docker \
+  --server-name time_dev_docker_server
+```
+
+The script defaults to a dry run. `--apply` is required before it logs in to
+the development gateway or calls ContextForge APIs. It does not create Docker
+services, start processes, write systemd units, mutate project state, edit
+client config, or record env-file values.
+
 `scripts/probe-time-dev.py` validates both surfaces. The direct probe lists
 tools from `http://127.0.0.1:9209/mcp` and calls `get_current_time` with
 `timezone=UTC`. The virtual probe creates a one-day scoped token for the Time
