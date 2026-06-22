@@ -168,6 +168,15 @@ Google prompt caching is implicit for eligible repeated prefixes.
 Do not enable or evaluate OpenRouter response caching via `X-OpenRouter-Cache`;
 that caches identical whole responses and is not the semantic-test objective.
 
+## Isolated Onboarding Runs
+
+Onboarding semantic-process proof runs should use an isolated harness root.
+The isolation helper creates fresh home, workspace, evidence, client-scoped,
+and server-instances directories and passes them into Docker Compose. The empty
+isolated `server-instances` mount prevents a foil such as Time from being
+visible to the tested assistant through tracked repository service homes before
+the source-lead-only onboarding process begins.
+
 ## Pi Human-Simulator Baseline
 
 Onboarding semantic-process acceptance runs use a separate Pi gpt-5.5

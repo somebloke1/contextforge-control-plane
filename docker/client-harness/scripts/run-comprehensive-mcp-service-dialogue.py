@@ -544,17 +544,21 @@ def prepare_isolated_harness(args: argparse.Namespace, harness_root: Path) -> tu
     workspace_dir = isolation_root / "workspace"
     evidence_dir = isolation_root / "evidence"
     client_scoped_dir = isolation_root / "client-scoped"
+    server_instances_dir = isolation_root / "server-instances"
     resets = {
         "home": reset_isolated_dir(home_dir),
         "workspace": reset_isolated_dir(workspace_dir),
         "evidence": reset_isolated_dir(evidence_dir),
         "client_scoped": reset_isolated_dir(client_scoped_dir),
+        "server_instances": reset_isolated_dir(server_instances_dir),
     }
     (workspace_dir / ".gitkeep").write_text("\n", encoding="utf-8")
+    (server_instances_dir / ".gitkeep").write_text("\n", encoding="utf-8")
     env = {
         "CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE": str(workspace_dir),
         "CONTEXTFORGE_CLIENT_HARNESS_EVIDENCE": str(evidence_dir),
         "CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED": str(client_scoped_dir),
+        "CONTEXTFORGE_CLIENT_HARNESS_SERVER_INSTANCES": str(server_instances_dir),
     }
     if client == "opencode":
         env["CONTEXTFORGE_CLIENT_HARNESS_OPENCODE_HOME"] = str(home_dir)
