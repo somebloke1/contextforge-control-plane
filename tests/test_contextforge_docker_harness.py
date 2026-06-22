@@ -680,10 +680,17 @@ console.log(JSON.stringify({{
             "does not use Codex subagents as tested-client substitutes",
             scenarios["runner_non_actions"],
         )
-        self.assertTrue(scenarios["foils"][0]["invalid_if_preexisting_contextforge_artifacts"])
-        self.assertIn("time:canonical", scenarios["foils"][0]["forbidden_existing_contextforge_bindings"])
-        self.assertIn("service_bound_prompts", scenarios["foils"][0]["preexisting_contextforge_artifact_scope"])
-        self.assertIn("service_bound_resources", scenarios["foils"][0]["preexisting_contextforge_artifact_scope"])
+        foils = {foil["id"]: foil for foil in scenarios["foils"]}
+        self.assertEqual("legacy_development_foil_not_clean_for_acceptance", foils["time"]["candidate_status"])
+        self.assertEqual(1, foils["memory"]["order"])
+        self.assertTrue(foils["time"]["invalid_if_preexisting_contextforge_artifacts"])
+        self.assertIn("time:canonical", foils["time"]["forbidden_existing_contextforge_bindings"])
+        self.assertIn("service_bound_prompts", foils["time"]["preexisting_contextforge_artifact_scope"])
+        self.assertIn("service_bound_resources", foils["time"]["preexisting_contextforge_artifact_scope"])
+        self.assertTrue(foils["memory"]["source_lead_only"])
+        self.assertIn("memory:canonical", foils["memory"]["forbidden_existing_contextforge_bindings"])
+        self.assertEqual("@modelcontextprotocol/server-memory", foils["memory"]["npm_package_metadata_evidence"]["package"])
+        self.assertEqual("mcp-server-memory", foils["memory"]["npm_package_metadata_evidence"]["bin"])
         self.assertIn("already exists in ContextForge", " ".join(method.split()))
         self.assertIn("preexisting-foil", onboarding_skill)
         self.assertIn("available-capabilities", gate)
@@ -939,6 +946,65 @@ console.log(JSON.stringify({{
             manifest["contextforge_servers"],
         )
         self.assertFalse(manifest["live_mutation_performed"])
+        self.assertEqual("known_development_foil_artifacts_present", manifest["repo_artifact_readback"]["status"])
+        self.assertGreater(manifest["repo_artifact_readback"]["present_count"], 0)
+
+    def test_memory_onboarding_foil_cleanup_readback_identifies_all_required_artifact_scopes(self) -> None:
+        cleanup = _load_script_module(
+            ROOT / "docker/contextforge-harness/scripts/clean_onboarding_foil.py",
+            "clean_onboarding_memory_foil_test",
+        )
+        live = {
+            "gateways": [{"id": "gateway-memory", "name": "memory-canonical-gateway", "enabled": True}],
+            "tools": [
+                {
+                    "id": "tool-memory",
+                    "name": "create_entities",
+                    "gatewayId": "gateway-memory",
+                    "enabled": True,
+                }
+            ],
+            "servers": [
+                {
+                    "id": "server-memory",
+                    "name": "memory-canonical-server",
+                    "associatedToolIds": ["tool-memory"],
+                    "associatedPromptIds": ["prompt-memory"],
+                    "associatedResourceIds": ["resource-memory"],
+                    "enabled": True,
+                }
+            ],
+            "prompts": [{"id": "prompt-memory", "name": "memory-abstract-spec", "enabled": True}],
+            "resources": [
+                {
+                    "id": "resource-memory",
+                    "name": "memory abstract spec",
+                    "uri": "contextforge://service-specs/memory/abstract/v1",
+                    "enabled": True,
+                }
+            ],
+        }
+
+        manifest = cleanup.build_manifest(
+            foil_id="memory",
+            base_url="http://127.0.0.1:4445",
+            live=live,
+            apply=False,
+        )
+
+        self.assertEqual("dirty", manifest["status"])
+        self.assertEqual(
+            {
+                "mcp_service": 1,
+                "service_bound_prompts": 1,
+                "service_bound_resources": 1,
+                "service_tools": 1,
+                "virtual_server": 1,
+            },
+            manifest["counts"],
+        )
+        self.assertEqual("no_known_repo_local_foil_artifacts", manifest["repo_artifact_readback"]["status"])
+        self.assertEqual(0, manifest["repo_artifact_readback"]["present_count"])
 
     def test_time_onboarding_foil_cleanup_cli_fixture_fails_closed_when_dirty(self) -> None:
         live = {

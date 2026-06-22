@@ -471,8 +471,8 @@ def contextforge_foil_preflight(
     artifact_scope = foil.get("preexisting_contextforge_artifact_scope") or []
     result: dict[str, Any] = {
         "status": "not_applicable",
-        "checked_surface": "contextforge_project_init_available_capabilities",
-        "checked_surface_scope": "visible activation/capability exposure; broader service/tool/virtual-server/prompt/resource cleanup remains required by gate policy",
+        "checked_surface": "contextforge_registry_and_project_init_available_capabilities",
+        "checked_surface_scope": "structured ContextForge registry readback plus target-client activation/capability exposure",
         "artifact_scope_required_clean": artifact_scope,
         "forbidden_existing_contextforge_bindings": forbidden,
         "allow_preexisting_foil_artifacts": bool(args.allow_preexisting_foil_artifacts),

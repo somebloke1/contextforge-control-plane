@@ -33,7 +33,39 @@ FOILS = {
         "server_names": ["time_dev_docker_server", "time_server"],
         "tool_name_prefixes": ["time-dev-docker-", "time-"],
         "prompt_name_prefixes": ["time-", "time_"],
-        "resource_uri_prefixes": ["contextforge://time/", "contextforge://services/time/"],
+        "resource_uri_prefixes": [
+            "contextforge://time/",
+            "contextforge://services/time/",
+            "contextforge://service-specs/time/",
+        ],
+        "repo_artifact_paths": [
+            "server-instances/time",
+            "docker/contextforge-harness/time-transceiver",
+            "docker/contextforge-harness/scripts/register_time_dev.py",
+            "docker/contextforge-harness/scripts/probe-time-dev.py",
+        ],
+        "repo_artifact_status": "known_development_foil_artifacts_present",
+        "required_clean_scopes": [
+            "mcp_service",
+            "service_tools",
+            "virtual_server",
+            "service_bound_prompts",
+            "service_bound_resources",
+        ],
+    },
+    "memory": {
+        "service_binding": "memory:canonical",
+        "gateway_names": ["memory-canonical-gateway", "memory-gateway", "memory"],
+        "server_names": ["memory-canonical-server", "memory-server"],
+        "tool_name_prefixes": ["memory-", "memory_"],
+        "prompt_name_prefixes": ["memory-", "memory_"],
+        "resource_uri_prefixes": [
+            "contextforge://memory/",
+            "contextforge://services/memory/",
+            "contextforge://service-specs/memory/",
+        ],
+        "repo_artifact_paths": [],
+        "repo_artifact_status": "no_known_repo_local_foil_artifacts",
         "required_clean_scopes": [
             "mcp_service",
             "service_tools",
@@ -180,6 +212,21 @@ def contextforge_server_readback(live: dict[str, list[dict[str, Any]]]) -> list[
     return servers
 
 
+def repo_artifact_readback(foil: dict[str, Any]) -> dict[str, Any]:
+    repo_root = Path(__file__).resolve().parents[3]
+    paths = [str(item) for item in foil.get("repo_artifact_paths") or [] if str(item).strip()]
+    matches = [
+        {"path": path, "present": (repo_root / path).exists()}
+        for path in paths
+    ]
+    return {
+        "status": str(foil.get("repo_artifact_status") or "not_declared"),
+        "checked_paths": matches,
+        "present_count": sum(1 for item in matches if item["present"]),
+        "claim_boundary": "repo artifact readback is a veil-risk diagnostic; ContextForge clean status is based on registry artifact scopes",
+    }
+
+
 def build_manifest(*, foil_id: str, base_url: str, live: dict[str, list[dict[str, Any]]], apply: bool) -> dict[str, Any]:
     foil = FOILS[foil_id]
     matches = collect_matches(live, foil)
@@ -210,6 +257,7 @@ def build_manifest(*, foil_id: str, base_url: str, live: dict[str, list[dict[str
         "status": "clean" if clean else "dirty",
         "required_clean_scopes": foil["required_clean_scopes"],
         "contextforge_servers": contextforge_server_readback(live),
+        "repo_artifact_readback": repo_artifact_readback(foil),
         "counts": counts,
         "matches": {
             scope: [{"id": item_id(row), "name": item_name(row), "enabled": row.get("enabled")} for row in rows]
