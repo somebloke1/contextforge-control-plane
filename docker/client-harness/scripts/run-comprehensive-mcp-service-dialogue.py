@@ -21,6 +21,8 @@ DEFAULT_SERENA_LANGUAGE = "python"
 DEFAULT_CONTEXTFORGE_HOST_BASE_URL = "http://127.0.0.1:4445"
 DEFAULT_CONTEXTFORGE_CONTAINER_BASE_URL = "http://host.docker.internal:4445"
 MIN_SEMANTIC_CONTEXT_WINDOW = 262144
+SSH_TMUX_LIVE_TARGET_ALIAS = "contextforge-live-target"
+SSH_TMUX_LIVE_PROBE_COMMAND = "printf contextforge-ssh-tmux-ok"
 SCOPED_TOKEN_PERMISSIONS = [
     "servers.use",
     "tools.read",
@@ -85,11 +87,10 @@ def ssh_tmux_live_target_prompt(repo_root: Path | None) -> str | None:
     env = read_env(env_path)
     if not env.get("CONTEXTFORGE_SSH_TMUX_TEST_HOST"):
         return None
-    alias = env.get("CONTEXTFORGE_SSH_TMUX_TEST_ALIAS") or "contextforge-live-target"
-    probe_command = env.get("CONTEXTFORGE_SSH_TMUX_TEST_REMOTE_PROBE_COMMAND") or "printf 'contextforge-ssh-tmux-ok\\n'"
+    alias = env.get("CONTEXTFORGE_SSH_TMUX_TEST_ALIAS") or SSH_TMUX_LIVE_TARGET_ALIAS
     return (
         f"Please connect to the live SSH test target alias `{alias}`, "
-        f"run `{probe_command}`, report what happened, and close the session. "
+        f"run `{SSH_TMUX_LIVE_PROBE_COMMAND}`, report what happened, and close the session. "
         "Keep the answer concise."
     )
 

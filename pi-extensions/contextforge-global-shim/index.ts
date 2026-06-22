@@ -100,6 +100,8 @@ type ShimGlobalState = {
 };
 
 const SHIM_NAME = "contextforge-global-shim";
+const SSH_TMUX_LIVE_TARGET_ALIAS = "contextforge-live-target";
+const SSH_TMUX_LIVE_PROBE_COMMAND = "printf contextforge-ssh-tmux-ok";
 const PORTAL_ROOT_CONFIG = "contextforge-root.json";
 const GLOBAL_STATE_KEY = "__contextforgeGlobalShimStateV3__";
 const globalState = shimGlobalState();
@@ -780,14 +782,15 @@ function registerImportedTool(pi: ExtensionAPI, client: JsonRpcStdioClient, serv
       if (!route) {
         return textResult(`No active ContextForge route for ${piName} in the current Pi project.`, true);
       }
-      if (route.blockedByDefault) {
+      const callParams = asObject(params);
+      if (route.blockedByDefault && !isAllowedSshTmuxLiveProbe(route, callParams)) {
         return textResult(
           `Blocked by ${SHIM_NAME}: ${route.mcpName} is not part of the default safe Pi policy for ${route.serviceBinding}.`,
           true,
         );
       }
       try {
-        const result = await route.client.callTool(route.mcpName, asObject(params));
+        const result = await route.client.callTool(route.mcpName, callParams);
         return await normalizeRouteToolResult(result, route);
       } catch (error) {
         return textResult(errorMessage(error), true);
@@ -1501,6 +1504,21 @@ function isBlockedByDefault(service: ProjectService, toolName: string): boolean 
   }
   if (serviceKey.startsWith("github:")) {
     return mutatingPatterns.some((pattern) => toolKey.includes(pattern));
+  }
+  return false;
+}
+
+function isAllowedSshTmuxLiveProbe(route: ToolRoute, params: JsonObject): boolean {
+  if (!route.serviceBinding.toLowerCase().startsWith("ssh-tmux:")) return false;
+  const toolKey = route.mcpName.toLowerCase();
+  if (toolKey.includes("open-session")) {
+    return String(params.host || "") === SSH_TMUX_LIVE_TARGET_ALIAS;
+  }
+  if (toolKey.includes("send-command")) {
+    return String(params.command || "").trim() === SSH_TMUX_LIVE_PROBE_COMMAND;
+  }
+  if (toolKey.includes("close-session")) {
+    return true;
   }
   return false;
 }

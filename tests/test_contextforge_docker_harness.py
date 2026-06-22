@@ -813,6 +813,17 @@ print(json.dumps(outputs))
         self.assertIn("- session_id: ${sessionId}", shim)
         self.assertIn("Visible terminal screen for session_id ${firstSessionId}:", shim)
 
+    def test_pi_shim_allows_only_constrained_ssh_tmux_live_probe(self) -> None:
+        shim = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
+
+        self.assertIn('const SSH_TMUX_LIVE_TARGET_ALIAS = "contextforge-live-target"', shim)
+        self.assertIn('const SSH_TMUX_LIVE_PROBE_COMMAND = "printf contextforge-ssh-tmux-ok"', shim)
+        self.assertIn("function isAllowedSshTmuxLiveProbe", shim)
+        self.assertIn('String(params.host || "") === SSH_TMUX_LIVE_TARGET_ALIAS', shim)
+        self.assertIn('String(params.command || "").trim() === SSH_TMUX_LIVE_PROBE_COMMAND', shim)
+        self.assertIn('toolKey.includes("close-session")', shim)
+        self.assertIn("route.blockedByDefault && !isAllowedSshTmuxLiveProbe(route, callParams)", shim)
+
     def test_pi_and_opencode_default_to_openrouter_semantic_model_profile(self) -> None:
         pi_models = json.loads((ROOT / "docker/client-harness/config/pi/models.json").read_text(encoding="utf-8"))
         opencode_config = json.loads((ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8"))
@@ -962,7 +973,7 @@ print(json.dumps(outputs))
                     [
                         "CONTEXTFORGE_SSH_TMUX_TEST_HOST=10.0.0.42",
                         "CONTEXTFORGE_SSH_TMUX_TEST_ALIAS=contextforge-live-target",
-                        "CONTEXTFORGE_SSH_TMUX_TEST_REMOTE_PROBE_COMMAND=printf ok",
+                        "CONTEXTFORGE_SSH_TMUX_TEST_REMOTE_PROBE_COMMAND=printf should-not-leak",
                         "",
                     ]
                 ),
@@ -978,7 +989,8 @@ print(json.dumps(outputs))
             )
 
         self.assertIn("contextforge-live-target", prompt)
-        self.assertIn("printf ok", prompt)
+        self.assertIn("printf contextforge-ssh-tmux-ok", prompt)
+        self.assertNotIn("should-not-leak", prompt)
         self.assertNotIn("10.0.0.42", prompt)
 
     def test_pi_openrouter_profiles_without_route_use_generic_provider(self) -> None:
