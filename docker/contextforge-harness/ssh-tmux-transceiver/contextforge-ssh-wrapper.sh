@@ -3,7 +3,9 @@ set -eu
 
 REAL_SSH=/usr/bin/ssh
 TARGET_HOST=${CONTEXTFORGE_SSH_TMUX_TEST_HOST:-}
+TARGET_ALIAS=${CONTEXTFORGE_SSH_TMUX_TEST_ALIAS:-contextforge-live-target}
 TARGET_PORT=${CONTEXTFORGE_SSH_TMUX_TEST_PORT:-}
+TARGET_USER=${CONTEXTFORGE_SSH_TMUX_TEST_USERNAME:-}
 AUTH_MODE=${CONTEXTFORGE_SSH_TMUX_TEST_AUTH_MODE:-}
 PRIVATE_KEY=${CONTEXTFORGE_SSH_TMUX_TEST_PRIVATE_KEY_PATH:-}
 KNOWN_HOSTS=${CONTEXTFORGE_SSH_TMUX_TEST_KNOWN_HOSTS_PATH:-}
@@ -39,10 +41,16 @@ destination_host() {
 }
 
 DEST_HOST=$(destination_host "$@")
-if [ -z "$TARGET_HOST" ] || [ "$DEST_HOST" != "$TARGET_HOST" ]; then
+if [ -z "$TARGET_HOST" ] || { [ "$DEST_HOST" != "$TARGET_HOST" ] && [ "$DEST_HOST" != "$TARGET_ALIAS" ]; }; then
   exec "$REAL_SSH" "$@"
 fi
 
+if [ "$DEST_HOST" = "$TARGET_ALIAS" ]; then
+  set -- -o "HostName=$TARGET_HOST" "$@"
+  if [ -n "$TARGET_USER" ]; then
+    set -- -l "$TARGET_USER" "$@"
+  fi
+fi
 if [ "$AUTH_MODE" = "key" ] && [ -n "$PRIVATE_KEY" ]; then
   set -- -i "$PRIVATE_KEY" "$@"
 fi

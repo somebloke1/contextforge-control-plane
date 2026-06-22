@@ -143,8 +143,10 @@ container paths in `.env`. For password auth, set
 `CONTEXTFORGE_SSH_TMUX_TEST_AUTH_MODE=password` and
 `CONTEXTFORGE_SSH_TMUX_TEST_PASSWORD` in the ignored `.env`; the sidecar-local
 SSH wrapper injects it with `sshpass -e` so the password is not supplied to the
-tested assistant or printed in command arguments. Do not commit the real `.env`,
-private keys, passwords, or known-hosts material.
+tested assistant or printed in command arguments. The tested assistant can use
+the non-secret alias from `CONTEXTFORGE_SSH_TMUX_TEST_ALIAS`, defaulting to
+`contextforge-live-target`, instead of seeing the real host value. Do not commit
+the real `.env`, private keys, passwords, or known-hosts material.
 
 The migration planner targets the compose-network URL
 `http://ssh-tmux-transceiver:9202/mcp`. Registry apply remains a separate
