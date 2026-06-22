@@ -137,6 +137,14 @@ local-provider diagnostics. Re-run the same compact package with a stronger
 configured semantic-test profile and compare the model-backed transcripts
 semantically.
 
+If one model repeatedly stops after the first safe tool call while stronger
+models complete the intended read-only workflow, treat that as both model-risk
+evidence and product-surface evidence. First ask whether the safe tool result
+itself can be made clearer or more complete without mutating state; ordinary
+users benefit from self-explanatory tool output. Only remove or disable that
+model from the default quorum pool after the same model remains uniquely
+inadequate despite a reasonable, user-facing result shape.
+
 Use [method.md](references/method.md#active-session-stewardship) for the concrete preflight/readback commands and ownership rules.
 
 Before broad fan-out, maintain a one-line active-slice ledger in the issue

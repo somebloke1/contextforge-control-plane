@@ -81,6 +81,16 @@ Useful behavior dimensions include:
 - credential/auth/token failure that should be explained without exposing
   secrets or blaming the wrong layer.
 
+When a model stops after the first safe tool call, do not immediately solve the
+failure by making the prompt more technical. Classify the observed route first:
+if the first tool result is ambiguous, incomplete, or not user-meaningful, that
+is product-surface evidence. Prefer improving safe tool descriptions or safe
+result normalization so a one-call-tolerant interaction still gives an ordinary
+user useful output. If the result shape is already clear and complete, but one
+model alone still fails while other models pass the same bundle, record a
+model-adequacy finding and consider disabling that model from the default pool
+for multi-step semantic tests.
+
 For every bundle, record the mapping:
 
 - behavior being explored;

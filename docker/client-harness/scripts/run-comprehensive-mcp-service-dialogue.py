@@ -88,6 +88,11 @@ def service_test_prompt(service: str, display: str, issue: int, global_issue: in
             f"Please check the details recorded for task {MENTALITY_FIXTURE_TASK_ID}. "
             "Keep the answer concise and mention the source you used."
         )
+    if service == "ssh-tmux":
+        return (
+            "Please inspect this project's active terminal session and report the visible terminal screen. "
+            "If there is no active session, say so. Keep the answer concise."
+        )
     return (
         f"Please use the project's {display} capability for a small ordinary task that fits it. "
         "Keep the answer concise and mention any limitation that prevents completion."
@@ -290,9 +295,14 @@ def selected_profile_env(
             env["OPENROUTER_PROVIDER_ROUTE"] = ""
             env["CONTEXTFORGE_TEST_PROVIDER_ROUTE"] = ""
         env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"] = (
-            os.environ.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
-            or available_env.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
-            or "openrouter-gemini-flash-lite"
+            str(profile.get("pi_provider") or "").strip()
+            or (
+                os.environ.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
+                or available_env.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
+                or "openrouter-gemini-flash-lite"
+            )
+            if routes
+            else "openrouter"
         )
         env["CONTEXTFORGE_PI_DEFAULT_MODEL"] = model
         env["CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"] = f"openrouter/{model}"
