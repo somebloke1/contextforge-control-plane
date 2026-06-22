@@ -191,6 +191,12 @@ provider kind, model id, route-preference list, context window, evidence root,
 and evaluator verdict. The quorum is about model diversity over the same
 behavior, not three retries on one model.
 
+Quorum execution should run profiles concurrently by default through isolated
+client harness roots. Each profile run needs its own home directory, workspace,
+client-scoped token mount, container name, session id, and evidence root. Use
+sequential mode only for debugging or when a service explicitly cannot tolerate
+parallel target-client runs.
+
 If one profile fails and others pass, classify that failure before replacing
 it: model-adequacy, provider/runtime outage, client/tool defect, prompt/package
 defect, or genuine product failure. Do not hide a failed model run by silently

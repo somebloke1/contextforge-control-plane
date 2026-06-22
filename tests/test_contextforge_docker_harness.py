@@ -1008,6 +1008,42 @@ print(json.dumps(outputs))
         self.assertIn('command.extend(["--service-test-prompt", args.service_test_prompt])', quorum)
         self.assertIn('"service_test_prompt_override_used": bool(args.service_test_prompt)', quorum)
 
+    def test_comprehensive_mcp_quorum_uses_parallel_isolated_client_surfaces(self) -> None:
+        compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
+        dialogue = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py").read_text(
+            encoding="utf-8"
+        )
+        quorum = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-model-quorum.py").read_text(
+            encoding="utf-8"
+        )
+
+        for phrase in [
+            "${CONTEXTFORGE_CLIENT_HARNESS_OPENCODE_HOME:-opencode-home}:/home/agent",
+            "${CONTEXTFORGE_CLIENT_HARNESS_PI_HOME:-pi-home}:/home/agent",
+            "${CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE:-./workspace}:/workspace",
+            "${CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED:-./client-scoped}:/run/contextforge-client-scoped:ro",
+        ]:
+            self.assertIn(phrase, compose)
+        for phrase in [
+            "--isolation-root",
+            "--run-suffix",
+            "safe_run_suffix",
+            "prepare_isolated_harness",
+            "CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE",
+            "CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED",
+            "lock_file = None if isolated else uc1.acquire_harness_lock(harness_root)",
+        ]:
+            self.assertIn(phrase, dialogue)
+        for phrase in [
+            "--jobs",
+            "ThreadPoolExecutor",
+            "parallel_isolated",
+            "--isolation-root",
+            "--run-suffix",
+            "prebuild",
+        ]:
+            self.assertIn(phrase, quorum)
+
     def test_pi_openrouter_profiles_without_route_use_generic_provider(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "comprehensive_mcp_service_dialogue",
@@ -1073,6 +1109,7 @@ print(json.dumps(outputs))
             "A one-model pass is useful slice evidence, not a test pass",
             "The quorum is about model diversity over the same behavior",
             "--service-test-prompt",
+            "isolated client harness roots",
         ]:
             self.assertIn(phrase, skill_line_wrapped)
         for phrase in [
@@ -1084,6 +1121,8 @@ print(json.dumps(outputs))
             "does not score semantic pass/fail",
             "`--service-test-prompt`",
             "localized bundle coverage",
+            "execution_mode: parallel_isolated",
+            "fall back to `--jobs 1`",
         ]:
             self.assertIn(phrase, method_line_wrapped)
         for phrase in [
@@ -1332,8 +1371,11 @@ print(json.dumps(outputs))
             self.assertIsNotNone(match, service)
             self.assertIn("- ../..:/repo:ro", match.group(0))
             self.assertIn("- ../../server-instances:/repo/server-instances:ro", match.group(0))
-            self.assertIn("- ./client-scoped:/run/contextforge-client-scoped:ro", match.group(0))
-            self.assertIn("- ./workspace:/workspace", match.group(0))
+            self.assertIn(
+                "- ${CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED:-./client-scoped}:/run/contextforge-client-scoped:ro",
+                match.group(0),
+            )
+            self.assertIn("- ${CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE:-./workspace}:/workspace", match.group(0))
             self.assertNotIn("contextforge-harness/env:/config/contextforge", match.group(0))
 
         for service in ("opencode-ephemeral", "pi-ephemeral"):
@@ -1376,7 +1418,13 @@ print(json.dumps(outputs))
             match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
             self.assertIsNotNone(match, service)
             service_block = match.group(0)
-            self.assertIn("- ./client-scoped:/run/contextforge-client-scoped:ro", service_block)
+            if service in {"opencode", "pi"}:
+                self.assertIn(
+                    "- ${CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED:-./client-scoped}:/run/contextforge-client-scoped:ro",
+                    service_block,
+                )
+            else:
+                self.assertIn("- ./client-scoped:/run/contextforge-client-scoped:ro", service_block)
             self.assertIn("- ../../server-instances:/repo/server-instances:ro", service_block)
             self.assertNotIn("../contextforge-harness/env:/config/contextforge", service_block)
             self.assertNotIn("- ../../server-instances:/repo/server-instances\n", service_block)

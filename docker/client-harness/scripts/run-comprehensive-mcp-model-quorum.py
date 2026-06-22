@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import importlib.util
 import json
 import os
@@ -98,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--count", type=int, default=MIN_MODEL_QUORUM)
     parser.add_argument("--profile", action="append", default=[], help="Explicit profile id; repeat for quorum.")
     parser.add_argument("--seed", type=int, default=None, help="Optional random seed for reproducible selection.")
+    parser.add_argument("--jobs", type=int, default=0, help="Concurrent profile runs; default is one job per selected profile.")
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument(
         "--service-test-prompt",
@@ -118,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"provide at least {MIN_MODEL_QUORUM} --profile values")
 
     dialogue = load_dialogue_runner()
+    uc1 = dialogue.load_uc1_module()
     repo_root = Path(__file__).resolve().parents[3]
     harness_root = repo_root / "docker" / "client-harness"
     service_map = dialogue.load_service_map(harness_root)
@@ -141,9 +144,53 @@ def main(argv: list[str] | None = None) -> int:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_root = harness_root / "evidence" / "comprehensive-mcp-quorum" / args.service / args.client / timestamp
     output_root.mkdir(parents=True, exist_ok=True)
-    runs: list[dict[str, Any]] = []
+    jobs = args.jobs or len(profiles)
+    if jobs < 1:
+        raise SystemExit("--jobs must be at least 1")
 
-    for index, profile in enumerate(profiles, start=1):
+    prebuild: dict[str, Any] | None = None
+    if not args.no_build:
+        build_command = [
+            "docker",
+            "compose",
+            "-f",
+            str(harness_root / "compose.yml"),
+            "build",
+            "base",
+            uc1.build_service_name(args.client),
+        ]
+        build_result = subprocess.run(build_command, cwd=repo_root, text=True, capture_output=True, timeout=600)
+        prebuild = {
+            "command": " ".join(build_command),
+            "returncode": build_result.returncode,
+            "stdout_path": str(output_root / "prebuild.stdout.txt"),
+            "stderr_path": str(output_root / "prebuild.stderr.txt"),
+        }
+        (output_root / "prebuild.stdout.txt").write_text(build_result.stdout, encoding="utf-8")
+        (output_root / "prebuild.stderr.txt").write_text(build_result.stderr, encoding="utf-8")
+        if build_result.returncode != 0:
+            summary = {
+                "schema_uri": "contextforge://client-harness/comprehensive-mcp-model-quorum/v1",
+                "ok_scope": "structural model-quorum execution package only",
+                "semantic_acceptance": "requires_non_spark_evaluator_per_model_and_quorum",
+                "quorum_status": "prebuild_failed",
+                "minimum_model_quorum": MIN_MODEL_QUORUM,
+                "client": args.client,
+                "service": args.service,
+                "service_issue": service_map[args.service]["issue"],
+                "global_issue": service_map.get("global_issue", 316),
+                "timestamp": timestamp,
+                "output_root": str(output_root),
+                "prebuild": prebuild,
+                "selected_profiles": [profile_record(dialogue, profile) for profile in profiles],
+                "completed_profile_count": 0,
+                "runs": [],
+            }
+            write_json(output_root / "quorum-summary.json", summary)
+            print(json.dumps(summary, indent=2, sort_keys=True))
+            return 1
+
+    def run_profile(index: int, profile: dict[str, Any]) -> dict[str, Any]:
         profile_id = str(profile["id"])
         command = [
             sys.executable,
@@ -157,8 +204,11 @@ def main(argv: list[str] | None = None) -> int:
             "--semantic-model-profile",
             profile_id,
         ]
-        if args.no_build or index > 1:
-            command.append("--no-build")
+        run_suffix = f"{index:02d}-{profile_id}"
+        command.extend(["--run-suffix", run_suffix])
+        command.append("--no-build")
+        if jobs > 1:
+            command.extend(["--isolation-root", str(output_root / "isolated" / run_suffix)])
         if args.contextforge_host_base_url:
             command.extend(["--contextforge-host-base-url", args.contextforge_host_base_url])
         if args.contextforge_container_base_url:
@@ -187,8 +237,24 @@ def main(argv: list[str] | None = None) -> int:
             "dialogue_semantic_acceptance": None if run_summary is None else run_summary.get("semantic_acceptance"),
             "dialogue_ok_scope": None if run_summary is None else run_summary.get("ok_scope"),
             "service_test_executed": None if run_summary is None else run_summary.get("service_test_executed"),
+            "run_suffix": run_suffix,
+            "isolation_root": None if jobs <= 1 else str(output_root / "isolated" / run_suffix),
         }
-        runs.append(run_record)
+        return run_record
+
+    if jobs == 1:
+        runs = [run_profile(index, profile) for index, profile in enumerate(profiles, start=1)]
+    else:
+        runs_by_index: dict[int, dict[str, Any]] = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(jobs, len(profiles))) as executor:
+            futures = {
+                executor.submit(run_profile, index, profile): index
+                for index, profile in enumerate(profiles, start=1)
+            }
+            for future in concurrent.futures.as_completed(futures):
+                index = futures[future]
+                runs_by_index[index] = future.result()
+        runs = [runs_by_index[index] for index in sorted(runs_by_index)]
 
     completed = [run for run in runs if run["returncode"] == 0 and run["dialogue_run_summary"]]
     summary = {
@@ -203,6 +269,9 @@ def main(argv: list[str] | None = None) -> int:
         "global_issue": service_map.get("global_issue", 316),
         "timestamp": timestamp,
         "output_root": str(output_root),
+        "execution_mode": "parallel_isolated" if jobs > 1 else "sequential",
+        "jobs": jobs,
+        "prebuild": prebuild,
         "selected_profiles": [profile_record(dialogue, profile) for profile in profiles],
         "service_test_prompt_override_used": bool(args.service_test_prompt),
         "completed_profile_count": len(completed),
