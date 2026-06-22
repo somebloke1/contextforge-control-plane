@@ -17,6 +17,7 @@ const APPROVAL_SOURCE =
 let governancePromptActiveUntil = 0
 const projectDocsLookupGuidanceActiveSessions = new Set()
 const serviceOnboardingPlannedSessions = new Set()
+const serviceOnboardingContinuedSessions = new Set()
 let serviceOnboardingHowToCache = undefined
 
 const textFromParts = (parts) => {
@@ -183,6 +184,11 @@ const suppliesSourceOnlyOnboardingDetails = (text) => {
 const asksForApproval = (text) => {
   const lowered = String(text ?? "").trim().toLowerCase()
   return /^(approve|approved|yes approve|i approve|go ahead|proceed|continue)$/i.test(lowered) || /\b(approve|approved|go ahead|proceed|continue)\b/.test(lowered)
+}
+
+const asksForRuntimeApply = (text) => {
+  const lowered = String(text ?? "").toLowerCase()
+  return asksForApproval(text) && /\b(runtime|apply|implement|implementation|register|registration|install|start|execute)\b/.test(lowered)
 }
 
 const asksForProjectStateReadback = (text) => {
@@ -361,6 +367,19 @@ const serviceOnboardingContinuationInstruction = (cwd) =>
     "User approval to create arbitrary local client config is not a ContextForge runtime/apply surface; do not use bash, write, or edit to create direct MCP config as a workaround.",
   ].join("\n")
 
+const serviceOnboardingRuntimeApplyInstruction = (cwd) =>
+  [
+    "The user is approving runtime/apply continuation for an uncataloged MCP service that already has a service-management continuation package in this session.",
+    serviceOnboardingHowTo(cwd),
+    "Call `contextforge-helper_cf_project_service_onboarding_runtime_apply` with the current project root and only source-derived facts already visible in this conversation.",
+    `Use project_root: "${String(cwd)}".`,
+    "Use empty strings or empty arrays for unknown fields; do not invent package names, commands, tools, transports, credentials, or implementation facts.",
+    "For list fields such as expected_tools, pass a JSON array of strings, never a comma-separated string.",
+    "When the helper returns `assistant_visible_response` or `message`, copy that value exactly as the complete visible reply and stop.",
+    "Do not install, register, start, expose, validate, probe, import, write client config, or claim the candidate is available unless a later approved executor surface actually performs that mutation.",
+    "User approval to create arbitrary local client config is not a ContextForge runtime/apply surface; do not use bash, write, or edit to create direct MCP config as a workaround.",
+  ].join("\n")
+
 const serviceOnboardingIntakeResponse = () =>
   [
     "I can help onboard that as an uncataloged MCP service, but this should stay source-only until you approve a concrete runtime step.",
@@ -468,18 +487,24 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         })
       }
       const exactCapabilityResponse = asksForProjectCapabilities(latestText) ? capabilitySummaryResponse(cwd) : ""
+      const serviceOnboardingRuntimeApplyRoute =
+        !exactCapabilityResponse && serviceOnboardingContinuedSessions.has(String(sessionID)) && asksForRuntimeApply(latestText)
+          ? serviceOnboardingRuntimeApplyInstruction(cwd)
+          : ""
       const serviceOnboardingContinuationRoute =
-        !exactCapabilityResponse && serviceOnboardingPlannedSessions.has(String(sessionID)) && asksForApproval(latestText)
+        !exactCapabilityResponse && !serviceOnboardingRuntimeApplyRoute && serviceOnboardingPlannedSessions.has(String(sessionID)) && asksForApproval(latestText)
           ? serviceOnboardingContinuationInstruction(cwd)
           : ""
       const serviceOnboardingActiveRoute =
         !exactCapabilityResponse &&
+        !serviceOnboardingRuntimeApplyRoute &&
         !serviceOnboardingContinuationRoute &&
         serviceOnboardingPlannedSessions.has(String(sessionID))
           ? serviceOnboardingPlanInstruction(cwd)
           : ""
       const serviceOnboardingPlanRoute =
         !exactCapabilityResponse &&
+        !serviceOnboardingRuntimeApplyRoute &&
         !serviceOnboardingContinuationRoute &&
         !serviceOnboardingActiveRoute &&
         suppliesSourceOnlyOnboardingDetails(latestText)
@@ -493,8 +518,8 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         asksForUncatalogedServiceOnboarding(latestText)
           ? serviceOnboardingIntakeResponse()
           : ""
-      const exactStateReadbackResponse = !exactCapabilityResponse && !serviceOnboardingContinuationRoute && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && asksForProjectStateReadback(latestText) ? stateReadbackResponse(cwd) : ""
-      const exactAvailabilityResponse = !exactCapabilityResponse && !serviceOnboardingContinuationRoute && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && !exactStateReadbackResponse && asksForContextForgeTools(latestText) ? availabilityResponse(cwd) : ""
+      const exactStateReadbackResponse = !exactCapabilityResponse && !serviceOnboardingRuntimeApplyRoute && !serviceOnboardingContinuationRoute && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && asksForProjectStateReadback(latestText) ? stateReadbackResponse(cwd) : ""
+      const exactAvailabilityResponse = !exactCapabilityResponse && !serviceOnboardingRuntimeApplyRoute && !serviceOnboardingContinuationRoute && !serviceOnboardingActiveRoute && !serviceOnboardingPlanRoute && !exactServiceOnboardingIntakeResponse && !exactStateReadbackResponse && asksForContextForgeTools(latestText) ? availabilityResponse(cwd) : ""
       const exactProjectDocsLookupCapabilityResponse =
         !exactCapabilityResponse &&
         !exactStateReadbackResponse &&
@@ -502,11 +527,14 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         (projectDocsLookupGuidanceActiveSessions.has(String(sessionID)) || asksHowToUseProjectDocsLookupCapability(latestText))
           ? projectDocsLookupCapabilityResponse()
           : ""
-      if (serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute || exactServiceOnboardingIntakeResponse) {
-        const route = serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute
+      if (serviceOnboardingRuntimeApplyRoute || serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute || exactServiceOnboardingIntakeResponse) {
+        const route = serviceOnboardingRuntimeApplyRoute || serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute
         const response = exactServiceOnboardingIntakeResponse
         if (serviceOnboardingPlanRoute) {
           serviceOnboardingPlannedSessions.add(String(sessionID))
+        }
+        if (serviceOnboardingContinuationRoute) {
+          serviceOnboardingContinuedSessions.add(String(sessionID))
         }
         if (route) {
           output.messages.unshift({

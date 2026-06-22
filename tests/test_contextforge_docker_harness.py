@@ -445,18 +445,23 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("do not present the existing service activation menu", pi_source)
         self.assertIn("cf_project_service_onboarding_plan", pi_source)
         self.assertIn("cf_project_service_onboarding_continue", pi_source)
+        self.assertIn("cf_project_service_onboarding_runtime_apply", pi_source)
         self.assertIn("get_service_onboarding_how_to", pi_source)
         self.assertIn("copy assistant_visible_response/message exactly", pi_source)
         self.assertIn("Do not reformat it into tables, expose enum names, add helper fields", pi_source)
         self.assertIn("asksForUncatalogedServiceOnboarding", opencode_source)
         self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", opencode_source)
         self.assertIn("contextforge-helper_cf_project_service_onboarding_continue", opencode_source)
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_runtime_apply", opencode_source)
         self.assertIn("serviceOnboardingIntakeResponse", opencode_source)
         self.assertIn("serviceOnboardingPlanInstruction", opencode_source)
+        self.assertIn("serviceOnboardingRuntimeApplyInstruction", opencode_source)
+        self.assertIn("serviceOnboardingHowTo(cwd)", opencode_source)
+        self.assertIn('"get_service_onboarding_how_to"', opencode_source)
         self.assertIn("serviceOnboardingPlannedSessions.has(String(sessionID))", opencode_source)
         self.assertIn("serviceOnboardingPlannedSessions.add(String(sessionID))", opencode_source)
+        self.assertIn("serviceOnboardingContinuedSessions.has(String(sessionID))", opencode_source)
         self.assertIn("agent_hidden_onboarding_how_to", opencode_source)
-        self.assertIn("get_service_onboarding_how_to", opencode_source)
         self.assertIn("use available read-only source-research tools against that lead", opencode_source)
         self.assertIn("only source-derived or user-visible facts", opencode_source)
         self.assertIn("Do not use canned service content", opencode_source)
@@ -520,6 +525,20 @@ const third = {{
   ],
 }};
 await hook({{}}, third);
+const fourth = {{
+  messages: [
+    ...second.messages,
+    {{
+      info: {{ id: "msg-6", role: "assistant", sessionID: "session-1" }},
+      parts: [{{ type: "text", text: "I prepared the service-management continuation package." }}],
+    }},
+    {{
+      info: {{ id: "msg-7", role: "user", sessionID: "session-1" }},
+      parts: [{{ type: "text", text: "approve runtime apply and registration" }}],
+    }},
+  ],
+}};
+await hook({{}}, fourth);
 const flatten = (messages) => messages
   .flatMap((message) => message.parts || [])
   .map((part) => part.text || "")
@@ -534,6 +553,9 @@ console.log(JSON.stringify({{
   thirdCount: third.messages.length,
   thirdRoute: third.messages[0].parts[0].text,
   thirdVisibleContext: flatten(third.messages),
+  fourthCount: fourth.messages.length,
+  fourthRoute: fourth.messages[0].parts[0].text,
+  fourthVisibleContext: flatten(fourth.messages),
 }}));
 """
         result = subprocess.run(
@@ -565,6 +587,10 @@ console.log(JSON.stringify({{
         self.assertIn("ContextForge Service Onboarding How-To", parsed["thirdRoute"])
         self.assertIn("use available read-only source-research tools", parsed["thirdRoute"])
         self.assertNotIn("guidance_resource_uri", parsed["thirdRoute"])
+        self.assertGreaterEqual(parsed["fourthCount"], 6)
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_runtime_apply", parsed["fourthRoute"])
+        self.assertIn("approve runtime apply and registration", parsed["fourthVisibleContext"])
+        self.assertIn("ContextForge Service Onboarding How-To", parsed["fourthRoute"])
 
     def test_onboarding_semantic_process_gate_uses_real_clients_and_composite_persona(self) -> None:
         gate = (ROOT / "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md").read_text(encoding="utf-8")

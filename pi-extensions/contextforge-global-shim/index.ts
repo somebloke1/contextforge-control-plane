@@ -561,6 +561,7 @@ async function firstPromptProjectInitMessage(projectRoot: string): Promise<JsonO
       "If the user provided a URL or other source lead, use available read-only source-research tools against that lead before asking the user for facts that should be discoverable from the source. If no source-research tool is available, say that source-research support is missing and ask only for the facts needed to proceed.",
       "For list fields such as expectedTools/expected_tools, pass a JSON array of strings, never a comma-separated string.",
       `For explicit new/uncataloged service onboarding, ask concise practical intake questions when source, transport, scope, credentials, expected tools, lifecycle/cleanup, proof plan, or approval boundaries are missing. If the user supplies enough facts for a source-only plan, call cf_project_service_onboarding_plan {"projectRoot":"${projectRoot}", ...} using only user-supplied facts, then copy assistant_visible_response/message exactly as the complete visible answer and stop. Do not install, register, expose, validate, probe, reload, or claim the candidate is available.`,
+      `After an uncataloged source-only plan, call cf_project_service_onboarding_continue for explicit continuation approval. After that continuation, call cf_project_service_onboarding_runtime_apply for explicit runtime/apply approval. Do not use project-init activation or direct client-local MCP config for uncataloged services.`,
       `If no prior service list is visible in the current transcript, silently call cf_project_init_list_capabilities for project root "${projectRoot}".`,
       "Use only the returned service ids and labels. Do not invent, rename, summarize, or substitute service names from memory.",
       "When calling a project setup tool, do not emit visible text before the call. The assistant message for that step must be only the tool call.",
@@ -1091,6 +1092,27 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
       }),
     },
     {
+      name: "cf_project_service_onboarding_runtime_apply",
+      operation: "build_service_onboarding_runtime_apply_package",
+      description: "Build a non-mutating runtime/apply package for an uncataloged MCP service after source-only planning and service-management continuation have both occurred and the user explicitly approves runtime/apply work. Use only source-derived or conversation-visible facts. This names the service binding, backend home, provision plan, and ContextForge registration plan, but does not install, register, expose, probe, write direct client-local MCP config, or claim target-client-visible availability. Copy assistant_visible_response/message exactly.",
+      parameters: helperSchema({
+        candidateService: { type: "string", description: "Candidate service name from the source-only onboarding plan." },
+        operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
+        sourcePath: { type: "string", description: "Source path, package, repository, or documentation reference used for the source-only plan." },
+        serviceBinding: { type: "string", description: "Optional source-derived service binding, when explicitly known." },
+        backendPackage: { type: "string", description: "Source-derived backend package name, when known." },
+        backendCommand: { type: "string", description: "Source-derived backend command or executable, when known." },
+        backendArgs: { type: "array", items: { type: "string" }, description: "Source-derived backend command arguments, when known." },
+        transportType: { type: "string", description: "Source-derived transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required." },
+        localizationType: { type: "string", description: "Source-derived scope/locality such as project_scoped, shared_canonical, credential_scoped, user_scoped, or dev_only." },
+        functionalType: { type: "string", description: "Source-derived functional class such as time_timezone, search_retrieval, filesystem_content, code_intelligence, or remote_api_tool." },
+        stateType: { type: "string", description: "Source-derived state footprint such as stateless, local_filesystem_state, project_metadata, cache_index_state, credential_state, or runtime_evidence_state." },
+        credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
+        expectedTools: { type: "array", items: { type: "string" }, description: "Source-derived expected tool names or capabilities." },
+        issue: { type: "string", description: "Optional tracking issue id." },
+      }),
+    },
+    {
       name: "cf_project_init_list_capabilities",
       operation: "list_available_capabilities",
       description: "List ContextForge services available for Pi activation and return the service-selection next turn.",
@@ -1309,6 +1331,18 @@ function clientVisibleProjectInitResult(operation: string, result: JsonObject): 
     return {
       ok: result.ok ?? true,
       status: result.status || "service_onboarding_continuation_plan",
+      project_root: result.project_root,
+      mutation_allowed: false,
+      assistant_visible_response: visible,
+      message: visible,
+      non_actions: result.non_actions || [],
+    };
+  }
+  if (operation === "build_service_onboarding_runtime_apply_package") {
+    const visible = String(result.assistant_visible_response || result.message || "").trim();
+    return {
+      ok: result.ok ?? true,
+      status: result.status || "service_onboarding_runtime_apply_package",
       project_root: result.project_root,
       mutation_allowed: false,
       assistant_visible_response: visible,
