@@ -989,9 +989,13 @@ def _footprint(
     scripts = _string_list(explicit.get("scripts"))
     docker_surfaces = _string_list(explicit.get("docker_surfaces"))
     generated_artifacts = _string_list(explicit.get("generated_artifacts"))
+    documented_equivalent = _first_string(explicit.get("documented_equivalent"))
+    server_instance_home = _first_string(explicit.get("server_instance_home"))
+    if not server_instance_home and not documented_equivalent and slug:
+        server_instance_home = f"server-instances/{slug}/"
 
-    if slug and not any(item.startswith("server-instances/") for item in files):
-        files.append(f"server-instances/{slug}/")
+    if server_instance_home and server_instance_home not in files:
+        files.append(server_instance_home)
     if not docs:
         docs.append("docs/initiatives/contextforge-control-plane/service-onboarding-helper.md")
     if not tests:
@@ -999,6 +1003,8 @@ def _footprint(
 
     return {
         "service_slug": slug,
+        "server_instance_home": server_instance_home,
+        "documented_equivalent": documented_equivalent,
         "project_root": project_root,
         "files": _unique(files),
         "scripts": _unique(scripts),

@@ -38,7 +38,7 @@ be resumable from the last recorded state:
 | `feasibility_review` | Check whether the service can be registered directly, needs a package bridge/transceiver, needs a dev Docker proof, or should be deferred. | Transport facts, dependency facts, credential/state facts, and known risks. |
 | `classification` | Assign typed classifications that drive implementation and approval boundaries. | `plan_type`, `localization_type`, `functional_type`, and other relevant dimensions. |
 | `strategy_selection` | Select the ContextForge implementation paradigm and explain why alternatives were rejected. | Chosen strategy, rejected strategies, and evidence gaps. |
-| `footprint_plan` | List source files, manifests, scripts, Docker surfaces, tests, docs, runtime state, and cleanup/rollback expectations. | Reviewable file and system surface list. |
+| `footprint_plan` | List source files, manifests, scripts, Docker surfaces, tests, docs, runtime state, backend home, and cleanup/rollback expectations. | Reviewable file and system surface list. |
 | `guidance_plan` | Generate or carry the compact service abstract spec and its ContextForge publication target. | Draft or reviewed abstract spec plus `contextforge://service-specs/<service>/abstract/v1` resource URI. |
 | `approval_gate` | Stop before any runtime/global/live mutation and emit exact approval text when required. | Required approvals and non-actions. |
 | `handoff` | Produce durable issue/PR-ready output with residual risks and next steps. | Structured onboarding record and GitHub links. |
@@ -385,7 +385,8 @@ identify key implementation decisions and present them methodically for user
 approval or amendment:
 
 - canonical service identity;
-- backend home;
+- backend home: default to `server-instances/<service-slug>/` unless a
+  source-backed documented equivalent is chosen;
 - transport and bridge strategy;
 - scope and locality;
 - state footprint;

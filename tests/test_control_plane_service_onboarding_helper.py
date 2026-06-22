@@ -88,6 +88,7 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertIn("register a ContextForge resource", record["guidance_plan"]["publication_requirement"])  # type: ignore[index]
         self.assertEqual("Direct native registration", record["integration_strategy"]["primary_paradigm"])  # type: ignore[index]
         self.assertEqual("docs-search", record["footprint_plan"]["service_slug"])  # type: ignore[index]
+        self.assertEqual("server-instances/docs-search/", record["footprint_plan"]["server_instance_home"])  # type: ignore[index]
         self.assertIn("open or update a focused issue/PR", " ".join(record["next_issue_pr_steps"]))  # type: ignore[index]
         gate = record["pre_runtime_workflow_gate"]
         self.assertFalse(gate["runtime_work_allowed"])  # type: ignore[index]
@@ -335,6 +336,12 @@ class ControlPlaneServiceOnboardingHelperTests(unittest.TestCase):
         self.assertEqual("time", record["onboarding_sequence"]["current_foil"]["service"])  # type: ignore[index]
         self.assertEqual("ready_for_pre_runtime_handoff", record["pre_runtime_workflow_gate"]["gate_status"])  # type: ignore[index]
         self.assertIn("bridge_transport_smoke_plan", _probe_layers(record["pre_runtime_workflow_gate"]))
+        self.assertEqual("server-instances/time/", record["footprint_plan"]["server_instance_home"])  # type: ignore[index]
+        brief = record["implementation_decision_brief"]
+        backend = next(item for item in brief["decision_categories"] if item["id"] == "backend_home")  # type: ignore[index]
+        self.assertEqual("known", backend["status"])
+        self.assertEqual("server-instances/time/", backend["current_decision"]["server_instance_home"])  # type: ignore[index]
+        self.assertEqual([], brief["unresolved_decisions"])  # type: ignore[index]
 
     def test_implementation_decision_brief_names_user_review_categories(self) -> None:
         record = self.record("native_http_shared_docs_source_only")

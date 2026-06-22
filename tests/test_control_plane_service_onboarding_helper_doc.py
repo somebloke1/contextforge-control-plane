@@ -300,6 +300,7 @@ class ServiceOnboardingHelperDocTests(unittest.TestCase):
             "present them methodically for user",
             "canonical service identity",
             "backend home",
+            "server-instances/<service-slug>/",
             "transport and bridge strategy",
             "scope and locality",
             "state footprint",
