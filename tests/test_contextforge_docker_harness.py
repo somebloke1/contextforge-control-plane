@@ -985,16 +985,34 @@ console.log(JSON.stringify({{
             "Answer the tested assistant.",
         )
 
-        self.assertIn("--provider openai-codex", command)
-        self.assertIn("--model gpt-5.5", command)
-        self.assertIn("--thinking low", command)
-        self.assertIn("--session-id human-sim-session", command)
-        self.assertIn("--session-dir /home/agent/.pi/human-sim-sessions", command)
+        self.assertEqual("pi", command[0])
+        self.assertEqual("openai-codex", command[command.index("--provider") + 1])
+        self.assertEqual("gpt-5.5", command[command.index("--model") + 1])
+        self.assertEqual("low", command[command.index("--thinking") + 1])
+        self.assertEqual("human-sim-session", command[command.index("--session-id") + 1])
+        self.assertEqual("/home/agent/.pi/human-sim-sessions", command[command.index("--session-dir") + 1])
+        self.assertIn("--system-prompt", command)
+        self.assertEqual("Answer the tested assistant.", command[-1])
         self.assertIn("--no-tools", command)
         self.assertIn("--no-context-files", command)
         self.assertIn("--no-extensions", command)
         self.assertIn("--no-skills", command)
         self.assertIn("--no-prompt-templates", command)
+
+    def test_onboarding_pi_human_responder_session_id_fits_codex_cache_key_limit(self) -> None:
+        dialogue = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+            "onboarding_semantic_pi_responder_session_id_test",
+        )
+        session_id = dialogue.pi_responder_session_id(
+            foil="time",
+            client="opencode",
+            run_id="20260622T081059Z-opencode-gemma-proxy-fix-2",
+        )
+
+        self.assertLessEqual(len(session_id), 64)
+        self.assertEqual(session_id, dialogue.pi_responder_session_id(foil="time", client="opencode", run_id="20260622T081059Z-opencode-gemma-proxy-fix-2"))
+        self.assertTrue(session_id.startswith("human-sim-time-opencode-"))
 
     def test_onboarding_pi_human_responder_launch_blanks_api_key_env(self) -> None:
         dialogue = _load_script_module(
@@ -1189,6 +1207,50 @@ print(json.dumps(redact_value(payload), sort_keys=True))
         self.assertIn("return \"${CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}\"", defaults)
         self.assertNotIn("openrouter-gemini-flash-lite", defaults)
         self.assertNotIn("google/gemini-2.5-flash-lite", defaults)
+
+    def test_opencode_semantic_config_routes_openrouter_through_host_proxy(self) -> None:
+        render_config = _load_script_module(
+            ROOT / "docker/client-harness/opencode/render-config.py",
+            "contextforge_opencode_render_config_test",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            source = tmp_path / "source.json"
+            target = tmp_path / "opencode.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "$schema": "https://opencode.ai/config.json",
+                        "model": "{env:CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}",
+                        "provider": {"openrouter": {"models": {}}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = {
+                "CONTEXTFORGE_OPENCODE_CONFIG_SOURCE": str(source),
+                "CONTEXTFORGE_OPENCODE_CONFIG_TARGET": str(target),
+                "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL": "openrouter/google/gemma-4-26b-a4b-it",
+                "OPENROUTER_OPENCODE_MODEL": "google/gemma-4-26b-a4b-it",
+                "OPENROUTER_BASE_URL": "http://host.docker.internal:59727/api/v1",
+                "OPENROUTER_API_KEY": "contextforge-host-proxy-dummy-test-token",
+                "CONTEXTFORGE_TEST_CONTEXT_WINDOW": "262144",
+                "CONTEXTFORGE_TEST_MAX_TOKENS": "32768",
+                "CONTEXTFORGE_TEST_MODEL_NAME": "Semantic proxy test model",
+            }
+            with unittest.mock.patch.dict(os.environ, env, clear=False):
+                render_config.render_config()
+
+            rendered = json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual("openrouter/google/gemma-4-26b-a4b-it", rendered["model"])
+            self.assertEqual("openrouter/google/gemma-4-26b-a4b-it", rendered["small_model"])
+            provider = rendered["provider"]["openrouter"]
+            self.assertEqual("http://host.docker.internal:59727/api/v1", provider["options"]["baseURL"])
+            self.assertEqual("contextforge-host-proxy-dummy-test-token", provider["options"]["apiKey"])
+            self.assertEqual(
+                262144,
+                provider["models"]["google/gemma-4-26b-a4b-it"]["limit"]["context"],
+            )
 
     def test_comprehensive_mcp_runner_uses_natural_prompt_and_separate_inventory(self) -> None:
         runner = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py").read_text(
@@ -1480,10 +1542,11 @@ print(json.dumps(outputs))
             'os.environ.get("OPENROUTER_PROVIDER_ROUTES", "")',
             opencode_renderer,
         )
-        self.assertIn(
-            'data["model"] = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"), model_id)',
-            opencode_renderer,
-        )
+        self.assertIn('default_model = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"), model_id)', opencode_renderer)
+        self.assertIn('data["model"] = default_model', opencode_renderer)
+        self.assertIn('data["small_model"] = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_SMALL_MODEL"), model_id)', opencode_renderer)
+        self.assertIn('provider_options["baseURL"] = base_url.rstrip("/")', opencode_renderer)
+        self.assertIn('provider_options["apiKey"] = os.environ["OPENROUTER_API_KEY"]', opencode_renderer)
         self.assertNotIn("setCacheKey", opencode_renderer)
         self.assertIn('"only": routes', opencode_renderer)
         self.assertIn('"order": routes', opencode_renderer)

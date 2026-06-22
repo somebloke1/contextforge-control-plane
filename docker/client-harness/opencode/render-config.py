@@ -59,8 +59,16 @@ def render_config() -> None:
     routes = [item.strip() for item in os.environ.get("OPENROUTER_PROVIDER_ROUTES", "").split(",") if item.strip()]
     if not routes and os.environ.get("OPENROUTER_PROVIDER_ROUTE"):
         routes = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
-    data["model"] = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"), model_id)
+    default_model = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"), model_id)
+    data["model"] = default_model
+    data["small_model"] = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_SMALL_MODEL"), model_id)
     provider = data.setdefault("provider", {}).setdefault("openrouter", {})
+    provider_options = provider.setdefault("options", {})
+    base_url = os.environ.get("OPENROUTER_BASE_URL")
+    if base_url:
+        provider_options["baseURL"] = base_url.rstrip("/")
+    if os.environ.get("OPENROUTER_API_KEY"):
+        provider_options["apiKey"] = os.environ["OPENROUTER_API_KEY"]
     model_config = {
         "name": os.environ.get("CONTEXTFORGE_TEST_MODEL_NAME", "Configured semantic-test model via OpenRouter"),
         "limit": {
