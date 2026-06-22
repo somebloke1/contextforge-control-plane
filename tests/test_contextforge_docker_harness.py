@@ -34,6 +34,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
 
         self.assertIn("ssh-tmux-transceiver:", compose)
         self.assertIn("contextforge-harness-ssh-tmux-transceiver:latest", compose)
+        self.assertIn("../../server-instances/ssh-tmux/.env", compose)
+        self.assertIn("../../server-instances/ssh-tmux/auth:/run/contextforge-ssh-tmux:ro", compose)
         self.assertIn('"127.0.0.1:9202:9202"', compose)
         self.assertIn("docker/contextforge-harness/ssh-tmux-transceiver/Dockerfile", compose)
         self.assertIn("openssh-client", dockerfile)

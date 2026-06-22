@@ -57,6 +57,11 @@ services:
       args:
         MCP_CONTEXTFORGE_GATEWAY_VERSION: "1.0.3"
     image: contextforge-harness-ssh-tmux-transceiver:latest
+    env_file:
+      - path: ../../server-instances/ssh-tmux/.env
+        required: false
+    volumes:
+      - ../../server-instances/ssh-tmux/auth:/run/contextforge-ssh-tmux:ro
     ports:
       - "127.0.0.1:9202:9202"
     healthcheck:

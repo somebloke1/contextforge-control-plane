@@ -47,6 +47,7 @@ inventory/*.secrets.json
 generated/
 upstream/
 server-instances/*/.env
+server-instances/*/auth/
 server-instances/*/run/
 server-instances/*/logs/
 server-instances/*/*.local.json
