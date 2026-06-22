@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Use Pi gpt-5.5 simulated human responders by default; seeded mode is debug scaffolding.",
     )
     parser.add_argument("--responder-pi-image", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_IMAGE", "contextforge-client-pi:human-sim-authenticated"))
-    parser.add_argument("--responder-pi-provider", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_PROVIDER", "openai"))
+    parser.add_argument("--responder-pi-provider", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_PROVIDER", "openai-codex"))
     parser.add_argument("--responder-pi-model", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_MODEL", "gpt-5.5"))
     parser.add_argument(
         "--responder-pi-thinking",

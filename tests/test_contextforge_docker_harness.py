@@ -886,7 +886,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         )
         command = dialogue.pi_responder_command(
             {
-                "provider": "openai",
+                "provider": "openai-codex",
                 "model": "gpt-5.5",
                 "thinking": "low",
             },
@@ -894,7 +894,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
             "Answer the tested assistant.",
         )
 
-        self.assertIn("--provider openai", command)
+        self.assertIn("--provider openai-codex", command)
         self.assertIn("--model gpt-5.5", command)
         self.assertIn("--thinking low", command)
         self.assertIn("--session-id human-sim-session", command)
@@ -904,6 +904,26 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("--no-extensions", command)
         self.assertIn("--no-skills", command)
         self.assertIn("--no-prompt-templates", command)
+
+    def test_onboarding_pi_human_responder_launch_blanks_api_key_env(self) -> None:
+        dialogue = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+            "onboarding_semantic_pi_responder_env_guard_test",
+        )
+
+        self.assertIn("PI_RESPONDER_FORBIDDEN_API_KEY_ENVS", dialogue.__dict__)
+        for key in [
+            "OPENAI_API_KEY",
+            "CODEX_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "OPENROUTER_API_KEY",
+            "GOOGLE_API_KEY",
+            "GEMINI_API_KEY",
+            "PERPLEXITY_API_KEY",
+            "EXA_API_KEY",
+            "CONTEXT7_API_KEY",
+        ]:
+            self.assertIn(key, dialogue.PI_RESPONDER_FORBIDDEN_API_KEY_ENVS)
 
     def test_mentality_manifest_records_dev_docker_surface(self) -> None:
         manifest = (ROOT / "server-instances/mentality/instance.json").read_text(encoding="utf-8")
@@ -1338,7 +1358,9 @@ print(json.dumps(outputs))
         self.assertIn("Pi Human-Simulator Baseline", readme)
         self.assertIn("contextforge-client-pi:human-sim-authenticated", readme)
         self.assertIn("Do not create the responder auth container through", readme)
-        self.assertIn("pi --provider openai --model gpt-5.5", readme)
+        self.assertIn("--env OPENAI_API_KEY=", readme)
+        self.assertIn("--env OPENROUTER_API_KEY=", readme)
+        self.assertIn("pi --provider openai-codex --model gpt-5.5", readme)
 
         pi_provider = pi_models["providers"]["openrouter-semantic-test"]
         self.assertEqual("$OPENROUTER_BASE_URL", pi_provider["baseUrl"])

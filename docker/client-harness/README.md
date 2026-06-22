@@ -173,15 +173,28 @@ baseline image:
 
 ```sh
 docker rm -f cf-pi-human-sim-auth 2>/dev/null || true
-docker run --name cf-pi-human-sim-auth -d contextforge-client-pi:latest sleep infinity
+docker run \
+  --name cf-pi-human-sim-auth \
+  --env OPENAI_API_KEY= \
+  --env CODEX_API_KEY= \
+  --env ANTHROPIC_API_KEY= \
+  --env OPENROUTER_API_KEY= \
+  --env GOOGLE_API_KEY= \
+  --env GEMINI_API_KEY= \
+  --env PERPLEXITY_API_KEY= \
+  --env EXA_API_KEY= \
+  --env CONTEXT7_API_KEY= \
+  -d \
+  contextforge-client-pi:latest \
+  sleep infinity
 docker exec -it cf-pi-human-sim-auth bash
 ```
 
-Inside the container, authenticate Pi for the OpenAI provider using the
-subscription-backed OAuth flow, then verify:
+Inside the container, authenticate Pi for the OpenAI Codex provider using the
+ChatGPT Plus/Pro subscription-backed OAuth flow, then verify:
 
 ```sh
-pi --provider openai --model gpt-5.5 --thinking low --no-tools --no-context-files -p "Reply exactly: human-sim-ok"
+pi --provider openai-codex --model gpt-5.5 --thinking low --no-tools --no-context-files -p "Reply exactly: human-sim-ok"
 ```
 
 After authentication succeeds, exit and capture the baseline:
