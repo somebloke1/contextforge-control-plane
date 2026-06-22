@@ -206,6 +206,27 @@ docker commit cf-pi-human-sim-auth contextforge-client-pi:human-sim-authenticate
 The remaining launch-only clients do not consume this semantic-test model
 profile yet. They are installed and version-checked only.
 
+## Semantic Evaluator Baseline
+
+Use Codex CLI for semantic evaluator runs by default. The evaluator should run
+`gpt-5.5` with high reasoning and a schema-constrained final artifact when a
+schema is available:
+
+```sh
+codex exec \
+  -m gpt-5.5 \
+  -c 'model_reasoning_effort="high"' \
+  --output-schema path/to/evaluator-schema.json \
+  --json \
+  --output-last-message path/to/evaluator-final.json \
+  "Evaluate the supplied ContextForge dialogue evidence."
+```
+
+The JSONL event stream is internal evidence. Shared/user-facing reports should
+publish the evaluator verdict, cited evidence, score, and concise rationale,
+not raw thinking tokens, unless the controller explicitly records a
+surface-labeled reason to render those tokens.
+
 ## ContextForge Helper Baseline
 
 See `CONTEXTFORGE_HELPER_BASELINE.md` for the Pi/OpenCode baseline contract

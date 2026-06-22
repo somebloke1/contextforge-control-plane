@@ -458,6 +458,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
     def test_onboarding_semantic_process_gate_uses_real_clients_and_composite_persona(self) -> None:
         gate = (ROOT / "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md").read_text(encoding="utf-8")
         method = (ROOT / "docker/client-harness/DIALOGUE_EVALUATION_METHOD.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docker/client-harness/README.md").read_text(encoding="utf-8")
         dialogue_runner = (
             ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py"
         ).read_text(encoding="utf-8")
@@ -581,7 +582,13 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('default="pi"', dialogue_runner)
         self.assertIn("pi_gpt_5_5_simulated_human_responder", dialogue_runner)
         self.assertIn("contextforge-client-pi:human-sim-authenticated", dialogue_runner)
+        evaluation_docs = gate + method + onboarding_skill + readme
         self.assertIn("gpt-5.5", gate + onboarding_skill + dialogue_runner)
+        self.assertIn("gpt-5.5 authenticated simulator with `low` thinking", onboarding_skill)
+        self.assertIn("Codex CLI `exec`", evaluation_docs)
+        self.assertIn('model_reasoning_effort="high"', evaluation_docs)
+        self.assertIn("--output-schema <FILE>", evaluation_docs)
+        self.assertIn("suppress raw thinking tokens", evaluation_docs)
         self.assertIn("dry_run", dialogue_runner)
         self.assertIn("if not args.dry_run", dialogue_runner)
         self.assertIn("MIN_MODEL_QUORUM = 3", quorum_runner)

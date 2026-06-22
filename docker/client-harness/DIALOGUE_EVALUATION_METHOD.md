@@ -28,6 +28,12 @@ The method layer is case-independent:
   support, not semantic acceptance;
 - require a delegated validator narrative and score sheet for semantic
   judgment;
+- prefer Codex CLI `exec` for semantic evaluator runs, using `gpt-5.5`,
+  `-c model_reasoning_effort="high"`, and `--output-schema <FILE>` when a
+  schema is available. The currently installed Pi CLI exposes JSON output mode
+  but no documented schema argument, so Pi is a fallback evaluator surface, not
+  the default. Structured output constrains the evaluator artifact shape, but
+  it does not replace semantic judgment.
 - require the evaluator narrative to identify visible dialogue quality risks
   that do not necessarily fail the use case, including placeholder-only visible
   prefaces before substantive answers, excessive internal terminology, or
@@ -146,6 +152,15 @@ For every model-dependent use case, the agent evaluator must receive and score:
 - the localized scorecard and fatal-failure criteria.
 - interaction efficiency after accounting for the sampled or specified human
   persona's natural overhead.
+
+Use Codex CLI `exec` with `gpt-5.5`,
+`-c model_reasoning_effort="high"`, and `--output-schema <FILE>` for semantic
+evaluator judgment by default. Use a lower thinking level or different surface
+only with an explicit evidence-backed reason. Capture raw evaluator events as
+internal evidence when useful, but suppress raw thinking tokens in shared or
+user-facing evidence by default; publish evaluator conclusions, cited evidence,
+score, and concise rationale instead. Rendering raw thinking tokens is an
+explicit design decision and must be justified.
 
 Quality risks such as placeholder-only visible prefaces are semantic evaluator
 judgments. Scripts may preserve and segment the visible assistant text for

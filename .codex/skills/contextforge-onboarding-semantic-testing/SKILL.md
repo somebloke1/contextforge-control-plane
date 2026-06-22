@@ -54,13 +54,16 @@ evaluate transcripts. They are never the tested assistant for this gate.
   Docker client harness.
 - Simulated human responder: separate persona that answers only the tested
   assistant's user-facing questions. Acceptance-matrix runs use a Pi
-  gpt-5.5 authenticated simulator unless the controller records a specific
-  equivalent substitute; seeded or direct-provider responders are debug
-  scaffolding.
+  gpt-5.5 authenticated simulator with `low` thinking unless the controller
+  records a specific equivalent substitute; seeded or direct-provider
+  responders are debug scaffolding.
 - Deterministic runner: resets state, launches clients, selects one model
   profile per run, records transcripts, and packages evidence.
 - Semantic evaluator: non-Spark model or SO that judges meaning, route
-  adequacy, claim boundaries, and process success.
+  adequacy, claim boundaries, and process success. Prefer Codex CLI `exec`
+  with `gpt-5.5`, `-c model_reasoning_effort="high"`, and
+  `--output-schema <FILE>` for evaluator runs. Use Pi as evaluator only as a
+  fallback when Codex CLI is unavailable or auth-blocked.
 
 ## Veil Rule
 
@@ -157,8 +160,17 @@ failure. Do not rewrite the story into a scripted substitute.
 
 ## Evaluation
 
-Use a non-Spark semantic evaluator for pass/fail judgment. The evaluator must
-judge whether the tested assistant:
+Use a non-Spark semantic evaluator for pass/fail judgment. The default
+semantic evaluator surface is Codex CLI `exec` with `gpt-5.5`,
+`-c model_reasoning_effort="high"`, and `--output-schema <FILE>` for the
+scorecard artifact. Use a lower thinking level only with an explicit
+evidence-backed reason. Structured output constrains the evaluator artifact
+shape; it does not replace semantic judgment. Capture raw evaluator events as
+internal evidence when useful, but suppress raw thinking tokens in shared or
+user-facing evidence by default and report conclusions plus concise rationale
+instead. Any decision to render raw thinking tokens must be explicit,
+surface-labeled, and justified by the controller. The evaluator must judge
+whether the tested assistant:
 
 - stayed behind the veil;
 - asked suitable questions or proceeded from source research when questions
