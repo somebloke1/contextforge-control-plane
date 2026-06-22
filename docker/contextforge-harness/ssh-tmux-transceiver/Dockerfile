@@ -9,7 +9,7 @@ ENV UV_CACHE_DIR=/var/cache/uv
 ENV PATH="/root/.local/bin:${PATH}"
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates openssh-client tmux \
+    && apt-get install -y --no-install-recommends ca-certificates openssh-client sshpass tmux \
     && python -m venv "${CONTEXTFORGE_TRANSCEIVER_VENV}" \
     && "${CONTEXTFORGE_TRANSCEIVER_VENV}/bin/python" -m pip install --no-cache-dir \
       "mcp-contextforge-gateway==${MCP_CONTEXTFORGE_GATEWAY_VERSION}" \
@@ -17,6 +17,9 @@ RUN apt-get update \
     && "${CONTEXTFORGE_TRANSCEIVER_VENV}/bin/uv" tool install "mcp-ssh-tmux==${MCP_SSH_TMUX_VERSION}" \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+COPY docker/contextforge-harness/ssh-tmux-transceiver/contextforge-ssh-wrapper.sh /root/.local/bin/ssh
+RUN chmod 0755 /root/.local/bin/ssh
 
 EXPOSE 9202
 
