@@ -12,6 +12,7 @@ import argparse
 import http.server
 import json
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -24,7 +25,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 
-DUMMY_API_KEY = "contextforge-host-proxy-dummy-key"
+DUMMY_API_KEY_PREFIX = "contextforge-host-proxy-dummy-"
 API_KEY_ENV_NAMES = (
     "OPENAI_API_KEY",
     "CODEX_API_KEY",
@@ -78,6 +79,15 @@ class OpenRouterProxy(http.server.BaseHTTPRequestHandler):
     def forward(self) -> None:
         upstream_base = str(self.server.upstream_base_url).rstrip("/")  # type: ignore[attr-defined]
         api_key = str(self.server.api_key)  # type: ignore[attr-defined]
+        expected_auth = str(self.server.expected_authorization)  # type: ignore[attr-defined]
+        if self.headers.get("Authorization") != expected_auth:
+            payload = json.dumps({"error": "unauthorized semantic model proxy request"}).encode()
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         length = int(self.headers.get("Content-Length", "0") or "0")
         body = self.rfile.read(length) if length else None
         suffix = strip_api_v1_prefix(self.path)
@@ -121,9 +131,12 @@ def serve(args: argparse.Namespace) -> int:
     api_key = os.environ.get(args.api_key_env)
     if not api_key:
         raise RuntimeError(f"missing host API key env {args.api_key_env}")
+    if not args.expected_dummy_key:
+        raise RuntimeError("--expected-dummy-key is required")
     server = http.server.ThreadingHTTPServer((args.listen_host, args.port), OpenRouterProxy)
     server.upstream_base_url = args.upstream_base_url.rstrip("/")  # type: ignore[attr-defined]
     server.api_key = api_key  # type: ignore[attr-defined]
+    server.expected_authorization = f"Bearer {args.expected_dummy_key}"  # type: ignore[attr-defined]
     print(
         json.dumps(
             {
@@ -133,6 +146,7 @@ def serve(args: argparse.Namespace) -> int:
                 "container_base_url": host_gateway_base_url(args.port),
                 "upstream_base_url": redact_url(args.upstream_base_url.rstrip("/")),
                 "api_key_env": args.api_key_env,
+                "dummy_key_present": True,
             },
             sort_keys=True,
         ),
@@ -148,6 +162,7 @@ class HostProxy:
     api_key_env: str
     upstream_base_url: str
     port: int
+    container_api_key: str
     process: subprocess.Popen[str]
 
     @property
@@ -159,7 +174,8 @@ class HostProxy:
             "provider_kind": self.provider_kind,
             "credential_location": "host_process_environment",
             "container_receives_real_api_key": False,
-            "container_api_key_value": "dummy",
+            "container_api_key_value": "ephemeral_dummy",
+            "container_api_key_present": True,
             "api_key_env": self.api_key_env,
             "container_base_url": self.container_base_url,
             "upstream_base_url": redact_url(self.upstream_base_url),
@@ -187,6 +203,7 @@ def start_openrouter_proxy(
     if not api_key:
         raise RuntimeError(f"cannot start semantic model host proxy without host {api_key_env}")
     port = free_local_port()
+    container_api_key = DUMMY_API_KEY_PREFIX + secrets.token_urlsafe(24)
     process_env = {key: value for key, value in os.environ.items() if key not in API_KEY_ENV_NAMES}
     process_env[api_key_env] = api_key
     command = [
@@ -194,13 +211,15 @@ def start_openrouter_proxy(
         str(script_path),
         "--serve-openrouter",
         "--listen-host",
-        "127.0.0.1",
+        "0.0.0.0",
         "--port",
         str(port),
         "--api-key-env",
         api_key_env,
         "--upstream-base-url",
         upstream_base_url,
+        "--expected-dummy-key",
+        container_api_key,
     ]
     process = subprocess.Popen(
         command,
@@ -222,6 +241,7 @@ def start_openrouter_proxy(
                     api_key_env=api_key_env,
                     upstream_base_url=upstream_base_url,
                     port=port,
+                    container_api_key=container_api_key,
                     process=process,
                 )
         if process.poll() is not None:
@@ -239,6 +259,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
     parser.add_argument("--upstream-base-url", default="https://openrouter.ai/api/v1")
+    parser.add_argument("--expected-dummy-key", default="")
     args = parser.parse_args()
     if args.serve_openrouter:
         return serve(args)

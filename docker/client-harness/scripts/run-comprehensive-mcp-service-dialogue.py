@@ -21,7 +21,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from semantic_model_host_proxy import API_KEY_ENV_NAMES, DUMMY_API_KEY, start_openrouter_proxy
+from semantic_model_host_proxy import API_KEY_ENV_NAMES, start_openrouter_proxy
 
 
 DEFAULT_SERENA_LANGUAGE = "python"
@@ -400,6 +400,26 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def assistant_error_from_json_stream(text: str) -> str | None:
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        message = event.get("message") if isinstance(event, dict) else None
+        if not isinstance(message, dict):
+            continue
+        error = message.get("errorMessage")
+        if isinstance(error, str) and error.strip():
+            return error.strip()
+        if message.get("stopReason") == "error":
+            return "assistant generation stopped with error"
+    return None
+
+
 def read_env(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     for raw_line in path.read_text(encoding="utf-8").splitlines():
@@ -743,7 +763,7 @@ def main(argv: list[str] | None = None) -> int:
                 host_env=available_model_env,
             )
             semantic_overrides["OPENROUTER_BASE_URL"] = semantic_host_proxy.container_base_url
-            semantic_overrides[api_key_env] = DUMMY_API_KEY
+            semantic_overrides[api_key_env] = semantic_host_proxy.container_api_key
         semantic_profile_summary = redacted_profile_summary(
             selected_profile,
             semantic_overrides,
@@ -802,7 +822,16 @@ def main(argv: list[str] | None = None) -> int:
             result = uc1.run(["docker", "exec", container, "bash", "-lc", command], cwd=repo_root, timeout=args.timeout, commands=commands)
             path = output_root / f"activation-turn-{index}.raw.txt"
             path.write_text(uc1.render_command_block(result), encoding="utf-8")
-            turns.append({"phase": "activation", "turn": index, "prompt": prompt, "path": str(path), **result})
+            turns.append(
+                {
+                    "phase": "activation",
+                    "turn": index,
+                    "prompt": prompt,
+                    "path": str(path),
+                    "assistant_error": assistant_error_from_json_stream(str(result.get("stdout") or "")),
+                    **result,
+                }
+            )
             if args.client == "opencode" and index == 1:
                 discovered = uc1.extract_opencode_session_id(str(result.get("stdout") or ""))
                 if discovered:
@@ -864,7 +893,16 @@ def main(argv: list[str] | None = None) -> int:
             result = uc1.run(["docker", "exec", container, "bash", "-lc", command], cwd=repo_root, timeout=args.timeout, commands=commands)
             path = output_root / "service-test-turn.raw.txt"
             path.write_text(uc1.render_command_block(result), encoding="utf-8")
-            turns.append({"phase": "service_test", "turn": 1, "prompt": prompt, "path": str(path), **result})
+            turns.append(
+                {
+                    "phase": "service_test",
+                    "turn": 1,
+                    "prompt": prompt,
+                    "path": str(path),
+                    "assistant_error": assistant_error_from_json_stream(str(result.get("stdout") or "")),
+                    **result,
+                }
+            )
             service_test_executed = True
             if args.client == "opencode":
                 discovered = uc1.extract_opencode_session_id(str(result.get("stdout") or ""))
@@ -1005,7 +1043,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if (
             activation_postcondition["returncode"] == 0
             and service_test_executed
-            and all(not turn["timeout"] and turn["returncode"] == 0 for turn in turns)
+            and all(not turn["timeout"] and turn["returncode"] == 0 and not turn.get("assistant_error") for turn in turns)
         ) else 1
     finally:
         if scoped_env_payload and not scoped_env_removed:

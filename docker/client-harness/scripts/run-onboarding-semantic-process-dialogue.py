@@ -20,7 +20,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from semantic_model_host_proxy import API_KEY_ENV_NAMES, DUMMY_API_KEY, start_openrouter_proxy
+from semantic_model_host_proxy import API_KEY_ENV_NAMES, start_openrouter_proxy
 
 
 DEFAULT_ONBOARDING_TURNS = 8
@@ -374,6 +374,26 @@ def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def assistant_error_from_json_stream(text: str) -> str | None:
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        message = event.get("message") if isinstance(event, dict) else None
+        if not isinstance(message, dict):
+            continue
+        error = message.get("errorMessage")
+        if isinstance(error, str) and error.strip():
+            return error.strip()
+        if message.get("stopReason") == "error":
+            return "assistant generation stopped with error"
+    return None
+
+
 def workspace_from_reset(reset_json: Any, harness_root: Path) -> str:
     if isinstance(reset_json, dict):
         workspace = reset_json.get("workspace")
@@ -654,7 +674,7 @@ def main(argv: list[str] | None = None) -> int:
                 host_env=available_model_env,
             )
             semantic_overrides["OPENROUTER_BASE_URL"] = semantic_host_proxy.container_base_url
-            semantic_overrides[api_key_env] = DUMMY_API_KEY
+            semantic_overrides[api_key_env] = semantic_host_proxy.container_api_key
     docker_run_env = {**compose_env, **{key: "" for key in API_KEY_ENV_NAMES}}
     semantic_profile = profile_summary(
         service_runner,
@@ -998,6 +1018,7 @@ def main(argv: list[str] | None = None) -> int:
                 session_id = discovered
         path = output_root / f"turn-{index}.raw.txt"
         path.write_text(uc1.render_command_block(result), encoding="utf-8")
+        assistant_error = assistant_error_from_json_stream(str(result.get("stdout") or ""))
         previous_user_prompt = prompt
         previous_assistant_output = str(result.get("stdout") or "")
         turns.append(
@@ -1007,6 +1028,7 @@ def main(argv: list[str] | None = None) -> int:
                 "path": str(path),
                 "returncode": result["returncode"],
                 "timeout": result["timeout"],
+                "assistant_error": assistant_error,
             }
         )
 
@@ -1046,7 +1068,7 @@ def main(argv: list[str] | None = None) -> int:
         and runtime["returncode"] == 0
         and responder_runtime_ok
         and responder_ok
-        and all(not turn["timeout"] and turn["returncode"] == 0 for turn in turns)
+        and all(not turn["timeout"] and turn["returncode"] == 0 and not turn.get("assistant_error") for turn in turns)
     )
     return 0 if ok else 1
 

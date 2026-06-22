@@ -1450,7 +1450,7 @@ print(json.dumps(outputs))
         self.assertIn('"minimum_context_window"', runner)
         self.assertIn('"api_key_present"', runner)
         self.assertIn("semantic_model_host_proxy", runner)
-        self.assertIn("DUMMY_API_KEY", runner)
+        self.assertIn("container_api_key", runner)
         self.assertIn('container_receives_real_semantic_model_api_key": False', runner)
         self.assertIn("API_KEY_ENV_NAMES", runner)
         self.assertNotIn('launch_command.extend(["-e", key])', runner)
@@ -1468,7 +1468,10 @@ print(json.dumps(outputs))
 
         self.assertNotIn("env_file:\n    - ./env/semantic-model.env", compose)
         self.assertIn('OPENROUTER_API_KEY: ""', compose)
-        self.assertIn("DUMMY_API_KEY", proxy)
+        self.assertIn("DUMMY_API_KEY_PREFIX", proxy)
+        self.assertIn("--expected-dummy-key", proxy)
+        self.assertIn("expected_authorization", proxy)
+        self.assertIn("0.0.0.0", proxy)
         self.assertIn("host.docker.internal", proxy)
         self.assertIn("headers[\"Authorization\"] = f\"Bearer {api_key}\"", proxy)
         for runner in [comprehensive_runner, onboarding_runner]:
@@ -1476,8 +1479,33 @@ print(json.dumps(outputs))
             self.assertIn("semantic_model_host_proxy", runner)
             self.assertIn("container_receives_real_semantic_model_api_key", runner)
             self.assertIn("OPENROUTER_BASE_URL", runner)
-            self.assertIn("DUMMY_API_KEY", runner)
+            self.assertIn("container_api_key", runner)
+            self.assertIn("assistant_error_from_json_stream", runner)
             self.assertNotIn('for key in semantic_secret_env_keys_to_pass:\n            launch_command.extend(["-e", key])', runner)
+
+    def test_semantic_runners_detect_structured_assistant_errors(self) -> None:
+        for script_name, module_name in [
+            ("run-comprehensive-mcp-service-dialogue.py", "comprehensive_mcp_error_detection"),
+            ("run-onboarding-semantic-process-dialogue.py", "onboarding_semantic_error_detection"),
+        ]:
+            spec = importlib.util.spec_from_file_location(
+                module_name,
+                ROOT / "docker/client-harness/scripts" / script_name,
+            )
+            assert spec is not None and spec.loader is not None
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            self.assertEqual(
+                "Connection error.",
+                module.assistant_error_from_json_stream(
+                    '{"type":"message_end","message":{"stopReason":"error","errorMessage":"Connection error."}}\n'
+                ),
+            )
+            self.assertIsNone(
+                module.assistant_error_from_json_stream(
+                    '{"type":"message_end","message":{"stopReason":"stop","content":[{"type":"text","text":"ok"}]}}\n'
+                )
+            )
 
     def test_flash_lite_is_explicit_only_for_multi_step_quorum(self) -> None:
         spec = importlib.util.spec_from_file_location(
