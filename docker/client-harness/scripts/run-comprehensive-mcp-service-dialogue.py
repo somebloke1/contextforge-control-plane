@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import random
+import shutil
 import sys
 import urllib.error
 import urllib.request
@@ -76,6 +77,10 @@ def default_session_id(client: str, service: str, phase: str, timestamp: str) ->
         safe = service.replace("-", "_")
         return f"ses_mcp_{safe}_{phase}_{compact}"
     return f"mcp-{service}-{phase}-{timestamp}"
+
+
+def safe_run_suffix(value: str) -> str:
+    return "".join(ch.lower() if ch.isalnum() else "-" for ch in value).strip("-")
 
 
 def ssh_tmux_live_target_prompt(repo_root: Path | None) -> str | None:
@@ -514,12 +519,56 @@ def scoped_env_text(container_base_url: str, server_id: str, access_token: str) 
     )
 
 
-def write_host_client_scoped_env(harness_root: Path, payload: str) -> Path:
-    path = harness_root / HOST_CLIENT_SCOPED_ENV_RELATIVE
+def write_host_client_scoped_env(client_scoped_dir: Path, payload: str) -> Path:
+    path = client_scoped_dir / "contextforge.env"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(payload, encoding="utf-8")
     os.chmod(path, 0o600)
     return path
+
+
+def reset_isolated_dir(path: Path) -> dict[str, Any]:
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True, exist_ok=True)
+    os.chmod(path, 0o777)
+    return {"path": str(path), "postcondition": path.exists()}
+
+
+def prepare_isolated_harness(args: argparse.Namespace, harness_root: Path) -> tuple[dict[str, str], dict[str, Any], Path]:
+    isolation_root = args.isolation_root.resolve()
+    client = str(args.client)
+    home_dir = isolation_root / f"{client}-home"
+    workspace_dir = isolation_root / "workspace"
+    evidence_dir = isolation_root / "evidence"
+    client_scoped_dir = isolation_root / "client-scoped"
+    resets = {
+        "home": reset_isolated_dir(home_dir),
+        "workspace": reset_isolated_dir(workspace_dir),
+        "evidence": reset_isolated_dir(evidence_dir),
+        "client_scoped": reset_isolated_dir(client_scoped_dir),
+    }
+    (workspace_dir / ".gitkeep").write_text("\n", encoding="utf-8")
+    env = {
+        "CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE": str(workspace_dir),
+        "CONTEXTFORGE_CLIENT_HARNESS_EVIDENCE": str(evidence_dir),
+        "CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED": str(client_scoped_dir),
+    }
+    if client == "opencode":
+        env["CONTEXTFORGE_CLIENT_HARNESS_OPENCODE_HOME"] = str(home_dir)
+    elif client == "pi":
+        env["CONTEXTFORGE_CLIENT_HARNESS_PI_HOME"] = str(home_dir)
+    else:  # pragma: no cover - argparse constrains current callers.
+        raise RuntimeError(f"isolated harness is not supported for client {client!r}")
+    return env, {
+        "mode": "isolated",
+        "root": str(isolation_root),
+        "postcondition": all(bool(item.get("postcondition")) for item in resets.values()),
+        "resets": resets,
+        "workspace": str(workspace_dir),
+        "home": str(home_dir),
+        "client_scoped": str(client_scoped_dir),
+    }, client_scoped_dir
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -544,6 +593,12 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=Path(os.environ["CONTEXTFORGE_DEV_ENV_FILE"]) if os.environ.get("CONTEXTFORGE_DEV_ENV_FILE") else None,
     )
+    parser.add_argument(
+        "--isolation-root",
+        type=Path,
+        help="Use isolated home/workspace/client-scoped mounts rooted here; required for safe parallel quorum runs.",
+    )
+    parser.add_argument("--run-suffix", help="Unique suffix for parallel evidence roots, container names, and sessions.")
     args = parser.parse_args(argv)
     if args.timeout < 90:
         raise SystemExit("--timeout must be at least 90 seconds")
@@ -560,13 +615,22 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"service {args.service!r} is missing service_binding in comprehensive-mcp-testing-services.json")
     global_issue = 316
 
-    lock_file = uc1.acquire_harness_lock(harness_root)
+    isolated = args.isolation_root is not None
+    compose_env: dict[str, str] = {}
+    isolated_reset: dict[str, Any] | None = None
+    client_scoped_dir = harness_root / "client-scoped"
+    lock_file = None if isolated else uc1.acquire_harness_lock(harness_root)
+    if isolated:
+        compose_env, isolated_reset, client_scoped_dir = prepare_isolated_harness(args, harness_root)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    output_root = harness_root / "evidence" / "comprehensive-mcp" / args.service / args.client / timestamp
+    run_suffix = safe_run_suffix(args.run_suffix or "")
+    run_id = timestamp if not run_suffix else f"{timestamp}-{run_suffix}"
+    output_root = harness_root / "evidence" / "comprehensive-mcp" / args.service / args.client / run_id
     output_root.mkdir(parents=True, exist_ok=True)
-    container = f"cf-mcp-{args.service[:18].replace('-', '')}-{args.client}-{timestamp.lower().replace('z', '')}"
-    activation_session = default_session_id(args.client, args.service, "activate", timestamp)
-    test_session = default_session_id(args.client, args.service, "test", timestamp)
+    container_run_id = run_id.lower().replace("z", "").replace("_", "-")
+    container = f"cf-mcp-{args.service[:18].replace('-', '')}-{args.client}-{container_run_id}"
+    activation_session = default_session_id(args.client, args.service, "activate", run_id)
+    test_session = default_session_id(args.client, args.service, "test", run_id)
     commands: list[dict[str, Any]] = []
     admin_token = ""
     scoped_token_id = ""
@@ -600,24 +664,44 @@ def main(argv: list[str] | None = None) -> int:
                 args.service,
             )
             scoped_env_payload = scoped_env_text(args.contextforge_container_base_url, scoped_server_id, access_token)
-            host_scoped_env_file = write_host_client_scoped_env(harness_root, scoped_env_payload)
+            host_scoped_env_file = write_host_client_scoped_env(client_scoped_dir, scoped_env_payload)
             scoped_env_installed = True
 
-        reset = uc1.run(
-            [
-                sys.executable,
-                str(harness_root / "scripts" / "reset-client-harness-state.py"),
-                "--client",
-                uc1.reset_client_name(args.client),
-                "--reset-home-volume",
-                "--evidence-dir",
-                "docker/client-harness/evidence/comprehensive-mcp/prior",
-            ],
-            cwd=repo_root,
-            timeout=120,
-            commands=commands,
-        )
-        reset_json = uc1.parse_json_or_text(reset["stdout"])
+        if isolated:
+            reset = {
+                "command": ["isolated-harness-reset", str(args.isolation_root)],
+                "command_text": f"isolated-harness-reset {args.isolation_root}",
+                "cwd": str(repo_root),
+                "returncode": 0 if isolated_reset and isolated_reset.get("postcondition") else 1,
+                "stdout": json.dumps(isolated_reset, indent=2, sort_keys=True),
+                "stderr": "",
+                "timeout": False,
+            }
+            commands.append(
+                {
+                    "command_text": reset["command_text"],
+                    "cwd": reset["cwd"],
+                    "returncode": reset["returncode"],
+                    "timeout": reset["timeout"],
+                }
+            )
+            reset_json = isolated_reset
+        else:
+            reset = uc1.run(
+                [
+                    sys.executable,
+                    str(harness_root / "scripts" / "reset-client-harness-state.py"),
+                    "--client",
+                    uc1.reset_client_name(args.client),
+                    "--reset-home-volume",
+                    "--evidence-dir",
+                    "docker/client-harness/evidence/comprehensive-mcp/prior",
+                ],
+                cwd=repo_root,
+                timeout=120,
+                commands=commands,
+            )
+            reset_json = uc1.parse_json_or_text(reset["stdout"])
         service_fixture = prepare_service_fixture(harness_root, args.service)
 
         uc1.ensure_semantic_model_env(harness_root, client=args.client, commands=commands, runner=uc1.run)
@@ -655,6 +739,7 @@ def main(argv: list[str] | None = None) -> int:
                 cwd=repo_root,
                 timeout=600,
                 commands=commands,
+                env=compose_env or None,
             )
 
         launch_command = [
@@ -678,6 +763,7 @@ def main(argv: list[str] | None = None) -> int:
             cwd=repo_root,
             timeout=120,
             commands=commands,
+            env=compose_env or None,
         )
         runtime = uc1.run(
             ["docker", "exec", container, "bash", "-lc", uc1.runtime_readback_command(args.client)],
@@ -823,6 +909,8 @@ def main(argv: list[str] | None = None) -> int:
             "service_issue": service["issue"],
             "global_issue": global_issue,
             "timestamp": timestamp,
+            "run_id": run_id,
+            "run_suffix": run_suffix or None,
             "container": container,
             "activation_session": activation_session,
             "test_session": test_session,
@@ -839,11 +927,12 @@ def main(argv: list[str] | None = None) -> int:
                 "probe_token_id": scoped_token_id or None,
                 "probe_token_delivery": "client_scoped_env_file" if scoped_env_payload else None,
                 "client_scoped_env_path": CLIENT_SCOPED_ENV_PATH if scoped_env_payload else None,
-                "host_client_scoped_env_file": str(HOST_CLIENT_SCOPED_ENV_RELATIVE) if scoped_env_payload else None,
+                "host_client_scoped_env_file": str(host_scoped_env_file) if host_scoped_env_file else None,
                 "client_scoped_env_installed": scoped_env_installed,
                 "client_scoped_env_removed": scoped_env_removed,
                 "probe_token_revoked": scoped_token_revoked,
             },
+            "isolation": None if not isolated else isolated_reset,
             "reset": reset_json,
             "service_fixture": service_fixture,
             "build_returncode": None if build_result is None else build_result["returncode"],
@@ -926,7 +1015,8 @@ def main(argv: list[str] | None = None) -> int:
                 revoke_probe_token(args.contextforge_host_base_url, admin_token, scoped_token_id)
             except Exception as exc:  # pragma: no cover - best-effort cleanup path
                 print(f"warning: failed to revoke probe token {scoped_token_id}: {exc}", file=sys.stderr)
-        lock_file.close()
+        if lock_file is not None:
+            lock_file.close()
 
 
 if __name__ == "__main__":

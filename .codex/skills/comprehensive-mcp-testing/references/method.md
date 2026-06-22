@@ -179,6 +179,15 @@ The three-model quorum does not permit deterministic prose scoring. Each model
 run still requires semantic evaluation for route use, user-facing clarity,
 leakage, recovery, and behavioral acceptance.
 
+Quorum runs should execute eligible profiles concurrently, not serially, once
+the runner can isolate target-client state. Parallelism must not reuse the same
+client home volume, `/workspace`, client-scoped token file, container name,
+session id, or evidence directory across profiles. If the runner cannot provide
+those isolated surfaces, fall back to `--jobs 1` and record the lost-concurrency
+risk as harness debt. Successful parallel evidence should record
+`execution_mode: parallel_isolated`, the job count, each isolation root, and
+the per-profile run suffix.
+
 ## Model-Sized Evaluation Packets
 
 Build evaluator packets for tested-assistant sessions as compact indexes, not

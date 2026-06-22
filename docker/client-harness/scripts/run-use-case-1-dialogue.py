@@ -489,12 +489,14 @@ def run(
     cwd: Path,
     timeout: int,
     commands: list[dict[str, Any]],
+    env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     command_text = shell_join(cmd)
     try:
         completed = subprocess.run(
             cmd,
             cwd=str(cwd),
+            env=None if env is None else {**os.environ, **env},
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
