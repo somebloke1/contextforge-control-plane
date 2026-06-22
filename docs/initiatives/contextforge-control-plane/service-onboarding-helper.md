@@ -378,10 +378,15 @@ advancing to the next foil.
 
 A foil is not complete merely because the controller or an informed agent can
 build it. Completion requires a blind semantic end-to-end onboarding trial: a
-fresh agent with no service-specific project history receives only the source
-lead and generic onboarding support, then succeeds from source research through
+real Pi and OpenCode target-client assistants receive only the source lead and
+generic onboarding support, while a separate simulated human responder answers
+only questions those assistants ask. The responder must have a declared
+knowledge persona, ranging from an ignorant user who asks the assistant to
+decide from research to an expert user who can state detailed requirements or
+preferences when asked. The trial must succeed from source research through
 decision record, implementation, runtime proof, ContextForge registration
-proof, target-client-visible safe use, and semantic evaluator narrative. The
+proof, target-client-visible safe use, and semantic evaluator narrative across
+at least three eligible semantic-test model profiles per target client. The
 trial may validate structure, command status, JSON, endpoints, and files
 deterministically, but it must not evaluate generated assistant meaning through
 string or regex matching. If the blind trial needs Time-specific facts that are

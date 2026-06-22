@@ -669,9 +669,11 @@ def _onboarding_sequence(candidate_service: str | None) -> dict[str, Any]:
         "rule": "perfect onboarding of the current foil before starting the next foil in the ladder",
         "semantic_onboarding_proof_required": True,
         "blind_trial_requirement": (
-            "a fresh agent with no service-specific project history, given only the source lead and generic "
-            "onboarding support, must complete source research, decision record, implementation, runtime proof, "
-            "ContextForge registration proof, target-client-visible safe use, and semantic evaluator narrative"
+            "real Pi and OpenCode target-client assistants, each in isolated runs across at least three eligible "
+            "semantic-test model profiles, must receive only the source lead plus generic onboarding support while "
+            "a separate simulated human responder answers questions with a declared knowledge persona; the process "
+            "must complete source research, decision record, implementation, runtime proof, ContextForge registration "
+            "proof, target-client-visible safe use, and semantic evaluator narrative without service-specific coaching"
         ),
         "development_foil_ladder": _json_compatible_copy(ONBOARDING_DEVELOPMENT_FOIL_LADDER),
         "current_foil": _json_compatible_copy(current) if current else None,
@@ -680,7 +682,9 @@ def _onboarding_sequence(candidate_service: str | None) -> dict[str, Any]:
         "advance_condition": (
             "current foil has approved decisions, implementation, runtime proof, ContextForge registration proof, "
             "target-client-visible list-tools plus safe call, operator trace, residual-risk ledger, and a blind "
-            "source-lead-only semantic end-to-end onboarding verdict from a non-Spark evaluator-capable agent"
+            "source-lead-only semantic end-to-end onboarding verdict for Pi and OpenCode target-client assistants "
+            "across at least three eligible model profiles, with a separate simulated human responder and non-Spark "
+            "evaluator judgment"
         ),
     }
 

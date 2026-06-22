@@ -84,6 +84,33 @@ Every runner-generated evaluation package must include both layers:
 Future use cases should add or modify only the localization artifact and runner
 prompt sequence unless the reusable method itself is inadequate.
 
+## Onboarding Process Gates
+
+Service-onboarding process proof is a special dialogue gate. It tests whether
+the ContextForge onboarding process works through actual target clients, not
+whether Codex can perform source research or implementation in its own
+framework. Use the repo-local `contextforge-onboarding-semantic-testing` skill
+as the operational test-running skill for this gate; this method only records
+the shared dialogue-evidence boundary.
+
+For each onboarding foil, the tested assistant must be a real Pi or OpenCode
+client session. Codex subagents may build runners or evaluate evidence, but
+they are not valid tested-client substitutes. The tested assistant receives
+only the source lead, generic onboarding guidance available through the client,
+and answers from a separate simulated human responder.
+
+The simulated human is a composite persona randomly composed per run across a
+five-dimensional disposition space: domain knowledge, goal specificity, risk
+posture, technical fluency, and interaction style. The persona remains fixed
+for the whole run and answers only questions the tested assistant asks. It must
+not volunteer package names, tool names, bridge commands, probe payloads,
+expected implementation shape, evaluator criteria, or controller memory.
+
+Acceptance requires Pi and OpenCode coverage across at least three distinct
+eligible semantic-test model profiles per target client. Deterministic runner
+checks may package setup, commands, JSON, files, endpoints, and transcripts,
+but semantic adequacy belongs to the evaluator.
+
 ## Deterministic Boundary
 
 Deterministic evaluation of generative outputs is disallowed unless the output

@@ -124,6 +124,13 @@ client/model under test or a cost-bounded dialogue probe. The evaluator role is
 not a mini-model role: use `gpt-5.5` for pass/fail semantic judgment, narrative
 quality assessment, overclaim detection, and requirement-gap analysis.
 
+For source-lead-only service-onboarding process gates, use
+`contextforge-onboarding-semantic-testing` in addition to this generic dialogue
+method. A Codex subagent is not the tested assistant for that gate: the tested
+assistant must be a real Pi or OpenCode target-client session, with a random
+composite simulated-human persona and at least three eligible semantic-test
+model profiles per target client.
+
 Expect raw CLI/JSON streams to become large. Preserve the raw stream as an
 evidence artifact, then use targeted readbacks to extract live values such as
 challenge ids, plan digests, and job ids. Do not truncate
