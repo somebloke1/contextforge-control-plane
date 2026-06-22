@@ -55,7 +55,7 @@ def render_config() -> None:
         shutil.copy2(source, target)
 
     data = json.loads(target.read_text(encoding="utf-8"))
-    model_id = openrouter_model_component(os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemini-2.5-flash-lite"))
+    model_id = openrouter_model_component(os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemma-4-26b-a4b-it"))
     routes = [item.strip() for item in os.environ.get("OPENROUTER_PROVIDER_ROUTES", "").split(",") if item.strip()]
     if not routes and os.environ.get("OPENROUTER_PROVIDER_ROUTE"):
         routes = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]

@@ -340,7 +340,7 @@ def selected_profile_env(
             or (
                 os.environ.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
                 or available_env.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
-                or "openrouter-gemini-flash-lite"
+                or "openrouter-semantic-test"
             )
             if routes
             else "openrouter"

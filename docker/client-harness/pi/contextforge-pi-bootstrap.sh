@@ -55,7 +55,7 @@ def effective_sticky_key() -> str:
 source = Path("/config/pi/models.json")
 target = Path(os.environ["PI_CODING_AGENT_DIR"]) / "models.json"
 data = json.loads(source.read_text(encoding="utf-8"))
-provider = data["providers"]["openrouter-gemini-flash-lite"]
+provider = data["providers"]["openrouter-semantic-test"]
 provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]
 provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]
 provider["headers"]["x-session-id"] = effective_sticky_key()

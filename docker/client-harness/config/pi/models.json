@@ -1,6 +1,6 @@
 {
   "providers": {
-    "openrouter-gemini-flash-lite": {
+    "openrouter-semantic-test": {
       "baseUrl": "$OPENROUTER_BASE_URL",
       "api": "openai-completions",
       "apiKey": "$OPENROUTER_API_KEY",
@@ -10,20 +10,15 @@
       },
       "compat": {
         "supportsDeveloperRole": true,
-        "supportsReasoningEffort": false,
-        "openRouterRouting": {
-          "only": ["google-ai-studio"],
-          "order": ["google-ai-studio"],
-          "allow_fallbacks": false
-        }
+        "supportsReasoningEffort": false
       },
       "models": [
         {
-          "id": "google/gemini-2.5-flash-lite",
-          "name": "Gemini 2.5 Flash Lite via OpenRouter",
+          "id": "google/gemma-4-26b-a4b-it",
+          "name": "Configured semantic-test model via OpenRouter",
           "reasoning": false,
           "input": ["text", "image"],
-          "contextWindow": 1048576,
+          "contextWindow": 262144,
           "maxTokens": 65535,
           "cost": {
             "input": 0.1,

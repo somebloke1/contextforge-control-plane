@@ -1022,8 +1022,8 @@ print(json.dumps(outputs))
 
         self.assertIn("COPY --chown=agent:agent pi-wrapper.sh /usr/local/bin/pi", dockerfile)
         self.assertIn(": \"${CONTEXTFORGE_PI_REAL_BIN:=/usr/bin/pi}\"", wrapper)
-        self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=openrouter-gemini-flash-lite}\"", wrapper)
-        self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_MODEL:=${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}}\"", wrapper)
+        self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=openrouter-semantic-test}\"", wrapper)
+        self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_MODEL:=${OPENROUTER_MODEL:-google/gemma-4-26b-a4b-it}}\"", wrapper)
         self.assertIn(". /usr/local/bin/contextforge-pi-bootstrap", wrapper)
         self.assertIn("default_args+=(--provider \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER}\")", wrapper)
         self.assertIn("default_args+=(--model \"${CONTEXTFORGE_PI_DEFAULT_MODEL}\")", wrapper)
@@ -1069,21 +1069,19 @@ print(json.dumps(outputs))
 
         self.assertIn("./env/semantic-model.env", compose)
         self.assertIn("OPENROUTER_API_KEY=replace-with-openrouter-secret", env_example)
-        self.assertIn("CONTEXTFORGE_TEST_MODEL=google/gemini-2.5-flash-lite", env_example)
-        self.assertIn("CONTEXTFORGE_TEST_PROVIDER_ROUTE=google-ai-studio", env_example)
-        self.assertIn("OPENROUTER_PROVIDER_ROUTES=google-ai-studio", env_example)
+        self.assertIn("CONTEXTFORGE_TEST_MODEL=google/gemma-4-26b-a4b-it", env_example)
+        self.assertIn("CONTEXTFORGE_TEST_PROVIDER_ROUTE=", env_example)
+        self.assertIn("OPENROUTER_PROVIDER_ROUTES=", env_example)
         self.assertIn("OPENROUTER_STICKY_KEY=contextforge-semantic-test", env_example)
         self.assertIn("OPENROUTER_STICKY_EPOCH_SECONDS=7200", env_example)
 
-        pi_provider = pi_models["providers"]["openrouter-gemini-flash-lite"]
+        pi_provider = pi_models["providers"]["openrouter-semantic-test"]
         self.assertEqual("$OPENROUTER_BASE_URL", pi_provider["baseUrl"])
         self.assertEqual("$OPENROUTER_API_KEY", pi_provider["apiKey"])
         self.assertEqual("$OPENROUTER_STICKY_KEY", pi_provider["headers"]["x-session-id"])
         self.assertNotIn("cacheControlFormat", pi_provider["compat"])
-        self.assertEqual(["google-ai-studio"], pi_provider["compat"]["openRouterRouting"]["only"])
-        self.assertEqual(["google-ai-studio"], pi_provider["compat"]["openRouterRouting"]["order"])
-        self.assertFalse(pi_provider["compat"]["openRouterRouting"]["allow_fallbacks"])
-        self.assertEqual("google/gemini-2.5-flash-lite", pi_provider["models"][0]["id"])
+        self.assertNotIn("openRouterRouting", pi_provider["compat"])
+        self.assertEqual("google/gemma-4-26b-a4b-it", pi_provider["models"][0]["id"])
 
         self.assertEqual("{env:CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}", opencode_config["model"])
         openrouter_provider = opencode_config["provider"]["openrouter"]
@@ -1096,7 +1094,7 @@ print(json.dumps(outputs))
         self.assertIn("OPENROUTER_STICKY_EPOCH_SECONDS", opencode_renderer)
         self.assertIn('return f"{base}-e{bucket}"', opencode_renderer)
         self.assertIn(
-            'model_id = openrouter_model_component(os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemini-2.5-flash-lite"))',
+            'model_id = openrouter_model_component(os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemma-4-26b-a4b-it"))',
             opencode_renderer,
         )
         self.assertIn(
@@ -1317,10 +1315,10 @@ print(json.dumps(outputs))
                 "route_preferences": [],
             },
             "pi",
-            {"CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openrouter-gemini-flash-lite"},
+            {"CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openrouter-semantic-test"},
         )
 
-        self.assertEqual("openrouter-gemini-flash-lite", routed_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
+        self.assertEqual("openrouter-semantic-test", routed_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
         self.assertEqual("openrouter", unrouted_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
         self.assertEqual("", unrouted_env["OPENROUTER_PROVIDER_ROUTES"])
         self.assertEqual("", unrouted_env["OPENROUTER_PROVIDER_ROUTE"])
