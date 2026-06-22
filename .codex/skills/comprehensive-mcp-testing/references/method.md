@@ -81,6 +81,16 @@ Useful behavior dimensions include:
 - credential/auth/token failure that should be explained without exposing
   secrets or blaming the wrong layer.
 
+For live target services, keep credentials in the runtime boundary, not in the
+tested-assistant prompt or transcript. If a service tool schema accepts only
+ordinary target parameters, such as host, username, and port, but not the secret
+material needed to authenticate, do not teach the tested assistant a password or
+token to pass interactively. Put credentials in ignored env files, mounted auth
+material, sidecar-local config, or a sidecar-local wrapper that consumes secrets
+without printing them. A direct sidecar/backend smoke with those credentials
+proves only the backend/auth layer; Pi/OpenCode usability still requires
+target-client-visible tool use and semantic evaluation.
+
 When a model stops after the first safe tool call, do not immediately solve the
 failure by making the prompt more technical. Classify the observed route first:
 if the first tool result is ambiguous, incomplete, or not user-meaningful, that
