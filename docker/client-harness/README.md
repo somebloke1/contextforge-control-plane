@@ -162,6 +162,34 @@ Google prompt caching is implicit for eligible repeated prefixes.
 Do not enable or evaluate OpenRouter response caching via `X-OpenRouter-Cache`;
 that caches identical whole responses and is not the semantic-test objective.
 
+## Pi Human-Simulator Baseline
+
+Onboarding semantic-process acceptance runs use a separate Pi gpt-5.5
+simulated-human responder. Do not create the responder auth container through
+the compose `pi` service, because target-client Pi resets own and remove the
+`contextforge-client-harness_pi-home` volume. Use a raw Docker container with
+its own writable layer, authenticate it once, then commit it as the responder
+baseline image:
+
+```sh
+docker rm -f cf-pi-human-sim-auth 2>/dev/null || true
+docker run --name cf-pi-human-sim-auth -d contextforge-client-pi:latest sleep infinity
+docker exec -it cf-pi-human-sim-auth bash
+```
+
+Inside the container, authenticate Pi for the OpenAI provider using the
+subscription-backed OAuth flow, then verify:
+
+```sh
+pi --provider openai --model gpt-5.5 --thinking low --no-tools --no-context-files -p "Reply exactly: human-sim-ok"
+```
+
+After authentication succeeds, exit and capture the baseline:
+
+```sh
+docker commit cf-pi-human-sim-auth contextforge-client-pi:human-sim-authenticated
+```
+
 The remaining launch-only clients do not consume this semantic-test model
 profile yet. They are installed and version-checked only.
 

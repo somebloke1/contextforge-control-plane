@@ -140,9 +140,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-turns", type=int, default=DEFAULT_ONBOARDING_TURNS)
     parser.add_argument(
         "--responder-mode",
-        choices=["model", "seeded"],
-        default="model",
-        help="Use model-backed simulated human responders by default; seeded mode is debug scaffolding.",
+        choices=["pi", "model", "seeded"],
+        default="pi",
+        help="Use Pi gpt-5.5 simulated human responders by default; seeded mode is debug scaffolding.",
+    )
+    parser.add_argument("--responder-pi-image", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_IMAGE", "contextforge-client-pi:human-sim-authenticated"))
+    parser.add_argument("--responder-pi-provider", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_PROVIDER", "openai"))
+    parser.add_argument("--responder-pi-model", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_MODEL", "gpt-5.5"))
+    parser.add_argument(
+        "--responder-pi-thinking",
+        choices=["off", "minimal", "low", "medium", "high", "xhigh"],
+        default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_THINKING", "low"),
     )
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -220,6 +228,14 @@ def main(argv: list[str] | None = None) -> int:
             str(args.max_turns),
             "--responder-mode",
             args.responder_mode,
+            "--responder-pi-image",
+            args.responder_pi_image,
+            "--responder-pi-provider",
+            args.responder_pi_provider,
+            "--responder-pi-model",
+            args.responder_pi_model,
+            "--responder-pi-thinking",
+            args.responder_pi_thinking,
             "--semantic-model-profile",
             profile_id,
             "--persona-index",

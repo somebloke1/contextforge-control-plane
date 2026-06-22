@@ -577,6 +577,11 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("preflight-contextforge-foil-clean-readback.json", dialogue_runner)
         self.assertIn("preflight-contextforge-available-capabilities.json", dialogue_runner)
         self.assertIn('"contextforge_servers": registry_parsed.get("contextforge_servers") or []', dialogue_runner)
+        self.assertIn('choices=["pi", "model", "seeded"]', dialogue_runner)
+        self.assertIn('default="pi"', dialogue_runner)
+        self.assertIn("pi_gpt_5_5_simulated_human_responder", dialogue_runner)
+        self.assertIn("contextforge-client-pi:human-sim-authenticated", dialogue_runner)
+        self.assertIn("gpt-5.5", gate + onboarding_skill + dialogue_runner)
         self.assertIn("dry_run", dialogue_runner)
         self.assertIn("if not args.dry_run", dialogue_runner)
         self.assertIn("MIN_MODEL_QUORUM = 3", quorum_runner)
@@ -873,6 +878,32 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
 
         self.assertEqual("passed", result["status"])
         self.assertEqual(live_servers, fake.payloads[0]["contextforge_servers"])
+
+    def test_onboarding_pi_human_responder_command_is_session_scoped_and_toolless(self) -> None:
+        dialogue = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+            "onboarding_semantic_pi_responder_command_test",
+        )
+        command = dialogue.pi_responder_command(
+            {
+                "provider": "openai",
+                "model": "gpt-5.5",
+                "thinking": "low",
+            },
+            "human-sim-session",
+            "Answer the tested assistant.",
+        )
+
+        self.assertIn("--provider openai", command)
+        self.assertIn("--model gpt-5.5", command)
+        self.assertIn("--thinking low", command)
+        self.assertIn("--session-id human-sim-session", command)
+        self.assertIn("--session-dir /home/agent/.pi/human-sim-sessions", command)
+        self.assertIn("--no-tools", command)
+        self.assertIn("--no-context-files", command)
+        self.assertIn("--no-extensions", command)
+        self.assertIn("--no-skills", command)
+        self.assertIn("--no-prompt-templates", command)
 
     def test_mentality_manifest_records_dev_docker_surface(self) -> None:
         manifest = (ROOT / "server-instances/mentality/instance.json").read_text(encoding="utf-8")
@@ -1293,6 +1324,7 @@ print(json.dumps(outputs))
         pi_models = json.loads((ROOT / "docker/client-harness/config/pi/models.json").read_text(encoding="utf-8"))
         opencode_config = json.loads((ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8"))
         compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
+        readme = (ROOT / "docker/client-harness/README.md").read_text(encoding="utf-8")
         opencode_entrypoint = (ROOT / "docker/client-harness/opencode/entrypoint.sh").read_text(encoding="utf-8")
         env_example = (ROOT / "docker/client-harness/env/semantic-model.env.example").read_text(encoding="utf-8")
 
@@ -1303,6 +1335,10 @@ print(json.dumps(outputs))
         self.assertIn("OPENROUTER_PROVIDER_ROUTES=", env_example)
         self.assertIn("OPENROUTER_STICKY_KEY=contextforge-semantic-test", env_example)
         self.assertIn("OPENROUTER_STICKY_EPOCH_SECONDS=7200", env_example)
+        self.assertIn("Pi Human-Simulator Baseline", readme)
+        self.assertIn("contextforge-client-pi:human-sim-authenticated", readme)
+        self.assertIn("Do not create the responder auth container through", readme)
+        self.assertIn("pi --provider openai --model gpt-5.5", readme)
 
         pi_provider = pi_models["providers"]["openrouter-semantic-test"]
         self.assertEqual("$OPENROUTER_BASE_URL", pi_provider["baseUrl"])
