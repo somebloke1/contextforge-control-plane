@@ -39,8 +39,9 @@ then saw and safely used the onboarded service through ContextForge.
 If the foil is already present in the target ContextForge surface before the
 run starts, the run is invalid. "Present" includes an MCP service, service
 tools, virtual server, service-bound prompt, service-bound resource, or any
-client activation-menu entry for the foil. Treat current menu/readback checks
-as a minimum visible preflight, not as the whole cleanup contract.
+client activation-menu entry for the foil. Require structured registry
+readback for service/tool/server/prompt/resource absence and activation-menu
+readback for client-visible exposure before real dialogue begins.
 
 Codex subagents may build runners, package evidence, review GitHub state, or
 evaluate transcripts. They are never the tested assistant for this gate.
