@@ -128,6 +128,11 @@ def parse_summary(stdout: str) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def dialogue_summary_acceptance_eligible(summary: dict[str, Any] | None) -> bool:
+    eligibility = summary.get("acceptance_matrix_eligibility") if isinstance(summary, dict) else None
+    return bool(isinstance(eligibility, dict) and eligibility.get("eligible") is True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", choices=["pi", "opencode"], required=True)
@@ -256,12 +261,15 @@ def main(argv: list[str] | None = None) -> int:
         stdout_path.write_text(result.stdout, encoding="utf-8")
         stderr_path.write_text(result.stderr, encoding="utf-8")
         run_summary = parse_summary(result.stdout)
+        acceptance_matrix_eligible = dialogue_summary_acceptance_eligible(run_summary)
         return {
             "index": index,
             "profile": profile_record(service_runner, profile),
             "persona_index": persona_index,
             "persona": dialogue.compose_persona(scenarios, seed=args.seed, index=persona_index),
             "returncode": result.returncode,
+            "acceptance_matrix_eligible": acceptance_matrix_eligible,
+            "acceptance_matrix_eligibility": None if run_summary is None else run_summary.get("acceptance_matrix_eligibility"),
             "stdout_path": str(stdout_path),
             "stderr_path": str(stderr_path),
             "dialogue_output_root": None if run_summary is None else run_summary.get("output_root"),
@@ -288,7 +296,8 @@ def main(argv: list[str] | None = None) -> int:
                 runs_by_index[index] = future.result()
         runs = [runs_by_index[index] for index in sorted(runs_by_index)]
 
-    completed = [run for run in runs if run["returncode"] == 0 and run["dialogue_run_summary"]]
+    successful = [run for run in runs if run["returncode"] == 0 and run["dialogue_run_summary"]]
+    completed = [run for run in successful if run.get("acceptance_matrix_eligible")]
     coverage = persona_coverage([run["persona"] for run in runs])
     if args.dry_run:
         quorum_status = "dry_run_structural_package_only"
@@ -319,6 +328,8 @@ def main(argv: list[str] | None = None) -> int:
         "configured_max_turns": args.max_turns,
         "responder_mode": args.responder_mode,
         "turn_budget_policy": TURN_BUDGET_POLICY,
+        "successful_profile_count": len(successful),
+        "eligible_completed_profile_count": len(completed),
         "completed_profile_count": len(completed),
         "real_dialogue_completed_profile_count": 0 if args.dry_run else len(completed),
         "runs": runs,

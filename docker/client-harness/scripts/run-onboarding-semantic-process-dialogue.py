@@ -181,6 +181,34 @@ def selected_prompts(args: argparse.Namespace, foil: dict[str, Any], persona: di
     return persona_prompt_sequence(foil, persona, args.max_turns), "seeded_default_persona_prompts"
 
 
+def acceptance_matrix_eligibility(
+    *,
+    dry_run: bool,
+    responder_mode: str,
+    manual_prompting: bool,
+    allow_preexisting_foil_artifacts: bool,
+    preflight_status: str | None,
+) -> dict[str, Any]:
+    disqualifiers: list[str] = []
+    if dry_run:
+        disqualifiers.append("dry_run")
+    if responder_mode != "pi_gpt_5_5_simulated_human_responder":
+        disqualifiers.append("simulated_human_responder_not_pi_gpt_5_5")
+    if manual_prompting:
+        disqualifiers.append("manual_or_seeded_prompt_sequence")
+    if allow_preexisting_foil_artifacts:
+        disqualifiers.append("preexisting_foil_artifact_bypass")
+    if preflight_status is not None and preflight_status != "passed":
+        disqualifiers.append(f"contextforge_foil_preflight_{preflight_status}")
+    return {
+        "eligible": not disqualifiers,
+        "disqualifiers": disqualifiers,
+        "required_responder_mode": "pi_gpt_5_5_simulated_human_responder",
+        "seeded_or_direct_provider_responders": "debug_scaffolding_only",
+        "manual_prompt_sequences": "debug_scaffolding_only",
+    }
+
+
 def clip_text(value: str, limit: int = RESPONDER_CONTEXT_CHAR_LIMIT) -> str:
     if len(value) <= limit:
         return value
@@ -737,6 +765,13 @@ def main(argv: list[str] | None = None) -> int:
         "persona": persona,
         "simulated_human_responder_mode": responder_mode,
         "simulated_human_responder_profile": responder_profile_summary,
+        "acceptance_matrix_eligibility": acceptance_matrix_eligibility(
+            dry_run=args.dry_run,
+            responder_mode=responder_mode,
+            manual_prompting=manual_prompting,
+            allow_preexisting_foil_artifacts=bool(args.allow_preexisting_foil_artifacts),
+            preflight_status=None,
+        ),
         "separate_simulated_human_responder_required": True,
         "default_turn_budget": DEFAULT_ONBOARDING_TURNS,
         "turn_budget_policy": TURN_BUDGET_POLICY,
@@ -795,6 +830,13 @@ def main(argv: list[str] | None = None) -> int:
         commands=commands,
     )
     summary_base["contextforge_foil_preflight"] = preflight
+    summary_base["acceptance_matrix_eligibility"] = acceptance_matrix_eligibility(
+        dry_run=False,
+        responder_mode=responder_mode,
+        manual_prompting=manual_prompting,
+        allow_preexisting_foil_artifacts=bool(args.allow_preexisting_foil_artifacts),
+        preflight_status=str(preflight.get("status") or ""),
+    )
     if preflight.get("status") not in {"passed", "not_applicable", "bypassed_for_debug_only"}:
         summary = {
             **summary_base,
