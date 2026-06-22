@@ -437,9 +437,12 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
     def test_client_guidance_routes_explicit_uncataloged_service_onboarding_without_activation(self) -> None:
         pi_source = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
         opencode_source = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").read_text(encoding="utf-8")
+        pi_rules = (ROOT / "docker/client-harness/config/pi/AGENTS.md").read_text(encoding="utf-8")
         opencode_rules = (ROOT / "docker/client-harness/config/opencode/AGENTS.md").read_text(encoding="utf-8")
 
         self.assertIn("explicit user requests to onboard or add an uncataloged/new MCP service", pi_source)
+        self.assertIn("do not call cf_project_init_list_capabilities", pi_source)
+        self.assertIn("do not present the existing service activation menu", pi_source)
         self.assertIn("cf_project_service_onboarding_plan", pi_source)
         self.assertIn("copy assistant_visible_response/message exactly", pi_source)
         self.assertIn("Do not reformat it into tables, expose enum names, add helper fields", pi_source)
@@ -447,6 +450,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("build_service_onboarding_plan", opencode_source)
         self.assertIn("serviceOnboardingIntakeResponse", opencode_source)
         self.assertIn("serviceOnboardingPlanResponse", opencode_source)
+        self.assertIn("produce a no-mutation source-only", pi_rules)
+        self.assertIn("do not restart project initialization", pi_rules)
         self.assertIn("produce a no-mutation source-only", opencode_rules)
         self.assertIn("do not restart project initialization", opencode_rules)
 
@@ -474,6 +479,14 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         scenarios = json.loads(
             (ROOT / "docker/client-harness/onboarding-semantic-process-scenarios.json").read_text(encoding="utf-8")
         )
+        semantic_profiles = json.loads(
+            (ROOT / "docker/client-harness/semantic-model-profiles.json").read_text(encoding="utf-8")
+        )["profiles"]
+        eligible_profile_ids = [
+            profile["id"]
+            for profile in semantic_profiles
+            if profile.get("multi_step_quorum_eligible") is not False
+        ]
 
         self.assertIn("real Pi or OpenCode client session", gate)
         self.assertIn("Codex-only onboarding run proves nothing", gate)
@@ -484,6 +497,14 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("string or regex matching", gate)
         self.assertEqual(["pi", "opencode"], scenarios["target_clients"])
         self.assertEqual(3, scenarios["minimum_model_quorum_per_client"])
+        self.assertEqual(
+            [
+                "openrouter-google-gemma-4-26b-a4b-it",
+                "openrouter-qwen-qwen3-coder-next",
+                "openrouter-deepseek-deepseek-v4-flash",
+            ],
+            eligible_profile_ids,
+        )
         self.assertEqual(
             "random_composition_per_client_model_run",
             scenarios["persona_sampling"]["selection_scope"],
@@ -506,6 +527,13 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
             "does not use Codex subagents as tested-client substitutes",
             scenarios["runner_non_actions"],
         )
+        self.assertTrue(scenarios["foils"][0]["invalid_if_preexisting_contextforge_artifacts"])
+        self.assertIn("time:canonical", scenarios["foils"][0]["forbidden_existing_contextforge_bindings"])
+        self.assertIn("service_bound_prompts", scenarios["foils"][0]["preexisting_contextforge_artifact_scope"])
+        self.assertIn("service_bound_resources", scenarios["foils"][0]["preexisting_contextforge_artifact_scope"])
+        self.assertIn("already exists in ContextForge", " ".join(method.split()))
+        self.assertIn("preexisting-foil", onboarding_skill)
+        self.assertIn("available-capabilities", gate)
         self.assertIn("Use this skill for onboarding-process proof", onboarding_skill)
         self.assertIn("not for already-registered MCP service-use proof", onboarding_skill)
         self.assertIn("For ordinary service-use proof", onboarding_skill)
@@ -544,7 +572,9 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("separate_simulated_human_responder_required", dialogue_runner)
         self.assertIn("agent_supplied_prompt_sequence", dialogue_runner)
         self.assertIn("agent_supplied_prompt_file", dialogue_runner)
-        self.assertIn("runner default prompts are structural scaffolding", dialogue_runner)
+        self.assertIn("runner seeded prompts are structural scaffolding", dialogue_runner)
+        self.assertIn("invalid_preexisting_foil_artifacts", dialogue_runner)
+        self.assertIn("preflight-contextforge-available-capabilities.json", dialogue_runner)
         self.assertIn("dry_run", dialogue_runner)
         self.assertIn("if not args.dry_run", dialogue_runner)
         self.assertIn("MIN_MODEL_QUORUM = 3", quorum_runner)

@@ -32,6 +32,10 @@ The method layer is case-independent:
   that do not necessarily fail the use case, including placeholder-only visible
   prefaces before substantive answers, excessive internal terminology, or
   awkward hesitation that a user would experience as low-quality interaction;
+- require the evaluator to judge interaction efficiency relative to the
+  de facto persona overhead: whether the assistant reached the required
+  outcome without avoidable detours, repeated explanations, needless approvals,
+  overlong procedural narration, or premature truncation;
 - classify failures as runner/package, tested-client behavior,
   environment/setup, or inconclusive;
 - remediate and repeat from a fresh target-client instance until the localized
@@ -99,12 +103,21 @@ they are not valid tested-client substitutes. The tested assistant receives
 only the source lead, generic onboarding guidance available through the client,
 and answers from a separate simulated human responder.
 
+The onboarding dialogue is not valid evidence if the foil already exists in
+ContextForge at run start as a service, tools, virtual server, service-bound
+prompt/resource, or activation-menu entry. That condition is a harness/setup
+invalidity, not a semantic failure by the tested assistant.
+
 The simulated human is a composite persona randomly composed per run across a
 five-dimensional disposition space: domain knowledge, goal specificity, risk
 posture, technical fluency, and interaction style. The persona remains fixed
 for the whole run and answers only questions the tested assistant asks. It must
 not volunteer package names, tool names, bridge commands, probe payloads,
 expected implementation shape, evaluator criteria, or controller memory.
+For acceptance-matrix onboarding runs, the simulated human should be reactive:
+it reads the tested assistant's previous visible output and produces the next
+persona-consistent user message. Seeded prompt sequences are debug scaffolding,
+not a substitute for the simulated human answering the actual interaction.
 
 Acceptance requires Pi and OpenCode coverage across at least three distinct
 eligible semantic-test model profiles per target client. Deterministic runner
@@ -131,6 +144,8 @@ For every model-dependent use case, the agent evaluator must receive and score:
 - raw transcript and normalized review surfaces;
 - structured verifier output;
 - the localized scorecard and fatal-failure criteria.
+- interaction efficiency after accounting for the sampled or specified human
+  persona's natural overhead.
 
 Quality risks such as placeholder-only visible prefaces are semantic evaluator
 judgments. Scripts may preserve and segment the visible assistant text for

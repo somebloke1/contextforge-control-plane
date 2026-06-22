@@ -42,6 +42,15 @@ from the controller, runner, evaluator, prior branches, parent workspace,
 existing service homes, expected package names, expected tool names, expected
 bridge commands, expected probe payloads, or hidden pass/fail criteria.
 
+The development ContextForge surface must also be clean for the selected foil
+at the beginning of an acceptance run. If the foil already exists as an MCP
+service, service tool set, virtual server, service-bound prompt, service-bound
+resource, or client activation-menu entry, the onboarding run is invalid
+because the tested assistant can start from already-onboarded state. Current
+runners must fail closed on any visible foil exposure they can deterministically
+read, and the cleanup/readback practice must co-evolve as ContextForge exposes
+additional artifact APIs.
+
 The runner may know evaluator criteria and evidence routing, but that
 information must stay outside prompts sent to the tested assistant.
 
@@ -67,6 +76,12 @@ decline if the persona would not know, or ask the assistant to decide from
 research. They must not volunteer low-level facts the tested assistant did not
 ask for.
 
+Acceptance-matrix runs should use a reactive simulated-human responder that
+reads the tested assistant's previous visible output and produces the next
+persona-consistent user message. Seeded followup prompts are useful for runner
+smoke/debug checks, but they are weaker evidence because they do not prove that
+the simulated human answered the actual questions asked.
+
 ## Minimum Run Matrix
 
 For each foil:
@@ -82,6 +97,18 @@ For each foil:
 The same foil can fail in one persona and pass in another. Acceptance requires
 the declared run matrix to pass semantically or for failures to be remediated
 and rerun from fresh state.
+
+Each client/model/persona run must budget enough interaction for a real
+onboarding conversation without coaching or truncation. The proper length is
+persona- and outcome-dependent and should become more determinate as the
+overall onboarding system evolves. All else equal, the interaction should be
+optimal: no gratuitous turns, no loss of required outcome. A seeded runner may
+use a generous default turn budget, but acceptance is never decided by a fixed
+turn count.
+The evaluator must separately judge efficiency after treating the sampled
+persona's natural overhead as given: did the tested assistant reach the outcome
+with appropriate pace and without avoidable detours, repeated explanations,
+needless approvals, overlong internal narration, or premature truncation?
 
 ## End-To-End Story
 
@@ -110,11 +137,19 @@ The runner must:
 
 - reset target-client container, home, workspace, scoped token files, and
   evidence root idempotently;
+- preflight the declared ContextForge development surface for preexisting foil
+  exposure before dialogue begins, including at least available-capabilities
+  readback, and stop as invalid if the foil is already visible;
 - choose one semantic-test model profile for the full run;
 - start non-ephemeral Pi/OpenCode containers;
 - maintain distinct session ids for tested assistant and simulated human;
 - record every prompt, answer, command, model profile, return code, timeout,
   transcript path, tool event summary, and generated artifact path;
+- record the configured turn budget and actual prompt/response count so the
+  semantic evaluator can judge whether the interaction was truncated,
+  over-guided, or unnecessarily long;
+- record whether the simulated-human responder was model-backed/reactive or
+  seeded/debug, including a redacted responder model profile when model-backed;
 - package source helper records, runtime readbacks, registration readbacks,
   target-client transcripts, and cleanup evidence;
 - declare `semantic_acceptance: requires_non_spark_evaluator`;
@@ -143,6 +178,8 @@ The evaluator must judge:
 - whether Pi/OpenCode actually saw and safely used the onboarded service;
 - whether reload or new-session boundaries were handled clearly;
 - whether user-facing copy was concise and non-noisy;
+- whether the interaction was efficient relative to the persona and task
+  complexity, with no gratuitous turns and no omitted required outcome;
 - whether any failure is a runner defect, simulated-human defect,
   tested-client behavior defect, generic-support gap, model inadequacy,
   service-specific issue, or environment/setup defect.
@@ -160,3 +197,6 @@ Do not accept:
 - deterministic transcript keyword checks as semantic acceptance;
 - a run that starts from an existing service home or prior Time-specific
   artifacts.
+- a run that starts with the foil already present in ContextForge as a service,
+  tools, virtual server, service-bound prompts/resources, or activation-menu
+  entry.
