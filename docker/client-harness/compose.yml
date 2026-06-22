@@ -214,7 +214,7 @@ services:
     volumes:
       - ${CONTEXTFORGE_CLIENT_HARNESS_OPENCODE_HOME:-opencode-home}:/home/agent
       - ../..:/repo:ro
-      - ../../server-instances:/repo/server-instances:ro
+      - ${CONTEXTFORGE_CLIENT_HARNESS_SERVER_INSTANCES:-../../server-instances}:/repo/server-instances:ro
       - ./config/opencode:/config/opencode:ro
       - ${CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED:-./client-scoped}:/run/contextforge-client-scoped:ro
       - ${CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE:-./workspace}:/workspace
@@ -261,7 +261,7 @@ services:
     volumes:
       - ${CONTEXTFORGE_CLIENT_HARNESS_PI_HOME:-pi-home}:/home/agent
       - ../..:/repo:ro
-      - ../../server-instances:/repo/server-instances:ro
+      - ${CONTEXTFORGE_CLIENT_HARNESS_SERVER_INSTANCES:-../../server-instances}:/repo/server-instances:ro
       - ./config/pi:/config/pi:ro
       - ${CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED:-./client-scoped}:/run/contextforge-client-scoped:ro
       - ${CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE:-./workspace}:/workspace

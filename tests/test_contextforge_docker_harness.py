@@ -1578,6 +1578,7 @@ print(json.dumps(outputs))
             "${CONTEXTFORGE_CLIENT_HARNESS_PI_HOME:-pi-home}:/home/agent",
             "${CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE:-./workspace}:/workspace",
             "${CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED:-./client-scoped}:/run/contextforge-client-scoped:ro",
+            "${CONTEXTFORGE_CLIENT_HARNESS_SERVER_INSTANCES:-../../server-instances}:/repo/server-instances:ro",
         ]:
             self.assertIn(phrase, compose)
         for phrase in [
@@ -1587,6 +1588,8 @@ print(json.dumps(outputs))
             "prepare_isolated_harness",
             "CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE",
             "CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED",
+            "CONTEXTFORGE_CLIENT_HARNESS_SERVER_INSTANCES",
+            "server_instances",
             "lock_file = None if isolated else uc1.acquire_harness_lock(harness_root)",
         ]:
             self.assertIn(phrase, dialogue)
@@ -1926,7 +1929,10 @@ print(json.dumps(outputs))
             match = re.search(rf"(?ms)^  {service}:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
             self.assertIsNotNone(match, service)
             self.assertIn("- ../..:/repo:ro", match.group(0))
-            self.assertIn("- ../../server-instances:/repo/server-instances:ro", match.group(0))
+            self.assertIn(
+                "- ${CONTEXTFORGE_CLIENT_HARNESS_SERVER_INSTANCES:-../../server-instances}:/repo/server-instances:ro",
+                match.group(0),
+            )
             self.assertIn(
                 "- ${CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED:-./client-scoped}:/run/contextforge-client-scoped:ro",
                 match.group(0),
@@ -1981,7 +1987,13 @@ print(json.dumps(outputs))
                 )
             else:
                 self.assertIn("- ./client-scoped:/run/contextforge-client-scoped:ro", service_block)
-            self.assertIn("- ../../server-instances:/repo/server-instances:ro", service_block)
+            if service in {"opencode", "pi"}:
+                self.assertIn(
+                    "- ${CONTEXTFORGE_CLIENT_HARNESS_SERVER_INSTANCES:-../../server-instances}:/repo/server-instances:ro",
+                    service_block,
+                )
+            else:
+                self.assertIn("- ../../server-instances:/repo/server-instances:ro", service_block)
             self.assertNotIn("../contextforge-harness/env:/config/contextforge", service_block)
             self.assertNotIn("- ../../server-instances:/repo/server-instances\n", service_block)
 
