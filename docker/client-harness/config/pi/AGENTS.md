@@ -18,10 +18,12 @@ the client.
 If the user approves continuation after a source-only onboarding plan, use the
 ContextForge service-onboarding continuation tool rather than project-init
 activation. If the user later approves runtime/apply work after that
-continuation, use the ContextForge service-onboarding runtime/apply package
-tool. Do not write direct client-local MCP config or claim availability until
-an approved ContextForge executor surface has actually performed runtime,
-registration, reload/new-session, list-tools, and safe-call proof.
+continuation, use the ContextForge service-onboarding runtime/apply executor
+tool. Do not use the non-mutating runtime/apply package tool as a substitute
+after runtime/apply approval. Do not write direct client-local MCP config or
+claim availability until an approved ContextForge executor surface has actually
+performed runtime, registration, reload/new-session, list-tools, and safe-call
+proof.
 
 When diagnosing ContextForge configuration or authentication inside this
 container, do not print raw env files, bearer headers, passwords, API keys,

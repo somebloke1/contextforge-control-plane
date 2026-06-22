@@ -534,7 +534,7 @@ function renderNextTurn(nextTurn: JsonObject): string {
 async function injectProjectInitPrompt(ctx?: ExtensionContext): Promise<JsonObject | undefined> {
   const projectRoot = resolve(ctx?.cwd || process.cwd());
   if (!shouldInjectProjectInitPrompt(projectRoot)) {
-    const initializedMessage = initializedProjectContextMessage(projectRoot);
+    const initializedMessage = await initializedProjectContextMessage(projectRoot);
     return initializedMessage ? { message: initializedMessage } : undefined;
   }
   try {
@@ -561,7 +561,7 @@ async function firstPromptProjectInitMessage(projectRoot: string): Promise<JsonO
       "If the user provided a URL or other source lead, use available read-only source-research tools against that lead before asking the user for facts that should be discoverable from the source. If no source-research tool is available, say that source-research support is missing and ask only for the facts needed to proceed.",
       "For list fields such as expectedTools/expected_tools, pass a JSON array of strings, never a comma-separated string.",
       `For explicit new/uncataloged service onboarding, ask concise practical intake questions when source, transport, scope, credentials, expected tools, lifecycle/cleanup, proof plan, or approval boundaries are missing. If the user supplies enough facts for a source-only plan, call cf_project_service_onboarding_plan {"projectRoot":"${projectRoot}", ...} using only user-supplied facts, then copy assistant_visible_response/message exactly as the complete visible answer and stop. Do not install, register, expose, validate, probe, reload, or claim the candidate is available.`,
-      `After an uncataloged source-only plan, call cf_project_service_onboarding_continue for explicit continuation approval. After that continuation, call cf_project_service_onboarding_runtime_apply for explicit runtime/apply approval. Do not use project-init activation or direct client-local MCP config for uncataloged services.`,
+      `After an uncataloged source-only plan, call cf_project_service_onboarding_continue for explicit continuation approval. After that continuation, call cf_project_service_onboarding_runtime_execute for explicit runtime/apply approval. Do not use project-init activation or direct client-local MCP config for uncataloged services.`,
       `If no prior service list is visible in the current transcript, silently call cf_project_init_list_capabilities for project root "${projectRoot}".`,
       "Use only the returned service ids and labels. Do not invent, rename, summarize, or substitute service names from memory.",
       "When calling a project setup tool, do not emit visible text before the call. The assistant message for that step must be only the tool call.",
@@ -582,7 +582,7 @@ async function firstPromptProjectInitMessage(projectRoot: string): Promise<JsonO
   };
 }
 
-function initializedProjectContextMessage(projectRoot: string): JsonObject | undefined {
+async function initializedProjectContextMessage(projectRoot: string): Promise<JsonObject | undefined> {
   if (initializedPromptOffered.has(projectRoot)) return undefined;
   const root = resolve(projectRoot);
   const statePath = join(root, ".project", "context_forge_state.json");
@@ -595,6 +595,7 @@ function initializedProjectContextMessage(projectRoot: string): JsonObject | und
     return undefined;
   }
   initializedPromptOffered.add(projectRoot);
+  const serviceOnboardingHowTo = await helperServiceOnboardingHowTo(root);
   return {
     customType: "contextforge-project-initialized-normal-use",
     content: [
@@ -603,7 +604,9 @@ function initializedProjectContextMessage(projectRoot: string): JsonObject | und
       "A required tool call means using Pi's actual tool-call mechanism. Do not write textual control syntax, pseudo-code, Python, print(default_api...), <ctrl...> blocks, JSON snippets, or function-call prose in the visible answer.",
       "Do not add a preface such as \"I'll check\" and do not paraphrase, bulletize, shorten, or reclassify readback responses.",
       "Do not restart first-run service selection. Do not propose, approve, apply, repair, validate, probe, onboard services, or mutate project-init state during ordinary normal-use questions.",
+      serviceOnboardingHowTo,
       `For explicit user requests to onboard or add an uncataloged/new MCP service, do not restart service selection. If the user has not supplied source, transport, scope, credentials, and expected-tool information, ask concise practical intake questions. If the user supplies enough details for a source-only plan, call cf_project_service_onboarding_plan {"projectRoot":"${root}", ...} using only the user's supplied facts, then copy its assistant_visible_response/message exactly as the complete visible answer and stop. Do not reformat it into tables, expose enum names, add helper fields, or claim credentials are not required when the user only said there are no credentials yet.`,
+      `After an uncataloged source-only plan, call cf_project_service_onboarding_continue for explicit continuation approval. After that continuation, call cf_project_service_onboarding_runtime_execute for explicit runtime/apply approval. Do not use cf_project_service_onboarding_runtime_apply as a substitute for the executor when the user has approved runtime/apply work, and do not use project-init activation or direct client-local MCP config for uncataloged services.`,
       "For list fields such as expectedTools/expected_tools, pass a JSON array of strings, never a comma-separated string.",
       "For ordinary normal-use readback questions, do not call cf_project_init_list_capabilities.",
       `For questions asking how to use the project docs lookup capability, docs lookup capability, ContextForge docs lookup guidance, or similar, call cf_contextforge_guidance_lookup {"projectRoot":"${root}","serviceBinding":"context7:canonical","mcpToolName":"project docs lookup capability"} and answer from its message or fallback_guidance. Do not call the Context7 docs query tools directly for this guidance-question class, and do not answer the underlying configuration question yet.`,
@@ -1113,6 +1116,27 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
       }),
     },
     {
+      name: "cf_project_service_onboarding_runtime_execute",
+      operation: "apply_service_onboarding_runtime_package",
+      description: "Apply an explicitly approved uncataloged MCP service runtime package through the recorded ContextForge development executor surface. Use only source-derived or conversation-visible facts. This may register the service on the development ContextForge surface when an approved dev runtime target exists; it must not write direct client-local MCP config, secrets, systemd units, or project activation state. Copy assistant_visible_response/message exactly.",
+      parameters: helperSchema({
+        candidateService: { type: "string", description: "Candidate service name from the source-only onboarding plan." },
+        operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
+        sourcePath: { type: "string", description: "Source path, package, repository, or documentation reference used for the source-only plan." },
+        serviceBinding: { type: "string", description: "Optional source-derived service binding, when explicitly known." },
+        backendPackage: { type: "string", description: "Source-derived backend package name, when known." },
+        backendCommand: { type: "string", description: "Source-derived backend command or executable, when known." },
+        backendArgs: { type: "array", items: { type: "string" }, description: "Source-derived backend command arguments, when known." },
+        transportType: { type: "string", description: "Source-derived transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required." },
+        localizationType: { type: "string", description: "Source-derived scope/locality such as project_scoped, shared_canonical, credential_scoped, user_scoped, or dev_only." },
+        functionalType: { type: "string", description: "Source-derived functional class such as time_timezone, search_retrieval, filesystem_content, code_intelligence, or remote_api_tool." },
+        stateType: { type: "string", description: "Source-derived state footprint such as stateless, local_filesystem_state, project_metadata, cache_index_state, credential_state, or runtime_evidence_state." },
+        credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
+        expectedTools: { type: "array", items: { type: "string" }, description: "Source-derived expected tool names or capabilities." },
+        issue: { type: "string", description: "Optional tracking issue id." },
+      }),
+    },
+    {
       name: "cf_project_init_list_capabilities",
       operation: "list_available_capabilities",
       description: "List ContextForge services available for Pi activation and return the service-selection next turn.",
@@ -1347,6 +1371,21 @@ function clientVisibleProjectInitResult(operation: string, result: JsonObject): 
       mutation_allowed: false,
       assistant_visible_response: visible,
       message: visible,
+      non_actions: result.non_actions || [],
+    };
+  }
+  if (operation === "apply_service_onboarding_runtime_package") {
+    const visible = String(result.assistant_visible_response || result.message || "").trim();
+    return {
+      ok: result.ok ?? true,
+      status: result.status || "service_onboarding_runtime_applied",
+      project_root: result.project_root,
+      mutation_allowed: true,
+      mutation_performed: Boolean(result.mutation_performed),
+      assistant_visible_response: visible,
+      message: visible,
+      tool_names: result.tool_names || result.executor_result?.tool_names || [],
+      runtime_target: result.runtime_target || {},
       non_actions: result.non_actions || [],
     };
   }

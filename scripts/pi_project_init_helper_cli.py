@@ -140,6 +140,26 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
         return _ok(_build_service_onboarding_continuation(project_root, data))
     if operation in {"build_service_onboarding_runtime_apply_package", "build_service_onboarding_runtime_apply", "cf_project_service_onboarding_runtime_apply"}:
         return _ok(_build_service_onboarding_runtime_apply_package(project_root, data))
+    if operation in {"apply_service_onboarding_runtime_package", "execute_service_onboarding_runtime_apply", "cf_project_service_onboarding_runtime_execute"}:
+        return _mcp_helper().cf_project_service_onboarding_runtime_execute(
+            project_root=project_root,
+            candidate_service=str(data.get("candidate_service") or data.get("candidateService") or ""),
+            operator_goal=str(data.get("operator_goal") or data.get("operatorGoal") or ""),
+            source_path=str(data.get("source_path") or data.get("sourcePath") or ""),
+            service_binding=str(data.get("service_binding") or data.get("serviceBinding") or ""),
+            backend_package=str(data.get("backend_package") or data.get("backendPackage") or ""),
+            backend_command=str(data.get("backend_command") or data.get("backendCommand") or ""),
+            backend_args=data.get("backend_args") or data.get("backendArgs") or [],
+            transport_type=str(data.get("transport_type") or data.get("transportType") or ""),
+            localization_type=str(data.get("localization_type") or data.get("localizationType") or ""),
+            functional_type=str(data.get("functional_type") or data.get("functionalType") or ""),
+            state_type=str(data.get("state_type") or data.get("stateType") or ""),
+            credential_boundary=str(data.get("credential_boundary") or data.get("credentialBoundary") or ""),
+            approval_type=str(data.get("approval_type") or data.get("approvalType") or ""),
+            expected_tools=data.get("expected_tools") or data.get("expectedTools") or [],
+            issue=str(data.get("issue") or data.get("issue_number") or data.get("issueNumber") or ""),
+            client_type=client_type,
+        )
     if operation == "get_service_onboarding_how_to":
         return _ok(service_onboarding_surfaces.hidden_onboarding_guidance(data))
     if operation == "list_available_capabilities":

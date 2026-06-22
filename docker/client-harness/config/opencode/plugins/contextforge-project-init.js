@@ -371,12 +371,13 @@ const serviceOnboardingRuntimeApplyInstruction = (cwd) =>
   [
     "The user is approving runtime/apply continuation for an uncataloged MCP service that already has a service-management continuation package in this session.",
     serviceOnboardingHowTo(cwd),
-    "Call `contextforge-helper_cf_project_service_onboarding_runtime_apply` with the current project root and only source-derived facts already visible in this conversation.",
+    "Call `contextforge-helper_cf_project_service_onboarding_runtime_execute` with the current project root and only source-derived facts already visible in this conversation.",
     `Use project_root: "${String(cwd)}".`,
     "Use empty strings or empty arrays for unknown fields; do not invent package names, commands, tools, transports, credentials, or implementation facts.",
     "For list fields such as expected_tools, pass a JSON array of strings, never a comma-separated string.",
     "When the helper returns `assistant_visible_response` or `message`, copy that value exactly as the complete visible reply and stop.",
-    "Do not install, register, start, expose, validate, probe, import, write client config, or claim the candidate is available unless a later approved executor surface actually performs that mutation.",
+    "Do not use bash, write, edit, or direct client-local MCP config as a workaround. The helper executor is the approved runtime/apply surface for this route.",
+    "After the helper reports success, tell the user only what was applied and that a new OpenCode session from this project root is required before newly registered tools can be discovered.",
     "User approval to create arbitrary local client config is not a ContextForge runtime/apply surface; do not use bash, write, or edit to create direct MCP config as a workaround.",
   ].join("\n")
 
