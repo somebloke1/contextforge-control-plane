@@ -99,6 +99,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", action="append", default=[], help="Explicit profile id; repeat for quorum.")
     parser.add_argument("--seed", type=int, default=None, help="Optional random seed for reproducible selection.")
     parser.add_argument("--no-build", action="store_true")
+    parser.add_argument(
+        "--service-test-prompt",
+        help="Override the default natural service-test prompt for each model-profile run.",
+    )
     parser.add_argument("--contextforge-host-base-url", default=os.environ.get("CONTEXTFORGE_HOST_BASE_URL"))
     parser.add_argument("--contextforge-container-base-url", default=os.environ.get("CONTEXTFORGE_CONTAINER_BASE_URL"))
     parser.add_argument(
@@ -161,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
             command.extend(["--contextforge-container-base-url", args.contextforge_container_base_url])
         if args.contextforge_env_file is not None:
             command.extend(["--contextforge-env-file", str(args.contextforge_env_file)])
+        if args.service_test_prompt:
+            command.extend(["--service-test-prompt", args.service_test_prompt])
 
         result = subprocess.run(command, cwd=repo_root, text=True, capture_output=True, timeout=args.timeout + 180)
         stdout_path = output_root / f"{index:02d}-{profile_id}.stdout.json"
@@ -198,6 +204,7 @@ def main(argv: list[str] | None = None) -> int:
         "timestamp": timestamp,
         "output_root": str(output_root),
         "selected_profiles": [profile_record(dialogue, profile) for profile in profiles],
+        "service_test_prompt_override_used": bool(args.service_test_prompt),
         "completed_profile_count": len(completed),
         "runs": runs,
         "deterministic_non_actions": [
