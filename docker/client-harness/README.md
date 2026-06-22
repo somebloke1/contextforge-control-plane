@@ -35,8 +35,8 @@ model id, provider-specific key env, base URL env, client support set, and
 route-preference list. The current profile pool is OpenRouter-backed and uses
 `OPENROUTER_API_KEY` on the host only. Pi/OpenCode Docker containers must not
 receive the real provider key; runners start a host-side proxy, configure the
-container with a host-gateway base URL, and pass only a dummy key into the
-container. Route preferences are profile-specific, while empty route lists
+container with a host-gateway base URL, and pass only an ephemeral dummy key
+into the container. Route preferences are profile-specific, while empty route lists
 leave routing to OpenRouter. The generated local env file is written with mode
 `0600` semantics through `umask 077`.
 
@@ -98,8 +98,8 @@ This validates that all five client commands launch.
 
 Pi and OpenCode semantic-test paths read provider/model defaults and available
 provider secrets from `env/semantic-model.env` on the host. Remote provider
-secrets remain host-only; target-client containers receive a dummy provider
-key and a host-gateway proxy base URL:
+secrets remain host-only; target-client containers receive an ephemeral dummy
+provider key and a host-gateway proxy base URL:
 
 ```sh
 scripts/probe-semantic-model.sh
