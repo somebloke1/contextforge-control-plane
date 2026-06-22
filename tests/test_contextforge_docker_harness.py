@@ -39,14 +39,30 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn('"127.0.0.1:9202:9202"', compose)
         self.assertIn("docker/contextforge-harness/ssh-tmux-transceiver/Dockerfile", compose)
         self.assertIn("openssh-client", dockerfile)
+        self.assertIn("sshpass", dockerfile)
         self.assertIn("tmux", dockerfile)
         self.assertIn("uv", dockerfile)
         self.assertIn("MCP_SSH_TMUX_VERSION=0.2.8", dockerfile)
         self.assertIn("mcp-ssh-tmux==${MCP_SSH_TMUX_VERSION}", dockerfile)
+        self.assertIn("contextforge-ssh-wrapper.sh /root/.local/bin/ssh", dockerfile)
         self.assertIn("mcpgateway.translate", dockerfile)
         self.assertIn("--stdio", dockerfile)
         self.assertIn("/root/.local/bin/mcp-ssh-tmux", dockerfile)
         self.assertIn("9202", dockerfile)
+
+    def test_ssh_tmux_sidecar_ssh_wrapper_injects_ignored_auth_env(self) -> None:
+        wrapper = (
+            ROOT / "docker/contextforge-harness/ssh-tmux-transceiver/contextforge-ssh-wrapper.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("CONTEXTFORGE_SSH_TMUX_TEST_HOST", wrapper)
+        self.assertIn("CONTEXTFORGE_SSH_TMUX_TEST_AUTH_MODE", wrapper)
+        self.assertIn("CONTEXTFORGE_SSH_TMUX_TEST_PASSWORD", wrapper)
+        self.assertIn("sshpass -e", wrapper)
+        self.assertIn("SSHPASS=$TARGET_PASSWORD", wrapper)
+        self.assertIn("UserKnownHostsFile=$KNOWN_HOSTS", wrapper)
+        self.assertIn("StrictHostKeyChecking=$STRICT_HOST_KEY_CHECKING", wrapper)
+        self.assertIn("-i \"$PRIVATE_KEY\"", wrapper)
 
     def test_compose_defines_dev_context7_transceiver_sidecar(self) -> None:
         compose = (ROOT / "docker/contextforge-harness/compose.yml").read_text(encoding="utf-8")

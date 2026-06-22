@@ -139,8 +139,12 @@ mounts ignored host files from `../../server-instances/ssh-tmux/auth/` at
 `/run/contextforge-ssh-tmux` inside the sidecar. For key auth, place the private
 key at `../../server-instances/ssh-tmux/auth/id_ed25519` and known-hosts file at
 `../../server-instances/ssh-tmux/auth/known_hosts`, then keep the default
-container paths in `.env`. Do not commit the real `.env`, private keys,
-passwords, or known-hosts material.
+container paths in `.env`. For password auth, set
+`CONTEXTFORGE_SSH_TMUX_TEST_AUTH_MODE=password` and
+`CONTEXTFORGE_SSH_TMUX_TEST_PASSWORD` in the ignored `.env`; the sidecar-local
+SSH wrapper injects it with `sshpass -e` so the password is not supplied to the
+tested assistant or printed in command arguments. Do not commit the real `.env`,
+private keys, passwords, or known-hosts material.
 
 The migration planner targets the compose-network URL
 `http://ssh-tmux-transceiver:9202/mcp`. Registry apply remains a separate
