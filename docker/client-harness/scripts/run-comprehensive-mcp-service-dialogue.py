@@ -271,6 +271,47 @@ def route_preferences(profile: dict[str, Any]) -> list[str]:
     return []
 
 
+def env_semantic_model_profile(available_env: dict[str, str]) -> dict[str, Any]:
+    def value(*keys: str, default: str = "") -> str:
+        for key in keys:
+            candidate = os.environ.get(key) or available_env.get(key)
+            if candidate:
+                return candidate
+        return default
+
+    provider_kind = value("CONTEXTFORGE_TEST_PROVIDER_KIND", "CONTEXTFORGE_TEST_PROVIDER", default="openrouter")
+    model = value("CONTEXTFORGE_TEST_MODEL", "OPENROUTER_MODEL")
+    if not model:
+        raise RuntimeError("semantic model env selector requires CONTEXTFORGE_TEST_MODEL or OPENROUTER_MODEL")
+    context_window = value("CONTEXTFORGE_TEST_CONTEXT_WINDOW", default=str(MIN_SEMANTIC_CONTEXT_WINDOW))
+    routes = [
+        item.strip()
+        for item in value("OPENROUTER_PROVIDER_ROUTES", "OPENROUTER_PROVIDER_ROUTE", "CONTEXTFORGE_TEST_PROVIDER_ROUTE").split(",")
+        if item.strip()
+    ]
+    profile: dict[str, Any] = {
+        "id": "env",
+        "display_name": value("CONTEXTFORGE_TEST_MODEL_NAME", default=model),
+        "provider_kind": provider_kind,
+        "provider_label": value("CONTEXTFORGE_TEST_PROVIDER", default=provider_kind),
+        "model": model,
+        "context_window": int(context_window),
+        "route_preferences": routes,
+        "multi_step_quorum_eligible": True,
+        "weight": 1,
+    }
+    if provider_kind == "openrouter":
+        profile.update(
+            {
+                "api_key_env": "OPENROUTER_API_KEY",
+                "base_url_env": "OPENROUTER_BASE_URL",
+                "default_base_url": value("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1"),
+                "pi_provider": value("CONTEXTFORGE_PI_DEFAULT_PROVIDER", default="openrouter-semantic-test"),
+            }
+        )
+    return profile
+
+
 def choose_semantic_model_profile(
     harness_root: Path,
     client: str,
@@ -278,7 +319,10 @@ def choose_semantic_model_profile(
     available_env: dict[str, str],
 ) -> dict[str, Any] | None:
     if selector == "env":
-        return None
+        profile = env_semantic_model_profile(available_env)
+        if not profile_supports_client(profile, client):
+            raise RuntimeError(f"semantic model env profile does not support client {client!r}")
+        return profile
     available_profiles = [
         profile
         for profile in load_semantic_model_profiles(harness_root)

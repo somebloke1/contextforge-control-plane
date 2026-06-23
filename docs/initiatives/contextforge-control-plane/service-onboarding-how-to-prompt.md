@@ -18,6 +18,13 @@ The workflow is:
    surface or stop at an explicitly unconfirmed source-inspection checklist.
    When available, call the ContextForge source-research helper for the source
    lead before building the onboarding plan.
+   If the user asks for exact remote source details such as tool schemas,
+   package metadata, environment variable declarations, or file-level anchors,
+   use the source-research helper again for the source lead. Do not use local
+   `read`, `ls`, `find`, `grep`, or shell commands against the workspace as
+   evidence for files that live only in a remote repository. If source-research
+   output is absent or insufficient, say the exact source detail is not yet
+   proven instead of reconstructing it from memory or prior prose.
 3. Build a source-only onboarding record naming service identity, transport,
    scope/locality, state footprint, credential boundary, implementation
    decisions, proof boundaries, and open questions.
@@ -56,17 +63,35 @@ The workflow is:
    arguments, tool schemas, and standard prompt-library content, then supply
    those fields before install/register packaging. If required fields are
    missing, the helper must refuse to attempt onboarding and identify the
-   missing fields.
+   missing fields. For managed npm-stdio onboarding, include the explicit
+   transport field value `stdio` in runtime/apply packaging calls. For large
+   tool sets, prefer `toolSchemaRecords`: an array of source-derived per-tool
+   records with `name`, `description`, `inputSchema`/`input_schema`, and
+   optional `sourceAnchor`/`source_anchor`.
+   This is a compact structured equivalent to the `toolSchemas` object; plain
+   summaries or arrays of tool names still do not satisfy the schema
+   requirement. On retry, resubmit the complete source-derived field set in one
+   call; the helper does not merge accepted values from earlier failed
+   attempts. Prefer just-in-time prompting through the runtime/apply draft
+   helper: submit one bounded slice, inspect the accepted fields and
+   `next_required_slice`, then continue with that smaller ask until the draft
+   reports it is ready for package preview. This avoids forcing the whole
+   onboarding contract into one tool call while still preserving strict final
+   package validation.
 5. When the user asks to continue, use the ContextForge service-onboarding or
    service-management continuation surface. Do not treat an uncataloged service
    as an existing project-init activation choice.
-6. When the user later approves runtime/apply work after continuation, first use
-   the ContextForge service-onboarding runtime/apply package surface to retrieve
-   the non-mutating package and `install_artifact_contract`. That package must
-   name the service binding, shared npm-stdio host target, per-service managed
-   runtime record, service-provision plan, ContextForge registration plan, and
-   ContextForge API JSON target while still avoiding mutation unless an
-   approved executor performs it.
+6. When the user later continues runtime/apply work after continuation, compose
+   the runtime/apply draft first. The draft surface is non-mutating and writes a
+   project-local JSON payload path; it returns accepted fields, missing fields,
+   and the next bounded ask. When the draft reports readiness, use the
+   ContextForge service-onboarding runtime/apply package preview surface with
+   the draft `structuredPayloadPath` to retrieve the non-mutating package and
+   `install_artifact_contract`. That package must name the service binding,
+   shared npm-stdio host target, per-service managed runtime record,
+   service-provision plan, ContextForge registration plan, and ContextForge API
+   JSON target while still avoiding mutation unless an approved executor
+   performs it.
    The service binding is ContextForge identity such as `time:canonical`;
    executable strings such as `uvx mcp-server-time` belong in backend command
    fields, not in the service binding.

@@ -35,6 +35,8 @@ tmp/
 *.sock
 generated/
 upstream/
+.contextforge/service-onboarding/runtime-apply-packages/
+.contextforge/service-onboarding/runtime-drafts/
 server-instances/*/.env
 server-instances/*/run/
 server-instances/*/logs/

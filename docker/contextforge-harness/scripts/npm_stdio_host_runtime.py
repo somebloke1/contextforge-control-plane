@@ -97,6 +97,84 @@ def package_install_spec(record: Mapping[str, Any]) -> str:
     return package
 
 
+def installed_package_dir(runtime_dir: Path, package: str) -> Path:
+    return runtime_dir / "package" / "node_modules" / package
+
+
+def installed_package_metadata(runtime_dir: Path, package: str) -> dict[str, Any]:
+    path = installed_package_dir(runtime_dir, package) / "package.json"
+    if not path.exists():
+        raise RuntimeError(f"installed npm package metadata is absent for {package}")
+    data = read_json(path)
+    if not isinstance(data, dict):
+        raise RuntimeError(f"installed npm package metadata is not a JSON object for {package}")
+    return data
+
+
+def package_bin_name(metadata: Mapping[str, Any], package: str) -> str:
+    bin_field = metadata.get("bin")
+    if isinstance(bin_field, str) and bin_field.strip():
+        return Path(package).name
+    if isinstance(bin_field, Mapping):
+        entries = {str(key): value for key, value in bin_field.items() if str(key).strip() and value}
+        if not entries:
+            raise RuntimeError(f"installed npm package has no executable bin entries for {package}")
+        basename = package.rsplit("/", 1)[-1]
+        if basename in entries:
+            return basename
+        if len(entries) == 1:
+            return next(iter(entries))
+        mcp_matches = sorted(key for key in entries if key.startswith("mcp-server-") or key.endswith("-mcp-server"))
+        if mcp_matches:
+            return mcp_matches[0]
+        raise RuntimeError(
+            f"installed npm package has multiple executable bins for {package}; "
+            "stdio.command must name one explicitly"
+        )
+    raise RuntimeError(f"installed npm package has no executable bin metadata for {package}")
+
+
+def package_tokens(package: str, version_policy: str) -> set[str]:
+    tokens = {package}
+    if version_policy and version_policy not in {"latest", "source-verified-or-pinned"}:
+        tokens.add(f"{package}@{version_policy}")
+    return tokens
+
+
+def normalized_npm_stdio_args(args: Sequence[str], package: str, version_policy: str) -> list[str]:
+    package_match = package_tokens(package, version_policy)
+    normalized: list[str] = []
+    for item in args:
+        text = str(item).strip()
+        if not text or text in {"-y", "--yes"}:
+            continue
+        if text in package_match:
+            continue
+        normalized.append(text)
+    return normalized
+
+
+def resolved_stdio_command(record: Mapping[str, Any], runtime_dir: Path) -> list[str]:
+    raw = stdio_command(record)
+    if not raw:
+        raise RuntimeError("managed npm-stdio record stdio command resolved empty")
+    package = str(record.get("package") or "").strip()
+    version_policy = str(record.get("version_policy") or "").strip()
+    if not package:
+        return raw
+    package_match = package_tokens(package, version_policy)
+    executable = raw[0]
+    if executable == "npx":
+        metadata = installed_package_metadata(runtime_dir, package)
+        bin_name = package_bin_name(metadata, package)
+        return [bin_name, *normalized_npm_stdio_args(raw[1:], package, version_policy)]
+    if executable in package_match:
+        metadata = installed_package_metadata(runtime_dir, package)
+        bin_name = package_bin_name(metadata, package)
+        return [bin_name, *normalized_npm_stdio_args(raw[1:], package, version_policy)]
+    return raw
+
+
 def stdio_command(record: Mapping[str, Any]) -> list[str]:
     stdio = record.get("stdio") if isinstance(record.get("stdio"), Mapping) else {}
     command = str(stdio.get("command") or "").strip()
@@ -258,12 +336,13 @@ def launch_bridge(
     bridge_endpoint = endpoint(record, service_binding)
     port = int(bridge_endpoint["port"])
     env = runtime_environment(record, runtime_dir)
+    bridge_stdio_command = resolved_stdio_command(record, runtime_dir)
     cmd = [
         TRANSCEIVER_PYTHON,
         "-m",
         "mcpgateway.translate",
         "--stdio",
-        shlex.join(stdio_command(record)),
+        shlex.join(bridge_stdio_command),
         "--expose-sse",
         "--expose-streamable-http",
         "--host",

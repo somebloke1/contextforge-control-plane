@@ -34,10 +34,16 @@ MAX_SOURCE_RESEARCH_TOTAL_BYTES = 60_000
 MAX_SOURCE_RESEARCH_DEPTH = 3
 RUNTIME_EXECUTOR_BASE_URL_ENV = "CONTEXTFORGE_RUNTIME_EXECUTOR_BASE_URL"
 RUNTIME_EXECUTOR_ENV_FILE_ENV = "CONTEXTFORGE_RUNTIME_EXECUTOR_ENV_FILE"
+RUNTIME_EXECUTOR_PROXY_URL_ENV = "CONTEXTFORGE_RUNTIME_APPLY_PROXY_URL"
+RUNTIME_EXECUTOR_PROXY_TOKEN_ENV = "CONTEXTFORGE_RUNTIME_APPLY_PROXY_TOKEN"
+RUNTIME_EXECUTOR_PROXY_BASE_URL_ENV = "CONTEXTFORGE_RUNTIME_APPLY_PROXY_BASE_URL"
+RUNTIME_EXECUTOR_PROXY_ENV_FILE_ENV = "CONTEXTFORGE_RUNTIME_APPLY_PROXY_ENV_FILE"
 RUNTIME_EXECUTOR_DEFAULT_BASE_URL = "http://host.docker.internal:4445" if Path("/repo").exists() else "http://127.0.0.1:4445"
 RUNTIME_EXECUTOR_DEFAULT_ENV_FILE = Path(
     os.environ.get(RUNTIME_EXECUTOR_ENV_FILE_ENV, REPO_ROOT / "docker" / "contextforge-harness" / "env" / "contextforge.env")
 )
+RUNTIME_APPLY_PACKAGE_CACHE_DIR = ".contextforge/service-onboarding/runtime-apply-packages"
+RUNTIME_APPLY_DRAFT_CACHE_DIR = ".contextforge/service-onboarding/runtime-drafts"
 NPM_STDIO_PORT_BASE = 20_000
 NPM_STDIO_PORT_SPAN = 30_000
 SERVICE_BINDING_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*:[a-z0-9][a-z0-9_.-]*$")
@@ -170,6 +176,25 @@ def fetch_text_url(url: str, *, max_bytes: int = MAX_SOURCE_RESEARCH_FILE_BYTES)
     return raw[:max_bytes].decode("utf-8", errors="replace"), truncated
 
 
+def fetch_npm_package_metadata(package_name: str) -> dict[str, Any]:
+    encoded = urllib.parse.quote(package_name, safe="")
+    metadata = fetch_json_url(f"https://registry.npmjs.org/{encoded}")
+    if not isinstance(metadata, Mapping):
+        return {}
+    latest = ""
+    dist_tags = metadata.get("dist-tags") if isinstance(metadata.get("dist-tags"), Mapping) else {}
+    if dist_tags:
+        latest = str(dist_tags.get("latest") or "")
+    return {
+        "registry": "npm",
+        "package": package_name,
+        "latest": latest,
+        "dist_tags": dict(dist_tags),
+        "description": str(metadata.get("description") or ""),
+        "repository": metadata.get("repository") if isinstance(metadata.get("repository"), Mapping) else {},
+    }
+
+
 def github_contents_api_url(parsed: Mapping[str, str], path: str) -> str:
     quoted_path = urllib.parse.quote(path.strip("/"))
     ref = urllib.parse.quote(parsed["ref"])
@@ -199,7 +224,25 @@ def source_research_visible_response(result: Mapping[str, Any]) -> str:
     warnings = result.get("warnings")
     if isinstance(warnings, list) and warnings:
         lines.append("Warnings: " + "; ".join(str(item) for item in warnings[:3]))
+    npm_metadata = result.get("npm_package_metadata")
+    if isinstance(npm_metadata, Mapping) and npm_metadata.get("package"):
+        latest = f" latest `{npm_metadata.get('latest')}`" if npm_metadata.get("latest") else ""
+        lines.append(f"NPM package metadata: `{npm_metadata.get('package')}`{latest}.")
     return "\n".join(lines)
+
+
+def package_name_from_source_files(source_files: Sequence[Mapping[str, Any]]) -> str:
+    for item in source_files:
+        if not str(item.get("path") or "").endswith("package.json"):
+            continue
+        try:
+            parsed = json.loads(str(item.get("content") or "{}"))
+        except json.JSONDecodeError:
+            continue
+        name = str(parsed.get("name") or "").strip() if isinstance(parsed, Mapping) else ""
+        if name:
+            return name
+    return ""
 
 
 def research_service_onboarding_source(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
@@ -285,6 +328,14 @@ def research_service_onboarding_source(project_root: str, data: Mapping[str, Any
                 "retrieved_content_bytes": total_bytes,
             }
         )
+        package_name = package_name_from_source_files(result["source_files"])
+        if package_name:
+            try:
+                metadata = fetch_npm_package_metadata(package_name)
+                if metadata:
+                    result["npm_package_metadata"] = metadata
+            except (OSError, urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+                result["warnings"].append(f"npm metadata fetch failed for {package_name}: {exc.__class__.__name__}: {exc}")
     except (OSError, urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         result.update({"ok": False, "error": f"{exc.__class__.__name__}: {exc}", "message": "Source research fetch failed."})
     result["assistant_visible_response"] = source_research_visible_response(result)
@@ -365,17 +416,197 @@ def service_onboarding_descriptor(data: Mapping[str, Any]) -> dict[str, Any]:
 def _list_field(data: Mapping[str, Any], *keys: str) -> list[Any]:
     for key in keys:
         value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, Sequence) and not isinstance(parsed, (str, bytes, bytearray)):
+                return [item for item in parsed]
         if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
             return [item for item in value]
     return []
 
 
+def _argument_text(item: Any) -> str:
+    if isinstance(item, str):
+        return item.strip()
+    if isinstance(item, Mapping):
+        value = item.get("arg") or item.get("value") or item.get("argument") or item.get("name")
+        if value is not None:
+            return str(value).strip()
+    return ""
+
+
+def _meaningful_payload_items(data: Mapping[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in data.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            if value:
+                result[key] = value
+            continue
+        if value in ("", [], {}):
+            continue
+        result[key] = value
+    return result
+
+
+def _structured_payload_artifact_path(data: Mapping[str, Any]) -> str:
+    for key in (
+        "structured_payload_path",
+        "structuredPayloadPath",
+        "runtime_apply_payload_path",
+        "runtimeApplyPayloadPath",
+        "onboarding_payload_path",
+        "onboardingPayloadPath",
+    ):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _project_local_artifact_path(project_root: str | Path, raw_path: str) -> Path:
+    root = Path(project_root).resolve(strict=False)
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = root / path
+    resolved = path.resolve(strict=False)
+    if root not in (resolved, *resolved.parents):
+        raise ValueError(f"structured_payload_path must stay under project_root: {raw_path}")
+    return resolved
+
+
+def merge_structured_payload_artifact(project_root: str | Path, data: Mapping[str, Any]) -> dict[str, Any]:
+    path_value = _structured_payload_artifact_path(data)
+    if not path_value:
+        return dict(data)
+    path = _project_local_artifact_path(project_root, path_value)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, Mapping):
+        raise ValueError(f"structured_payload_path must contain a JSON object: {path}")
+    merged = {**dict(payload), **_meaningful_payload_items(data)}
+    merged["structured_payload_path"] = str(path)
+    return merged
+
+
+def _environment_entry(item: Any, required_secret_names: set[str]) -> dict[str, Any] | None:
+    if isinstance(item, Mapping):
+        name = str(item.get("name") or item.get("key") or "").strip()
+        value = item.get("value")
+        if not name and len(item) == 1:
+            name, value = next(iter(item.items()))
+            name = str(name).strip()
+        if not name:
+            return None
+        secret = bool(item.get("secret") or item.get("is_secret") or item.get("isSecret") or name in required_secret_names)
+        entry: dict[str, Any] = {"name": name, "secret": secret}
+        if item.get("description"):
+            entry["description"] = str(item["description"])
+        if not secret and value is not None:
+            entry["value"] = str(value)
+        return entry
+    name = str(item).strip()
+    if not name:
+        return None
+    return {"name": name, "secret": name in required_secret_names}
+
+
 def _mapping_field(data: Mapping[str, Any], *keys: str) -> dict[str, Any]:
     for key in keys:
         value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, Mapping):
+                return dict(parsed)
         if isinstance(value, Mapping):
             return dict(value)
     return {}
+
+
+def _tool_schema_field(data: Mapping[str, Any]) -> dict[str, Any]:
+    mapping = _mapping_field(data, "tool_schemas", "toolSchemas")
+    if mapping:
+        return mapping
+    records = _tool_schema_records_field(data)
+    if records:
+        return records
+    return {}
+
+
+def _tool_schema_records_field(data: Mapping[str, Any]) -> dict[str, Any]:
+    records = data.get("tool_schema_records") or data.get("toolSchemaRecords")
+    if isinstance(records, str) and records.strip():
+        try:
+            records = json.loads(records)
+        except json.JSONDecodeError:
+            return {}
+    if not isinstance(records, Sequence) or isinstance(records, (str, bytes, bytearray)):
+        return {}
+    result: dict[str, Any] = {}
+    for item in records:
+        if not isinstance(item, Mapping):
+            continue
+        name = str(item.get("name") or item.get("tool") or item.get("tool_name") or item.get("toolName") or "").strip()
+        if not name:
+            continue
+        schema: dict[str, Any] = {}
+        description = str(item.get("description") or "").strip()
+        if description:
+            schema["description"] = description
+        input_schema = item.get("input_schema") if "input_schema" in item else item.get("inputSchema")
+        if isinstance(input_schema, Mapping):
+            schema["inputSchema"] = dict(input_schema)
+        elif isinstance(item.get("schema"), Mapping):
+            schema["inputSchema"] = dict(item["schema"])
+        source_anchor = item.get("source_anchor") or item.get("sourceAnchor") or item.get("source")
+        if source_anchor:
+            schema["source_anchor"] = str(source_anchor)
+        if schema:
+            result[name] = schema
+    return result
+
+
+def _tool_schema_summaries_field(data: Mapping[str, Any]) -> dict[str, Any]:
+    summaries = data.get("tool_schema_summaries") or data.get("toolSchemaSummaries")
+    if isinstance(summaries, str) and summaries.strip():
+        try:
+            summaries = json.loads(summaries)
+        except json.JSONDecodeError:
+            return {"_summary": summaries.strip()}
+    if isinstance(summaries, Mapping):
+        return dict(summaries)
+    if isinstance(summaries, Sequence) and not isinstance(summaries, (str, bytes, bytearray)):
+        result: dict[str, Any] = {}
+        for index, item in enumerate(summaries, start=1):
+            if isinstance(item, Mapping):
+                name = str(item.get("name") or item.get("tool") or f"tool_{index}").strip()
+                if name:
+                    result[name] = {
+                        key: value
+                        for key, value in item.items()
+                        if key in {"description", "input", "input_summary", "inputSummary", "output", "output_summary", "outputSummary"}
+                    } or str(item)
+            elif str(item).strip():
+                result[f"tool_{index}"] = {"summary": str(item).strip()}
+        return result
+    return {}
+
+
+def _valid_tool_schema_mapping(value: Any) -> bool:
+    if not isinstance(value, Mapping) or not value:
+        return False
+    for name, schema in value.items():
+        if not str(name).strip() or not isinstance(schema, Mapping) or not schema:
+            return False
+        if not any(key in schema for key in ("description", "input_schema", "inputSchema", "input", "schema", "type", "properties")):
+            return False
+    return True
 
 
 def _bool_field(data: Mapping[str, Any], *keys: str) -> bool:
@@ -432,6 +663,9 @@ def service_management_descriptor(data: Mapping[str, Any]) -> dict[str, Any]:
     package_arguments = _list_field(data, "package_arguments", "packageArguments")
     if package_arguments:
         backend["package_arguments"] = package_arguments
+    backend_args = _list_field(data, "backend_args", "backendArgs")
+    if backend_args:
+        backend["runtime_arguments"] = backend_args
     runtime_arguments = _list_field(data, "runtime_arguments", "runtimeArguments")
     if runtime_arguments:
         backend["runtime_arguments"] = runtime_arguments
@@ -444,14 +678,23 @@ def service_management_descriptor(data: Mapping[str, Any]) -> dict[str, Any]:
     descriptor["npm_package_confirmed"] = _bool_field(data, "npm_package_confirmed", "npmPackageConfirmed")
     descriptor["environment_variables_reviewed"] = _bool_field(data, "environment_variables_reviewed", "environmentVariablesReviewed")
     descriptor["package_arguments_reviewed"] = _bool_field(data, "package_arguments_reviewed", "packageArgumentsReviewed")
-    tool_schemas = _mapping_field(data, "tool_schemas", "toolSchemas")
+    tool_schemas = _tool_schema_field(data)
     if tool_schemas:
         descriptor["tool_schemas"] = tool_schemas
+    tool_schema_summaries = _tool_schema_summaries_field(data)
+    if tool_schema_summaries:
+        descriptor["tool_schema_summaries"] = tool_schema_summaries
     prompt_library = _mapping_field(data, "prompt_library", "promptLibrary")
     if prompt_library:
+        if "abstractPrompt" in prompt_library and "abstract_prompt" not in prompt_library:
+            prompt_library["abstract_prompt"] = prompt_library["abstractPrompt"]
+        if "detailPrompts" in prompt_library and "detail_prompts" not in prompt_library:
+            prompt_library["detail_prompts"] = prompt_library["detailPrompts"]
         descriptor["prompt_library"] = prompt_library
     if command:
         backend["command"] = str(command)
+    elif package and str(runtime_hint or "").strip().lower() == "npx":
+        backend["command"] = "npx"
     elif package:
         backend["command"] = str(package)
     if transport:
@@ -520,8 +763,13 @@ def runtime_apply_required_input_gaps(descriptor: Mapping[str, Any]) -> list[dic
                 "reason": "assistant must research/determine package/runtime arguments, even when the result is none",
             }
         )
-    if not isinstance(descriptor.get("tool_schemas"), Mapping) or not descriptor.get("tool_schemas"):
-        gaps.append({"field": "tool_schemas", "reason": "tool schemas must be understood and supplied before prompt publication"})
+    if not _valid_tool_schema_mapping(descriptor.get("tool_schemas")):
+        gaps.append(
+            {
+                "field": "tool_schemas",
+                "reason": "structured tool schemas are required as an object mapping tool name to source-derived schema object, or as tool_schema_records/toolSchemaRecords array entries with name, description, and input_schema/inputSchema; summaries or string arrays are not accepted as a substitute",
+            }
+        )
     if not str(prompt_library.get("abstract_prompt") or "").strip():
         gaps.append({"field": "prompt_library.abstract_prompt", "reason": "standard abstract prompt content is mandatory"})
     detail_prompts = prompt_library.get("detail_prompts")
@@ -538,6 +786,16 @@ def runtime_apply_blocked_response(candidate: str, gaps: Sequence[Mapping[str, s
     ]
     for gap in gaps:
         lines.append(f"- `{gap.get('field')}`: {gap.get('reason')}")
+    lines.append(
+        "When retrying, resubmit the complete source-derived field set in one call; "
+        "the helper does not merge accepted values from earlier failed attempts."
+    )
+    if any(str(gap.get("field") or "") in {"tool_schemas", "prompt_library.detail_prompts"} for gap in gaps):
+        lines.append(
+            "For large structured payloads, the assistant may write a project-local JSON object containing the "
+            "complete source-derived field set and pass its path as `structured_payload_path`/`structuredPayloadPath`; "
+            "that file may include `toolSchemas` or `toolSchemaRecords` plus `promptLibrary`."
+        )
     lines.extend(
         [
             "After those facts are supplied, ask me to build the runtime/apply package again.",
@@ -547,7 +805,264 @@ def runtime_apply_blocked_response(candidate: str, gaps: Sequence[Mapping[str, s
     return "\n".join(lines)
 
 
+RUNTIME_APPLY_DRAFT_SLICES: list[dict[str, Any]] = [
+    {
+        "id": "identity",
+        "title": "Service and package identity",
+        "fields": [
+            "candidate_service",
+            "operator_goal",
+            "source_path",
+            "backend_package",
+            "package_registry_type",
+            "package_version",
+            "npm_package_confirmed",
+        ],
+    },
+    {
+        "id": "transport",
+        "title": "Transport and command",
+        "fields": [
+            "transport_type",
+            "backend_command",
+            "backend_args",
+            "runtime_hint",
+            "package_arguments_reviewed",
+            "package_arguments",
+        ],
+    },
+    {
+        "id": "environment",
+        "title": "Environment and credential boundary",
+        "fields": [
+            "credential_boundary",
+            "environment_variables_reviewed",
+            "environment_variables",
+            "required_secret_names",
+        ],
+    },
+    {
+        "id": "tool_schemas",
+        "title": "Tool schemas",
+        "fields": [
+            "expected_tools",
+            "tool_schema_records",
+            "tool_schemas",
+            "tool_schema_summaries",
+        ],
+    },
+    {
+        "id": "prompt_library",
+        "title": "Prompt library and classification",
+        "fields": [
+            "localization_type",
+            "functional_type",
+            "state_type",
+            "approval_type",
+            "prompt_library",
+        ],
+    },
+]
+
+
+def runtime_apply_draft_cache_dir(project_root: str | Path) -> Path:
+    return Path(project_root).resolve(strict=False) / RUNTIME_APPLY_DRAFT_CACHE_DIR
+
+
+def runtime_apply_draft_id(data: Mapping[str, Any]) -> str:
+    for key in ("runtime_apply_draft_id", "runtimeApplyDraftId", "draft_id", "draftId"):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            normalized = value.strip()
+            if not re.fullmatch(r"rad_[a-z0-9_.-]+", normalized):
+                raise ValueError("runtime_apply_draft_id must start with rad_ and contain only letters, digits, underscores, dots, or dashes")
+            return normalized
+    service = str(data.get("candidate_service") or data.get("candidateService") or data.get("service") or "").strip()
+    package = str(data.get("backend_package") or data.get("backendPackage") or data.get("package") or "").strip()
+    source = str(data.get("source_path") or data.get("sourcePath") or "").strip()
+    material = service or package or source or "unnamed-service"
+    return "rad_" + package_alias(material)[:80].strip(".-")
+
+
+def runtime_apply_draft_path(project_root: str | Path, draft_id: str) -> Path:
+    if not re.fullmatch(r"rad_[a-z0-9_.-]+", draft_id):
+        raise ValueError("runtime_apply_draft_id must start with rad_ and contain only letters, digits, underscores, dots, or dashes")
+    return runtime_apply_draft_cache_dir(project_root) / f"{draft_id}.json"
+
+
+def load_runtime_apply_draft(project_root: str | Path, draft_id: str) -> dict[str, Any]:
+    path = runtime_apply_draft_path(project_root, draft_id)
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, Mapping):
+        raise ValueError(f"runtime apply draft is not a JSON object: {path}")
+    return dict(payload)
+
+
+def store_runtime_apply_draft(project_root: str | Path, draft_id: str, payload: Mapping[str, Any]) -> Path:
+    cache_dir = runtime_apply_draft_cache_dir(project_root)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = runtime_apply_draft_path(project_root, draft_id)
+    content = dict(payload)
+    content["runtime_apply_draft_id"] = draft_id
+    path.write_text(json.dumps(content, indent=2, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def runtime_apply_draft_slice_for_gap(field: str) -> dict[str, Any]:
+    root = field.split(".", 1)[0]
+    for item in RUNTIME_APPLY_DRAFT_SLICES:
+        if field in item["fields"] or root in item["fields"]:
+            return item
+    return RUNTIME_APPLY_DRAFT_SLICES[0]
+
+
+def runtime_apply_draft_status(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
+    draft_id = runtime_apply_draft_id(data)
+    previous = load_runtime_apply_draft(project_root, draft_id)
+    merged = {**previous, **_meaningful_payload_items(merge_structured_payload_artifact(project_root, data))}
+    merged.pop("structured_payload_path", None)
+    merged.pop("structuredPayloadPath", None)
+    merged.pop("runtimeApplyDraftId", None)
+    merged.pop("draftId", None)
+    merged["runtime_apply_draft_id"] = draft_id
+    draft_path = store_runtime_apply_draft(project_root, draft_id, merged)
+    descriptor = service_management_descriptor(merged)
+    gaps = runtime_apply_required_input_gaps(descriptor)
+    accepted_fields = sorted(key for key, value in _meaningful_payload_items(merged).items() if key != "runtime_apply_draft_id")
+    if gaps:
+        next_slice = runtime_apply_draft_slice_for_gap(str(gaps[0].get("field") or ""))
+        ready = False
+        status = "service_onboarding_runtime_apply_draft_incomplete"
+    else:
+        next_slice = {
+            "id": "build_package",
+            "title": "Build runtime/apply package",
+            "fields": ["structuredPayloadPath"],
+        }
+        ready = True
+        status = "service_onboarding_runtime_apply_draft_ready"
+    visible = runtime_apply_draft_visible_response(
+        draft_id=draft_id,
+        draft_path=draft_path,
+        ready=ready,
+        next_slice=next_slice,
+        gaps=gaps,
+    )
+    return {
+        "status": status,
+        "project_root": project_root,
+        "mutation_allowed": False,
+        "runtime_apply_draft_id": draft_id,
+        "structured_payload_path": str(draft_path),
+        "ready_to_build_runtime_apply_package": ready,
+        "accepted_fields": accepted_fields,
+        "required_inputs": gaps,
+        "next_required_slice": next_slice,
+        "assistant_visible_response": visible,
+        "message": visible,
+        "non_actions": [
+            "does not call ContextForge APIs",
+            "does not mutate the shared npm-stdio host",
+            "does not write prompt-library content",
+            "does not write client-local MCP config",
+            "does not build or execute the runtime/apply package",
+        ],
+    }
+
+
+def runtime_apply_draft_visible_response(
+    *,
+    draft_id: str,
+    draft_path: Path,
+    ready: bool,
+    next_slice: Mapping[str, Any],
+    gaps: Sequence[Mapping[str, str]],
+) -> str:
+    lines = [
+        f"Updated the onboarding draft `{draft_id}`.",
+        f"Draft payload path: `{draft_path}`.",
+        "This is a non-mutating just-in-time draft step.",
+    ]
+    if ready:
+        lines.extend(
+            [
+                "The draft now has the required source-derived fields for runtime/apply package preview.",
+                "Next step: call the runtime/apply package preview with `structuredPayloadPath` set to the draft payload path.",
+                "Do not claim runtime, ContextForge, target-client, or safe-call readiness from this draft step.",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                f"Next bounded ask: {next_slice.get('title')}.",
+                "Provide only that slice if possible; the helper will keep composing the draft.",
+                "Still required:",
+            ]
+        )
+        for gap in gaps[:8]:
+            lines.append(f"- `{gap.get('field')}`: {gap.get('reason')}")
+    lines.append("No runtime, registry, Docker, prompt-library, client config, or project activation mutation has been performed.")
+    return "\n".join(lines)
+
+
+def runtime_apply_package_cache_dir(project_root: str | Path) -> Path:
+    return Path(project_root).resolve(strict=False) / RUNTIME_APPLY_PACKAGE_CACHE_DIR
+
+
+def runtime_apply_package_id(package: Mapping[str, Any]) -> str:
+    material = {
+        "schema": "contextforge://control-plane/service-onboarding-runtime-apply-package-id/v1",
+        "service_provision_plan": package.get("service_provision_plan"),
+        "contextforge_registration_plan": package.get("contextforge_registration_plan"),
+        "install_artifact_contract": package.get("install_artifact_contract"),
+    }
+    return "rap_" + hashlib.sha256(json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:24]
+
+
+def store_runtime_apply_package(project_root: str | Path, package: Mapping[str, Any]) -> dict[str, str]:
+    package_id = runtime_apply_package_id(package)
+    cache_dir = runtime_apply_package_cache_dir(project_root)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    package_path = cache_dir / f"{package_id}.json"
+    content = dict(package)
+    content["runtime_apply_package_id"] = package_id
+    package_path.write_text(json.dumps(content, indent=2, sort_keys=True), encoding="utf-8")
+    return {"runtime_apply_package_id": package_id, "runtime_apply_package_path": str(package_path)}
+
+
+def load_runtime_apply_package(project_root: str | Path, package_id: str) -> dict[str, Any]:
+    normalized = str(package_id or "").strip()
+    if not re.fullmatch(r"rap_[a-f0-9]{24}", normalized):
+        raise ValueError("runtime_apply_package_id must be a recorded rap_<digest> id from cf_project_service_onboarding_runtime_apply")
+    package_path = runtime_apply_package_cache_dir(project_root) / f"{normalized}.json"
+    if not package_path.exists():
+        raise FileNotFoundError(f"recorded runtime_apply_package_id was not found: {normalized}")
+    package = json.loads(package_path.read_text(encoding="utf-8"))
+    if not isinstance(package, Mapping):
+        raise ValueError(f"recorded runtime_apply_package_id is not an object: {normalized}")
+    return dict(package)
+
+
+def runtime_apply_package_identity(project_root: str | Path, package_id: str) -> dict[str, str]:
+    package = load_runtime_apply_package(project_root, package_id)
+    provision = package.get("service_provision_plan") if isinstance(package.get("service_provision_plan"), Mapping) else {}
+    registration = package.get("contextforge_registration_plan") if isinstance(package.get("contextforge_registration_plan"), Mapping) else {}
+    boundary = package.get("runtime_apply_boundary") if isinstance(package.get("runtime_apply_boundary"), Mapping) else {}
+    descriptor = registration.get("candidate_descriptor") if isinstance(registration.get("candidate_descriptor"), Mapping) else {}
+    backend = descriptor.get("backend") if isinstance(descriptor.get("backend"), Mapping) else {}
+    return {
+        "candidate_service": str(descriptor.get("candidate_service") or descriptor.get("canonical_service") or ""),
+        "service_binding": str(provision.get("service_binding") or ""),
+        "source_path": str(descriptor.get("source_lead") or ""),
+        "backend_package": str(backend.get("package") or ""),
+        "executor_surface": str(boundary.get("recorded_executor_surface") or ""),
+    }
+
+
 def build_service_onboarding_plan(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
+    data = merge_structured_payload_artifact(project_root, data)
     record = service_onboarding.build_onboarding_record(
         service_onboarding_descriptor(data),
         project_root=project_root,
@@ -568,6 +1083,7 @@ def build_service_onboarding_plan(project_root: str, data: Mapping[str, Any]) ->
 
 
 def build_service_onboarding_continuation(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
+    data = merge_structured_payload_artifact(project_root, data)
     descriptor = service_management_descriptor(data)
     handoff = service_handoffs.build_catalog_candidate_handoff(
         descriptor,
@@ -602,6 +1118,7 @@ def build_service_onboarding_continuation(project_root: str, data: Mapping[str, 
 
 
 def build_service_onboarding_runtime_apply_package(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
+    data = merge_structured_payload_artifact(project_root, data)
     descriptor = service_management_descriptor(data)
     candidate = (
         descriptor.get("candidate_service")
@@ -688,21 +1205,10 @@ def build_service_onboarding_runtime_apply_package(project_root: str, data: Mapp
         backend_command=backend_command,
         project_root=project_root,
     )
-    visible = runtime_apply_visible_response(
-        candidate=str(candidate),
-        service_binding=service_binding,
-        management_result=management_result,
-        provision_plan=provision_plan,
-        install_artifact_contract=install_contract,
-        runtime_target=runtime_target,
-        runtime_target_error=runtime_target_error,
-    )
-    return {
+    package: dict[str, Any] = {
         "status": "service_onboarding_runtime_apply_package",
         "project_root": project_root,
         "mutation_allowed": False,
-        "assistant_visible_response": visible,
-        "message": visible,
         **hidden_onboarding_guidance(data),
         "handoff": handoff,
         "service_management_result": management_result,
@@ -732,6 +1238,21 @@ def build_service_onboarding_runtime_apply_package(project_root: str, data: Mapp
             "does not claim target-client-visible service availability",
         ],
     }
+    package_ref = store_runtime_apply_package(project_root, package)
+    package.update(package_ref)
+    visible = runtime_apply_visible_response(
+        candidate=str(candidate),
+        service_binding=service_binding,
+        management_result=management_result,
+        provision_plan=provision_plan,
+        install_artifact_contract=install_contract,
+        runtime_target=runtime_target,
+        runtime_target_error=runtime_target_error,
+        runtime_apply_package_id=package_ref["runtime_apply_package_id"],
+    )
+    package["assistant_visible_response"] = visible
+    package["message"] = visible
+    return package
 
 
 def install_artifact_contract(
@@ -764,41 +1285,74 @@ def install_artifact_contract(
         or f"{service.replace(':', '-')}-server"
     )
     upstream_url = str(runtime_target.get("upstream_url") or "<service-container-streamable-http-url>")
-    package_arguments = [
-        str(item)
-        for item in backend.get("package_arguments", [])
-        if isinstance(item, str) and item.strip()
-    ]
+    package_arguments = [text for item in backend.get("package_arguments", []) if (text := _argument_text(item))]
     required_secret_names = [
         str(item)
         for item in descriptor.get("required_secret_names", [])
         if str(item).strip()
     ]
+    required_secret_name_set = set(required_secret_names)
     environment_variables = []
     environment_values: dict[str, str] = {}
     for item in backend.get("environment_variables", []):
-        if isinstance(item, Mapping):
-            name = str(item.get("name") or item.get("key") or "").strip()
-            if not name:
-                continue
-            secret = bool(item.get("secret") or item.get("is_secret") or item.get("isSecret") or name in required_secret_names)
-            entry: dict[str, Any] = {"name": name, "secret": secret}
-            if item.get("description"):
-                entry["description"] = str(item["description"])
-            value = item.get("value")
-            if not secret and value is not None:
-                entry["value"] = str(value)
-                environment_values[name] = str(value)
-            environment_variables.append(entry)
-        else:
-            name = str(item).strip()
-            if name:
-                environment_variables.append({"name": name, "secret": name in required_secret_names})
+        entry = _environment_entry(item, required_secret_name_set)
+        if not entry:
+            continue
+        if entry.get("value") is not None:
+            environment_values[str(entry["name"])] = str(entry["value"])
+        environment_variables.append(entry)
     endpoint = npm_stdio_endpoint(service_binding, project_root=project_root)
+    runtime_apply_payload_contract = {
+        "required_fields": [
+            "candidate_service",
+            "backend_package",
+            "package_registry_type",
+            "transport_type",
+            "npm_package_confirmed",
+            "environment_variables_reviewed",
+            "package_arguments_reviewed",
+            "tool_schemas",
+            "prompt_library.abstract_prompt",
+            "prompt_library.detail_prompts",
+        ],
+        "tool_schemas_shape": {
+            "type": "object",
+            "description": "Object mapping exact tool name to a source-derived JSON-schema-like object. Do not send an array of strings and do not rely on summaries as the schema.",
+            "additionalProperties": {
+                "type": "object",
+                "recommended_fields": [
+                    "description",
+                    "input_schema",
+                    "source_anchor",
+                ],
+                "input_schema": "JSON Schema object for the tool input, for example {\"type\":\"object\",\"properties\":{},\"required\":[]}.",
+            },
+        },
+        "tool_schema_records_shape": {
+            "type": "array",
+            "description": "Compact accepted equivalent for clients that struggle with one large nested object: array of per-tool source-derived records.",
+            "items": {
+                "type": "object",
+                "required": ["name", "description", "inputSchema"],
+                "properties": {
+                    "name": "Exact tool name.",
+                    "description": "Source-derived tool description.",
+                    "inputSchema": "JSON Schema object for the tool input.",
+                    "sourceAnchor": "Optional source file, URL, or symbol anchor.",
+                },
+            },
+        },
+        "tool_schema_summaries_policy": "Accepted only as review notes; summaries do not satisfy the required tool_schemas field.",
+        "prompt_library_shape": {
+            "abstract_prompt": "Concise proactive service abstract.",
+            "detail_prompts": "Object mapping detail prompt id to lazy-loaded task guidance.",
+        },
+    }
     return {
         "schema_uri": "contextforge://control-plane/service-onboarding-install-artifact-contract/v1",
         "service_binding": service_binding,
         "purpose": "managed npm-stdio host service record plus ContextForge API JSON for reviewed service installation",
+        "runtime_apply_payload_contract": runtime_apply_payload_contract,
         "runtime_substrate": {
             "kind": "shared_docker_service",
             "id": "npm-stdio-host",
@@ -824,7 +1378,7 @@ def install_artifact_contract(
                     "npm package identifier and approved version or version policy",
                     "runtime hint such as npx when known",
                     "stdio command arguments and package arguments",
-                    "non-secret environment placeholders only",
+                    "concrete non-secret environment values, or descriptions for optional variables without chosen values",
                     "required secret names and credential boundary without secret values",
                     "shared npm-stdio host endpoint allocation",
                     "no client-local MCP configuration",
@@ -861,6 +1415,7 @@ def install_artifact_contract(
                     "endpoint": endpoint,
                     "expected_tools": expected,
                     "tool_schemas": descriptor.get("tool_schemas") if isinstance(descriptor.get("tool_schemas"), Mapping) else {},
+                    "tool_schema_summaries": descriptor.get("tool_schema_summaries") if isinstance(descriptor.get("tool_schema_summaries"), Mapping) else {},
                     "prompt_library": {
                         "abstract_prompt": str(prompt_library.get("abstract_prompt") or ""),
                         "detail_prompts": prompt_library.get("detail_prompts") if isinstance(prompt_library.get("detail_prompts"), Mapping) else {},
@@ -931,24 +1486,88 @@ def install_artifact_contract(
 
 
 def apply_service_onboarding_runtime_package(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
-    package = build_service_onboarding_runtime_apply_package(project_root, data)
+    runtime_apply_package_id = str(data.get("runtime_apply_package_id") or data.get("runtimeApplyPackageId") or "").strip()
+    package = (
+        load_runtime_apply_package(project_root, runtime_apply_package_id)
+        if runtime_apply_package_id
+        else build_service_onboarding_runtime_apply_package(project_root, data)
+    )
+    if package.get("status") == "service_onboarding_runtime_apply_blocked":
+        failure_report = {
+            "failed_stage": "required_inputs",
+            "sanitized_error": "runtime/apply cannot proceed until required source-derived onboarding fields are supplied",
+            "rollback_actions_attempted": [],
+            "rollback_result": "not_run",
+            "residual_cleanup_risk": "",
+        }
+        return {
+            "status": package.get("status"),
+            "project_root": project_root,
+            "mutation_allowed": False,
+            "mutation_performed": False,
+            "assistant_visible_response": package.get("assistant_visible_response") or package.get("message") or "",
+            "message": package.get("message") or package.get("assistant_visible_response") or "",
+            "executor_result": {
+                "mutation_performed": False,
+                "apply_requested": False,
+                "failure_report": failure_report,
+                "tool_names": [],
+                "non_actions": package.get("non_actions") or [],
+            },
+            "runtime_target": {},
+            "required_inputs": package.get("required_inputs") or [],
+            "non_actions": package.get("non_actions") or [],
+        }
+    if runtime_apply_package_id:
+        package["runtime_apply_package_id"] = runtime_apply_package_id
     target = dev_runtime_target_for_package(package, data)
     if data.get("require_executor_surface_approval"):
-        require_runtime_executor_surface_approval(str(data.get("approval_text") or ""), target)
-    executor = load_runtime_package_executor(target["executor_surface"])
-    with tempfile.NamedTemporaryFile("w", suffix="-runtime-apply-package.json", encoding="utf-8", delete=True) as handle:
-        json.dump(package, handle)
-        handle.flush()
-        result = executor.run(
-            package_path=Path(handle.name),
-            upstream_url=target["upstream_url"],
-            gateway_name=target.get("gateway_name"),
-            server_name=target.get("virtual_server_name"),
-            apply=True,
-            base_url=str(data.get("contextforge_base_url") or data.get("contextforgeBaseUrl") or os.environ.get(RUNTIME_EXECUTOR_BASE_URL_ENV, RUNTIME_EXECUTOR_DEFAULT_BASE_URL)),
-            env_file=Path(str(data.get("contextforge_env_file") or data.get("contextforgeEnvFile") or RUNTIME_EXECUTOR_DEFAULT_ENV_FILE)),
-            wait_attempts=int(data.get("wait_attempts") or data.get("waitAttempts") or 12),
+        provision = package.get("service_provision_plan") if isinstance(package.get("service_provision_plan"), Mapping) else {}
+        require_runtime_executor_surface_approval(
+            str(data.get("approval_text") or ""),
+            target,
+            service_binding=str(provision.get("service_binding") or ""),
+            runtime_apply_package_id=str(package.get("runtime_apply_package_id") or runtime_apply_package_id),
         )
+    try:
+        result = execute_runtime_apply_package(package, target, data)
+    except Exception as exc:
+        failure_report = getattr(exc, "failure_report", None)
+        if not isinstance(failure_report, Mapping):
+            failure_report = {
+                "failed_stage": "runtime_apply",
+                "sanitized_error": str(exc),
+                "rollback_actions_attempted": [],
+                "rollback_result": "not_run",
+                "residual_cleanup_risk": "runtime/apply failed before structured rollback evidence was returned",
+            }
+        result = {
+            "schema_uri": "contextforge://control-plane/service-onboarding-runtime-package-apply/v1",
+            "mutation_performed": False,
+            "apply_requested": True,
+            "package": {
+                "status": package.get("status"),
+                "service_binding": package.get("service_provision_plan", {}).get("service_binding"),
+                "provision_plan_id": package.get("service_provision_plan", {}).get("provision_plan_id"),
+                "catalog_plan_id": package.get("contextforge_registration_plan", {}).get("plan_id"),
+            },
+            "failure_report": dict(failure_report),
+            "non_actions": [
+                "runtime/apply failed; no target-client-visible service availability claim is available from this step",
+            ],
+        }
+    if not bool(result.get("mutation_performed")) and not isinstance(result.get("failure_report"), Mapping):
+        result = dict(result)
+        result["failure_report"] = {
+            "failed_stage": "runtime_apply",
+            "sanitized_error": "runtime executor returned mutation_performed=false without a structured failure_report",
+            "rollback_actions_attempted": [],
+            "rollback_result": "unknown",
+            "residual_cleanup_risk": "executor did not report rollback status",
+        }
+        result["non_actions"] = result.get("non_actions") or [
+            "runtime/apply failed; no target-client-visible service availability claim is available from this step"
+        ]
     candidate = (
         package.get("contextforge_registration_plan", {})
         .get("candidate_descriptor", {})
@@ -958,13 +1577,14 @@ def apply_service_onboarding_runtime_package(project_root: str, data: Mapping[st
     )
     visible = runtime_execute_visible_response(str(candidate), result)
     return {
-        "status": "service_onboarding_runtime_applied",
+        "status": "service_onboarding_runtime_applied" if bool(result.get("mutation_performed")) else "service_onboarding_runtime_apply_failed",
         "project_root": project_root,
         "mutation_allowed": True,
         "mutation_performed": bool(result.get("mutation_performed")),
         "assistant_visible_response": visible,
         "message": visible,
         "executor_result": result,
+        "runtime_apply_package_id": package.get("runtime_apply_package_id"),
         "runtime_target": {
             "gateway_name": target.get("gateway_name"),
             "virtual_server_name": target.get("virtual_server_name"),
@@ -973,6 +1593,95 @@ def apply_service_onboarding_runtime_package(project_root: str, data: Mapping[st
         },
         "non_actions": result.get("non_actions") or [],
     }
+
+
+def runtime_executor_base_url(data: Mapping[str, Any]) -> str:
+    return str(
+        data.get("contextforge_base_url")
+        or data.get("contextforgeBaseUrl")
+        or os.environ.get(RUNTIME_EXECUTOR_BASE_URL_ENV)
+        or RUNTIME_EXECUTOR_DEFAULT_BASE_URL
+    )
+
+
+def runtime_executor_env_file(data: Mapping[str, Any]) -> Path:
+    return Path(
+        str(
+            data.get("contextforge_env_file")
+            or data.get("contextforgeEnvFile")
+            or os.environ.get(RUNTIME_EXECUTOR_ENV_FILE_ENV)
+            or RUNTIME_EXECUTOR_DEFAULT_ENV_FILE
+        )
+    )
+
+
+def execute_runtime_apply_package(package: Mapping[str, Any], target: Mapping[str, str], data: Mapping[str, Any]) -> dict[str, Any]:
+    proxy_url = os.environ.get(RUNTIME_EXECUTOR_PROXY_URL_ENV, "").strip()
+    if proxy_url:
+        return execute_runtime_apply_package_via_proxy(package, target, data, proxy_url=proxy_url)
+    executor = load_runtime_package_executor(target["executor_surface"])
+    with tempfile.NamedTemporaryFile("w", suffix="-runtime-apply-package.json", encoding="utf-8", delete=True) as handle:
+        json.dump(package, handle)
+        handle.flush()
+        return executor.run(
+            package_path=Path(handle.name),
+            upstream_url=target["upstream_url"],
+            gateway_name=target.get("gateway_name"),
+            server_name=target.get("virtual_server_name"),
+            apply=True,
+            base_url=runtime_executor_base_url(data),
+            env_file=runtime_executor_env_file(data),
+            wait_attempts=int(data.get("wait_attempts") or data.get("waitAttempts") or 12),
+        )
+
+
+def execute_runtime_apply_package_via_proxy(
+    package: Mapping[str, Any],
+    target: Mapping[str, str],
+    data: Mapping[str, Any],
+    *,
+    proxy_url: str,
+) -> dict[str, Any]:
+    token = os.environ.get(RUNTIME_EXECUTOR_PROXY_TOKEN_ENV, "").strip()
+    if not token:
+        raise RuntimeError("runtime/apply host proxy is configured without a proxy token")
+    body = {
+        "package": package,
+        "target": dict(target),
+        "apply": True,
+        "base_url": os.environ.get(RUNTIME_EXECUTOR_PROXY_BASE_URL_ENV, "http://127.0.0.1:4445"),
+        "env_file": os.environ.get(
+            RUNTIME_EXECUTOR_PROXY_ENV_FILE_ENV,
+            str(REPO_ROOT / "docker" / "contextforge-harness" / "env" / "contextforge.env"),
+        ),
+        "wait_attempts": int(data.get("wait_attempts") or data.get("waitAttempts") or 12),
+    }
+    request = urllib.request.Request(
+        proxy_url,
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=240) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")
+        raise RuntimeError(f"runtime/apply host proxy failed: HTTP {exc.code} {exc.reason}: {detail}") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("runtime/apply host proxy returned non-object JSON")
+    if payload.get("ok") is False and isinstance(payload.get("failure_report"), Mapping):
+        class ProxyRuntimeApplyError(RuntimeError):
+            pass
+
+        error = ProxyRuntimeApplyError(str(payload.get("error") or "runtime/apply host proxy failed"))
+        error.failure_report = dict(payload["failure_report"])  # type: ignore[attr-defined]
+        raise error
+    return payload
 
 
 def dev_runtime_target_for_package(package: Mapping[str, Any], data: Mapping[str, Any]) -> dict[str, str]:
@@ -1055,12 +1764,24 @@ def dev_runtime_target_for_package(package: Mapping[str, Any], data: Mapping[str
     )
 
 
-def require_runtime_executor_surface_approval(approval_text: str, target: Mapping[str, str]) -> None:
+def require_runtime_executor_surface_approval(
+    approval_text: str,
+    target: Mapping[str, str],
+    *,
+    service_binding: str = "",
+    runtime_apply_package_id: str = "",
+) -> None:
     text = approval_text.strip().lower()
+    exact_phrase = runtime_apply_approval_phrase(
+        service_binding=service_binding or "the named service",
+        runtime_target=target,
+        runtime_apply_package_id=runtime_apply_package_id,
+    )
     if not text:
         raise PermissionError(
             "latest user message does not approve the recorded runtime executor surface; "
-            "ask the user to approve or decline the named executor surface before runtime execution"
+            "ask the user to approve or decline the named executor surface before runtime execution. "
+            f"Exact approval phrase: {exact_phrase}"
         )
     terms = {
         str(target.get("gateway_name") or "").strip().lower(),
@@ -1075,8 +1796,25 @@ def require_runtime_executor_surface_approval(approval_text: str, target: Mappin
     if terms and not any(term in text for term in terms):
         raise PermissionError(
             "latest user message approves runtime/apply in general but does not approve the recorded runtime executor surface; "
-            "ask the user to approve or decline the named executor surface before runtime execution"
+            "ask the user to approve or decline the named executor surface before runtime execution. "
+            f"Exact approval phrase: {exact_phrase}"
         )
+
+
+def runtime_apply_approval_phrase(
+    *,
+    service_binding: str,
+    runtime_target: Mapping[str, str] | None,
+    runtime_apply_package_id: str,
+) -> str:
+    executor_surface = str((runtime_target or {}).get("executor_surface") or "").strip()
+    if not executor_surface:
+        executor_surface = "the recorded ContextForge runtime/apply executor surface"
+    package_id = runtime_apply_package_id or "the recorded runtime/apply package id"
+    return (
+        f"Approve runtime/apply for {service_binding} using executor surface "
+        f"{executor_surface} and runtime_apply_package_id {package_id}."
+    )
 
 
 def runtime_instance_matches(instance: Mapping[str, Any], *, service_binding: str, source_path: str, candidate: str) -> bool:
@@ -1111,6 +1849,30 @@ def load_runtime_package_executor(surface: str):
 
 
 def runtime_execute_visible_response(candidate: str, result: Mapping[str, Any]) -> str:
+    mutation_performed = bool(result.get("mutation_performed"))
+    if not mutation_performed:
+        failure_report = result.get("failure_report") if isinstance(result.get("failure_report"), Mapping) else {}
+        failed_stage = str(failure_report.get("failed_stage") or result.get("failed_stage") or "runtime_apply")
+        sanitized_error = str(failure_report.get("sanitized_error") or result.get("sanitized_error") or "").strip()
+        rollback_result = str(failure_report.get("rollback_result") or result.get("rollback_result") or "unknown")
+        residual_cleanup_risk = str(failure_report.get("residual_cleanup_risk") or result.get("residual_cleanup_risk") or "").strip()
+        lines = [
+            f"`{candidate}` was not applied to the ContextForge development surface.",
+            "Runtime/apply did not complete; no service was installed, registered, exposed, or made available to this client by this step.",
+            f"Failed stage: `{failed_stage}`.",
+        ]
+        if sanitized_error:
+            lines.append(f"Observed error: {sanitized_error}")
+        lines.append(f"Rollback result: `{rollback_result}`.")
+        if residual_cleanup_risk:
+            lines.append(f"Residual cleanup risk: {residual_cleanup_risk}")
+        lines.extend(
+            [
+                "Do not ask the user to reload for this service yet, and do not claim target-client-visible tools are available.",
+                "Research the required correction from source evidence and submit a complete corrected runtime package before trying again.",
+            ]
+        )
+        return "\n".join(lines)
     binding = result.get("package", {}).get("service_binding") if isinstance(result.get("package"), Mapping) else ""
     gateway = result.get("gateway") if isinstance(result.get("gateway"), Mapping) else {}
     server = result.get("server") if isinstance(result.get("server"), Mapping) else {}
@@ -1128,8 +1890,9 @@ def runtime_execute_visible_response(candidate: str, result: Mapping[str, Any]) 
         lines.append("Tools registered: " + ", ".join(f"`{tool}`" for tool in tools) + ".")
     lines.extend(
         [
-            "No client-local MCP config, project activation state, systemd unit, Docker service, or secret value was written by this step.",
-            "Start a new Pi/OpenCode session from this project root so the newly registered ContextForge tools can be discovered, then use a safe service call to confirm behavior.",
+            "This step may have installed packages and started or restarted hosted service processes inside the shared npm-stdio host; do not say no runtime process was started unless the executor result explicitly proves that.",
+            "No client-local MCP config, project activation state, systemd unit, new Docker service, or secret value was written by this step.",
+            "Target-client usability is not proven yet. Start a new Pi/OpenCode session from this project root, confirm the tools are visible there, then use a safe service call before claiming the service is usable.",
         ]
     )
     return "\n".join(lines)
@@ -1185,11 +1948,12 @@ def service_management_visible_response(result: Mapping[str, Any], candidate: st
         "This is not a project-init service activation menu, and no cataloged-service selection was made.",
     ]
     if required:
-        lines.append("Required approval before mutation: " + ", ".join(required) + ".")
+        lines.append("A separate explicit approval is required before any ContextForge registry or catalog mutation.")
     lines.extend(
         [
             "No service has been installed, registered, started, exposed, imported, or made available to this client.",
-            "This surface stops before catalog promotion or runtime apply. A separate service-management apply surface is required before any ContextForge registry, runtime, or client-visible mutation.",
+            "The next safe step, if you want to continue, is a non-mutating runtime package preview for review. That preview still does not install or register anything.",
+            "Actual runtime execution remains a later approval step after reviewing the recorded package and executor surface.",
             "Do not use project-init activation or the existing service menu for this uncataloged service.",
         ]
     )
@@ -1205,6 +1969,7 @@ def runtime_apply_visible_response(
     install_artifact_contract: Mapping[str, Any] | None = None,
     runtime_target: Mapping[str, str] | None = None,
     runtime_target_error: str = "",
+    runtime_apply_package_id: str = "",
 ) -> str:
     plan = management_result.get("x_catalog_plan") if isinstance(management_result.get("x_catalog_plan"), Mapping) else {}
     catalog_plan_id = str(plan.get("plan_id") or management_result.get("result_id") or "unavailable")
@@ -1216,7 +1981,9 @@ def runtime_apply_visible_response(
         f"Catalog plan id: `{catalog_plan_id}`.",
         f"Provision plan id: `{provision_plan_id}`.",
         f"Backend home target: `{backend_home}`.",
+        f"Runtime/apply package id: `{runtime_apply_package_id or 'unavailable'}`.",
         "Expected implementation artifacts: a managed npm-stdio service record for the shared Docker host and a `contextforge-service.json` API definition for gateway refresh and virtual-server registration.",
+        "Use `install_artifact_contract.runtime_apply_payload_contract` for the exact accepted runtime/apply payload shape; `tool_schemas` must be an object mapping tool names to structured schema objects, not an array of strings or summaries.",
         "No runtime, registry, client config, or project activation mutation has been performed by this helper call.",
     ]
     if install_artifact_contract:
@@ -1237,7 +2004,11 @@ def runtime_apply_visible_response(
         if runtime_target.get("upstream_url"):
             lines.append(f"Recorded upstream URL: `{runtime_target.get('upstream_url')}`.")
         lines.append(
-            "The next executor still needs explicit approval for this exact recorded apply surface, then must prove backend readiness, ContextForge registration, a reload or new-session boundary, target-client-visible list-tools, and a safe service call."
+            "Exact approval phrase to proceed: "
+            f"`{runtime_apply_approval_phrase(service_binding=service_binding, runtime_target=runtime_target, runtime_apply_package_id=runtime_apply_package_id)}`"
+        )
+        lines.append(
+            "The next executor still needs explicit approval for this exact recorded apply surface. After that approval, call the runtime executor with this runtime/apply package id, then prove backend readiness, ContextForge registration, a reload or new-session boundary, target-client-visible list-tools, and a safe service call."
         )
     else:
         lines.append(

@@ -7,8 +7,21 @@
   "persona_sampling": {
     "selection_scope": "random_composition_per_client_model_run",
     "stability_rule": "randomly compose once before the run and keep the persona fixed for the whole tested-assistant dialogue",
-    "composition_model": "five_dimensional_persona_vector",
+    "composition_model": "five_dimensional_persona_vector_plus_help_determination_multiplier",
     "random_seed_recording_required": true,
+    "help_determination": {
+      "id": "determination_to_help_assistant_succeed_at_onboarding",
+      "scale": "n/20",
+      "default": 15,
+      "bounds": [1, 20],
+      "rule": "cooperation multiplier for the simulated-human responder only; it does not add hidden service knowledge or tested-assistant guidance",
+      "batch_adaptation": {
+        "all_three_fail": "+2 for the next quorum batch",
+        "two_fail": "+1 for the next quorum batch",
+        "one_fails": "no change for the next quorum batch",
+        "all_three_succeed": "-1 for the next quorum batch"
+      }
+    },
     "dimensions": [
       {
         "id": "domain_knowledge",
@@ -33,7 +46,7 @@
       {
         "id": "interaction_style",
         "values": ["terse", "cooperative", "demanding"],
-        "rule": "controls response length, patience, and willingness to ask the assistant to decide from research"
+        "rule": "controls response length, patience, and willingness to ask the assistant to decide from research; demanding means exacting and constructive, not cantankerous or hostile"
       }
     ],
     "coverage_requirements": [

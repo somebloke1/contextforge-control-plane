@@ -469,6 +469,21 @@ def client_visible_service_onboarding_payload(value: dict[str, Any]) -> dict[str
         )
     if value.get("status") == "service_onboarding_runtime_apply_package":
         public["install_artifact_contract"] = value.get("install_artifact_contract")
+        public["runtime_apply_package_id"] = value.get("runtime_apply_package_id")
+        public["runtime_apply_package_ref"] = {
+            "id": value.get("runtime_apply_package_id"),
+            "use_after_explicit_approval": "call cf_project_service_onboarding_runtime_execute with runtime_apply_package_id; do not reconstruct the full package payload from memory",
+        }
+    if value.get("status") in {
+        "service_onboarding_runtime_apply_draft_incomplete",
+        "service_onboarding_runtime_apply_draft_ready",
+    }:
+        public["runtime_apply_draft_id"] = value.get("runtime_apply_draft_id")
+        public["structured_payload_path"] = value.get("structured_payload_path")
+        public["ready_to_build_runtime_apply_package"] = value.get("ready_to_build_runtime_apply_package")
+        public["accepted_fields"] = value.get("accepted_fields") or []
+        public["required_inputs"] = value.get("required_inputs") or []
+        public["next_required_slice"] = value.get("next_required_slice") or {}
     if value.get("status") == "service_onboarding_runtime_apply_blocked":
         public["required_inputs"] = value.get("required_inputs") or []
     return {key: item for key, item in public.items() if item not in (None, "")}
@@ -1802,7 +1817,31 @@ def _text_contains_runtime_identity(text: str, identity_terms: set[str]) -> bool
     return False
 
 
-def _require_runtime_apply_approval_text(project_root: str, *, candidate_service: str = "", service_binding: str = "", source_path: str = "", backend_package: str = "") -> None:
+def _runtime_apply_exact_approval_phrase(
+    *,
+    service_binding: str = "",
+    runtime_apply_package_id: str = "",
+    executor_surface: str = "",
+) -> str:
+    binding = service_binding or "the named service"
+    surface = executor_surface or "the recorded ContextForge runtime/apply executor surface"
+    package_id = runtime_apply_package_id or "the recorded runtime/apply package id"
+    return (
+        f"Approve runtime/apply for {binding} using executor surface "
+        f"{surface} and runtime_apply_package_id {package_id}."
+    )
+
+
+def _require_runtime_apply_approval_text(
+    project_root: str,
+    *,
+    candidate_service: str = "",
+    service_binding: str = "",
+    source_path: str = "",
+    backend_package: str = "",
+    runtime_apply_package_id: str = "",
+    executor_surface: str = "",
+) -> None:
     if _env_truthy("CONTEXTFORGE_HELPER_ALLOW_UNGATED_RUNTIME_APPLY_PACKAGE"):
         return
     if _approval_source_path() is None:
@@ -1817,16 +1856,29 @@ def _require_runtime_apply_approval_text(project_root: str, *, candidate_service
     has_runtime_intent = bool(
         re.search(r"\b(?:runtime|apply|implement|implementation|register|registration|install|start|execute)\b", lowered)
     )
+    exact_phrase = _runtime_apply_exact_approval_phrase(
+        service_binding=service_binding,
+        runtime_apply_package_id=runtime_apply_package_id,
+        executor_surface=executor_surface,
+    )
     if _latest_text_has_approval_negation(lowered) or not (has_approval and has_runtime_intent):
         raise PermissionError(
             "latest user message does not contain explicit runtime/apply approval intent; "
-            "ask the user to approve or decline the runtime/apply package before calling this tool"
+            "ask the user to approve or decline the runtime/apply package before calling this tool. "
+            f"Exact approval phrase: {exact_phrase}"
+        )
+    if runtime_apply_package_id and runtime_apply_package_id.lower() not in lowered:
+        raise PermissionError(
+            "latest user message does not identify the exact runtime/apply package id being executed; "
+            "ask the user to approve runtime/apply for this exact recorded package before calling this tool. "
+            f"Exact approval phrase: {exact_phrase}"
         )
     identity_terms = _runtime_apply_identity_terms(candidate_service, service_binding, source_path, backend_package)
     if identity_terms and not _text_contains_runtime_identity(lowered, identity_terms):
         raise PermissionError(
             "latest user message does not identify the service being approved for runtime/apply; "
-            "ask the user to approve runtime/apply for the named service before calling this tool"
+            "ask the user to approve runtime/apply for the named service before calling this tool. "
+            f"Exact approval phrase: {exact_phrase}"
         )
 
 
@@ -2083,6 +2135,9 @@ def cf_project_service_onboarding_plan(
     candidate_service: str = "",
     operator_goal: str = "",
     source_path: str = "",
+    backend_package: str = "",
+    backend_command: str = "",
+    backend_args: list[str] | None = None,
     transport_type: str = "",
     localization_type: str = "",
     functional_type: str = "",
@@ -2097,10 +2152,12 @@ def cf_project_service_onboarding_plan(
     npm_package_confirmed: bool = False,
     environment_variables_reviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    environment_variables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     session_id: str = "",
@@ -2115,6 +2172,9 @@ def cf_project_service_onboarding_plan(
                 "candidate_service": candidate_service,
                 "operator_goal": operator_goal,
                 "source_path": source_path,
+                "backend_package": backend_package,
+                "backend_command": backend_command,
+                "backend_args": backend_args or [],
                 "transport_type": transport_type,
                 "localization_type": localization_type,
                 "functional_type": functional_type,
@@ -2133,6 +2193,8 @@ def cf_project_service_onboarding_plan(
                 "package_arguments": package_arguments or [],
                 "required_secret_names": required_secret_names or [],
                 "tool_schemas": tool_schemas or {},
+                "tool_schema_records": tool_schema_records or [],
+                "tool_schema_summaries": tool_schema_summaries or [],
                 "prompt_library": prompt_library or {},
                 "issue": issue,
                 "session_id": session_id,
@@ -2149,6 +2211,9 @@ def build_service_onboarding_plan(
     candidate_service: str = "",
     operator_goal: str = "",
     source_path: str = "",
+    backend_package: str = "",
+    backend_command: str = "",
+    backend_args: list[str] | None = None,
     transport_type: str = "",
     localization_type: str = "",
     functional_type: str = "",
@@ -2163,10 +2228,12 @@ def build_service_onboarding_plan(
     npm_package_confirmed: bool = False,
     environment_variables_reviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    environment_variables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     session_id: str = "",
@@ -2178,6 +2245,9 @@ def build_service_onboarding_plan(
         candidate_service=candidate_service,
         operator_goal=operator_goal,
         source_path=source_path,
+        backend_package=backend_package,
+        backend_command=backend_command,
+        backend_args=backend_args,
         transport_type=transport_type,
         localization_type=localization_type,
         functional_type=functional_type,
@@ -2196,6 +2266,8 @@ def build_service_onboarding_plan(
         package_arguments=package_arguments,
         required_secret_names=required_secret_names,
         tool_schemas=tool_schemas,
+        tool_schema_records=tool_schema_records,
+        tool_schema_summaries=tool_schema_summaries,
         prompt_library=prompt_library,
         issue=issue,
         session_id=session_id,
@@ -2240,65 +2312,130 @@ def research_service_onboarding_source(
 
 @server.tool()
 def cf_project_service_onboarding_continue(
-    project_root: str,
+    project_root: str = "",
+    projectRoot: str = "",
     candidate_service: str = "",
+    candidateService: str = "",
     operator_goal: str = "",
+    operatorGoal: str = "",
     source_path: str = "",
+    sourcePath: str = "",
     backend_package: str = "",
+    backendPackage: str = "",
     backend_command: str = "",
+    backendCommand: str = "",
+    command: str = "",
+    backendArgs: list[str] | None = None,
     transport_type: str = "",
+    transportType: str = "",
     localization_type: str = "",
+    localizationType: str = "",
     functional_type: str = "",
+    functionalType: str = "",
     state_type: str = "",
+    stateType: str = "",
     credential_boundary: str = "",
+    credentialBoundary: str = "",
     approval_type: str = "",
+    approvalType: str = "",
     expected_tools: list[str] | None = None,
+    expectedTools: list[str] | None = None,
     package_registry_type: str = "",
+    packageRegistryType: str = "",
     package_version: str = "",
+    packageVersion: str = "",
     runtime_hint: str = "",
+    runtimeHint: str = "",
     npm_package_confirmed: bool = False,
+    npmPackageConfirmed: bool = False,
     environment_variables_reviewed: bool = False,
+    environmentVariablesReviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    packageArgumentsReviewed: bool = False,
+    environment_variables: list[Any] | None = None,
+    environmentVariables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
+    packageArguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
+    requiredSecretNames: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    toolSchemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    toolSchemaRecords: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
+    toolSchemaSummaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
+    promptLibrary: dict[str, Any] | None = None,
+    structured_payload_path: str = "",
+    structuredPayloadPath: str = "",
     issue: str = "",
+    issueNumber: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
+    clientType: str = "",
 ) -> dict[str, Any]:
     """Build a non-mutating service-management continuation package for an approved uncataloged service."""
     try:
+        project_root = project_root or projectRoot
+        client_type = client_type or clientType or DEFAULT_CLIENT_TYPE
+        candidate_service = candidate_service or candidateService
+        operator_goal = operator_goal or operatorGoal
+        source_path = source_path or sourcePath
+        backend_package = backend_package or backendPackage
+        backend_command = backend_command or backendCommand or command
+        transport_type = transport_type or transportType
+        localization_type = localization_type or localizationType
+        functional_type = functional_type or functionalType
+        state_type = state_type or stateType
+        credential_boundary = credential_boundary or credentialBoundary
+        approval_type = approval_type or approvalType
+        expected_tools = expected_tools or expectedTools
+        package_registry_type = package_registry_type or packageRegistryType
+        package_version = package_version or packageVersion
+        runtime_hint = runtime_hint or runtimeHint
+        npm_package_confirmed = npm_package_confirmed or npmPackageConfirmed
+        environment_variables_reviewed = environment_variables_reviewed or environmentVariablesReviewed
+        package_arguments_reviewed = package_arguments_reviewed or packageArgumentsReviewed
+        environment_variables = environment_variables or environmentVariables
+        package_arguments = package_arguments or packageArguments
+        backend_args = backendArgs or []
+        required_secret_names = required_secret_names or requiredSecretNames
+        tool_schemas = tool_schemas or toolSchemas
+        tool_schema_records = tool_schema_records or toolSchemaRecords
+        tool_schema_summaries = tool_schema_summaries or toolSchemaSummaries
+        prompt_library = prompt_library or promptLibrary
+        issue = issue or issueNumber
         root = _continuation_project_root(project_root, client_type)
-        result = service_onboarding_surfaces.build_service_onboarding_continuation(
-            root,
-            {
-                "candidate_service": candidate_service,
-                "operator_goal": operator_goal,
-                "source_path": source_path,
-                "backend_package": backend_package,
-                "backend_command": backend_command,
-                "transport_type": transport_type,
-                "localization_type": localization_type,
-                "functional_type": functional_type,
-                "state_type": state_type,
-                "credential_boundary": credential_boundary,
-                "approval_type": approval_type,
-                "expected_tools": expected_tools or [],
-                "package_registry_type": package_registry_type,
-                "package_version": package_version,
-                "runtime_hint": runtime_hint,
-                "npm_package_confirmed": npm_package_confirmed,
-                "environment_variables_reviewed": environment_variables_reviewed,
-                "package_arguments_reviewed": package_arguments_reviewed,
-                "environment_variables": environment_variables or [],
-                "package_arguments": package_arguments or [],
-                "required_secret_names": required_secret_names or [],
-                "tool_schemas": tool_schemas or {},
-                "prompt_library": prompt_library or {},
-                "issue": issue,
-            },
-        )
+        payload = {
+            "candidate_service": candidate_service,
+            "operator_goal": operator_goal,
+            "source_path": source_path,
+            "backend_package": backend_package,
+            "backend_command": backend_command,
+            "backend_args": backend_args,
+            "transport_type": transport_type,
+            "localization_type": localization_type,
+            "functional_type": functional_type,
+            "state_type": state_type,
+            "credential_boundary": credential_boundary,
+            "approval_type": approval_type,
+            "expected_tools": expected_tools or [],
+            "package_registry_type": package_registry_type,
+            "package_version": package_version,
+            "runtime_hint": runtime_hint,
+            "npm_package_confirmed": npm_package_confirmed,
+            "environment_variables_reviewed": environment_variables_reviewed,
+            "package_arguments_reviewed": package_arguments_reviewed,
+            "environment_variables": environment_variables or [],
+            "package_arguments": package_arguments or [],
+            "required_secret_names": required_secret_names or [],
+            "tool_schemas": tool_schemas or {},
+            "tool_schema_records": tool_schema_records or [],
+            "tool_schema_summaries": tool_schema_summaries or [],
+            "prompt_library": prompt_library or {},
+            "structured_payload_path": structured_payload_path or structuredPayloadPath,
+            "issue": issue,
+        }
+        result = service_onboarding_surfaces.build_service_onboarding_continuation(root, payload)
         return client_visible_service_onboarding_payload({"ok": True, **result})
     except Exception as exc:
         return _error(exc)
@@ -2325,10 +2462,12 @@ def build_service_onboarding_continuation(
     npm_package_confirmed: bool = False,
     environment_variables_reviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    environment_variables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
@@ -2358,6 +2497,8 @@ def build_service_onboarding_continuation(
         package_arguments=package_arguments,
         required_secret_names=required_secret_names,
         tool_schemas=tool_schemas,
+        tool_schema_records=tool_schema_records,
+        tool_schema_summaries=tool_schema_summaries,
         prompt_library=prompt_library,
         issue=issue,
         client_type=client_type,
@@ -2385,10 +2526,12 @@ def build_service_onboarding_continue(
     npm_package_confirmed: bool = False,
     environment_variables_reviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    environment_variables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
@@ -2418,6 +2561,8 @@ def build_service_onboarding_continue(
         package_arguments=package_arguments,
         required_secret_names=required_secret_names,
         tool_schemas=tool_schemas,
+        tool_schema_records=tool_schema_records,
+        tool_schema_summaries=tool_schema_summaries,
         prompt_library=prompt_library,
         issue=issue,
         client_type=client_type,
@@ -2425,47 +2570,218 @@ def build_service_onboarding_continue(
 
 
 @server.tool()
-def cf_project_service_onboarding_runtime_apply(
-    project_root: str,
+def cf_project_service_onboarding_runtime_draft(
+    project_root: str = "",
+    projectRoot: str = "",
+    runtime_apply_draft_id: str = "",
+    runtimeApplyDraftId: str = "",
+    draft_id: str = "",
+    draftId: str = "",
     candidate_service: str = "",
+    candidateService: str = "",
     operator_goal: str = "",
+    operatorGoal: str = "",
     source_path: str = "",
+    sourcePath: str = "",
     service_binding: str = "",
+    serviceBinding: str = "",
     backend_package: str = "",
+    backendPackage: str = "",
     backend_command: str = "",
+    backendCommand: str = "",
+    command: str = "",
     backend_args: list[str] | None = None,
+    backendArgs: list[str] | None = None,
     transport_type: str = "",
+    transportType: str = "",
     localization_type: str = "",
+    localizationType: str = "",
     functional_type: str = "",
+    functionalType: str = "",
     state_type: str = "",
+    stateType: str = "",
     credential_boundary: str = "",
+    credentialBoundary: str = "",
     approval_type: str = "",
+    approvalType: str = "",
     expected_tools: list[str] | None = None,
+    expectedTools: list[str] | None = None,
     package_registry_type: str = "",
+    packageRegistryType: str = "",
     package_version: str = "",
+    packageVersion: str = "",
     runtime_hint: str = "",
+    runtimeHint: str = "",
     npm_package_confirmed: bool = False,
+    npmPackageConfirmed: bool = False,
     environment_variables_reviewed: bool = False,
+    environmentVariablesReviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    packageArgumentsReviewed: bool = False,
+    environment_variables: list[Any] | None = None,
+    environmentVariables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
+    packageArguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
+    requiredSecretNames: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    toolSchemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    toolSchemaRecords: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
+    toolSchemaSummaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
+    promptLibrary: dict[str, Any] | None = None,
+    structured_payload_path: str = "",
+    structuredPayloadPath: str = "",
     issue: str = "",
+    issueNumber: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
+    clientType: str = "",
 ) -> dict[str, Any]:
-    """Build a non-mutating runtime-apply package for an approved uncataloged service."""
+    """Create or update a non-mutating runtime/apply draft one bounded slice at a time."""
     try:
+        project_root = project_root or projectRoot
+        client_type = client_type or clientType or DEFAULT_CLIENT_TYPE
         root = _continuation_project_root(project_root, client_type)
-        _require_runtime_apply_approval_text(
-            root,
-            candidate_service=candidate_service,
-            service_binding=service_binding,
-            source_path=source_path,
-            backend_package=backend_package,
-        )
-        result = service_onboarding_surfaces.build_service_onboarding_runtime_apply_package(
+        payload = {
+            "runtime_apply_draft_id": runtime_apply_draft_id or runtimeApplyDraftId or draft_id or draftId,
+            "candidate_service": candidate_service or candidateService,
+            "operator_goal": operator_goal or operatorGoal,
+            "source_path": source_path or sourcePath,
+            "service_binding": service_binding or serviceBinding,
+            "backend_package": backend_package or backendPackage,
+            "backend_command": backend_command or backendCommand or command,
+            "backend_args": backend_args or backendArgs or [],
+            "transport_type": transport_type or transportType,
+            "localization_type": localization_type or localizationType,
+            "functional_type": functional_type or functionalType,
+            "state_type": state_type or stateType,
+            "credential_boundary": credential_boundary or credentialBoundary,
+            "approval_type": approval_type or approvalType,
+            "expected_tools": expected_tools or expectedTools or [],
+            "package_registry_type": package_registry_type or packageRegistryType,
+            "package_version": package_version or packageVersion,
+            "runtime_hint": runtime_hint or runtimeHint,
+            "npm_package_confirmed": npm_package_confirmed or npmPackageConfirmed,
+            "environment_variables_reviewed": environment_variables_reviewed or environmentVariablesReviewed,
+            "package_arguments_reviewed": package_arguments_reviewed or packageArgumentsReviewed,
+            "environment_variables": environment_variables or environmentVariables or [],
+            "package_arguments": package_arguments or packageArguments or [],
+            "required_secret_names": required_secret_names or requiredSecretNames or [],
+            "tool_schemas": tool_schemas or toolSchemas or {},
+            "tool_schema_records": tool_schema_records or toolSchemaRecords or [],
+            "tool_schema_summaries": tool_schema_summaries or toolSchemaSummaries or [],
+            "prompt_library": prompt_library or promptLibrary or {},
+            "structured_payload_path": structured_payload_path or structuredPayloadPath,
+            "issue": issue or issueNumber,
+        }
+        result = service_onboarding_surfaces.runtime_apply_draft_status(root, payload)
+        return client_visible_service_onboarding_payload({"ok": True, **result})
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def cf_project_service_onboarding_runtime_apply(
+    project_root: str = "",
+    projectRoot: str = "",
+    candidate_service: str = "",
+    candidateService: str = "",
+    operator_goal: str = "",
+    operatorGoal: str = "",
+    source_path: str = "",
+    sourcePath: str = "",
+    service_binding: str = "",
+    serviceBinding: str = "",
+    backend_package: str = "",
+    backendPackage: str = "",
+    backend_command: str = "",
+    backendCommand: str = "",
+    command: str = "",
+    backend_args: list[str] | None = None,
+    backendArgs: list[str] | None = None,
+    transport_type: str = "",
+    transportType: str = "",
+    localization_type: str = "",
+    localizationType: str = "",
+    functional_type: str = "",
+    functionalType: str = "",
+    state_type: str = "",
+    stateType: str = "",
+    credential_boundary: str = "",
+    credentialBoundary: str = "",
+    approval_type: str = "",
+    approvalType: str = "",
+    expected_tools: list[str] | None = None,
+    expectedTools: list[str] | None = None,
+    package_registry_type: str = "",
+    packageRegistryType: str = "",
+    package_version: str = "",
+    packageVersion: str = "",
+    runtime_hint: str = "",
+    runtimeHint: str = "",
+    npm_package_confirmed: bool = False,
+    npmPackageConfirmed: bool = False,
+    environment_variables_reviewed: bool = False,
+    environmentVariablesReviewed: bool = False,
+    package_arguments_reviewed: bool = False,
+    packageArgumentsReviewed: bool = False,
+    environment_variables: list[Any] | None = None,
+    environmentVariables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
+    packageArguments: list[Any] | None = None,
+    required_secret_names: list[str] | None = None,
+    requiredSecretNames: list[str] | None = None,
+    tool_schemas: dict[str, Any] | None = None,
+    toolSchemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    toolSchemaRecords: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
+    toolSchemaSummaries: Any = None,
+    prompt_library: dict[str, Any] | None = None,
+    promptLibrary: dict[str, Any] | None = None,
+    structured_payload_path: str = "",
+    structuredPayloadPath: str = "",
+    issue: str = "",
+    issueNumber: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    clientType: str = "",
+) -> dict[str, Any]:
+    """Build a non-mutating runtime-apply package preview for an uncataloged service."""
+    try:
+        project_root = project_root or projectRoot
+        client_type = client_type or clientType or DEFAULT_CLIENT_TYPE
+        candidate_service = candidate_service or candidateService
+        operator_goal = operator_goal or operatorGoal
+        source_path = source_path or sourcePath
+        service_binding = service_binding or serviceBinding
+        backend_package = backend_package or backendPackage
+        backend_command = backend_command or backendCommand or command
+        backend_args = backend_args or backendArgs
+        transport_type = transport_type or transportType
+        localization_type = localization_type or localizationType
+        functional_type = functional_type or functionalType
+        state_type = state_type or stateType
+        credential_boundary = credential_boundary or credentialBoundary
+        approval_type = approval_type or approvalType
+        expected_tools = expected_tools or expectedTools
+        package_registry_type = package_registry_type or packageRegistryType
+        package_version = package_version or packageVersion
+        runtime_hint = runtime_hint or runtimeHint
+        npm_package_confirmed = npm_package_confirmed or npmPackageConfirmed
+        environment_variables_reviewed = environment_variables_reviewed or environmentVariablesReviewed
+        package_arguments_reviewed = package_arguments_reviewed or packageArgumentsReviewed
+        environment_variables = environment_variables or environmentVariables
+        package_arguments = package_arguments or packageArguments
+        required_secret_names = required_secret_names or requiredSecretNames
+        tool_schemas = tool_schemas or toolSchemas
+        tool_schema_records = tool_schema_records or toolSchemaRecords
+        tool_schema_summaries = tool_schema_summaries or toolSchemaSummaries
+        prompt_library = prompt_library or promptLibrary
+        issue = issue or issueNumber
+        root = _continuation_project_root(project_root, client_type)
+        payload = service_onboarding_surfaces.merge_structured_payload_artifact(
             root,
             {
                 "candidate_service": candidate_service,
@@ -2492,10 +2808,14 @@ def cf_project_service_onboarding_runtime_apply(
                 "package_arguments": package_arguments or [],
                 "required_secret_names": required_secret_names or [],
                 "tool_schemas": tool_schemas or {},
+                "tool_schema_records": tool_schema_records or [],
+                "tool_schema_summaries": tool_schema_summaries or [],
                 "prompt_library": prompt_library or {},
+                "structured_payload_path": structured_payload_path or structuredPayloadPath,
                 "issue": issue,
             },
         )
+        result = service_onboarding_surfaces.build_service_onboarding_runtime_apply_package(root, payload)
         return client_visible_service_onboarding_payload({"ok": True, **result})
     except Exception as exc:
         return _error(exc)
@@ -2503,49 +2823,111 @@ def cf_project_service_onboarding_runtime_apply(
 
 @server.tool()
 def cf_project_service_onboarding_runtime_execute(
-    project_root: str,
+    project_root: str = "",
+    projectRoot: str = "",
+    runtime_apply_package_id: str = "",
+    runtimeApplyPackageId: str = "",
     candidate_service: str = "",
+    candidateService: str = "",
     operator_goal: str = "",
+    operatorGoal: str = "",
     source_path: str = "",
+    sourcePath: str = "",
     service_binding: str = "",
+    serviceBinding: str = "",
     backend_package: str = "",
+    backendPackage: str = "",
     backend_command: str = "",
+    backendCommand: str = "",
+    command: str = "",
     backend_args: list[str] | None = None,
+    backendArgs: list[str] | None = None,
     transport_type: str = "",
+    transportType: str = "",
     localization_type: str = "",
+    localizationType: str = "",
     functional_type: str = "",
+    functionalType: str = "",
     state_type: str = "",
+    stateType: str = "",
     credential_boundary: str = "",
+    credentialBoundary: str = "",
     approval_type: str = "",
+    approvalType: str = "",
     expected_tools: list[str] | None = None,
+    expectedTools: list[str] | None = None,
     package_registry_type: str = "",
+    packageRegistryType: str = "",
     package_version: str = "",
+    packageVersion: str = "",
     runtime_hint: str = "",
+    runtimeHint: str = "",
     npm_package_confirmed: bool = False,
+    npmPackageConfirmed: bool = False,
     environment_variables_reviewed: bool = False,
+    environmentVariablesReviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    packageArgumentsReviewed: bool = False,
+    environment_variables: list[Any] | None = None,
+    environmentVariables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
+    packageArguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
+    requiredSecretNames: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    toolSchemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    toolSchemaRecords: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
+    toolSchemaSummaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
+    promptLibrary: dict[str, Any] | None = None,
+    structured_payload_path: str = "",
+    structuredPayloadPath: str = "",
     issue: str = "",
+    issueNumber: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
+    clientType: str = "",
 ) -> dict[str, Any]:
     """Apply an approved runtime package through the recorded dev ContextForge executor surface."""
     try:
+        project_root = project_root or projectRoot
+        client_type = client_type or clientType or DEFAULT_CLIENT_TYPE
+        runtime_apply_package_id = runtime_apply_package_id or runtimeApplyPackageId
+        candidate_service = candidate_service or candidateService
+        operator_goal = operator_goal or operatorGoal
+        source_path = source_path or sourcePath
+        service_binding = service_binding or serviceBinding
+        backend_package = backend_package or backendPackage
+        backend_command = backend_command or backendCommand or command
+        backend_args = backend_args or backendArgs
+        transport_type = transport_type or transportType
+        localization_type = localization_type or localizationType
+        functional_type = functional_type or functionalType
+        state_type = state_type or stateType
+        credential_boundary = credential_boundary or credentialBoundary
+        approval_type = approval_type or approvalType
+        expected_tools = expected_tools or expectedTools
+        package_registry_type = package_registry_type or packageRegistryType
+        package_version = package_version or packageVersion
+        runtime_hint = runtime_hint or runtimeHint
+        npm_package_confirmed = npm_package_confirmed or npmPackageConfirmed
+        environment_variables_reviewed = environment_variables_reviewed or environmentVariablesReviewed
+        package_arguments_reviewed = package_arguments_reviewed or packageArgumentsReviewed
+        environment_variables = environment_variables or environmentVariables
+        package_arguments = package_arguments or packageArguments
+        required_secret_names = required_secret_names or requiredSecretNames
+        tool_schemas = tool_schemas or toolSchemas
+        tool_schema_records = tool_schema_records or toolSchemaRecords
+        tool_schema_summaries = tool_schema_summaries or toolSchemaSummaries
+        prompt_library = prompt_library or promptLibrary
+        issue = issue or issueNumber
         root = _continuation_project_root(project_root, client_type)
         approval_text = _read_latest_user_message_text(root)
-        _require_runtime_apply_approval_text(
-            root,
-            candidate_service=candidate_service,
-            service_binding=service_binding,
-            source_path=source_path,
-            backend_package=backend_package,
-        )
-        result = service_onboarding_surfaces.apply_service_onboarding_runtime_package(
+        payload = service_onboarding_surfaces.merge_structured_payload_artifact(
             root,
             {
+                "runtime_apply_package_id": runtime_apply_package_id,
                 "candidate_service": candidate_service,
                 "operator_goal": operator_goal,
                 "source_path": source_path,
@@ -2570,24 +2952,63 @@ def cf_project_service_onboarding_runtime_execute(
                 "package_arguments": package_arguments or [],
                 "required_secret_names": required_secret_names or [],
                 "tool_schemas": tool_schemas or {},
+                "tool_schema_records": tool_schema_records or [],
+                "tool_schema_summaries": tool_schema_summaries or [],
                 "prompt_library": prompt_library or {},
+                "structured_payload_path": structured_payload_path or structuredPayloadPath,
                 "issue": issue,
+            },
+        )
+        runtime_apply_package_id = runtime_apply_package_id or str(payload.get("runtime_apply_package_id") or payload.get("runtimeApplyPackageId") or "")
+        candidate_service = candidate_service or str(payload.get("candidate_service") or payload.get("candidateService") or "")
+        service_binding = service_binding or str(payload.get("service_binding") or payload.get("serviceBinding") or "")
+        source_path = source_path or str(payload.get("source_path") or payload.get("sourcePath") or "")
+        backend_package = backend_package or str(payload.get("backend_package") or payload.get("backendPackage") or "")
+        package_identity: Mapping[str, str] = {}
+        if runtime_apply_package_id:
+            package_identity = service_onboarding_surfaces.runtime_apply_package_identity(root, runtime_apply_package_id)
+        _require_runtime_apply_approval_text(
+            root,
+            candidate_service=candidate_service or package_identity.get("candidate_service", ""),
+            service_binding=service_binding or package_identity.get("service_binding", ""),
+            source_path=source_path or package_identity.get("source_path", ""),
+            backend_package=backend_package or package_identity.get("backend_package", ""),
+            runtime_apply_package_id=runtime_apply_package_id,
+            executor_surface=package_identity.get("executor_surface", ""),
+        )
+        result = service_onboarding_surfaces.apply_service_onboarding_runtime_package(
+            root,
+            {
+                **payload,
+                "runtime_apply_package_id": runtime_apply_package_id,
+                "candidate_service": candidate_service,
+                "service_binding": service_binding,
+                "source_path": source_path,
+                "backend_package": backend_package,
                 "approval_text": approval_text,
                 "require_executor_surface_approval": True,
             },
         )
         visible = str(result.get("assistant_visible_response") or result.get("message") or "").strip()
+        mutation_performed = bool(result.get("mutation_performed"))
+        executor_result = result.get("executor_result") if isinstance(result.get("executor_result"), Mapping) else {}
+        failure_report = executor_result.get("failure_report") if isinstance(executor_result.get("failure_report"), Mapping) else {}
         return {
-            "ok": True,
+            "ok": mutation_performed,
             "status": result.get("status"),
             "project_root": result.get("project_root"),
-            "mutation_allowed": True,
-            "mutation_performed": bool(result.get("mutation_performed")),
+            "mutation_allowed": bool(result.get("mutation_allowed")),
+            "mutation_performed": mutation_performed,
             "assistant_visible_response": visible,
             "message": visible,
             "non_actions": result.get("non_actions") or [],
+            "runtime_apply_package_id": result.get("runtime_apply_package_id"),
             "runtime_target": result.get("runtime_target") or {},
-            "tool_names": result.get("executor_result", {}).get("tool_names") if isinstance(result.get("executor_result"), Mapping) else [],
+            "tool_names": executor_result.get("tool_names") or [],
+            "failed_stage": failure_report.get("failed_stage"),
+            "rollback_result": failure_report.get("rollback_result"),
+            "residual_cleanup_risk": failure_report.get("residual_cleanup_risk"),
+            "required_inputs": result.get("required_inputs") or [],
         }
     except Exception as exc:
         return _error(exc)
@@ -2616,11 +3037,14 @@ def build_service_onboarding_runtime_apply_package(
     npm_package_confirmed: bool = False,
     environment_variables_reviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    environment_variables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
+    structured_payload_path: str = "",
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
@@ -2651,7 +3075,10 @@ def build_service_onboarding_runtime_apply_package(
         package_arguments=package_arguments,
         required_secret_names=required_secret_names,
         tool_schemas=tool_schemas,
+        tool_schema_records=tool_schema_records,
+        tool_schema_summaries=tool_schema_summaries,
         prompt_library=prompt_library,
+        structured_payload_path=structured_payload_path,
         issue=issue,
         client_type=client_type,
     )
@@ -2680,11 +3107,14 @@ def build_service_onboarding_runtime_apply(
     npm_package_confirmed: bool = False,
     environment_variables_reviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    environment_variables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
+    structured_payload_path: str = "",
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
@@ -2715,7 +3145,10 @@ def build_service_onboarding_runtime_apply(
         package_arguments=package_arguments,
         required_secret_names=required_secret_names,
         tool_schemas=tool_schemas,
+        tool_schema_records=tool_schema_records,
+        tool_schema_summaries=tool_schema_summaries,
         prompt_library=prompt_library,
+        structured_payload_path=structured_payload_path,
         issue=issue,
         client_type=client_type,
     )
@@ -2724,6 +3157,7 @@ def build_service_onboarding_runtime_apply(
 @server.tool()
 def build_service_onboarding_runtime_execute(
     project_root: str,
+    runtime_apply_package_id: str = "",
     candidate_service: str = "",
     operator_goal: str = "",
     source_path: str = "",
@@ -2744,17 +3178,21 @@ def build_service_onboarding_runtime_execute(
     npm_package_confirmed: bool = False,
     environment_variables_reviewed: bool = False,
     package_arguments_reviewed: bool = False,
-    environment_variables: list[dict[str, Any]] | None = None,
-    package_arguments: list[dict[str, Any]] | None = None,
+    environment_variables: list[Any] | None = None,
+    package_arguments: list[Any] | None = None,
     required_secret_names: list[str] | None = None,
     tool_schemas: dict[str, Any] | None = None,
+    tool_schema_records: list[Any] | None = None,
+    tool_schema_summaries: Any = None,
     prompt_library: dict[str, Any] | None = None,
+    structured_payload_path: str = "",
     issue: str = "",
     client_type: str = DEFAULT_CLIENT_TYPE,
 ) -> dict[str, Any]:
     """Natural alias for cf_project_service_onboarding_runtime_execute."""
     return cf_project_service_onboarding_runtime_execute(
         project_root=project_root,
+        runtime_apply_package_id=runtime_apply_package_id,
         candidate_service=candidate_service,
         operator_goal=operator_goal,
         source_path=source_path,
@@ -2779,7 +3217,10 @@ def build_service_onboarding_runtime_execute(
         package_arguments=package_arguments,
         required_secret_names=required_secret_names,
         tool_schemas=tool_schemas,
+        tool_schema_records=tool_schema_records,
+        tool_schema_summaries=tool_schema_summaries,
         prompt_library=prompt_library,
+        structured_payload_path=structured_payload_path,
         issue=issue,
         client_type=client_type,
     )

@@ -210,6 +210,16 @@ Per-service onboarding should normally emit a managed npm-stdio service record
 plus a ContextForge API JSON plan. A Dockerfile is required for the reusable
 host substrate itself, not for every npm service hosted by that substrate.
 
+The helper should use just-in-time prompting rather than front-loading a tidal
+wave of requirements. Onboarding is a significant commitment, so the assistant
+should receive one bounded ask at a time, submit source-derived values for that
+slice, and let the helper persist or return the growing draft package. Each
+draft/update response must identify accepted fields, missing fields, the
+current draft payload path, and the next required slice. The assistant does not
+need to know every later requirement until the previous slice has been accepted.
+This allows the model to give full attention to a smaller surface while the
+larger framework composes the runtime/apply package in order.
+
 The helper is a gate, not the researcher. It may remind the code assistant
 which fields are required and why they matter, but it must not perform source
 research on the assistant's behalf during install/register packaging. Before
@@ -219,13 +229,30 @@ arguments, environment variables, required secret names, tool schemas, and
 prompt-library content. The standard prompt-library content is mandatory:
 one compact abstract prompt for proactive loading and one or more lazy-loaded
 detail prompts for specific use guidance.
+For managed npm-stdio onboarding, runtime/apply packaging calls must include
+the explicit transport value `stdio`.
+For large tool sets or clients that handle arrays more reliably than one large
+nested object, the assistant may supply `toolSchemaRecords`: an array of
+structured per-tool records with `name`, `description`, `inputSchema` or
+`input_schema`, and optional `sourceAnchor` or `source_anchor`. The helper
+normalizes those records into the canonical `tool_schemas` object. Tool names,
+plain summaries, or arrays of prose remain insufficient.
+For clients or models that cannot reliably pass large nested schema structures
+as a direct tool argument, the assistant may write a complete project-local JSON
+payload containing the same source-derived fields and pass
+`structured_payload_path` or `structuredPayloadPath` to the helper. The path
+must remain under the project root, and the file is valid only when authored by
+the assistant during the onboarding dialogue. This is a payload transport
+fallback, not permission for the controller or runner to prebuild service facts.
 
 If a hosted install, start, bridge, ContextForge registration, tool refresh, or
 virtual-server association fails, the helper should return the observed or
 sanitized error and the failed stage. It must not tell the assistant which
 service-specific package argument, env var, tool schema, or prompt content to
 change. The assistant remains responsible for researching and determining the
-correction, then resubmitting a complete field set.
+correction, then resubmitting a complete field set. The helper does not merge
+accepted values across failed attempts; each retry must carry the complete
+source-derived field set needed for install/register packaging.
 
 All hosted-service CRUD must be idempotent. Repeating create/update/delete with
 the same target record must converge on the same state without duplicate npm

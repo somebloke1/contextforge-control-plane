@@ -46,11 +46,15 @@ inventory/*.local.yaml
 inventory/*.secrets.json
 generated/
 upstream/
+.contextforge/service-onboarding/runtime-apply-packages/
+.contextforge/service-onboarding/runtime-drafts/
 server-instances/*/.env
 server-instances/*/auth/
 server-instances/*/run/
 server-instances/*/logs/
 server-instances/*/*.local.json
+server-instances/npm-stdio-host/index.json
+server-instances/npm-stdio-host/services/
 server-instances/serena-*/
 !server-instances/serena-cf-controlplane-d46fe58a2a20/
 !server-instances/serena-cf-controlplane-d46fe58a2a20/README.md

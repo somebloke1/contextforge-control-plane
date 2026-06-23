@@ -106,6 +106,10 @@ def _build_service_onboarding_runtime_apply_package(project_root: str, data: Map
     return service_onboarding_surfaces.build_service_onboarding_runtime_apply_package(project_root, data)
 
 
+def _build_service_onboarding_runtime_draft(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
+    return service_onboarding_surfaces.runtime_apply_draft_status(project_root, data)
+
+
 def _research_service_onboarding_source(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
     return service_onboarding_surfaces.research_service_onboarding_source(project_root, data)
 
@@ -144,11 +148,18 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
         return _ok(_research_service_onboarding_source(project_root, data))
     if operation in {"build_service_onboarding_continuation", "build_service_onboarding_continue", "cf_project_service_onboarding_continue"}:
         return _ok(_build_service_onboarding_continuation(project_root, data))
+    if operation in {
+        "build_service_onboarding_runtime_draft",
+        "update_service_onboarding_runtime_draft",
+        "cf_project_service_onboarding_runtime_draft",
+    }:
+        return _ok(_build_service_onboarding_runtime_draft(project_root, data))
     if operation in {"build_service_onboarding_runtime_apply_package", "build_service_onboarding_runtime_apply", "cf_project_service_onboarding_runtime_apply"}:
         return _ok(_build_service_onboarding_runtime_apply_package(project_root, data))
     if operation in {"apply_service_onboarding_runtime_package", "execute_service_onboarding_runtime_apply", "cf_project_service_onboarding_runtime_execute"}:
         return _mcp_helper().cf_project_service_onboarding_runtime_execute(
             project_root=project_root,
+            runtime_apply_package_id=str(data.get("runtime_apply_package_id") or data.get("runtimeApplyPackageId") or ""),
             candidate_service=str(data.get("candidate_service") or data.get("candidateService") or ""),
             operator_goal=str(data.get("operator_goal") or data.get("operatorGoal") or ""),
             source_path=str(data.get("source_path") or data.get("sourcePath") or ""),
@@ -173,7 +184,10 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
             package_arguments=data.get("package_arguments") or data.get("packageArguments") or [],
             required_secret_names=data.get("required_secret_names") or data.get("requiredSecretNames") or [],
             tool_schemas=data.get("tool_schemas") or data.get("toolSchemas") or {},
+            tool_schema_records=data.get("tool_schema_records") or data.get("toolSchemaRecords") or [],
+            tool_schema_summaries=data.get("tool_schema_summaries") or data.get("toolSchemaSummaries") or [],
             prompt_library=data.get("prompt_library") or data.get("promptLibrary") or {},
+            structured_payload_path=str(data.get("structured_payload_path") or data.get("structuredPayloadPath") or ""),
             issue=str(data.get("issue") or data.get("issue_number") or data.get("issueNumber") or ""),
             client_type=client_type,
         )

@@ -30,10 +30,15 @@ The method layer is case-independent:
   including prompt, artifact path, return code, timeout, model/client identity,
   assistant-output size, event counts where available, tool-call counts, and
   total generation count;
+- for live long-running dialogue attempts, limit controller-facing progress
+  checks to run start, 2 minutes, 6 minutes, and terminal completion or error;
+  this is orchestration cadence only and must not affect prompts or scoring;
 - treat deterministic verifier output as harness and structured-evidence
   support, not semantic acceptance;
-- require a delegated validator narrative and score sheet for semantic
-  judgment;
+- require one delegated validator narrative and score sheet after the
+  interaction completes; the evaluator assesses every turn and the whole
+  dialogue from the completed evidence package, not during the live
+  conversation;
 - prefer Codex CLI `exec` for semantic evaluator runs, using `gpt-5.5`,
   `-c model_reasoning_effort="high"`, and `--output-schema <FILE>` when a
   schema is available. The currently installed Pi CLI exposes JSON output mode
@@ -126,10 +131,31 @@ posture, technical fluency, and interaction style. The persona remains fixed
 for the whole run and answers only questions the tested assistant asks. It must
 not volunteer package names, tool names, bridge commands, probe payloads,
 expected implementation shape, evaluator criteria, or controller memory.
+Demanding personas may be exacting, skeptical, terse, or impatient, but they
+should not become cantankerous or hostile; their role is to simulate a plausible
+human user still trying to complete the onboarding outcome.
+The responder also receives a recorded
+`determination_to_help_assistant_succeed_at_onboarding = n/20` value. Default
+`n` is 15. This is a cooperation multiplier, not extra service knowledge: it
+controls how hard the simulated human tries to help the tested assistant reach
+successful onboarding while preserving persona knowledge, voice, and approval
+boundaries. Quorum batches adapt the next batch's `n` from the first three
+structural outcomes: three failures => `+2`, two failures => `+1`, one failure
+=> no change, zero failures => `-1`, clamped to `1..20`.
 For acceptance-matrix onboarding runs, the simulated human should be reactive:
 it reads the tested assistant's previous visible output and produces the next
 persona-consistent user message. Seeded prompt sequences are debug scaffolding,
 not a substitute for the simulated human answering the actual interaction.
+The responder may use a structured harness envelope with `message` and a
+non-user-visible continuation flag so the runner can stop after a natural
+conversation ending. The tested assistant receives only the message content.
+For workflows that require a reload or fresh client after installation, the
+runner may perform that actual session boundary after structured install/apply
+success. The boundary must be recorded in the evidence package with pre/post
+session ids. The simulated human may be told only the generic operator fact
+that a fresh/reloaded session has been started, so any tested-assistant
+awareness of the boundary arrives as ordinary user-visible dialogue rather
+than hidden harness coaching.
 
 Evaluator distinction: normal code-assistant behavior is not a defect merely
 because it produces files, plans, tables, managed npm-stdio service records,
@@ -167,7 +193,11 @@ string parsing, or other deterministic pattern matching as a test, gate, score
 criterion, semantic observation, or acceptance oracle for free-form assistant
 behavior.
 
-For every model-dependent use case, the agent evaluator must receive and score:
+For every model-dependent use case, the agent evaluator must receive the full
+evidence package after the conversation ends or reaches its safety bound. It
+must evaluate every user/assistant turn as part of a single after-action review
+and also score the whole interaction. This is not live in-loop scoring and does
+not require one evaluator invocation per turn.
 
 - each step generation in sequence;
 - the total generation/session report;

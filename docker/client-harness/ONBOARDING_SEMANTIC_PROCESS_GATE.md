@@ -78,6 +78,27 @@ new acceptance attempt.
 The runner may know evaluator criteria and evidence routing, but that
 information must stay outside prompts sent to the tested assistant.
 
+Controller-facing live progress reporting should occur only at run start, at
+2 minutes, at 6 minutes, and at terminal completion or error. This avoids
+turn-by-turn orchestration chatter while preserving enough operator visibility.
+It is not a prompt, scoring, or behavior rule for the tested assistant or the
+simulated human.
+
+Docker-isolated target clients do not own the host Docker daemon or host
+compose-file path locality. When onboarding uses the shared `npm-stdio-host`,
+the runner must provide a host-side runtime/apply proxy so the tested
+assistant can use the shipped helper surface while runtime mutation occurs in
+the correct host harness context. This proxy must not carry service-specific
+facts, expected answers, or behavioral coaching.
+After a structured runtime/apply result proves
+`service_onboarding_runtime_applied`, the runner may start a fresh or reloaded
+target-client session before the next tested-assistant turn. That boundary is
+part of the required operator workflow and must be recorded as evidence with
+pre/post session ids. It may be exposed to the simulated human only as the
+generic fact that a fresh/reloaded session has been started; it must not convey
+service-specific package names, tool names, commands, probes, evaluator
+criteria, or controller conclusions.
+
 The gate must not confuse ordinary code-assistant artifact work with a runner
 shortcut. A tested assistant may, when the simulated human approves it, draft
 workspace-local onboarding dossiers, source-evidence tables, managed npm-stdio
@@ -100,6 +121,25 @@ tested assistant to research and supply the npm package, transport, env vars,
 arguments, tool schemas, and prompt-library content. If a runtime attempt
 fails, the helper may return stage-labeled error information, but it must not
 tell the tested assistant the service-specific fix.
+The preferred interface is just-in-time prompting through a non-mutating draft
+surface: the tested assistant submits one bounded source-derived slice, the
+helper records accepted fields, identifies missing fields, returns the next
+required slice, and writes or returns the growing project-local draft payload.
+The final runtime/apply package preview remains strict and may be built only
+after the draft has enough source-derived fields; runtime execution remains a
+separate approval-bound mutation.
+For many-tool services, the accepted structured schema input may be a
+`toolSchemaRecords` array: one source-derived record per tool with name,
+description, input schema, and optional source anchor. This is equivalent to
+the canonical `tool_schemas` object after helper normalization, but plain
+summaries, tool-name arrays, or controller-filled schema content are still
+insufficient.
+If the target client cannot reliably pass large nested schema objects as tool
+arguments, it may instead write a complete project-local JSON payload and pass
+`structured_payload_path`/`structuredPayloadPath` to the helper. That is valid
+only when the tested assistant authored the file from source-derived facts
+inside the target-client session; the controller or runner must not prebuild
+the payload or populate it with hidden expected answers.
 Runtime/apply evidence must also prove idempotency at the operation boundary:
 failed install/register attempts clean up partial hosted-service,
 ContextForge, bridge, and prompt-library state before returning the error;
@@ -128,12 +168,35 @@ model-backed human run. Do not turn the simulated human into an idealized
 compliance actor with a rule stack. If that human is demanding, overconfident,
 imprecise, or pushes for a shortcut, that is part of the behavior space the
 product must survive unless the runner itself leaked hidden controller facts.
+Demanding does not mean cantankerous or hostile: the simulated human can be
+strict, skeptical, terse, or impatient while remaining constructive and
+practically oriented toward completing the onboarding goal.
+The simulator must honor the persona's ignorance boundary. It may react to the
+tested assistant's visible proposals, approve or decline bounded steps, ask for
+evidence, and require rollback clarity, but it must not inject latent model
+expertise, protocol recipes, service-specific commands, or alternate
+non-ContextForge routes that the persona would not know.
+The runner also records
+`determination_to_help_assistant_succeed_at_onboarding = n/20`, starting at
+15/20 by default. This is not a sixth random persona dimension; it is a
+simulated-human cooperation multiplier. At 15/20 or higher, the responder
+should be relentlessly constructive about helping the assistant reach
+successful ContextForge onboarding while still honoring the persona's knowledge
+and approval boundaries. Across three-model quorum batches, all runs in the
+same batch use the same `n`; the next batch adapts from the first three
+structural onboarding outcomes: all three fail => `n += 2`; two fail =>
+`n += 1`; one fails => no change; all three succeed => `n -= 1`, clamped to
+`1..20`.
 
 Acceptance-matrix runs should use a reactive simulated-human responder that
 reads the tested assistant's previous visible output and produces the next
 persona-consistent user message. Seeded followup prompts are useful for runner
 smoke/debug checks, but they are weaker evidence because they do not prove that
 the simulated human answered the actual questions asked.
+The responder may return a structured harness envelope containing the next
+human message plus a non-user-visible continuation flag. The runner may stop
+capture when that flag says the human would naturally end the conversation; the
+tested assistant receives only the human message, never the control metadata.
 
 ## Minimum Run Matrix
 
@@ -158,6 +221,9 @@ overall onboarding system evolves. All else equal, the interaction should be
 optimal: no gratuitous turns, no loss of required outcome. A seeded runner may
 use a generous default turn budget, but acceptance is never decided by a fixed
 turn count.
+The default capture safety bounds are 32 tested-assistant turns or 600 seconds
+of dialogue wall time. Reaching either bound stops capture and must be recorded
+as evidence for the evaluator; it does not by itself prove pass or fail.
 The evaluator must separately judge efficiency after treating the sampled
 persona's natural overhead as given: did the tested assistant reach the outcome
 with appropriate pace and without avoidable detours, repeated explanations,
@@ -205,6 +271,8 @@ The runner must:
 - record the configured turn budget and actual prompt/response count so the
   semantic evaluator can judge whether the interaction was truncated,
   over-guided, or unnecessarily long;
+- record the configured dialogue wall-time budget, elapsed time, and stop
+  reason;
 - record whether the simulated-human responder was model-backed/reactive or
   seeded/debug, including a redacted responder model profile when model-backed;
 - package source helper records, runtime readbacks, registration readbacks,
@@ -237,6 +305,10 @@ instead. Rendering raw thinking tokens is an explicit design decision that must
 be surface-labeled and justified.
 
 The evaluator must judge:
+
+- every user/assistant turn after the interaction is complete or has reached
+  its safety bound, without evaluator calls during the live conversation and
+  without one evaluator invocation per turn;
 
 - whether the tested assistant stayed behind the veil;
 - whether the simulated human identity and knowledge context were supplied
