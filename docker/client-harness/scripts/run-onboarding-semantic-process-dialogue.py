@@ -9,7 +9,10 @@ import importlib.util
 import json
 import os
 import random
+import re
+import shlex
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -21,13 +24,18 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from semantic_model_host_proxy import API_KEY_ENV_NAMES, start_openrouter_proxy
+from runtime_apply_host_proxy import start_runtime_apply_host_proxy
+from harness_redaction import redact_value
 
 
-DEFAULT_ONBOARDING_TURNS = 8
+DEFAULT_ONBOARDING_TURNS = 32
+DEFAULT_DIALOGUE_SECONDS = 600
+DEFAULT_HUMAN_HELP_DETERMINATION = 15
 TURN_BUDGET_POLICY = (
-    "interaction length is persona- and outcome-dependent; default seeded runs "
-    "use a generous budget, but semantic adequacy is judged by required outcomes, "
-    "not by a fixed turn count"
+    "capture the live interaction without evaluator calls until the conversation "
+    "ends or reaches the safety bound; default safety bounds are 32 turns or "
+    "600 seconds, after which a semantic evaluator reviews every turn and the "
+    "whole session from the completed evidence package"
 )
 RESPONDER_CONTEXT_CHAR_LIMIT = 16000
 DEFAULT_PI_RESPONDER_IMAGE = "contextforge-client-pi:human-sim-authenticated"
@@ -44,6 +52,24 @@ PI_RESPONDER_FORBIDDEN_API_KEY_ENVS = (
     "PERPLEXITY_API_KEY",
     "EXA_API_KEY",
     "CONTEXT7_API_KEY",
+)
+NON_TARGET_CLIENT_SERVICE_TOOL_NAMES = {
+    "bash",
+    "edit",
+    "find",
+    "glob",
+    "grep",
+    "list",
+    "ls",
+    "read",
+    "view_image",
+    "write",
+}
+NON_TARGET_CLIENT_SERVICE_TOOL_PREFIXES = (
+    "cf_contextforge_",
+    "cf_project_",
+    "contextforge-helper_",
+    "contextforge_helper_",
 )
 
 
@@ -85,6 +111,42 @@ def compose_persona(scenarios: dict[str, Any], *, seed: int | None, index: int) 
             raise RuntimeError(f"persona dimension {dimension_id!r} has no values")
         persona[dimension_id] = rng.choice(values)
     return persona
+
+
+def bounded_help_determination(value: int) -> int:
+    return max(1, min(20, int(value)))
+
+
+def help_determination_lines(rating: int) -> list[str]:
+    rating = bounded_help_determination(rating)
+    if rating >= 15:
+        description = (
+            f"{rating}/20: relentless practical determination to help the assistant succeed at "
+            "onboarding the service. The human should actively keep the process moving, "
+            "answer asked questions from visible context and persona knowledge, approve "
+            "bounded safe next steps when appropriate, request concrete corrections when "
+            "something is unclear, and avoid derailing into perfectionism or hostility."
+        )
+    elif rating >= 7:
+        description = (
+            f"{rating}/20: strong determination to help. The human should be cooperative "
+            "and progress-oriented while still honoring the persona's approval and "
+            "knowledge boundaries."
+        )
+    elif rating >= 4:
+        description = (
+            f"{rating}/20: moderate determination to help. The human can ask more "
+            "questions and may move more cautiously, but still wants onboarding to succeed."
+        )
+    else:
+        description = (
+            f"{rating}/20: low determination to help. The human may disengage sooner, "
+            "while remaining plausible and within the persona."
+        )
+    return [
+        f"determination_to_help_assistant_succeed_at_onboarding: {rating}/20",
+        description,
+    ]
 
 
 def persona_initial_prompt(foil: dict[str, Any], persona: dict[str, str]) -> str:
@@ -152,7 +214,7 @@ def persona_followup_prompt(persona: dict[str, str], turn_index: int) -> str:
     if style == "terse":
         base += " Be concise."
     elif style == "demanding":
-        base += " Be precise about what is proven and what is not."
+        base += " Be precise about what is proven and what is not, without becoming adversarial."
     return base
 
 
@@ -257,33 +319,55 @@ def responder_messages(
     foil: dict[str, Any],
     persona: dict[str, str],
     *,
+    help_determination: int,
     turn_index: int,
     previous_user_prompt: str,
     previous_assistant_output: str,
+    runner_observation: str = "",
 ) -> list[dict[str, str]]:
     persona_lines = "\n".join(f"- {key}: {value}" for key, value in sorted(persona.items()))
-    system = responder_system_prompt()
+    help_lines = "\n".join(f"- {line}" for line in help_determination_lines(help_determination))
+    system = responder_system_prompt(help_determination=help_determination)
+    runner_observation_block = (
+        f"\n\nActual operator/session fact now visible to you as the human user:\n{runner_observation}\n"
+        if runner_observation.strip()
+        else ""
+    )
     user = (
         f"Source lead: {foil['source_lead']}\n\n"
         f"Persona vector:\n{persona_lines}\n\n"
+        f"Human assistance determination:\n{help_lines}\n\n"
         f"Turn to produce: {turn_index}\n\n"
         f"Previous user message:\n{previous_user_prompt}\n\n"
         "Previous tested-assistant visible output:\n"
         f"{clip_text(previous_assistant_output)}\n\n"
+        f"{runner_observation_block}"
         "Write the next simulated-human message now."
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def responder_system_prompt() -> str:
+def responder_system_prompt(*, help_determination: int = DEFAULT_HUMAN_HELP_DETERMINATION) -> str:
+    help_text = " ".join(help_determination_lines(help_determination))
     return (
         "You are the human user in a ContextForge onboarding interaction with a code assistant. "
         "You want the project to be able to use the MCP service from the source lead through "
         "ContextForge, while your knowledge, approval posture, technical fluency, and voice are "
         "defined by the persona vector, previous user message, and previous assistant output. "
+        f"Your determination to help the assistant succeed at onboarding is: {help_text}. "
         "You may ask for source evidence, plans, rollback boundaries, or approved intermediate "
         "artifacts as a human would, but your continuing practical goal is usable ContextForge "
-        "onboarding rather than source-only documentation. Write the human user's next message."
+        "onboarding rather than source-only documentation. Be a plausible human, not a hostile "
+        "or cantankerous obstacle: even when demanding or strict, keep responses constructive, "
+        "bounded, and aimed at helping the assistant reach the onboarding outcome. "
+        "Do not use latent technical knowledge beyond the persona and visible dialogue. "
+        "If the persona lacks MCP or ContextForge expertise, do not propose protocol-level "
+        "test harnesses, implementation commands, or alternate non-ContextForge routes unless "
+        "the tested assistant first offers that route and asks you to choose. "
+        "Return only a JSON object with `message` and `continue_conversation`. "
+        "`message` is the human user's next message. `continue_conversation` is false when "
+        "the human would naturally stop because the requested work is complete, blocked for "
+        "later, or no further response is needed."
     )
 
 
@@ -306,23 +390,54 @@ def pi_responder_prompt(
     foil: dict[str, Any],
     persona: dict[str, str],
     *,
+    help_determination: int,
     turn_index: int,
     previous_user_prompt: str,
     previous_assistant_output: str,
+    runner_observation: str = "",
 ) -> str:
     persona_lines = "\n".join(f"- {key}: {value}" for key, value in sorted(persona.items()))
+    help_lines = "\n".join(f"- {line}" for line in help_determination_lines(help_determination))
+    runner_observation_block = (
+        f"\n\nActual operator/session fact now visible to you as the human user:\n{runner_observation}\n"
+        if runner_observation.strip()
+        else ""
+    )
     return (
         f"Source lead: {foil['source_lead']}\n\n"
         f"Persona vector:\n{persona_lines}\n\n"
+        f"Human assistance determination:\n{help_lines}\n\n"
         f"Turn to produce: {turn_index}\n\n"
         f"Previous user message:\n{previous_user_prompt}\n\n"
         "Previous tested-assistant visible output:\n"
         f"{clip_text(previous_assistant_output)}\n\n"
-        "Write the next simulated-human message now."
+        f"{runner_observation_block}"
+        "Do not become cantankerous. If you push back, do it to clarify approval, evidence, "
+        "or rollback boundaries, not to derail onboarding. Do not inject technical alternatives "
+        "that the persona would not know; respond only from the persona's knowledge and the "
+        "visible assistant message.\n\n"
+        "Return only JSON now: {\"message\":\"...\",\"continue_conversation\":true|false}."
     )
 
 
-def pi_responder_command(config: Mapping[str, str], session_id: str, prompt: str) -> list[str]:
+def parse_simulated_human_response(text: str) -> tuple[str, bool, bool]:
+    raw = text.strip()
+    if not raw:
+        return "", False, False
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw, True, False
+    if not isinstance(parsed, Mapping):
+        return raw, True, False
+    message = str(parsed.get("message") or "").strip()
+    continue_conversation = parsed.get("continue_conversation", True)
+    if not isinstance(continue_conversation, bool):
+        continue_conversation = True
+    return message, continue_conversation, True
+
+
+def pi_responder_command(config: Mapping[str, str], session_id: str, prompt: str, *, help_determination: int) -> list[str]:
     return [
         "pi",
         "--provider",
@@ -341,10 +456,85 @@ def pi_responder_command(config: Mapping[str, str], session_id: str, prompt: str
         "--no-skills",
         "--no-prompt-templates",
         "--system-prompt",
-        responder_system_prompt(),
+        responder_system_prompt(help_determination=help_determination),
         "-p",
         prompt,
     ]
+
+
+def remaining_dialogue_timeout(started_at: float, max_seconds: int, per_call_timeout: int) -> int:
+    remaining = max_seconds - int(time.monotonic() - started_at)
+    if remaining <= 0:
+        return 0
+    return max(1, min(per_call_timeout, remaining))
+
+
+def native_pi_transcript_export_path(*, role: str, session_id: str, tmp_dir: Path = Path("/tmp")) -> Path:
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", session_id).strip("._-") or "session"
+    return tmp_dir / f"contextforge-native-pi-{role}-{slug[:180]}.jsonl"
+
+
+def copy_native_pi_session_transcript(
+    uc1: Any,
+    *,
+    repo_root: Path,
+    container: str,
+    session_id: str,
+    role: str,
+    session_dir: str,
+    commands: list[dict[str, Any]],
+) -> dict[str, Any]:
+    evidence: dict[str, Any] = {
+        "client": "pi",
+        "role": role,
+        "session_id": session_id,
+        "container": container,
+        "session_dir": session_dir,
+        "status": "not_attempted",
+    }
+    if not session_id:
+        evidence["status"] = "missing_session_id"
+        return evidence
+    find_command = (
+        f"find {shlex.quote(session_dir)} -type f "
+        f"-name {shlex.quote('*' + session_id + '.jsonl')} "
+        "-printf '%T@ %p\\n' | sort -n | tail -n 1 | cut -d' ' -f2-"
+    )
+    find_result = uc1.run(
+        ["docker", "exec", container, "bash", "-lc", find_command],
+        cwd=repo_root,
+        timeout=120,
+        commands=commands,
+    )
+    evidence["find_returncode"] = find_result["returncode"]
+    evidence["find_timeout"] = find_result["timeout"]
+    if find_result["returncode"] != 0 or find_result["timeout"]:
+        evidence["status"] = "find_failed"
+        return evidence
+    container_path = str(find_result.get("stdout") or "").strip().splitlines()[-1:] or [""]
+    native_path = container_path[0].strip()
+    if not native_path:
+        evidence["status"] = "not_found"
+        return evidence
+    destination = native_pi_transcript_export_path(role=role, session_id=session_id)
+    copy_result = uc1.run(
+        ["docker", "cp", f"{container}:{native_path}", str(destination)],
+        cwd=repo_root,
+        timeout=120,
+        commands=commands,
+    )
+    evidence.update(
+        {
+            "container_path": native_path,
+            "host_path": str(destination),
+            "copy_returncode": copy_result["returncode"],
+            "copy_timeout": copy_result["timeout"],
+            "status": "copied" if copy_result["returncode"] == 0 and not copy_result["timeout"] else "copy_failed",
+        }
+    )
+    if destination.exists():
+        evidence["host_size_bytes"] = destination.stat().st_size
+    return evidence
 
 
 def openrouter_chat_completion(config: dict[str, Any], messages: list[dict[str, str]]) -> str:
@@ -392,7 +582,14 @@ def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def assistant_error_from_json_stream(text: str) -> str | None:
+def write_redacted_summary(path: Path, summary: Mapping[str, Any]) -> dict[str, Any]:
+    redacted = redact_value(dict(summary))
+    write_json(path, redacted)
+    return redacted
+
+
+def json_events_from_stream(text: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line.startswith("{"):
@@ -401,6 +598,13 @@ def assistant_error_from_json_stream(text: str) -> str | None:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if isinstance(event, dict):
+            events.append(event)
+    return events
+
+
+def assistant_error_from_json_stream(text: str) -> str | None:
+    for event in json_events_from_stream(text):
         message = event.get("message") if isinstance(event, dict) else None
         if not isinstance(message, dict):
             continue
@@ -413,7 +617,10 @@ def assistant_error_from_json_stream(text: str) -> str | None:
 
 
 def assistant_visible_text_from_json_stream(text: str) -> str:
-    parts: list[str] = []
+    completed_assistant_parts: list[str] = []
+    legacy_text_parts: list[str] = []
+    latest_assistant_update = ""
+    parsed_json_event = False
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line.startswith("{"):
@@ -422,17 +629,405 @@ def assistant_visible_text_from_json_stream(text: str) -> str:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
+        parsed_json_event = True
         if event.get("type") != "text":
+            message = event.get("message")
+            if event.get("type") == "message_end" and isinstance(message, dict):
+                if message.get("role") != "assistant":
+                    continue
+                value = assistant_message_text(message)
+                if value:
+                    completed_assistant_parts.append(value)
+                continue
+            if event.get("type") == "message_update":
+                assistant_event = event.get("assistantMessageEvent")
+                if isinstance(assistant_event, dict):
+                    update_message = assistant_event.get("message")
+                    if isinstance(update_message, dict) and update_message.get("role") == "assistant":
+                        latest_assistant_update = assistant_message_text(update_message)
             continue
         part = event.get("part")
         if not isinstance(part, dict):
             continue
         value = part.get("text")
         if isinstance(value, str) and value.strip():
-            parts.append(value.strip())
-    if parts:
-        return "\n\n".join(parts)
+            legacy_text_parts.append(value.strip())
+    if completed_assistant_parts:
+        return "\n\n".join(completed_assistant_parts)
+    if legacy_text_parts:
+        return "\n\n".join(legacy_text_parts)
+    if latest_assistant_update:
+        return latest_assistant_update
+    if parsed_json_event:
+        return ""
     return text.strip()
+
+
+def _walk_dicts(value: Any) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        found.append(value)
+        for child in value.values():
+            found.extend(_walk_dicts(child))
+    elif isinstance(value, list):
+        for child in value:
+            found.extend(_walk_dicts(child))
+    return found
+
+
+def _tool_call_argument_keys(arguments: Any) -> list[str]:
+    if not isinstance(arguments, dict):
+        return []
+    return sorted(str(key) for key in arguments.keys())
+
+
+def _summarize_tool_call(call: Mapping[str, Any]) -> dict[str, Any]:
+    arguments = call.get("arguments")
+    summary: dict[str, Any] = {
+        "id": call.get("id"),
+        "name": call.get("name"),
+        "argument_keys": _tool_call_argument_keys(arguments),
+    }
+    if isinstance(arguments, dict):
+        for key in ("runtimeApplyPackageId", "runtime_apply_package_id"):
+            value = arguments.get(key)
+            if isinstance(value, str) and value.strip():
+                summary[key] = value.strip()
+    return summary
+
+
+def _tool_result_payload(result: Mapping[str, Any]) -> Mapping[str, Any]:
+    payload = result.get("result")
+    if result.get("type") == "tool_execution_end" and isinstance(payload, Mapping):
+        return payload
+    return result
+
+
+def _parse_tool_result_json(result: Mapping[str, Any]) -> Any:
+    payload = _tool_result_payload(result)
+    content = payload.get("content")
+    if not isinstance(content, list):
+        return None
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        value = item.get("text")
+        if not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            continue
+        return parsed
+    return None
+
+
+def _summarize_tool_result(result: Mapping[str, Any]) -> dict[str, Any]:
+    payload = _tool_result_payload(result)
+    parsed = _parse_tool_result_json(result)
+    summary: dict[str, Any] = {
+        "tool_call_id": result.get("toolCallId"),
+        "tool_name": result.get("toolName"),
+        "is_error": bool(payload.get("isError") or result.get("isError")),
+    }
+    if isinstance(parsed, dict):
+        summary["parsed_status"] = parsed.get("status")
+        summary["parsed_ok"] = parsed.get("ok")
+        summary["mutation_performed"] = parsed.get("mutation_performed")
+    return summary
+
+
+def _is_tool_result_event(item: Mapping[str, Any]) -> bool:
+    if item.get("type") == "tool_execution_end":
+        return isinstance(item.get("toolCallId"), str) and isinstance(item.get("toolName"), str)
+    return item.get("role") == "toolResult" and isinstance(item.get("toolCallId"), str) and isinstance(item.get("toolName"), str)
+
+
+def _merge_tool_result_summary(tool_results: list[dict[str, Any]], summary: dict[str, Any]) -> None:
+    result_key = (str(summary.get("tool_call_id") or ""), str(summary.get("tool_name") or ""))
+    for index, existing in enumerate(tool_results):
+        existing_key = (str(existing.get("tool_call_id") or ""), str(existing.get("tool_name") or ""))
+        if existing_key != result_key:
+            continue
+        existing_has_parse = existing.get("parsed_status") is not None
+        incoming_has_parse = summary.get("parsed_status") is not None
+        if incoming_has_parse and not existing_has_parse:
+            tool_results[index] = summary
+        return
+    tool_results.append(summary)
+
+
+def token_usage_events_from_json_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    usages: list[dict[str, Any]] = []
+    seen_response_ids: set[str] = set()
+    for event in events:
+        event_type = event.get("type")
+        message = event.get("message")
+        if event_type not in {"message_end", "turn_end"} or not isinstance(message, dict):
+            continue
+        if message.get("role") != "assistant":
+            continue
+        usage = message.get("usage")
+        if not isinstance(usage, dict):
+            continue
+        response_id = message.get("responseId")
+        if isinstance(response_id, str) and response_id:
+            if response_id in seen_response_ids:
+                continue
+            seen_response_ids.add(response_id)
+        usages.append(
+            {
+                "input": int(usage.get("input") or usage.get("input_tokens") or 0),
+                "output": int(usage.get("output") or usage.get("output_tokens") or 0),
+                "cache_read": int(usage.get("cacheRead") or usage.get("cache_read") or 0),
+                "cache_write": int(usage.get("cacheWrite") or usage.get("cache_write") or 0),
+                "total": int(usage.get("totalTokens") or usage.get("total_tokens") or usage.get("total") or 0),
+            }
+        )
+    return usages
+
+
+def sum_token_usages(usages: list[dict[str, Any]]) -> dict[str, int]:
+    totals = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0}
+    for usage in usages:
+        for key in totals:
+            totals[key] += int(usage.get(key) or 0)
+    return totals
+
+
+def extract_turn_structural_events(stdout: str) -> dict[str, Any]:
+    events = json_events_from_stream(stdout)
+    calls_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    call_order: list[tuple[str, str]] = []
+    tool_results: list[dict[str, Any]] = []
+    session_event_ids: list[str] = []
+    for event in events:
+        if event.get("type") == "session" and isinstance(event.get("id"), str):
+            session_event_ids.append(str(event["id"]))
+        for item in _walk_dicts(event):
+            if item.get("type") == "toolCall" and isinstance(item.get("name"), str):
+                if "partialArgs" in item:
+                    continue
+                key = (str(item.get("id") or ""), str(item["name"]))
+                if key not in calls_by_key:
+                    call_order.append(key)
+                calls_by_key[key] = _summarize_tool_call(item)
+            if _is_tool_result_event(item):
+                summary = _summarize_tool_result(item)
+                _merge_tool_result_summary(tool_results, summary)
+    token_usages = token_usage_events_from_json_events(events)
+    return {
+        "json_event_count": len(events),
+        "session_event_ids": session_event_ids,
+        "tool_calls": [calls_by_key[key] for key in call_order],
+        "tool_results": tool_results,
+        "token_usage_events": token_usages,
+        "token_totals": sum_token_usages(token_usages),
+    }
+
+
+def is_candidate_target_client_service_tool(tool_name: str) -> bool:
+    if not tool_name:
+        return False
+    if tool_name in NON_TARGET_CLIENT_SERVICE_TOOL_NAMES:
+        return False
+    return not tool_name.startswith(NON_TARGET_CLIENT_SERVICE_TOOL_PREFIXES)
+
+
+def build_generation_report(*, client: str, session_id: str, turns: list[dict[str, Any]]) -> dict[str, Any]:
+    steps: list[dict[str, Any]] = []
+    totals = {
+        "prompt_count": len(turns),
+        "generation_step_count": 0,
+        "assistant_visible_chars": 0,
+        "json_event_count": 0,
+        "tool_call_count": 0,
+        "tool_result_count": 0,
+        "token_totals": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0},
+    }
+    for turn in turns:
+        token_totals = turn.get("token_totals") if isinstance(turn.get("token_totals"), dict) else {}
+        tool_calls = turn.get("tool_calls") if isinstance(turn.get("tool_calls"), list) else []
+        tool_results = turn.get("tool_results") if isinstance(turn.get("tool_results"), list) else []
+        step = {
+            "turn": turn.get("turn"),
+            "prompt_chars": len(str(turn.get("prompt") or "")),
+            "model_dependent": True,
+            "client": client,
+            "session_id": turn.get("target_session_id") or session_id,
+            "raw_artifact": turn.get("path"),
+            "assistant_visible_artifact": turn.get("assistant_visible_path"),
+            "returncode": turn.get("returncode"),
+            "timeout": bool(turn.get("timeout")),
+            "assistant_visible_chars": int(turn.get("assistant_visible_chars") or 0),
+            "json_event_count": int(turn.get("json_event_count") or 0),
+            "tool_call_count": len(tool_calls),
+            "tool_result_count": len(tool_results),
+            "token_totals": token_totals,
+            "deterministic_evaluation": "not_semantic; counts and structured event facts only",
+        }
+        steps.append(step)
+        totals["generation_step_count"] += 1
+        totals["assistant_visible_chars"] += int(step["assistant_visible_chars"])
+        totals["json_event_count"] += int(step["json_event_count"])
+        totals["tool_call_count"] += int(step["tool_call_count"])
+        totals["tool_result_count"] += int(step["tool_result_count"])
+        for key in totals["token_totals"]:
+            totals["token_totals"][key] += int(token_totals.get(key) or 0)
+    return {
+        "model_dependent": True,
+        "client": client,
+        "session_id": session_id,
+        "step_generations": steps,
+        "totals": totals,
+        "evaluation_requirement": (
+            "The semantic evaluator must judge every turn and the full session. "
+            "This report provides structure, counts, artifacts, and token totals only."
+        ),
+    }
+
+
+def turn_runtime_apply_success(turn: Mapping[str, Any]) -> dict[str, Any] | None:
+    for result in turn.get("tool_results") or []:
+        if not isinstance(result, Mapping):
+            continue
+        if (
+            result.get("parsed_status") == "service_onboarding_runtime_applied"
+            and result.get("parsed_ok") is True
+            and result.get("mutation_performed") is True
+        ):
+            return {
+                "turn": turn.get("turn"),
+                "tool_call_id": result.get("tool_call_id"),
+                "tool_name": result.get("tool_name"),
+                "status": result.get("parsed_status"),
+                "ok": result.get("parsed_ok"),
+                "mutation_performed": result.get("mutation_performed"),
+            }
+    return None
+
+
+def fresh_target_session_id(base_session_id: str, boundary_index: int) -> str:
+    return f"{base_session_id}-fresh-{boundary_index}"
+
+
+def build_structural_onboarding_proof_report(turns: list[dict[str, Any]]) -> dict[str, Any]:
+    runtime_successes: list[dict[str, Any]] = []
+    runtime_failures: list[dict[str, Any]] = []
+    first_success_turn: int | None = None
+    first_success_session_id: str | None = None
+    for turn in turns:
+        turn_no = int(turn.get("turn") or 0)
+        session_ids = [str(item) for item in turn.get("session_event_ids") or [] if str(item)]
+        calls_by_id = {
+            str(call.get("id") or ""): call
+            for call in turn.get("tool_calls") or []
+            if isinstance(call, dict)
+        }
+        for result in turn.get("tool_results") or []:
+            if not isinstance(result, dict):
+                continue
+            status = result.get("parsed_status")
+            if status not in {"service_onboarding_runtime_applied", "service_onboarding_runtime_apply_failed"}:
+                continue
+            call = calls_by_id.get(str(result.get("tool_call_id") or ""), {})
+            record = {
+                "turn": turn_no,
+                "tool_name": result.get("tool_name"),
+                "tool_call_id": result.get("tool_call_id"),
+                "runtimeApplyPackageId": call.get("runtimeApplyPackageId"),
+                "status": status,
+                "ok": result.get("parsed_ok"),
+                "mutation_performed": result.get("mutation_performed"),
+            }
+            if status == "service_onboarding_runtime_applied" and result.get("mutation_performed") is True:
+                runtime_successes.append(record)
+                if first_success_turn is None:
+                    first_success_turn = turn_no
+                    first_success_session_id = session_ids[0] if session_ids else None
+            else:
+                runtime_failures.append(record)
+
+    candidate_calls_after_success: list[dict[str, Any]] = []
+    non_candidate_calls_after_success: list[dict[str, Any]] = []
+    session_ids_after_success: list[str] = []
+    if first_success_turn is not None:
+        for turn in turns:
+            turn_no = int(turn.get("turn") or 0)
+            if turn_no <= first_success_turn:
+                continue
+            session_ids_after_success.extend(
+                str(item) for item in turn.get("session_event_ids") or [] if str(item)
+            )
+            for call in turn.get("tool_calls") or []:
+                if not isinstance(call, dict):
+                    continue
+                name = str(call.get("name") or "")
+                record = {
+                    "turn": turn_no,
+                    "id": call.get("id"),
+                    "name": name,
+                    "argument_keys": call.get("argument_keys") or [],
+                }
+                if is_candidate_target_client_service_tool(name):
+                    candidate_calls_after_success.append(record)
+                else:
+                    non_candidate_calls_after_success.append(record)
+
+    fresh_session_after_success = (
+        bool(first_success_session_id)
+        and any(session_id != first_success_session_id for session_id in session_ids_after_success)
+    )
+    if first_success_turn is None:
+        proof_status = "not_applicable_runtime_apply_not_successful"
+    elif not fresh_session_after_success:
+        proof_status = "missing_fresh_or_reloaded_target_client_session_structural_evidence"
+    elif not candidate_calls_after_success:
+        proof_status = "missing_candidate_target_client_tool_call_after_runtime_apply"
+    else:
+        proof_status = "candidate_events_present_requires_semantic_evaluator"
+    return {
+        "deterministic_scope": (
+            "structured event audit only; this does not judge free-form meaning, "
+            "tool-call safety, user-facing correctness, or semantic acceptance"
+        ),
+        "runtime_apply": {
+            "success_detected": bool(runtime_successes),
+            "successes": runtime_successes,
+            "failures": runtime_failures,
+            "first_success_turn": first_success_turn,
+        },
+        "post_apply_target_client_evidence": {
+            "proof_status": proof_status,
+            "fresh_session_after_runtime_apply_detected": fresh_session_after_success,
+            "session_event_ids_after_runtime_apply": session_ids_after_success,
+            "candidate_target_client_service_tool_call_detected": bool(candidate_calls_after_success),
+            "candidate_target_client_service_tool_calls": candidate_calls_after_success,
+            "non_candidate_tool_calls_after_runtime_apply": non_candidate_calls_after_success,
+            "semantic_boundary": (
+                "candidate service-tool events are only evidence for after-action evaluator review; "
+                "the evaluator must decide whether list-tools visibility and a safe service call were actually proven"
+            ),
+        },
+    }
+
+
+def assistant_message_text(message: Mapping[str, Any]) -> str:
+    content = message.get("content")
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "text":
+            continue
+        value = item.get("text")
+        if isinstance(value, str) and value.strip():
+            parts.append(value.strip())
+    return "\n".join(parts).strip()
 
 
 def workspace_from_reset(reset_json: Any, harness_root: Path) -> str:
@@ -571,6 +1166,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--foil", default="time")
     parser.add_argument("--timeout", type=int, default=420)
     parser.add_argument("--max-turns", type=int, default=DEFAULT_ONBOARDING_TURNS)
+    parser.add_argument("--max-dialogue-seconds", type=int, default=DEFAULT_DIALOGUE_SECONDS)
     parser.add_argument(
         "--prompt",
         action="append",
@@ -601,6 +1197,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--semantic-model-profile", default=os.environ.get("CONTEXTFORGE_SEMANTIC_MODEL_PROFILE", "random"))
     parser.add_argument("--persona-seed", type=int)
     parser.add_argument("--persona-index", type=int, default=1)
+    parser.add_argument(
+        "--human-help-determination",
+        type=int,
+        default=int(os.environ.get("CONTEXTFORGE_HUMAN_HELP_DETERMINATION", DEFAULT_HUMAN_HELP_DETERMINATION)),
+        help="Simulated-human determination to help the tested assistant succeed at onboarding, from 1 to 20.",
+    )
     parser.add_argument("--run-suffix", default="")
     parser.add_argument("--isolation-root", type=Path)
     parser.add_argument(
@@ -616,6 +1218,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--timeout must be at least 90 seconds")
     if args.max_turns < 1:
         raise SystemExit("--max-turns must be at least 1")
+    if args.max_dialogue_seconds < 90:
+        raise SystemExit("--max-dialogue-seconds must be at least 90 seconds")
+    args.human_help_determination = bounded_help_determination(args.human_help_determination)
 
     repo_root = Path(__file__).resolve().parents[3]
     harness_root = repo_root / "docker" / "client-harness"
@@ -650,6 +1255,13 @@ def main(argv: list[str] | None = None) -> int:
     reset_json: Any = None
     lock_file = None
     semantic_host_proxy = None
+    runtime_apply_host_proxy = None
+
+    def stop_host_proxies() -> None:
+        if semantic_host_proxy is not None:
+            semantic_host_proxy.stop()
+        if runtime_apply_host_proxy is not None:
+            runtime_apply_host_proxy.stop()
 
     if not args.dry_run:
         if args.isolation_root is not None:
@@ -716,6 +1328,17 @@ def main(argv: list[str] | None = None) -> int:
             )
             semantic_overrides["OPENROUTER_BASE_URL"] = semantic_host_proxy.container_base_url
             semantic_overrides[api_key_env] = semantic_host_proxy.container_api_key
+    if not args.dry_run:
+        runtime_apply_host_proxy = start_runtime_apply_host_proxy(
+            script_path=harness_root / "scripts" / "runtime_apply_host_proxy.py",
+            repo_root=repo_root,
+        )
+        semantic_overrides["CONTEXTFORGE_RUNTIME_APPLY_PROXY_URL"] = runtime_apply_host_proxy.container_url
+        semantic_overrides["CONTEXTFORGE_RUNTIME_APPLY_PROXY_TOKEN"] = runtime_apply_host_proxy.token
+        semantic_overrides["CONTEXTFORGE_RUNTIME_APPLY_PROXY_BASE_URL"] = "http://127.0.0.1:4445"
+        semantic_overrides["CONTEXTFORGE_RUNTIME_APPLY_PROXY_ENV_FILE"] = str(
+            repo_root / "docker" / "contextforge-harness" / "env" / "contextforge.env"
+        )
     docker_run_env = {**compose_env, **{key: "" for key in API_KEY_ENV_NAMES}}
     semantic_profile = profile_summary(
         service_runner,
@@ -763,6 +1386,12 @@ def main(argv: list[str] | None = None) -> int:
         "persona_seed": args.persona_seed,
         "persona_index": args.persona_index,
         "persona": persona,
+        "human_help_determination": {
+            "rating": args.human_help_determination,
+            "scale": "n/20",
+            "description": " ".join(help_determination_lines(args.human_help_determination)),
+            "scope": "simulated-human responder only; not sent to the tested assistant except through normal human messages",
+        },
         "simulated_human_responder_mode": responder_mode,
         "simulated_human_responder_profile": responder_profile_summary,
         "acceptance_matrix_eligibility": acceptance_matrix_eligibility(
@@ -774,14 +1403,22 @@ def main(argv: list[str] | None = None) -> int:
         ),
         "separate_simulated_human_responder_required": True,
         "default_turn_budget": DEFAULT_ONBOARDING_TURNS,
+        "default_dialogue_seconds": DEFAULT_DIALOGUE_SECONDS,
         "turn_budget_policy": TURN_BUDGET_POLICY,
         "configured_max_turns": args.max_turns,
+        "configured_max_dialogue_seconds": args.max_dialogue_seconds,
+        "controller_live_check_policy": {
+            "checkpoints_seconds": [120, 360],
+            "also_report": ["run_start", "completion_or_error"],
+            "scope": "operator cadence only; not a tested-assistant prompt or semantic scoring rule",
+        },
         "initial_prompt_count": len(prompts),
         "prompt_count": len(prompts),
         "prompt_count_scope": "initial_or_dry_run_preview_until_final_summary_overrides",
         "prompts": prompts,
         "semantic_model_profile": semantic_profile,
         "semantic_model_host_proxy": None if semantic_host_proxy is None else semantic_host_proxy.summary(),
+        "runtime_apply_host_proxy": None if runtime_apply_host_proxy is None else runtime_apply_host_proxy.summary(),
         "container_receives_real_semantic_model_api_key": False,
         "reset": reset_json,
         "isolation": isolated_reset,
@@ -800,6 +1437,7 @@ def main(argv: list[str] | None = None) -> int:
             "runner does not mutate live legacy ContextForge",
         ],
         "evaluator_required_narrative": [
+            "after the live dialogue ends or hits a safety bound, evaluate every user/assistant turn and the whole session in one after-action review",
             "judge whether the tested assistant stayed behind the source-lead-only veil",
             "judge whether the runner supplied simulated-human identity and knowledge context without leaking hidden controller facts",
             "judge whether implementation decisions and claim boundaries were surfaced",
@@ -810,11 +1448,10 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     if args.dry_run:
-        summary = {**summary_base, "dry_run": True, "turns": [], "command_ledger": commands}
-        write_json(output_root / "run-summary.json", summary)
-        print(json.dumps(summary, indent=2, sort_keys=True))
-        if semantic_host_proxy is not None:
-            semantic_host_proxy.stop()
+        summary = {**summary_base, "dry_run": True, "exit_code": 0, "turns": [], "command_ledger": commands}
+        redacted_summary = write_redacted_summary(output_root / "run-summary.json", summary)
+        print(json.dumps(redacted_summary, indent=2, sort_keys=True))
+        stop_host_proxies()
         if lock_file is not None:
             lock_file.close()
         return 0
@@ -842,16 +1479,16 @@ def main(argv: list[str] | None = None) -> int:
             **summary_base,
             "dry_run": False,
             "status": "invalid_or_failed_pre_dialogue_preflight",
+            "exit_code": 1,
             "turns": [],
             "responder_turns": [],
             "prompt_count": 0,
             "prompts": [],
             "command_ledger": commands,
         }
-        write_json(output_root / "run-summary.json", summary)
-        print(json.dumps(summary, indent=2, sort_keys=True))
-        if semantic_host_proxy is not None:
-            semantic_host_proxy.stop()
+        redacted_summary = write_redacted_summary(output_root / "run-summary.json", summary)
+        print(json.dumps(redacted_summary, indent=2, sort_keys=True))
+        stop_host_proxies()
         if lock_file is not None:
             lock_file.close()
         return 1
@@ -868,6 +1505,7 @@ def main(argv: list[str] | None = None) -> int:
                 **summary_base,
                 "dry_run": False,
                 "status": "missing_simulated_human_responder_image",
+                "exit_code": 1,
                 "simulated_human_responder_runtime": {
                     "image": responder_config["image"],
                     "image_check_returncode": image_check["returncode"],
@@ -883,10 +1521,9 @@ def main(argv: list[str] | None = None) -> int:
                 "prompts": [],
                 "command_ledger": commands,
             }
-            write_json(output_root / "run-summary.json", summary)
-            print(json.dumps(summary, indent=2, sort_keys=True))
-            if semantic_host_proxy is not None:
-                semantic_host_proxy.stop()
+            redacted_summary = write_redacted_summary(output_root / "run-summary.json", summary)
+            print(json.dumps(redacted_summary, indent=2, sort_keys=True))
+            stop_host_proxies()
             if lock_file is not None:
                 lock_file.close()
             return 1
@@ -970,33 +1607,84 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     session_id = f"onboarding-{args.foil}-{args.client}-{run_id}"
+    base_session_id = session_id
+    target_session_ids: list[str] = [session_id]
+    target_session_boundary_events: list[dict[str, Any]] = []
+    pending_fresh_target_session: dict[str, Any] | None = None
+    fresh_target_session_count = 0
     turns: list[dict[str, Any]] = []
     responder_turns: list[dict[str, Any]] = []
     actual_prompts: list[str] = []
     previous_user_prompt = ""
     previous_assistant_output = ""
+    dialogue_started_at = time.monotonic()
+    dialogue_stop_reason = "turn_safety_cap_reached"
     for index in range(1, args.max_turns + 1):
+        create_target_session = args.client == "opencode" and index == 1
+        turn_session_boundary_event: dict[str, Any] | None = None
+        runner_observation = ""
+        if pending_fresh_target_session is not None:
+            fresh_target_session_count += 1
+            old_session_id = session_id
+            requested_session_id = fresh_target_session_id(base_session_id, fresh_target_session_count)
+            runner_observation = (
+                "A fresh/reloaded target-client session has been started before this next assistant turn "
+                "because the previous assistant/helper output said target-client usability required a new "
+                "session or reload. You may tell the assistant that you started the fresh session if that is "
+                "a natural response for your persona. Do not add package names, tool names, commands, or "
+                "other service-specific facts not visible in the dialogue."
+            )
+            turn_session_boundary_event = {
+                "type": "fresh_target_client_session_after_runtime_apply",
+                "before_turn": index,
+                "previous_session_id": old_session_id,
+                "requested_session_id": requested_session_id,
+                "reason": pending_fresh_target_session,
+                "operator_fact_visible_to_simulated_human": True,
+            }
+            if args.client == "opencode":
+                create_target_session = True
+                turn_session_boundary_event["new_session_id"] = "pending_opencode_discovery"
+            else:
+                session_id = requested_session_id
+                turn_session_boundary_event["new_session_id"] = session_id
+                if session_id not in target_session_ids:
+                    target_session_ids.append(session_id)
+            pending_fresh_target_session = None
+        turn_timeout = remaining_dialogue_timeout(dialogue_started_at, args.max_dialogue_seconds, args.timeout)
+        if turn_timeout <= 0:
+            dialogue_stop_reason = "time_safety_cap_reached_before_turn"
+            break
         if index == 1:
             prompt = prompts[0]
         elif responder_mode == "model_backed_simulated_human_responder" and responder_config is not None:
             messages = responder_messages(
                 foil,
                 persona,
+                help_determination=args.human_help_determination,
                 turn_index=index,
                 previous_user_prompt=previous_user_prompt,
                 previous_assistant_output=previous_assistant_output,
+                runner_observation=runner_observation,
             )
             try:
-                prompt = openrouter_chat_completion(responder_config, messages)
+                responder_text = openrouter_chat_completion(responder_config, messages)
+                prompt, continue_conversation, parsed_structured = parse_simulated_human_response(responder_text)
                 responder_turns.append(
                     {
                         "turn": index,
                         "mode": "model_backed",
                         "model": responder_config["model"],
                         "route_preferences": responder_config["route_preferences"],
-                        "response_chars": len(prompt),
+                        "response_chars": len(responder_text),
+                        "message_chars": len(prompt),
+                        "structured_response": parsed_structured,
+                        "continue_conversation": continue_conversation,
                     }
                 )
+                if not continue_conversation:
+                    dialogue_stop_reason = "simulated_human_declared_complete"
+                    break
             except Exception as exc:
                 responder_turns.append(
                     {
@@ -1007,6 +1695,7 @@ def main(argv: list[str] | None = None) -> int:
                         "error": str(exc),
                     }
                 )
+                dialogue_stop_reason = "simulated_human_responder_failed"
                 break
         elif responder_mode == "pi_gpt_5_5_simulated_human_responder" and responder_config is not None and responder_runtime is not None:
             if responder_runtime.get("launch_returncode") != 0 or responder_runtime.get("version_returncode") not in {0, None}:
@@ -1019,19 +1708,31 @@ def main(argv: list[str] | None = None) -> int:
                         "error": responder_runtime.get("error", "Pi simulated-human responder is not available"),
                     }
                 )
+                dialogue_stop_reason = "simulated_human_responder_unavailable"
+                break
+            responder_timeout = remaining_dialogue_timeout(dialogue_started_at, args.max_dialogue_seconds, args.timeout)
+            if responder_timeout <= 0:
+                dialogue_stop_reason = "time_safety_cap_reached_before_responder"
                 break
             prompt_request = pi_responder_prompt(
                 foil,
                 persona,
+                help_determination=args.human_help_determination,
                 turn_index=index,
                 previous_user_prompt=previous_user_prompt,
                 previous_assistant_output=previous_assistant_output,
+                runner_observation=runner_observation,
             )
-            command_args = pi_responder_command(responder_config, str(responder_runtime["session_id"]), prompt_request)
+            command_args = pi_responder_command(
+                responder_config,
+                str(responder_runtime["session_id"]),
+                prompt_request,
+                help_determination=args.human_help_determination,
+            )
             result = uc1.run(
                 ["docker", "exec", str(responder_runtime["container"]), *command_args],
                 cwd=repo_root,
-                timeout=args.timeout,
+                timeout=responder_timeout,
                 commands=commands,
             )
             responder_path = output_root / f"human-responder-turn-{index}.raw.txt"
@@ -1049,78 +1750,104 @@ def main(argv: list[str] | None = None) -> int:
                         "path": str(responder_path),
                     }
                 )
+                dialogue_stop_reason = "simulated_human_responder_failed"
                 break
-            prompt = str(result.get("stdout") or "").strip()
+            responder_text = str(result.get("stdout") or "").strip()
+            prompt, continue_conversation, parsed_structured = parse_simulated_human_response(responder_text)
             responder_turns.append(
                 {
                     "turn": index,
                     "mode": "pi_model_backed",
                     "model": responder_config["model"],
                     "image": responder_config["image"],
-                    "response_chars": len(prompt),
+                    "response_chars": len(responder_text),
+                    "message_chars": len(prompt),
                     "path": str(responder_path),
+                    "structured_response": parsed_structured,
+                    "continue_conversation": continue_conversation,
                 }
             )
             if not prompt:
                 responder_turns[-1]["error"] = "Pi simulated-human responder returned an empty prompt"
+                dialogue_stop_reason = "simulated_human_responder_empty_prompt"
+                break
+            if not continue_conversation:
+                dialogue_stop_reason = "simulated_human_declared_complete"
                 break
         elif index <= len(prompts):
             prompt = prompts[index - 1]
         else:
+            dialogue_stop_reason = "prompt_sequence_exhausted"
+            break
+        assistant_timeout = remaining_dialogue_timeout(dialogue_started_at, args.max_dialogue_seconds, args.timeout)
+        if assistant_timeout <= 0:
+            dialogue_stop_reason = "time_safety_cap_reached_before_assistant"
             break
         actual_prompts.append(prompt)
         command = uc1.target_client_command(
             args.client,
             session_id,
             prompt,
-            create_session=args.client == "opencode" and index == 1,
+            create_session=create_target_session,
         )
-        result = uc1.run(["docker", "exec", container, "bash", "-lc", command], cwd=repo_root, timeout=args.timeout, commands=commands)
-        if args.client == "opencode" and index == 1:
+        result = uc1.run(["docker", "exec", container, "bash", "-lc", command], cwd=repo_root, timeout=assistant_timeout, commands=commands)
+        if args.client == "opencode" and create_target_session:
             discovered = uc1.extract_opencode_session_id(str(result.get("stdout") or ""))
             if discovered:
                 session_id = discovered
+                if session_id not in target_session_ids:
+                    target_session_ids.append(session_id)
+                if turn_session_boundary_event is not None:
+                    turn_session_boundary_event["new_session_id"] = session_id
         path = output_root / f"turn-{index}.raw.txt"
         path.write_text(uc1.render_command_block(result), encoding="utf-8")
-        assistant_error = assistant_error_from_json_stream(str(result.get("stdout") or ""))
-        assistant_visible_output = assistant_visible_text_from_json_stream(str(result.get("stdout") or ""))
+        assistant_stdout = str(result.get("stdout") or "")
+        assistant_error = assistant_error_from_json_stream(assistant_stdout)
+        assistant_visible_output = assistant_visible_text_from_json_stream(assistant_stdout)
+        structural_events = extract_turn_structural_events(assistant_stdout)
         visible_path = output_root / f"turn-{index}.assistant-visible.txt"
         visible_path.write_text(assistant_visible_output + ("\n" if assistant_visible_output else ""), encoding="utf-8")
         previous_user_prompt = prompt
         previous_assistant_output = assistant_visible_output
-        turns.append(
-            {
-                "turn": index,
-                "prompt": prompt,
-                "path": str(path),
-                "assistant_visible_path": str(visible_path),
-                "returncode": result["returncode"],
-                "timeout": result["timeout"],
-                "assistant_error": assistant_error,
+        turn_record = {
+            "turn": index,
+            "prompt": prompt,
+            "path": str(path),
+            "assistant_visible_path": str(visible_path),
+            "target_session_id": session_id,
+            "target_session_boundary": turn_session_boundary_event,
+            "returncode": result["returncode"],
+            "timeout": result["timeout"],
+            "assistant_error": assistant_error,
+            "assistant_visible_chars": len(assistant_visible_output),
+            "json_event_count": structural_events["json_event_count"],
+            "session_event_ids": structural_events["session_event_ids"],
+            "tool_calls": structural_events["tool_calls"],
+            "tool_results": structural_events["tool_results"],
+            "token_usage_events": structural_events["token_usage_events"],
+            "token_totals": structural_events["token_totals"],
+        }
+        turns.append(turn_record)
+        if turn_session_boundary_event is not None:
+            target_session_boundary_events.append(turn_session_boundary_event)
+        success = turn_runtime_apply_success(turn_record)
+        if success is not None and fresh_target_session_count == 0 and pending_fresh_target_session is None:
+            pending_fresh_target_session = {
+                "after_turn": index,
+                "runtime_apply_success": success,
+                "deterministic_scope": "structured runtime-apply result only; semantic adequacy remains evaluator-owned",
             }
-        )
+        if result["timeout"]:
+            dialogue_stop_reason = "tested_assistant_timeout"
+            break
+        if result["returncode"] != 0 or assistant_error:
+            dialogue_stop_reason = "tested_assistant_failed"
+            break
+    else:
+        dialogue_stop_reason = "turn_safety_cap_reached"
 
-    summary = {
-        **summary_base,
-        "dry_run": False,
-        "container": container,
-        "session_id": session_id,
-        "build_returncode": None if build_result is None else build_result["returncode"],
-        "launch_returncode": launch["returncode"],
-        "runtime_returncode": runtime["returncode"],
-        "simulated_human_responder_runtime": responder_runtime,
-        "turns": turns,
-        "responder_turns": responder_turns,
-        "prompt_count": len(actual_prompts),
-        "prompts": actual_prompts,
-        "command_ledger": commands,
-    }
-    write_json(output_root / "run-summary.json", summary)
-    print(json.dumps(summary, indent=2, sort_keys=True))
-    if semantic_host_proxy is not None:
-        semantic_host_proxy.stop()
-    if lock_file is not None:
-        lock_file.close()
+    dialogue_elapsed_seconds = round(time.monotonic() - dialogue_started_at, 3)
+
     responder_ok = all("error" not in turn for turn in responder_turns)
     responder_runtime_ok = (
         responder_runtime is None
@@ -1138,7 +1865,79 @@ def main(argv: list[str] | None = None) -> int:
         and responder_ok
         and all(not turn["timeout"] and turn["returncode"] == 0 and not turn.get("assistant_error") for turn in turns)
     )
-    return 0 if ok else 1
+    exit_code = 0 if ok else 1
+    native_transcript_exports: list[dict[str, Any]] = []
+    if args.client == "pi":
+        for transcript_session_id in dict.fromkeys(target_session_ids):
+            native_transcript_exports.append(
+                copy_native_pi_session_transcript(
+                    uc1,
+                    repo_root=repo_root,
+                    container=container,
+                    session_id=transcript_session_id,
+                    role="target",
+                    session_dir="/home/agent/.pi/agent/sessions",
+                    commands=commands,
+                )
+            )
+    if (
+        responder_mode == "pi_gpt_5_5_simulated_human_responder"
+        and responder_runtime is not None
+        and isinstance(responder_runtime.get("container"), str)
+        and isinstance(responder_runtime.get("session_id"), str)
+    ):
+        native_transcript_exports.append(
+            copy_native_pi_session_transcript(
+                uc1,
+                repo_root=repo_root,
+                container=str(responder_runtime["container"]),
+                session_id=str(responder_runtime["session_id"]),
+                role="human-sim",
+                session_dir="/home/agent/.pi/human-sim-sessions",
+                commands=commands,
+            )
+        )
+    native_transcript_export_manifest = output_root / "native-transcript-exports.json"
+    write_json(native_transcript_export_manifest, {"exports": native_transcript_exports})
+    generation_report = build_generation_report(client=args.client, session_id=session_id, turns=turns)
+    structural_onboarding_proof = build_structural_onboarding_proof_report(turns)
+    summary = {
+        **summary_base,
+        "dry_run": False,
+        "exit_code": exit_code,
+        "container": container,
+        "session_id": session_id,
+        "target_session_ids": target_session_ids,
+        "target_session_boundary_events": target_session_boundary_events,
+        "build_returncode": None if build_result is None else build_result["returncode"],
+        "launch_returncode": launch["returncode"],
+        "runtime_returncode": runtime["returncode"],
+        "simulated_human_responder_runtime": responder_runtime,
+        "evidence_exports": {
+            "native_pi_transcript_manifest": str(native_transcript_export_manifest),
+            "native_pi_transcripts": native_transcript_exports,
+        },
+        "generation_report": generation_report,
+        "structural_onboarding_proof": structural_onboarding_proof,
+        "turns": turns,
+        "responder_turns": responder_turns,
+        "dialogue_stop_reason": dialogue_stop_reason,
+        "dialogue_elapsed_seconds": dialogue_elapsed_seconds,
+        "dialogue_safety_bounds": {
+            "max_turns": args.max_turns,
+            "max_dialogue_seconds": args.max_dialogue_seconds,
+            "policy": "capture first; evaluate every turn and whole-session semantics after the interaction",
+        },
+        "prompt_count": len(actual_prompts),
+        "prompts": actual_prompts,
+        "command_ledger": commands,
+    }
+    redacted_summary = write_redacted_summary(output_root / "run-summary.json", summary)
+    print(json.dumps(redacted_summary, indent=2, sort_keys=True))
+    stop_host_proxies()
+    if lock_file is not None:
+        lock_file.close()
+    return exit_code
 
 
 if __name__ == "__main__":

@@ -1096,6 +1096,76 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             self.assertEqual("passed", deleted["rollback_result"])
             self.assertFalse(Path(applied["runtime_dir"]).exists())
 
+    def test_npm_stdio_host_runtime_resolves_package_id_command_to_installed_bin(self) -> None:
+        runtime = load_executor().npm_stdio_host_runtime
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package_path = root / "memory-package.json"
+            package = surfaces.build_service_onboarding_runtime_apply_package(
+                str(root),
+                {
+                    "candidate_service": "memory",
+                    "operator_goal": "Add project memory.",
+                    "source_path": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
+                    "backend_package": "@modelcontextprotocol/server-memory",
+                    "transport_type": "stdio",
+                    "localization_type": "project_scoped",
+                    "functional_type": "filesystem_content",
+                    "state_type": "local_filesystem_state",
+                    "credential_boundary": "no credentials required",
+                    "expected_tools": ["read_graph"],
+                    **{
+                        **npm_stdio_required_payload(),
+                        "package_version": "2026.1.26",
+                        "package_arguments": ["-y", "@modelcontextprotocol/server-memory"],
+                        "tool_schemas": {
+                            "read_graph": {
+                                "description": "Return the complete persisted knowledge graph.",
+                                "inputSchema": {"type": "object", "properties": {}, "required": []},
+                            }
+                        },
+                    },
+                },
+            )
+            record = package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["content"]
+            record["stdio"]["command"] = "@modelcontextprotocol/server-memory"
+            record["stdio"]["args"] = ["-y", "@modelcontextprotocol/server-memory"]
+            package_path.write_text(json.dumps(package), encoding="utf-8")
+            runtime.npm_stdio_host_records.upsert_from_runtime_package(package)
+            metadata_path = (
+                runtime.service_dir(root, "memory:project")
+                / "package"
+                / "node_modules"
+                / "@modelcontextprotocol"
+                / "server-memory"
+                / "package.json"
+            )
+            metadata_path.parent.mkdir(parents=True, exist_ok=True)
+            metadata_path.write_text(
+                json.dumps({"name": "@modelcontextprotocol/server-memory", "bin": {"mcp-server-memory": "dist/index.js"}}),
+                encoding="utf-8",
+            )
+            calls: list[list[str]] = []
+
+            def fake_run(command, **_kwargs):
+                calls.append(list(command))
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            def fake_popen(command, **kwargs):
+                calls.append(list(command))
+                return FakeProcess()
+
+            original_wait = runtime.wait_for_bridge_endpoint
+            runtime.wait_for_bridge_endpoint = lambda endpoint, process: {"ready": True, "attempts": 1}
+            try:
+                applied = runtime.apply_service(root, "memory:project", runner=fake_run, popen=fake_popen)
+            finally:
+                runtime.wait_for_bridge_endpoint = original_wait
+
+            self.assertEqual("created", applied["action"])
+            self.assertIn("mcp-server-memory", calls[1])
+            self.assertNotIn("@modelcontextprotocol/server-memory -y @modelcontextprotocol/server-memory", calls[1])
+
     def test_service_guidance_resources_shape_contextforge_scanner_trigger_words(self) -> None:
         executor = load_executor()
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

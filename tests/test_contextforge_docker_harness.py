@@ -24,6 +24,7 @@ def _load_script_module(path: Path, module_name: str) -> Any:
     module = importlib.util.module_from_spec(spec)
     sys_path = sys.path
     sys_path.insert(0, str(path.parent))
+    sys.modules[module_name] = module
     try:
         spec.loader.exec_module(module)
     finally:
@@ -328,6 +329,8 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
             "config/contextforge.env",
             "run/",
             "upstream/",
+            ".contextforge/service-onboarding/runtime-apply-packages/",
+            ".contextforge/service-onboarding/runtime-drafts/",
         ]:
             self.assertIn(pattern, dockerignore)
 
@@ -443,21 +446,65 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("explicit user requests to onboard or add an uncataloged/new MCP service", pi_source)
         self.assertIn("do not call cf_project_init_list_capabilities", pi_source)
         self.assertIn("do not present the existing service activation menu", pi_source)
+        self.assertIn("cf_project_service_onboarding_research_source", pi_source)
         self.assertIn("cf_project_service_onboarding_plan", pi_source)
         self.assertIn("cf_project_service_onboarding_continue", pi_source)
+        self.assertIn("cf_project_service_onboarding_runtime_draft", pi_source)
         self.assertIn("cf_project_service_onboarding_runtime_apply", pi_source)
         self.assertIn("cf_project_service_onboarding_runtime_execute", pi_source)
+        plan_start = pi_source.index('name: "cf_project_service_onboarding_plan"')
+        plan_end = pi_source.index('name: "cf_project_service_onboarding_continue"', plan_start)
+        plan_block = pi_source[plan_start:plan_end]
+        self.assertIn("backendPackage", plan_block)
+        self.assertIn("backendCommand", plan_block)
+        self.assertIn("backendArgs", plan_block)
+        self.assertIn("...npmStdioRuntimeFields()", plan_block)
+        continue_start = pi_source.index('name: "cf_project_service_onboarding_continue"')
+        continue_end = pi_source.index('name: "cf_project_service_onboarding_runtime_draft"', continue_start)
+        continue_block = pi_source[continue_start:continue_end]
+        self.assertIn("backendArgs", continue_block)
+        self.assertIn("command", continue_block)
+        runtime_draft_start = pi_source.index('name: "cf_project_service_onboarding_runtime_draft"')
+        runtime_draft_end = pi_source.index('name: "cf_project_service_onboarding_runtime_apply"', runtime_draft_start)
+        runtime_draft_block = pi_source[runtime_draft_start:runtime_draft_end]
+        self.assertIn("runtimeApplyDraftId", runtime_draft_block)
+        self.assertIn("just-in-time prompting", runtime_draft_block)
+        self.assertIn("next required slice", runtime_draft_block)
+        runtime_execute_start = pi_source.index('name: "cf_project_service_onboarding_runtime_execute"')
+        runtime_execute_end = pi_source.index('name: "cf_project_init_list_capabilities"', runtime_execute_start)
+        runtime_execute_block = pi_source[runtime_execute_start:runtime_execute_end]
+        self.assertIn("command", runtime_execute_block)
+        self.assertIn("...npmStdioRuntimeFields()", runtime_execute_block)
+        self.assertIn("do not claim curl, shell, filesystem writes, or command execution occurred", pi_source)
+        self.assertIn("do not use local read/bash/ls/find/grep against /workspace", pi_source)
+        self.assertIn("toolSchemaSummaries", pi_source)
+        self.assertIn("toolSchemaRecords", pi_source)
+        self.assertIn("Accepted compact equivalent to toolSchemas", pi_source)
+        self.assertIn("Prefer this when a service has more than three tools", pi_source)
+        self.assertIn("do not send an array of strings or summaries", pi_source)
+        self.assertIn("Do not JSON-encode this field as a string", pi_source)
+        self.assertIn("structuredPayloadPath", pi_source)
+        self.assertIn("pass transportType with value stdio explicitly", pi_source)
+        self.assertIn("required_inputs: result.required_inputs", pi_source)
+        self.assertIn("copy_as_complete_visible_response: Boolean(visible)", pi_source)
+        self.assertNotIn("JSON-encoded object string", pi_source)
+        self.assertIn("Prefer strings such as '-y' and '@package/name'", pi_source)
         self.assertIn("get_service_onboarding_how_to", pi_source)
         self.assertIn("copy assistant_visible_response/message exactly", pi_source)
         self.assertIn("Do not reformat it into tables, expose enum names, add helper fields", pi_source)
         self.assertIn("asksForUncatalogedServiceOnboarding", opencode_source)
         self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", opencode_source)
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_research_source", opencode_source)
         self.assertIn("contextforge-helper_cf_project_service_onboarding_continue", opencode_source)
+        self.assertIn("contextforge-helper_cf_project_service_onboarding_runtime_draft", opencode_source)
         self.assertIn("contextforge-helper_cf_project_service_onboarding_runtime_execute", opencode_source)
+        self.assertIn("do not claim curl, shell, filesystem writes, or command execution occurred", opencode_source)
         self.assertIn("serviceOnboardingIntakeResponse", opencode_source)
         self.assertIn("serviceOnboardingPlanInstruction", opencode_source)
         self.assertIn("serviceOnboardingRuntimeApplyInstruction", opencode_source)
         self.assertIn("serviceOnboardingHowTo(cwd)", opencode_source)
+        self.assertIn("toolSchemaRecords", opencode_source)
+        self.assertIn("include the explicit transport value `stdio`", opencode_source)
         self.assertIn('"get_service_onboarding_how_to"', opencode_source)
         self.assertIn("serviceOnboardingPlannedSessions.has(String(sessionID))", opencode_source)
         self.assertIn("serviceOnboardingPlannedSessions.add(String(sessionID))", opencode_source)
@@ -465,6 +512,7 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
         self.assertIn("agent_hidden_onboarding_how_to", opencode_source)
         self.assertIn("use available read-only source-research tools against that lead", opencode_source)
         self.assertIn("only source-derived or user-visible facts", opencode_source)
+        self.assertIn("just-in-time prompting", opencode_source)
         self.assertIn("Do not use canned service content", opencode_source)
         self.assertNotIn("calendar-notes", opencode_source)
         self.assertIn("produce a no-mutation source-only", pi_rules)
@@ -663,8 +711,15 @@ console.log(JSON.stringify({{
             scenarios["persona_sampling"]["selection_scope"],
         )
         self.assertEqual(
-            "five_dimensional_persona_vector",
+            "five_dimensional_persona_vector_plus_help_determination_multiplier",
             scenarios["persona_sampling"]["composition_model"],
+        )
+        self.assertEqual(15, scenarios["persona_sampling"]["help_determination"]["default"])
+        self.assertEqual("n/20", scenarios["persona_sampling"]["help_determination"]["scale"])
+        self.assertEqual([1, 20], scenarios["persona_sampling"]["help_determination"]["bounds"])
+        self.assertEqual(
+            "+2 for the next quorum batch",
+            scenarios["persona_sampling"]["help_determination"]["batch_adaptation"]["all_three_fail"],
         )
         self.assertEqual(
             [
@@ -746,6 +801,37 @@ console.log(JSON.stringify({{
         evaluation_docs = gate + method + onboarding_skill + readme
         self.assertIn("gpt-5.5", gate + onboarding_skill + dialogue_runner)
         self.assertIn("gpt-5.5 authenticated simulator with `low` thinking", onboarding_skill)
+        self.assertIn("Demanding does not mean cantankerous", gate)
+        self.assertIn("Demanding does not mean cantankerous", onboarding_skill)
+        self.assertIn("not a hostile", dialogue_runner)
+        self.assertIn("Do not become cantankerous", dialogue_runner)
+        self.assertIn("Do not use latent technical knowledge", dialogue_runner)
+        self.assertIn("persona's ignorance boundary", gate)
+        self.assertIn("persona's ignorance boundary", onboarding_skill)
+        self.assertIn("alternate non-ContextForge routes", dialogue_runner)
+        pi_shim = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
+        self.assertIn("Do not put prose explanations in value", pi_shim)
+        self.assertIn("runtimeApplyPackageId", pi_shim)
+        self.assertIn("do not reconstruct the full package payload from memory", pi_shim)
+        opencode_plugin = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").read_text(encoding="utf-8")
+        self.assertIn("runtime_apply_package_id", opencode_plugin)
+        self.assertIn("Prefer that id over reconstructing the full package payload from memory", opencode_plugin)
+        self.assertIn("continue_conversation", dialogue_runner)
+        self.assertIn("simulated_human_declared_complete", dialogue_runner)
+        interaction_style = next(
+            dimension
+            for dimension in scenarios["persona_sampling"]["dimensions"]
+            if dimension["id"] == "interaction_style"
+        )
+        self.assertIn("not cantankerous or hostile", interaction_style["rule"])
+        self.assertIn("should not become cantankerous or hostile", method)
+        self.assertIn("15/20", gate)
+        self.assertIn("n/20", onboarding_skill)
+        self.assertIn("32 tested-assistant turns or 600 seconds", gate)
+        self.assertIn("32 tested-assistant turns or 600", onboarding_skill)
+        self.assertIn("evaluate every user/assistant turn", method)
+        self.assertIn("does not require one evaluator invocation per turn", " ".join(method.split()))
+        self.assertIn("do not call an evaluator inside the live conversation loop", onboarding_skill)
         self.assertIn("Codex CLI `exec`", evaluation_docs)
         self.assertIn('model_reasoning_effort="high"', evaluation_docs)
         self.assertIn("--output-schema <FILE>", evaluation_docs)
@@ -765,6 +851,29 @@ console.log(JSON.stringify({{
         quorum_module = _load_script_module(
             ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-quorum.py",
             "onboarding_semantic_quorum_test",
+        )
+        self.assertEqual(32, dialogue_module.DEFAULT_ONBOARDING_TURNS)
+        self.assertEqual(600, dialogue_module.DEFAULT_DIALOGUE_SECONDS)
+        self.assertEqual(15, dialogue_module.DEFAULT_HUMAN_HELP_DETERMINATION)
+        self.assertEqual(32, quorum_module.DEFAULT_ONBOARDING_TURNS)
+        self.assertEqual(600, quorum_module.DEFAULT_DIALOGUE_SECONDS)
+        self.assertEqual(15, quorum_module.DEFAULT_HUMAN_HELP_DETERMINATION)
+        self.assertEqual(1, dialogue_module.bounded_help_determination(-5))
+        self.assertEqual(20, dialogue_module.bounded_help_determination(99))
+        self.assertIn(
+            "determination_to_help_assistant_succeed_at_onboarding: 15/20",
+            "\n".join(dialogue_module.help_determination_lines(15)),
+        )
+        self.assertIn("7/20", "\n".join(dialogue_module.help_determination_lines(7)))
+        self.assertNotIn("/10", "\n".join(dialogue_module.help_determination_lines(7)))
+        self.assertEqual(12, quorum_module.next_batch_help_determination(10, failure_count=3))
+        self.assertEqual(11, quorum_module.next_batch_help_determination(10, failure_count=2))
+        self.assertEqual(10, quorum_module.next_batch_help_determination(10, failure_count=1))
+        self.assertEqual(9, quorum_module.next_batch_help_determination(10, failure_count=0))
+        self.assertEqual(20, quorum_module.next_batch_help_determination(19, failure_count=3))
+        self.assertEqual(
+            "target-session-fresh-1",
+            dialogue_module.fresh_target_session_id("target-session", 1),
         )
         persona = dialogue_module.compose_persona(scenarios, seed=17, index=1)
         self.assertEqual(
@@ -1182,6 +1291,7 @@ console.log(JSON.stringify({{
             },
             "human-sim-session",
             "Answer the tested assistant.",
+            help_determination=15,
         )
 
         self.assertEqual("pi", command[0])
@@ -1191,6 +1301,7 @@ console.log(JSON.stringify({{
         self.assertEqual("human-sim-session", command[command.index("--session-id") + 1])
         self.assertEqual("/home/agent/.pi/human-sim-sessions", command[command.index("--session-dir") + 1])
         self.assertIn("--system-prompt", command)
+        self.assertIn("15/20", command[command.index("--system-prompt") + 1])
         self.assertEqual("Answer the tested assistant.", command[-1])
         self.assertIn("--no-tools", command)
         self.assertIn("--no-context-files", command)
@@ -1851,7 +1962,351 @@ print(json.dumps(outputs))
                 module.assistant_error_from_json_stream(
                     '{"type":"message_end","message":{"stopReason":"stop","content":[{"type":"text","text":"ok"}]}}\n'
                 )
+        )
+
+    def test_onboarding_runner_parses_structured_simulated_human_stop_signal(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_human_stop_signal",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        message, should_continue, structured = module.parse_simulated_human_response(
+            '{"message":"Thanks, that is sufficient.","continue_conversation":false}'
+        )
+
+        self.assertEqual("Thanks, that is sufficient.", message)
+        self.assertFalse(should_continue)
+        self.assertTrue(structured)
+
+        fallback_message, fallback_continue, fallback_structured = module.parse_simulated_human_response(
+            "Please show the rollback boundary."
+        )
+        self.assertEqual("Please show the rollback boundary.", fallback_message)
+        self.assertTrue(fallback_continue)
+        self.assertFalse(fallback_structured)
+
+    def test_onboarding_runner_extracts_only_visible_pi_assistant_text(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_visible_text",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        stream = "\n".join(
+            [
+                '{"type":"message_end","message":{"role":"custom","customType":"contextforge-project-init-first-prompt","content":"hidden route context"}}',
+                '{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","name":"cf_project_service_onboarding_plan"}]}}',
+                '{"type":"message_update","assistantMessageEvent":{"message":{"role":"assistant","content":[{"type":"text","text":"partial visible"}]}}}',
+                '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"final visible"}]}}',
+            ]
+        )
+
+        self.assertEqual("final visible", module.assistant_visible_text_from_json_stream(stream))
+
+    def test_onboarding_runner_visible_text_uses_latest_update_when_no_message_end(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_visible_text_update",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        stream = "\n".join(
+            [
+                '{"type":"message_update","assistantMessageEvent":{"message":{"role":"assistant","content":[{"type":"text","text":"part"}]}}}',
+                '{"type":"message_update","assistantMessageEvent":{"message":{"role":"assistant","content":[{"type":"text","text":"part done"}]}}}',
+            ]
+        )
+
+        self.assertEqual("part done", module.assistant_visible_text_from_json_stream(stream))
+
+    def test_onboarding_runner_reports_structural_post_apply_target_client_evidence(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_post_apply_structural_evidence",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        apply_stdout = "\n".join(
+            [
+                '{"type":"session","id":"target-session-before-reload"}',
+                '{"type":"turn_end","message":{"role":"assistant","responseId":"r1","usage":{"input":10,"output":4,"totalTokens":14},"content":[{"type":"toolCall","id":"call-apply","name":"cf_project_service_onboarding_runtime_execute","arguments":{"projectRoot":"/workspace","runtimeApplyPackageId":"rap_ok"}}]},"toolResults":[{"role":"toolResult","toolCallId":"call-apply","toolName":"cf_project_service_onboarding_runtime_execute","isError":false,"content":[{"type":"text","text":"{\\"ok\\":true,\\"status\\":\\"service_onboarding_runtime_applied\\",\\"mutation_performed\\":true}"}]}]}',
+            ]
+        )
+        service_stdout = "\n".join(
+            [
+                '{"type":"session","id":"target-session-after-reload"}',
+                '{"type":"turn_end","message":{"role":"assistant","responseId":"r2","usage":{"input":8,"output":3,"totalTokens":11},"content":[{"type":"toolCall","id":"call-service","name":"memory-gateway-create-entities","arguments":{"entities":[]}}]},"toolResults":[{"role":"toolResult","toolCallId":"call-service","toolName":"memory-gateway-create-entities","isError":false,"content":[{"type":"text","text":"{}"}]}]}',
+            ]
+        )
+        turns = []
+        for index, stdout in enumerate([apply_stdout, service_stdout], start=1):
+            structural = module.extract_turn_structural_events(stdout)
+            turns.append(
+                {
+                    "turn": index,
+                    "prompt": f"prompt {index}",
+                    "path": f"/tmp/turn-{index}.raw.txt",
+                    "assistant_visible_path": f"/tmp/turn-{index}.assistant-visible.txt",
+                    "target_session_id": (
+                        "target-session-before-reload"
+                        if index == 1
+                        else "target-session-after-reload"
+                    ),
+                    "returncode": 0,
+                    "timeout": False,
+                    "assistant_visible_chars": 12,
+                    **structural,
+                }
             )
+
+        proof = module.build_structural_onboarding_proof_report(turns)
+        generation_report = module.build_generation_report(client="pi", session_id="target-session-after-reload", turns=turns)
+
+        self.assertTrue(proof["runtime_apply"]["success_detected"])
+        self.assertEqual(
+            "candidate_events_present_requires_semantic_evaluator",
+            proof["post_apply_target_client_evidence"]["proof_status"],
+        )
+        self.assertTrue(proof["post_apply_target_client_evidence"]["fresh_session_after_runtime_apply_detected"])
+        self.assertTrue(
+            proof["post_apply_target_client_evidence"]["candidate_target_client_service_tool_call_detected"]
+        )
+        self.assertEqual(
+            "memory-gateway-create-entities",
+            proof["post_apply_target_client_evidence"]["candidate_target_client_service_tool_calls"][0]["name"],
+        )
+        self.assertIn("does not judge free-form meaning", proof["deterministic_scope"])
+        self.assertEqual(2, generation_report["totals"]["generation_step_count"])
+        self.assertEqual(2, generation_report["totals"]["tool_call_count"])
+        self.assertEqual(2, generation_report["totals"]["tool_result_count"])
+        self.assertEqual(
+            "target-session-before-reload",
+            generation_report["step_generations"][0]["session_id"],
+        )
+        self.assertEqual(
+            "target-session-after-reload",
+            generation_report["step_generations"][1]["session_id"],
+        )
+        self.assertIn("not_semantic", generation_report["step_generations"][0]["deterministic_evaluation"])
+
+    def test_onboarding_runner_parses_pi_tool_execution_end_after_start_event(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_tool_execution_end_parse",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        stdout = "\n".join(
+            [
+                '{"type":"session","id":"target-session-before-reload"}',
+                '{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call-apply","name":"cf_project_service_onboarding_runtime_execute","arguments":{"runtimeApplyPackageId":"rap_ok"}}]}}',
+                '{"type":"tool_execution_start","toolCallId":"call-apply","toolName":"cf_project_service_onboarding_runtime_execute","args":{"runtimeApplyPackageId":"rap_ok"}}',
+                '{"type":"tool_execution_end","toolCallId":"call-apply","toolName":"cf_project_service_onboarding_runtime_execute","isError":false,"result":{"content":[{"type":"text","text":"{\\"ok\\":true,\\"status\\":\\"service_onboarding_runtime_applied\\",\\"mutation_performed\\":true}"}],"isError":false}}',
+                '{"type":"message_end","message":{"role":"toolResult","toolCallId":"call-apply","toolName":"cf_project_service_onboarding_runtime_execute","isError":false,"content":[{"type":"text","text":"{\\"ok\\":true,\\"status\\":\\"service_onboarding_runtime_applied\\",\\"mutation_performed\\":true}"}]}}',
+            ]
+        )
+
+        structural = module.extract_turn_structural_events(stdout)
+
+        self.assertEqual(1, len(structural["tool_results"]))
+        self.assertEqual("service_onboarding_runtime_applied", structural["tool_results"][0]["parsed_status"])
+        self.assertTrue(structural["tool_results"][0]["parsed_ok"])
+        self.assertTrue(structural["tool_results"][0]["mutation_performed"])
+        success = module.turn_runtime_apply_success({"turn": 3, **structural})
+        self.assertIsNotNone(success)
+        assert success is not None
+        self.assertEqual(3, success["turn"])
+        self.assertEqual("service_onboarding_runtime_applied", success["status"])
+        self.assertFalse(module.is_candidate_target_client_service_tool("cf_contextforge_pi_readback"))
+        self.assertFalse(module.is_candidate_target_client_service_tool("cf_project_init_list_capabilities"))
+        self.assertTrue(module.is_candidate_target_client_service_tool("memory-gateway-read-graph"))
+
+    def test_onboarding_runner_passes_fresh_session_fact_only_to_human_simulator(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_fresh_session_human_context",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        prompt = module.pi_responder_prompt(
+            {"source_lead": "https://example.test/mcp"},
+            {
+                "domain_knowledge": "ignorant",
+                "goal_specificity": "outcome_oriented",
+                "risk_posture": "cautious",
+                "technical_fluency": "nontechnical",
+                "interaction_style": "cooperative",
+            },
+            help_determination=15,
+            turn_index=4,
+            previous_user_prompt="approve",
+            previous_assistant_output="Please start a new session before claiming usability.",
+            runner_observation="A fresh/reloaded target-client session has been started before this next assistant turn.",
+        )
+
+        self.assertIn("Actual operator/session fact now visible to you as the human user", prompt)
+        self.assertIn("fresh/reloaded target-client session", prompt)
+        self.assertNotIn("memory-gateway-read-graph", prompt)
+
+    def test_onboarding_runner_marks_missing_fresh_session_after_runtime_apply(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_missing_fresh_session",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        stdout = "\n".join(
+            [
+                '{"type":"session","id":"same-session"}',
+                '{"type":"turn_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call-apply","name":"cf_project_service_onboarding_runtime_execute","arguments":{"runtimeApplyPackageId":"rap_ok"}}]},"toolResults":[{"role":"toolResult","toolCallId":"call-apply","toolName":"cf_project_service_onboarding_runtime_execute","content":[{"type":"text","text":"{\\"ok\\":true,\\"status\\":\\"service_onboarding_runtime_applied\\",\\"mutation_performed\\":true}"}]}]}',
+            ]
+        )
+        structural = module.extract_turn_structural_events(stdout)
+        proof = module.build_structural_onboarding_proof_report(
+            [
+                {
+                    "turn": 1,
+                    "prompt": "approved apply",
+                    "path": "/tmp/turn-1.raw.txt",
+                    "assistant_visible_path": "/tmp/turn-1.assistant-visible.txt",
+                    "returncode": 0,
+                    "timeout": False,
+                    "assistant_visible_chars": 0,
+                    **structural,
+                }
+            ]
+        )
+
+        self.assertEqual(
+            "missing_fresh_or_reloaded_target_client_session_structural_evidence",
+            proof["post_apply_target_client_evidence"]["proof_status"],
+        )
+        self.assertFalse(proof["post_apply_target_client_evidence"]["candidate_target_client_service_tool_call_detected"])
+
+    def test_onboarding_runner_exports_native_pi_transcripts_to_tmp_paths(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_native_pi_transcript_export",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = module.native_pi_transcript_export_path(
+                role="target",
+                session_id="onboarding/memory pi:bad chars",
+                tmp_dir=Path(tmp),
+            )
+
+        self.assertEqual("contextforge-native-pi-target-onboarding_memory_pi_bad_chars.jsonl", path.name)
+        source = (ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("copy_native_pi_session_transcript", source)
+        self.assertIn("/home/agent/.pi/agent/sessions", source)
+        self.assertIn("/home/agent/.pi/human-sim-sessions", source)
+        self.assertIn('"evidence_exports"', source)
+        self.assertIn("native-transcript-exports.json", source)
+
+    def test_onboarding_runner_supplies_host_runtime_apply_proxy_to_client_container(self) -> None:
+        source = (ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("from runtime_apply_host_proxy import start_runtime_apply_host_proxy", source)
+        self.assertIn("CONTEXTFORGE_RUNTIME_APPLY_PROXY_URL", source)
+        self.assertIn("CONTEXTFORGE_RUNTIME_APPLY_PROXY_TOKEN", source)
+        self.assertIn("CONTEXTFORGE_RUNTIME_APPLY_PROXY_BASE_URL", source)
+        self.assertIn("runtime_apply_host_proxy.summary()", source)
+
+        proxy = (ROOT / "docker/client-harness/scripts/runtime_apply_host_proxy.py").read_text(encoding="utf-8")
+        self.assertIn("ContextForgeRuntimeApplyProxy", proxy)
+        self.assertIn("host.docker.internal", proxy)
+        self.assertIn("apply_onboarding_runtime_package.py", proxy)
+        self.assertIn("ephemeral_redacted", proxy)
+
+    def test_onboarding_runner_redacts_runtime_apply_proxy_token_from_summary(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_redacted_summary",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run-summary.json"
+            module.write_redacted_summary(
+                path,
+                {
+                    "command_ledger": [
+                        {
+                            "command_text": "docker run -e CONTEXTFORGE_RUNTIME_APPLY_PROXY_TOKEN=secret-token pi",
+                            "cwd": "/tmp",
+                            "returncode": 0,
+                            "timeout": False,
+                        }
+                    ],
+                    "runtime_apply_host_proxy": {"token": "secret-token"},
+                },
+            )
+            text = path.read_text(encoding="utf-8")
+
+        self.assertNotIn("secret-token", text)
+        self.assertIn("[REDACTED_CONTEXTFORGE_SECRET]", text)
+
+    def test_runtime_apply_host_proxy_maps_only_executor_paths_to_host_root(self) -> None:
+        module = _load_script_module(
+            ROOT / "docker/client-harness/scripts/runtime_apply_host_proxy.py",
+            "runtime_apply_host_proxy_path_map",
+        )
+        package = {
+            "project_root": "/workspace",
+            "service_provision_plan": {
+                "x_backend_home": "/workspace/server-instances/memory-canonical",
+            },
+            "install_artifact_contract": {
+                "artifacts": {
+                    "npm_stdio_service_record": {
+                        "path": "/workspace/server-instances/memory-canonical/npm-stdio-service.json",
+                        "content": {
+                            "environment": {
+                                "values": {
+                                    "MEMORY_FILE_PATH": "/workspace/.contextforge/memory/memory.jsonl",
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+
+        translated = module.translate_package_paths_for_host(package, repo_root=ROOT)
+
+        self.assertEqual(str(ROOT), translated["project_root"])
+        self.assertEqual(
+            str(ROOT / "server-instances/memory-canonical"),
+            translated["service_provision_plan"]["x_backend_home"],
+        )
+        self.assertEqual(
+            str(ROOT / "server-instances/memory-canonical/npm-stdio-service.json"),
+            translated["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["path"],
+        )
+        self.assertEqual(
+            "/workspace/.contextforge/memory/memory.jsonl",
+            translated["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["content"]["environment"]["values"]["MEMORY_FILE_PATH"],
+        )
 
     def test_flash_lite_is_explicit_only_for_multi_step_quorum(self) -> None:
         spec = importlib.util.spec_from_file_location(
@@ -1884,6 +2339,38 @@ print(json.dumps(outputs))
 
         self.assertEqual(flash_lite["id"], explicit["id"])
         self.assertNotIn(flash_lite["id"], {profile["id"] for profile in random_candidates})
+
+    def test_env_semantic_model_selector_builds_proxy_eligible_profile(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "comprehensive_mcp_service_dialogue",
+            ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        profile = module.choose_semantic_model_profile(
+            ROOT / "docker/client-harness",
+            "pi",
+            "env",
+            {
+                "CONTEXTFORGE_TEST_PROVIDER": "openrouter",
+                "CONTEXTFORGE_TEST_MODEL": "google/gemma-4-26b-a4b-it",
+                "CONTEXTFORGE_TEST_CONTEXT_WINDOW": "262144",
+                "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1",
+                "OPENROUTER_API_KEY": "present",
+                "CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openrouter-semantic-test",
+            },
+        )
+        env, secret_keys = module.selected_profile_env(profile, "pi", {"OPENROUTER_API_KEY": "present"})
+
+        self.assertEqual("env", profile["id"])
+        self.assertEqual("openrouter", profile["provider_kind"])
+        self.assertEqual("google/gemma-4-26b-a4b-it", profile["model"])
+        self.assertEqual(["OPENROUTER_API_KEY"], secret_keys)
+        self.assertEqual("openrouter-semantic-test", env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
+        self.assertEqual("google/gemma-4-26b-a4b-it", env["CONTEXTFORGE_PI_DEFAULT_MODEL"])
+        self.assertEqual("https://openrouter.ai/api/v1", env["OPENROUTER_BASE_URL"])
 
     def test_ssh_tmux_live_target_prompt_uses_alias_not_real_host(self) -> None:
         spec = importlib.util.spec_from_file_location(

@@ -16,11 +16,14 @@ from typing import Any
 
 
 MIN_MODEL_QUORUM = 3
-DEFAULT_ONBOARDING_TURNS = 8
+DEFAULT_ONBOARDING_TURNS = 32
+DEFAULT_DIALOGUE_SECONDS = 600
+DEFAULT_HUMAN_HELP_DETERMINATION = 15
 TURN_BUDGET_POLICY = (
-    "interaction length is persona- and outcome-dependent; default seeded runs "
-    "use a generous budget, but semantic adequacy is judged by required outcomes, "
-    "not by a fixed turn count"
+    "capture each live interaction without evaluator calls until it reaches a "
+    "completion point or safety bound; default safety bounds are 32 turns or "
+    "600 seconds, after which a semantic evaluator reviews every turn and the "
+    "whole session from the completed evidence package"
 )
 
 
@@ -133,6 +136,38 @@ def dialogue_summary_acceptance_eligible(summary: dict[str, Any] | None) -> bool
     return bool(isinstance(eligibility, dict) and eligibility.get("eligible") is True)
 
 
+def bounded_help_determination(value: int) -> int:
+    return max(1, min(20, int(value)))
+
+
+def structural_onboarding_successful(summary: dict[str, Any] | None) -> bool:
+    if not isinstance(summary, dict):
+        return False
+    proof = summary.get("structural_onboarding_proof")
+    if not isinstance(proof, dict):
+        return False
+    runtime = proof.get("runtime_apply")
+    post_apply = proof.get("post_apply_target_client_evidence")
+    if not isinstance(runtime, dict) or not isinstance(post_apply, dict):
+        return False
+    return bool(
+        runtime.get("success_detected") is True
+        and post_apply.get("fresh_session_after_runtime_apply_detected") is True
+        and post_apply.get("candidate_target_client_service_tool_call_detected") is True
+    )
+
+
+def next_batch_help_determination(current: int, *, failure_count: int) -> int:
+    current = bounded_help_determination(current)
+    if failure_count <= 0:
+        return bounded_help_determination(current - 1)
+    if failure_count == 1:
+        return current
+    if failure_count == 2:
+        return bounded_help_determination(current + 1)
+    return bounded_help_determination(current + 2)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", choices=["pi", "opencode"], required=True)
@@ -143,6 +178,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int)
     parser.add_argument("--jobs", type=int, default=0)
     parser.add_argument("--max-turns", type=int, default=DEFAULT_ONBOARDING_TURNS)
+    parser.add_argument("--max-dialogue-seconds", type=int, default=DEFAULT_DIALOGUE_SECONDS)
+    parser.add_argument(
+        "--human-help-determination-start",
+        type=int,
+        default=int(os.environ.get("CONTEXTFORGE_HUMAN_HELP_DETERMINATION_START", DEFAULT_HUMAN_HELP_DETERMINATION)),
+        help="Starting simulated-human determination to help, from 1 to 20. Defaults to 15/20.",
+    )
+    parser.add_argument(
+        "--disable-adaptive-human-help-determination",
+        action="store_true",
+        help="Disable next-batch n adjustment from the prior three-model quorum outcome.",
+    )
     parser.add_argument(
         "--responder-mode",
         choices=["pi", "model", "seeded"],
@@ -165,6 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"--count must be at least {MIN_MODEL_QUORUM}")
     if args.profile and len(args.profile) < MIN_MODEL_QUORUM:
         raise SystemExit(f"provide at least {MIN_MODEL_QUORUM} --profile values")
+    args.human_help_determination_start = bounded_help_determination(args.human_help_determination_start)
 
     repo_root = Path(__file__).resolve().parents[3]
     harness_root = repo_root / "docker" / "client-harness"
@@ -217,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(summary, indent=2, sort_keys=True))
             return 1
 
-    def run_profile(index: int, profile: dict[str, Any], persona_index: int) -> dict[str, Any]:
+    def run_profile(index: int, profile: dict[str, Any], persona_index: int, help_determination: int) -> dict[str, Any]:
         profile_id = str(profile["id"])
         run_suffix = f"{index:02d}-{profile_id}-persona-{persona_index}"
         command = [
@@ -231,6 +279,8 @@ def main(argv: list[str] | None = None) -> int:
             str(args.timeout),
             "--max-turns",
             str(args.max_turns),
+            "--max-dialogue-seconds",
+            str(args.max_dialogue_seconds),
             "--responder-mode",
             args.responder_mode,
             "--responder-pi-image",
@@ -241,6 +291,8 @@ def main(argv: list[str] | None = None) -> int:
             args.responder_pi_model,
             "--responder-pi-thinking",
             args.responder_pi_thinking,
+            "--human-help-determination",
+            str(help_determination),
             "--semantic-model-profile",
             profile_id,
             "--persona-index",
@@ -262,11 +314,14 @@ def main(argv: list[str] | None = None) -> int:
         stderr_path.write_text(result.stderr, encoding="utf-8")
         run_summary = parse_summary(result.stdout)
         acceptance_matrix_eligible = dialogue_summary_acceptance_eligible(run_summary)
+        onboarding_successful = structural_onboarding_successful(run_summary)
         return {
             "index": index,
             "profile": profile_record(service_runner, profile),
             "persona_index": persona_index,
             "persona": dialogue.compose_persona(scenarios, seed=args.seed, index=persona_index),
+            "human_help_determination": help_determination,
+            "structural_onboarding_successful": onboarding_successful,
             "returncode": result.returncode,
             "acceptance_matrix_eligible": acceptance_matrix_eligible,
             "acceptance_matrix_eligibility": None if run_summary is None else run_summary.get("acceptance_matrix_eligibility"),
@@ -279,16 +334,18 @@ def main(argv: list[str] | None = None) -> int:
             "run_suffix": run_suffix,
         }
 
+    adaptive_help = not args.disable_adaptive_human_help_determination
+    batch_help = args.human_help_determination_start
     if args.dry_run or jobs == 1:
-        runs = [
-            run_profile(index, profile, persona_indices[index - 1])
-            for index, profile in enumerate(profiles, start=1)
-        ]
+        runs = []
+        for index, profile in enumerate(profiles, start=1):
+            run = run_profile(index, profile, persona_indices[index - 1], batch_help)
+            runs.append(run)
     else:
         runs_by_index: dict[int, dict[str, Any]] = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(jobs, len(profiles))) as executor:
             futures = {
-                executor.submit(run_profile, index, profile, persona_indices[index - 1]): index
+                executor.submit(run_profile, index, profile, persona_indices[index - 1], batch_help): index
                 for index, profile in enumerate(profiles, start=1)
             }
             for future in concurrent.futures.as_completed(futures):
@@ -296,6 +353,13 @@ def main(argv: list[str] | None = None) -> int:
                 runs_by_index[index] = future.result()
         runs = [runs_by_index[index] for index in sorted(runs_by_index)]
 
+    structurally_successful_runs = [run for run in runs if run.get("structural_onboarding_successful")]
+    structural_failure_count = max(0, MIN_MODEL_QUORUM - min(len(structurally_successful_runs), MIN_MODEL_QUORUM))
+    next_batch_help = (
+        batch_help
+        if args.dry_run or not adaptive_help
+        else next_batch_help_determination(batch_help, failure_count=structural_failure_count)
+    )
     successful = [run for run in runs if run["returncode"] == 0 and run["dialogue_run_summary"]]
     completed = [run for run in successful if run.get("acceptance_matrix_eligible")]
     coverage = persona_coverage([run["persona"] for run in runs])
@@ -325,7 +389,26 @@ def main(argv: list[str] | None = None) -> int:
         "persona_indices": persona_indices,
         "persona_coverage": coverage,
         "default_turn_budget": DEFAULT_ONBOARDING_TURNS,
+        "default_dialogue_seconds": DEFAULT_DIALOGUE_SECONDS,
         "configured_max_turns": args.max_turns,
+        "configured_max_dialogue_seconds": args.max_dialogue_seconds,
+        "human_help_determination_policy": {
+            "start": args.human_help_determination_start,
+            "this_batch": batch_help,
+            "structural_failure_count_for_first_three": structural_failure_count,
+            "next_batch": next_batch_help,
+            "scale": "n/20",
+            "adaptive": adaptive_help,
+            "adjustment_rules": {
+                "all_three_fail": "+2 for all human simulators in the next quorum run",
+                "two_fail": "+1 for all human simulators in the next quorum run",
+                "one_fails": "no change for the next quorum run",
+                "all_three_succeed": "-1 for all human simulators in the next quorum run",
+            },
+            "bounds": "ratings are clamped to 1..20",
+            "parallel_note": "all runs in the same quorum batch receive this_batch rating; adaptation applies to the next batch",
+        },
+        "structural_onboarding_successful_count": len(structurally_successful_runs),
         "responder_mode": args.responder_mode,
         "turn_budget_policy": TURN_BUDGET_POLICY,
         "successful_profile_count": len(successful),
@@ -340,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
             "quorum runner varies model profile and persona across isolated runs",
         ],
         "evaluator_required_narrative": [
+            "after each live dialogue ends or hits a safety bound, evaluate every user/assistant turn and the whole session in one after-action review",
             "judge each client/model/persona run behind the source-lead-only veil",
             "accept quorum only if at least three distinct eligible profiles pass semantically",
             "judge interaction efficiency relative to each sampled persona overhead and required outcome",

@@ -275,13 +275,16 @@ The validator must not decide PR readiness. It returns evidence only.
    behavior failure is observed. Do not stop at proposal, approval, reload, or
    other intermediate checkpoints unless directly interrupted by the controller.
 15. Before submitting a verdict, write a step-by-step narrative of the testing
-   session from your own perspective. For each step, cite the exact transcript,
-   raw turn, verifier, or package artifact used; describe the natural prompt,
-   visible assistant reply, hidden/extension message if relevant, supporting
-   tool evidence, and outcome; and classify any problem as runner/package
-   defect, tested-client behavior defect, environment/setup defect, or
-   inconclusive. This narrative is an additional semantic signal and must not
-   replace raw evidence or deterministic verifier output.
+   session from your own perspective after the interaction is complete or has
+   reached its safety bound. Evaluate every turn in that after-action review,
+   but do not run evaluator calls during the live conversation and do not spend
+   one evaluator invocation per turn. For each material step, cite the exact
+   transcript, raw turn, verifier, or package artifact used; describe the
+   natural prompt, visible assistant reply, hidden/extension message if
+   relevant, supporting tool evidence, and outcome; and classify any problem as
+   runner/package defect, tested-client behavior defect, environment/setup
+   defect, or inconclusive. This narrative is an additional semantic signal and
+   must not replace raw evidence or deterministic verifier output.
 16. Add reflective-learning notes. Surface useful refinements discovered during
    the run, classify each one, and keep them distinct from the pass/fail verdict
    unless the localized package already requires them.

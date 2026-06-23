@@ -80,6 +80,23 @@ tested assistant to research those fields, but must not research or infer them
 for the tested assistant. On runtime failure, the helper returns the failed
 stage plus observed/sanitized error only; it must not prescribe the
 service-specific correction.
+The intended helper ergonomics are just-in-time prompting and cumulative draft
+composition: a non-mutating draft/update tool asks for one bounded slice,
+records accepted source-derived fields, returns missing fields and the next
+required slice, and writes or returns the project-local structured payload path
+to use for final package preview. Do not force a tested assistant to satisfy
+the entire onboarding contract in one tool call when the draft surface is
+available.
+For large tool sets, `toolSchemaRecords` is an allowed structured transport
+shape: one source-derived record per tool with name, description, input schema,
+and optional source anchor. It is not a semantic shortcut and does not permit
+plain summaries, tool-name arrays, or controller-provided schema content.
+When a target client struggles to pass large nested schemas as tool arguments,
+the tested assistant may write a complete project-local JSON payload containing
+the same source-derived fields and call the helper with
+`structured_payload_path`/`structuredPayloadPath`. The helper may parse that
+file because the assistant authored it inside the target-client session; the
+controller must not prebuild or inject it.
 Runtime/apply operations must be idempotent and transactional. If installation
 or registration fails, the executor must uninstall/remove any partial hosted
 npm service, bridge endpoint, ContextForge gateway/tool/server association, and
@@ -121,6 +138,10 @@ reads the tested assistant's previous visible output and produces the next
 persona-consistent user message. Seeded prompt sequences are acceptable for
 runner smoke/debug checks, but they are not equivalent to a model-backed
 responder answering the actual questions asked.
+The responder may return a structured harness envelope containing the human
+message plus a non-user-visible continuation flag. The runner may use that
+flag to stop capture when the simulated human would naturally end the
+conversation; the tested assistant receives only the human message content.
 
 ## Persona Sampling
 
@@ -138,6 +159,26 @@ situation, goal, knowledge, and voice, then let the model-backed human run.
 Do not tune the simulated human into an idealized compliance actor. Imperfect,
 demanding, imprecise, or overconfident user behavior is part of the product
 behavior space unless the runner itself leaked hidden controller facts.
+Demanding does not mean cantankerous: the simulated human may be strict,
+skeptical, terse, or impatient, but must remain constructive and practically
+oriented toward completing the onboarding goal.
+The simulator must also honor the persona's ignorance boundary. It may react
+to visible assistant proposals, approve, decline, ask for evidence, or ask for
+rollback boundaries, but it must not inject latent model expertise, protocol
+recipes, service-specific commands, or alternate non-ContextForge routes that
+the persona would not know.
+In addition to the five persona dimensions, each run records
+`determination_to_help_assistant_succeed_at_onboarding = n/20`. Default `n` is
+15. At 15/20 or above the simulated human should be relentlessly, constructively
+helpful toward successful onboarding: answer questions from visible context,
+approve bounded safe next steps when appropriate, request concrete corrections
+instead of derailing, and keep the interaction moving while honoring persona
+knowledge and approval boundaries.
+For three-model quorum batches, all runs in a batch use the same `n`. The next
+batch adapts from the first three structural onboarding outcomes: if all three
+fail, `n += 2`; if two fail, `n += 1`; if one fails, no change; if all three
+succeed, `n -= 1`. Clamp `n` to `1..20`. This is simulated-human behavior
+control only; it is not sent as hidden guidance to the tested assistant.
 
 ## Run Matrix
 
@@ -154,6 +195,9 @@ For each onboarding foil, acceptance requires:
   fixed turn count as acceptance. The semantic evaluator judges whether the
   dialogue was truncated, over-guided, unnecessarily long, or complete with no
   loss of required outcome.
+- default individual-run safety bounds are 32 tested-assistant turns or 600
+  seconds of dialogue wall time. These bounds stop capture; they are not a
+  semantic pass/fail oracle.
 - semantic evaluation of interaction efficiency, taking the sampled persona's
   natural overhead as given and judging whether the assistant avoided needless
   detours, repeated explanations, premature approvals, overlong procedural
@@ -185,6 +229,20 @@ JSON structure, artifact existence, endpoint reachability, transcript capture,
 credential cleanup, and preexisting-foil absence in structured ContextForge
 readbacks. It must not evaluate generated assistant meaning through string
 matching, regex matching, keyword matching, or transcript pattern scoring.
+After a structured `service_onboarding_runtime_applied` result, the runner may
+start a fresh or reloaded target-client session for the next tested-assistant
+turn. This is required orchestration evidence, not tested-assistant coaching:
+record the pre/post session ids and boundary reason, and expose at most the
+generic operator fact that a fresh/reloaded session has been started to the
+simulated human responder. Do not add service-specific facts, expected tool
+names, commands, or evaluator criteria through this boundary.
+
+When target clients are Docker-isolated, do not expect the tested Pi/OpenCode
+container to own host Docker Compose paths or the host Docker daemon. Runtime
+apply for the shared `npm-stdio-host` must run through the configured
+host-side runtime/apply proxy while preserving the same helper/tool surface to
+the tested assistant. This is environment restoration, not a prompt cheat: do
+not add service-specific facts or behavioral steering through the proxy.
 
 The runner package should emit a manifest-first evidence bundle with:
 
@@ -195,7 +253,15 @@ The runner package should emit a manifest-first evidence bundle with:
 - stepwise and total generation reports;
 - raw transcript paths and targeted excerpts;
 - structured runtime/ContextForge/target-client readbacks;
-- evaluator score sheet and final narrative prompt.
+- evaluator score sheet and final narrative prompt for one after-action
+  judgment covering every turn and the whole dialogue.
+
+During live semantic runs, controller-facing progress checks should be limited
+to run start, the 2-minute mark, the 6-minute mark, and terminal completion or
+error. Do not add ad hoc live polling updates unless the run itself fails or
+requires immediate intervention. This cadence is a human-facing orchestration
+discipline only; it must not alter prompts sent to the tested assistant or
+simulated human.
 
 If a deterministic check fails before real dialogue begins, report setup
 failure. Do not rewrite the story into a scripted substitute.
@@ -211,8 +277,12 @@ shape; it does not replace semantic judgment. Capture raw evaluator events as
 internal evidence when useful, but suppress raw thinking tokens in shared or
 user-facing evidence by default and report conclusions plus concise rationale
 instead. Any decision to render raw thinking tokens must be explicit,
-surface-labeled, and justified by the controller. The evaluator must judge
-whether the tested assistant:
+surface-labeled, and justified by the controller. The evaluator receives the
+full evidence package after the interaction completes or hits its safety bound.
+It must assess every turn and the whole interaction in one after-action review;
+do not call an evaluator inside the live conversation loop or spend one
+evaluator invocation per turn. The evaluator must judge whether the tested
+assistant:
 
 - stayed behind the veil;
 - asked suitable questions or proceeded from source research when questions

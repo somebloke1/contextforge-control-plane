@@ -23,7 +23,8 @@ SECRET_KEY_RE = re.compile(
     r"password|"
     r"private[_-]?key|"
     r"refresh[_-]?token|"
-    r"secret"
+    r"secret|"
+    r"(?:^|[_-])token(?:[_-]|$)"
     r")"
 )
 
