@@ -3237,28 +3237,35 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             )
             package_id = package["runtime_apply_package_id"]
             approval_source = root / "latest-user.json"
-            approval_source.write_text(
-                json.dumps(
-                    {
-                        "cwd": str(root),
-                        "text": f"Do not continue with install for {package_id} memory-gateway.",
-                    }
-                ),
-                encoding="utf-8",
-            )
             with (
                 mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False),
                 mock.patch.object(onboarding_surfaces, "load_runtime_package_executor", return_value=FakeExecutor),
             ):
-                result = contextforge_helper_mcp.cf_project_service_onboarding_runtime_execute(
-                    project_root=str(root),
-                    runtime_apply_package_id=package_id,
-                    client_type="opencode",
-                )
+                rejected_texts = [
+                    f"Do not continue with install for {package_id} memory-gateway.",
+                    f"Not approved to continue runtime apply for {package_id} memory-gateway.",
+                    f"I cannot approve runtime apply for {package_id} memory-gateway.",
+                    f"No, proceed with runtime apply for {package_id} memory-gateway.",
+                ]
+                results = []
+                for text in rejected_texts:
+                    approval_source.write_text(
+                        json.dumps({"cwd": str(root), "text": text}),
+                        encoding="utf-8",
+                    )
+                    results.append(
+                        contextforge_helper_mcp.cf_project_service_onboarding_runtime_execute(
+                            project_root=str(root),
+                            runtime_apply_package_id=package_id,
+                            client_type="opencode",
+                        )
+                    )
 
-        self.assertFalse(result["ok"])
-        self.assertEqual("PermissionError", result["error"]["type"])
-        self.assertIn("explicit runtime/apply approval intent", result["error"]["message"])
+        self.assertEqual(4, len(results))
+        for result in results:
+            self.assertFalse(result["ok"])
+            self.assertEqual("PermissionError", result["error"]["type"])
+            self.assertIn("explicit runtime/apply approval intent", result["error"]["message"])
 
     def test_runtime_apply_can_delegate_to_host_proxy_for_containerized_clients(self) -> None:
         package = {

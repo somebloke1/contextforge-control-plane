@@ -1702,17 +1702,21 @@ def _latest_text_is_approval(text: str) -> bool:
 
 def _latest_text_has_approval_negation(text: str) -> bool:
     lowered = text.strip().lower()
+    action = r"(?:approve|approved|proceed|continue|apply|register|install|start|execute|implement)"
     return bool(
         re.search(
-            r"\b(?:do\s+not|don't|dont|not|never|no)\s+"
-            r"(?:approve|proceed|continue|apply|register|install|start|execute|implement)\b",
+            rf"\b(?:do\s+not|don't|dont|not|never|no)\s*,?\s+{action}\b",
             lowered,
         )
         or re.search(
-            r"\bi\s+(?:do\s+not|don't|dont)\s+"
-            r"(?:approve|proceed|continue|apply|register|install|start|execute|implement)\b",
+            rf"\bi\s+(?:do\s+not|don't|dont|cannot|can't|cant|won't|wont)\s+{action}\b",
             lowered,
         )
+        or re.search(
+            rf"\b(?:cannot|can't|cant|unable\s+to|won't|wont|refuse\s+to)\s+{action}\b",
+            lowered,
+        )
+        or re.search(r"\bnot\s+approved\b", lowered)
         or re.search(r"\bdecline\b", lowered)
         or re.search(r"\bdefer\b", lowered)
     )
