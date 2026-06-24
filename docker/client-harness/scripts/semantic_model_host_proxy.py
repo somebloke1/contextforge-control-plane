@@ -137,6 +137,13 @@ class OpenRouterProxy(http.server.BaseHTTPRequestHandler):
             return body
         if not isinstance(payload, dict):
             return body
+        for key in ("max_tokens", "max_completion_tokens"):
+            try:
+                value = int(payload.get(key))
+            except (TypeError, ValueError):
+                continue
+            if value > max_output_tokens:
+                payload[key] = max_output_tokens
         if "max_tokens" not in payload and "max_completion_tokens" not in payload:
             payload["max_tokens"] = max_output_tokens
         return json.dumps(payload, separators=(",", ":")).encode("utf-8")

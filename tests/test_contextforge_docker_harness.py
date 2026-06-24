@@ -2251,6 +2251,23 @@ print(json.dumps(outputs))
         self.assertEqual(2048, unchanged["max_completion_tokens"])
         self.assertNotIn("max_tokens", unchanged)
 
+        oversized = json.loads(
+            module.OpenRouterProxy.cap_openai_max_tokens(
+                json.dumps(
+                    {
+                        "model": "qwen/qwen3-coder-next",
+                        "messages": [],
+                        "max_tokens": 65536,
+                        "max_completion_tokens": 65536,
+                    }
+                ).encode("utf-8"),
+                2048,
+            ).decode("utf-8")
+        )
+
+        self.assertEqual(2048, oversized["max_tokens"])
+        self.assertEqual(2048, oversized["max_completion_tokens"])
+
     def test_semantic_model_profile_preflight_classifies_openrouter_availability(self) -> None:
         module = _load_script_module(
             ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",

@@ -3208,6 +3208,58 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("exact runtime/apply package id", result["error"]["message"])
         self.assertIn(package_id, result["error"]["message"])
 
+    def test_contextforge_helper_mcp_runtime_execute_rejects_negated_continue_approval(self) -> None:
+        class FakeExecutor:
+            @staticmethod
+            def run(**_kwargs: Any) -> dict[str, Any]:
+                raise AssertionError("executor must not run when latest user text negates continue/proceed intent")
+
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package = onboarding_surfaces.build_service_onboarding_runtime_apply_package(
+                str(root),
+                {
+                    "candidate_service": "memory",
+                    "operator_goal": "Add the Memory MCP service.",
+                    "source_path": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
+                    "backend_package": "@modelcontextprotocol/server-memory",
+                    "backend_command": "npx",
+                    "backend_args": ["-y", "@modelcontextprotocol/server-memory@2026.1.26"],
+                    "transport_type": "stdio",
+                    "localization_type": "shared_canonical",
+                    "functional_type": "governance_memory",
+                    "state_type": "local_filesystem_state",
+                    "credential_boundary": "no credentials required",
+                    "approval_type": "runtime_registration",
+                    "expected_tools": ["create_entities", "read_graph"],
+                    **npm_stdio_required_kwargs(),
+                },
+            )
+            package_id = package["runtime_apply_package_id"]
+            approval_source = root / "latest-user.json"
+            approval_source.write_text(
+                json.dumps(
+                    {
+                        "cwd": str(root),
+                        "text": f"Do not continue with install for {package_id} memory-gateway.",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False),
+                mock.patch.object(onboarding_surfaces, "load_runtime_package_executor", return_value=FakeExecutor),
+            ):
+                result = contextforge_helper_mcp.cf_project_service_onboarding_runtime_execute(
+                    project_root=str(root),
+                    runtime_apply_package_id=package_id,
+                    client_type="opencode",
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("PermissionError", result["error"]["type"])
+        self.assertIn("explicit runtime/apply approval intent", result["error"]["message"])
+
     def test_runtime_apply_can_delegate_to_host_proxy_for_containerized_clients(self) -> None:
         package = {
             "status": "service_onboarding_runtime_apply_package",

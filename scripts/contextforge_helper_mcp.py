@@ -1703,8 +1703,16 @@ def _latest_text_is_approval(text: str) -> bool:
 def _latest_text_has_approval_negation(text: str) -> bool:
     lowered = text.strip().lower()
     return bool(
-        re.search(r"\b(?:do\s+not|don't|dont|not|never|no)\s+approve\b", lowered)
-        or re.search(r"\bi\s+(?:do\s+not|don't|dont)\s+approve\b", lowered)
+        re.search(
+            r"\b(?:do\s+not|don't|dont|not|never|no)\s+"
+            r"(?:approve|proceed|continue|apply|register|install|start|execute|implement)\b",
+            lowered,
+        )
+        or re.search(
+            r"\bi\s+(?:do\s+not|don't|dont)\s+"
+            r"(?:approve|proceed|continue|apply|register|install|start|execute|implement)\b",
+            lowered,
+        )
         or re.search(r"\bdecline\b", lowered)
         or re.search(r"\bdefer\b", lowered)
     )
@@ -1870,8 +1878,7 @@ def _require_runtime_apply_approval_text(
         )
     text = _read_latest_user_message_text(project_root)
     lowered = text.strip().lower()
-    approval_terms = {"approve", "approved", "proceed", "continue"}
-    has_approval = _latest_text_is_approval(text) or any(term in lowered for term in approval_terms)
+    has_approval = _latest_text_is_approval(text) or re.search(r"\b(?:approve|approved|proceed|continue)\b", lowered) is not None
     has_runtime_intent = bool(
         re.search(r"\b(?:runtime|apply|implement|implementation|register|registration|install|start|execute)\b", lowered)
     )
