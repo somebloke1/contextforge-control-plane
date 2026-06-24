@@ -30,6 +30,12 @@ The method layer is case-independent:
   including prompt, artifact path, return code, timeout, model/client identity,
   assistant-output size, event counts where available, tool-call counts, and
   total generation count;
+- preflight selected semantic-test model profiles against the current provider
+  with a representative prompt and output-token envelope before launching a
+  live client dialogue. Provider authentication, route, rate, credit,
+  prompt-token, or output-token failures are setup failures and must be
+  packaged as such, not misclassified as target-client or ContextForge product
+  behavior;
 - for live long-running dialogue attempts, limit controller-facing progress
   checks to run start, 2 minutes, 6 minutes, and terminal completion or error;
   this is orchestration cadence only and must not affect prompts or scoring;

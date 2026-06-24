@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import socket
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import control_plane_project_state as project_state
 import control_plane_service_onboarding_surfaces as surfaces
+import project_init_common as common
 
 
 def npm_stdio_required_payload() -> dict[str, Any]:
@@ -59,25 +62,37 @@ def load_executor():
 
 
 def write_time_package(path: Path, project_root: Path) -> dict[str, Any]:
-    package = surfaces.build_service_onboarding_runtime_apply_package(
-        str(project_root),
-        {
-            "candidateService": "time",
-            "operatorGoal": "Add Time MCP service.",
-            "sourcePath": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
-            "backendPackage": "mcp-server-time",
-            "backendCommand": "uvx",
-            "backendArgs": ["mcp-server-time", "--local-timezone", "UTC"],
-            "transportType": "stdio",
-            "localizationType": "shared_canonical",
-            "functionalType": "time_timezone",
-            "stateType": "stateless",
-            "credentialBoundary": "no credentials required",
-            "expectedTools": ["get_current_time", "convert_time"],
-            "issue": "356",
-            **npm_stdio_required_payload(),
+    with mock.patch.object(
+        surfaces,
+        "fetch_npm_package_metadata",
+        return_value={
+            "registry": "npm",
+            "package": "mcp-server-time",
+            "latest": "1.0.1",
+            "dist_tags": {"latest": "1.0.1"},
+            "published_versions": ["1.0.0", "1.0.1"],
+            "published_version_count": 2,
         },
-    )
+    ):
+        package = surfaces.build_service_onboarding_runtime_apply_package(
+            str(project_root),
+            {
+                "candidateService": "time",
+                "operatorGoal": "Add Time MCP service.",
+                "sourcePath": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+                "backendPackage": "mcp-server-time",
+                "backendCommand": "uvx",
+                "backendArgs": ["mcp-server-time", "--local-timezone", "UTC"],
+                "transportType": "stdio",
+                "localizationType": "shared_canonical",
+                "functionalType": "time_timezone",
+                "stateType": "stateless",
+                "credentialBoundary": "no credentials required",
+                "expectedTools": ["get_current_time", "convert_time"],
+                "issue": "356",
+                **npm_stdio_required_payload(),
+            },
+        )
     path.write_text(json.dumps(package), encoding="utf-8")
     return package
 
@@ -418,6 +433,20 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             self.assertTrue(record_path.exists())
             self.assertEqual("created", result["npm_stdio_host_record"]["action"])
             self.assertEqual("mcp-server-time", json.loads(record_path.read_text(encoding="utf-8"))["package"])
+            manifest_path = record_path.parent / "instance.json"
+            self.assertEqual(str(manifest_path), result["service_instance_manifest"]["path"])
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual("npm-stdio-host", manifest["managed_by"])
+            self.assertEqual("time:canonical", manifest["service_binding"])
+            self.assertEqual("time-server", manifest["contextforge"]["virtual_server"]["name"])
+            self.assertEqual("gateway-1", manifest["contextforge"]["gateway"]["id"])
+            discovered = common.discover_contextforge_hosted_services(
+                project_root=root,
+                server_instances_root=root / "server-instances",
+            )
+            services = {service["service_binding"]: service for service in discovered}
+            self.assertIn("time:canonical", services)
+            self.assertEqual("time-server", services["time:canonical"]["virtual_server"])
 
             second = executor.run(
                 package_path=package_path,
@@ -429,6 +458,7 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
                 wait_attempts=1,
             )
             self.assertEqual("already_applied", second["npm_stdio_host_record"]["action"])
+            self.assertEqual("already_applied", second["service_instance_manifest"]["action"])
             self.assertEqual(1, len(client.gateways))
             self.assertEqual(1, len(client.servers))
 
@@ -603,6 +633,7 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             )
             record_path = Path(created["npm_stdio_host_record"]["record_path"])
             self.assertTrue(record_path.exists())
+            self.assertTrue((record_path.parent / "instance.json").exists())
             self.assertEqual(1, len(client.gateways))
             self.assertEqual(1, len(client.servers))
             self.assertEqual(2, len(client.resources))
@@ -634,7 +665,9 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             self.assertEqual([], client.servers)
             self.assertEqual([], client.resources)
             self.assertFalse(record_path.exists())
+            self.assertFalse((record_path.parent / "instance.json").exists())
             actions = [action["action"] for action in deleted["delete_actions"]]
+            self.assertIn("delete_managed_instance_manifest", actions)
             self.assertIn("delete_virtual_server", actions)
             self.assertIn("delete_prompt_library_resource", actions)
             self.assertIn("delete_gateway", actions)
@@ -1128,12 +1161,13 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
                 },
             )
             record = package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["content"]
+            service_binding = str(record["service_binding"])
             record["stdio"]["command"] = "@modelcontextprotocol/server-memory"
             record["stdio"]["args"] = ["-y", "@modelcontextprotocol/server-memory"]
             package_path.write_text(json.dumps(package), encoding="utf-8")
             runtime.npm_stdio_host_records.upsert_from_runtime_package(package)
             metadata_path = (
-                runtime.service_dir(root, "memory:project")
+                runtime.service_dir(root, service_binding)
                 / "package"
                 / "node_modules"
                 / "@modelcontextprotocol"
@@ -1158,13 +1192,48 @@ class OnboardingRuntimePackageExecutorTests(unittest.TestCase):
             original_wait = runtime.wait_for_bridge_endpoint
             runtime.wait_for_bridge_endpoint = lambda endpoint, process: {"ready": True, "attempts": 1}
             try:
-                applied = runtime.apply_service(root, "memory:project", runner=fake_run, popen=fake_popen)
+                applied = runtime.apply_service(root, service_binding, runner=fake_run, popen=fake_popen)
             finally:
                 runtime.wait_for_bridge_endpoint = original_wait
 
             self.assertEqual("created", applied["action"])
             self.assertIn("mcp-server-memory", calls[1])
             self.assertNotIn("@modelcontextprotocol/server-memory -y @modelcontextprotocol/server-memory", calls[1])
+
+    def test_npm_stdio_host_runtime_fails_closed_when_endpoint_port_is_occupied(self) -> None:
+        runtime = load_executor().npm_stdio_host_runtime
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, socket.socket() as listener:
+            root = Path(tmp).resolve()
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            occupied_port = listener.getsockname()[1]
+            package_path = root / "time-package.json"
+            package = write_time_package(package_path, root)
+            record = package["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["content"]
+            record["endpoint"] = {
+                "host": "127.0.0.1",
+                "port": occupied_port,
+                "container_url": f"http://npm-stdio-host:{occupied_port}/mcp",
+                "streamable_http_url": f"http://npm-stdio-host:{occupied_port}/mcp",
+                "sse_url": f"http://npm-stdio-host:{occupied_port}/sse",
+            }
+            package_path.write_text(json.dumps(package), encoding="utf-8")
+            runtime.npm_stdio_host_records.upsert_from_runtime_package(package)
+            popen_called = False
+
+            def fake_run(command, **_kwargs):
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            def fake_popen(command, **kwargs):
+                nonlocal popen_called
+                popen_called = True
+                return FakeProcess()
+
+            with self.assertRaisesRegex(RuntimeError, "endpoint port is already in use"):
+                runtime.apply_service(root, "time:canonical", runner=fake_run, popen=fake_popen)
+
+            self.assertFalse(popen_called)
+            self.assertIsNone(runtime.read_state(root, "time:canonical"))
 
     def test_service_guidance_resources_shape_contextforge_scanner_trigger_words(self) -> None:
         executor = load_executor()

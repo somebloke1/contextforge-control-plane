@@ -226,11 +226,58 @@ def iter_server_instance_manifests(server_instances_root: str | Path = SERVER_IN
             continue
 
 
+def _server_instance_discovery_roots(
+    *,
+    project_root: str | Path | None,
+    server_instances_root: str | Path | None,
+) -> list[Path]:
+    if server_instances_root is not None:
+        return [Path(server_instances_root)]
+    roots: list[Path] = []
+    if project_root is not None:
+        project_instances = canonical_path(project_root) / "server-instances"
+        roots.append(project_instances)
+    roots.append(SERVER_INSTANCES_ROOT)
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        resolved = root.resolve(strict=False)
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        deduped.append(root)
+    return deduped
+
+
+def _display_instance_path(manifest_path: Path, server_instances_root: str | Path) -> str:
+    path = manifest_path.parent.resolve(strict=False)
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        root = Path(server_instances_root).resolve(strict=False)
+        try:
+            return str(Path("server-instances") / path.relative_to(root))
+        except ValueError:
+            return str(path)
+
+
+def _display_manifest_path(manifest_path: Path, server_instances_root: str | Path) -> str:
+    path = manifest_path.resolve(strict=False)
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        root = Path(server_instances_root).resolve(strict=False)
+        try:
+            return str(Path("server-instances") / path.relative_to(root))
+        except ValueError:
+            return str(path)
+
+
 def discover_contextforge_hosted_services(
     *,
     project_root: str | Path | None = None,
     contextforge_servers: Iterable[dict[str, Any]] | None = None,
-    server_instances_root: str | Path = SERVER_INSTANCES_ROOT,
+    server_instances_root: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     """Return service activation candidates from manifests plus optional live readback.
 
@@ -248,74 +295,80 @@ def discover_contextforge_hosted_services(
         if isinstance(server, dict) and server.get("name")
     }
     services: list[dict[str, Any]] = []
-    for manifest_path, manifest in iter_server_instance_manifests(server_instances_root):
-        if manifest.get("enabled") is False:
-            continue
-        virtual_server = _manifest_virtual_server(manifest)
-        server_name = str(virtual_server.get("name") or manifest.get("server_name") or "")
-        if not server_name:
-            continue
-        service_family = str(manifest.get("service") or manifest.get("slug") or manifest.get("name") or manifest_path.parent.name)
-        canonical_project_root = manifest.get("canonical_project_root")
-        if canonical_project_root and canonical_project is not None:
-            if canonical_path(str(canonical_project_root)) != canonical_project:
+    seen_service_bindings: set[str] = set()
+    for discovery_root in _server_instance_discovery_roots(project_root=project_root, server_instances_root=server_instances_root):
+        for manifest_path, manifest in iter_server_instance_manifests(discovery_root):
+            if manifest.get("enabled") is False:
                 continue
-        instantiation_class = _manifest_instantiation_class(manifest)
-        alias = normalize_codex_alias(str(manifest.get("codex_alias") or service_family))
-        live_server = readback_by_name.get(server_name)
-        registration = manifest.get("registration") if isinstance(manifest.get("registration"), dict) else {}
-        manifest_provisioning_required = _serena_manifest_needs_project_provisioning(manifest)
-        status = (
-            "not_provisioned"
-            if manifest_provisioning_required
-            else ("matched" if live_server else ("not_checked" if contextforge_servers is None else "missing"))
-        )
-        provisioning_required = manifest_provisioning_required or (
-            service_family == "serena" and status in {"missing", "stale"}
-        )
-        scope = manifest.get("scope") if isinstance(manifest.get("scope"), dict) else {}
-        if provisioning_required and not scope and canonical_project_root:
-            scope = _serena_project_scope(canonical_path(str(canonical_project_root)), provisioned=False)
-        bridge = manifest.get("bridge") if isinstance(manifest.get("bridge"), dict) else {}
-        if provisioning_required and not bridge:
-            bridge = _serena_project_bridge(provisioned=False)
-        descriptor = _redacted_manifest_descriptor(manifest, server_name, instantiation_class)
-        if scope:
-            descriptor["scope"] = scope
-        descriptor["provisioning_status"] = "required" if provisioning_required else "manifest_backed"
-        services.append(
-            {
-                "service_family": service_family,
-                "canonical_service": str(manifest.get("canonical_service") or service_family),
-                "service_binding": _manifest_service_binding(manifest, service_family, instantiation_class, canonical_project_root),
-                "codex_alias": alias,
-                "instantiation_class": instantiation_class,
-                "backend_instance": str(manifest_path.parent.relative_to(REPO_ROOT)),
-                "manifest_path": str(manifest_path.relative_to(REPO_ROOT)),
-                "virtual_server": server_name,
-                "gateway": _manifest_gateway_name(manifest),
-                "contextforge_readback_status": status,
-                "contextforge_server_id": str(live_server.get("id")) if live_server and live_server.get("id") else None,
-                "registered_tools": list(registration.get("registered_tools") or []),
-                "scope": scope,
-                "bridge": bridge,
-                "non_actions": _activation_non_actions(instantiation_class),
-                "validation_policy": safe_validation_policy(service_family),
-                "descriptor_digest": stable_digest(descriptor),
-                **(
-                    {
-                        "provisioning": {
-                            "status": "required",
-                            "helper": "manage_serena_project_instance.py",
-                            "requires_language_input": True,
-                            "reason": "existing Serena manifest is missing ContextForge gateway or virtual-server registration",
+            virtual_server = _manifest_virtual_server(manifest)
+            server_name = str(virtual_server.get("name") or manifest.get("server_name") or "")
+            if not server_name:
+                continue
+            service_family = str(manifest.get("service") or manifest.get("slug") or manifest.get("name") or manifest_path.parent.name)
+            canonical_project_root = manifest.get("canonical_project_root")
+            if canonical_project_root and canonical_project is not None:
+                if canonical_path(str(canonical_project_root)) != canonical_project:
+                    continue
+            instantiation_class = _manifest_instantiation_class(manifest)
+            service_binding = _manifest_service_binding(manifest, service_family, instantiation_class, canonical_project_root)
+            if service_binding in seen_service_bindings:
+                continue
+            seen_service_bindings.add(service_binding)
+            alias = normalize_codex_alias(str(manifest.get("codex_alias") or service_family))
+            live_server = readback_by_name.get(server_name)
+            registration = manifest.get("registration") if isinstance(manifest.get("registration"), dict) else {}
+            manifest_provisioning_required = _serena_manifest_needs_project_provisioning(manifest)
+            status = (
+                "not_provisioned"
+                if manifest_provisioning_required
+                else ("matched" if live_server else ("not_checked" if contextforge_servers is None else "missing"))
+            )
+            provisioning_required = manifest_provisioning_required or (
+                service_family == "serena" and status in {"missing", "stale"}
+            )
+            scope = manifest.get("scope") if isinstance(manifest.get("scope"), dict) else {}
+            if provisioning_required and not scope and canonical_project_root:
+                scope = _serena_project_scope(canonical_path(str(canonical_project_root)), provisioned=False)
+            bridge = manifest.get("bridge") if isinstance(manifest.get("bridge"), dict) else {}
+            if provisioning_required and not bridge:
+                bridge = _serena_project_bridge(provisioned=False)
+            descriptor = _redacted_manifest_descriptor(manifest, server_name, instantiation_class)
+            if scope:
+                descriptor["scope"] = scope
+            descriptor["provisioning_status"] = "required" if provisioning_required else "manifest_backed"
+            services.append(
+                {
+                    "service_family": service_family,
+                    "canonical_service": str(manifest.get("canonical_service") or service_family),
+                    "service_binding": service_binding,
+                    "codex_alias": alias,
+                    "instantiation_class": instantiation_class,
+                    "backend_instance": _display_instance_path(manifest_path, discovery_root),
+                    "manifest_path": _display_manifest_path(manifest_path, discovery_root),
+                    "virtual_server": server_name,
+                    "gateway": _manifest_gateway_name(manifest),
+                    "contextforge_readback_status": status,
+                    "contextforge_server_id": str(live_server.get("id")) if live_server and live_server.get("id") else None,
+                    "registered_tools": list(registration.get("registered_tools") or []),
+                    "scope": scope,
+                    "bridge": bridge,
+                    "non_actions": _activation_non_actions(instantiation_class),
+                    "validation_policy": safe_validation_policy(service_family),
+                    "descriptor_digest": stable_digest(descriptor),
+                    **(
+                        {
+                            "provisioning": {
+                                "status": "required",
+                                "helper": "manage_serena_project_instance.py",
+                                "requires_language_input": True,
+                                "reason": "existing Serena manifest is missing ContextForge gateway or virtual-server registration",
+                            }
                         }
-                    }
-                    if provisioning_required
-                    else {}
-                ),
-            }
-        )
+                        if provisioning_required
+                        else {}
+                    ),
+                }
+            )
     if canonical_project is not None and safe_workspace_project_root(canonical_project) and not _has_project_serena_service(services):
         services.append(_synthetic_serena_project_service(canonical_project))
     return services

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import io
 import importlib.util
 import json
 import os
@@ -8,8 +9,10 @@ import re
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 import unittest.mock
+import urllib.error
 from pathlib import Path
 from typing import Any
 
@@ -858,6 +861,16 @@ console.log(JSON.stringify({{
         self.assertEqual(32, quorum_module.DEFAULT_ONBOARDING_TURNS)
         self.assertEqual(600, quorum_module.DEFAULT_DIALOGUE_SECONDS)
         self.assertEqual(15, quorum_module.DEFAULT_HUMAN_HELP_DETERMINATION)
+        self.assertEqual(300, quorum_module.CHILD_DIALOGUE_TIMEOUT_MARGIN_SECONDS)
+        timeout_args = types.SimpleNamespace(timeout=420, max_dialogue_seconds=600)
+        self.assertGreater(
+            quorum_module.child_dialogue_subprocess_timeout(timeout_args),
+            quorum_module.DEFAULT_DIALOGUE_SECONDS,
+        )
+        self.assertEqual(
+            "partial output",
+            quorum_module.timeout_text(b"partial output"),
+        )
         self.assertEqual(1, dialogue_module.bounded_help_determination(-5))
         self.assertEqual(20, dialogue_module.bounded_help_determination(99))
         self.assertIn(
@@ -1076,7 +1089,7 @@ console.log(JSON.stringify({{
             "servers": [
                 {
                     "id": "server-memory",
-                    "name": "memory-canonical-server",
+                    "name": "memory-project-server",
                     "associatedToolIds": ["tool-memory"],
                     "associatedPromptIds": ["prompt-memory"],
                     "associatedResourceIds": ["resource-memory"],
@@ -1114,6 +1127,214 @@ console.log(JSON.stringify({{
         )
         self.assertEqual("no_known_repo_local_foil_artifacts", manifest["repo_artifact_readback"]["status"])
         self.assertEqual(0, manifest["repo_artifact_readback"]["present_count"])
+        self.assertEqual(
+            [{"enabled": True, "id": "server-memory", "name": "memory-project-server"}],
+            manifest["matches"]["virtual_server"],
+        )
+
+    def test_memory_onboarding_foil_cleanup_readback_fails_closed_on_stale_npm_stdio_host_record(self) -> None:
+        cleanup = _load_script_module(
+            ROOT / "docker/contextforge-harness/scripts/clean_onboarding_foil.py",
+            "clean_onboarding_memory_host_foil_test",
+        )
+        live = {"gateways": [], "tools": [], "servers": [], "prompts": [], "resources": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index = root / "server-instances" / "npm-stdio-host" / "index.json"
+            index.parent.mkdir(parents=True)
+            index.write_text(
+                json.dumps(
+                    {
+                        "schema_uri": "contextforge://control-plane/npm-stdio-host-index/v1",
+                        "host_service": "npm-stdio-host",
+                        "records": {
+                            "memory:project": {
+                                "service_binding": "memory:project",
+                                "record_path": "server-instances/memory-project/npm-stdio-service.json",
+                                "host_service": "npm-stdio-host",
+                                "content_digest": "sha256:test",
+                            },
+                            "memory-project:project": {
+                                "service_binding": "memory-project:project",
+                                "record_path": "server-instances/memory-project-project/npm-stdio-service.json",
+                                "host_service": "npm-stdio-host",
+                                "content_digest": "sha256:test-project",
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            manifest = cleanup.build_manifest(
+                foil_id="memory",
+                base_url="http://127.0.0.1:4445",
+                live=live,
+                apply=False,
+                project_root=root,
+            )
+
+        self.assertEqual("dirty", manifest["status"])
+        self.assertEqual(0, sum(manifest["counts"].values()))
+        self.assertEqual(
+            {"host_managed_instance_manifests": 0, "host_records": 2, "host_runtime_services": 0},
+            manifest["npm_stdio_host_readback"]["counts"],
+        )
+        self.assertCountEqual(
+            [
+                {
+                    "kind": "npm_stdio_host_record",
+                    "method": "DELETE",
+                    "path": str(root / "server-instances/memory-project/npm-stdio-service.json"),
+                    "scope": "npm_stdio_host_record",
+                    "service_binding": "memory:project",
+                },
+                {
+                    "kind": "npm_stdio_host_record",
+                    "method": "DELETE",
+                    "path": str(root / "server-instances/memory-project-project/npm-stdio-service.json"),
+                    "scope": "npm_stdio_host_record",
+                    "service_binding": "memory-project:project",
+                }
+            ],
+            manifest["planned_host_operations"],
+        )
+        self.assertFalse(manifest["npm_stdio_host_readback"]["matches"]["host_records"][0]["record_exists"])
+
+    def test_memory_onboarding_foil_cleanup_readback_fails_closed_on_stale_managed_instance_manifest(self) -> None:
+        cleanup = _load_script_module(
+            ROOT / "docker/contextforge-harness/scripts/clean_onboarding_foil.py",
+            "clean_onboarding_memory_manifest_foil_test",
+        )
+        live = {"gateways": [], "tools": [], "servers": [], "prompts": [], "resources": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "server-instances" / "memory-project" / "instance.json"
+            manifest_path.parent.mkdir(parents=True)
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_uri": "contextforge://control-plane/server-instance/v1",
+                        "managed_by": "npm-stdio-host",
+                        "service_binding": "memory:project",
+                        "service": "memory",
+                        "slug": "memory-project",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            manifest = cleanup.build_manifest(
+                foil_id="memory",
+                base_url="http://127.0.0.1:4445",
+                live=live,
+                apply=False,
+                project_root=root,
+            )
+            results = cleanup.execute_host_operations(root, manifest["planned_host_operations"])
+            post = cleanup.build_manifest(
+                foil_id="memory",
+                base_url="http://127.0.0.1:4445",
+                live=live,
+                apply=False,
+                project_root=root,
+            )
+
+        self.assertEqual("dirty", manifest["status"])
+        self.assertEqual(
+            {"host_managed_instance_manifests": 1, "host_records": 0, "host_runtime_services": 0},
+            manifest["npm_stdio_host_readback"]["counts"],
+        )
+        self.assertEqual(
+            [
+                {
+                    "kind": "npm_stdio_host_instance_manifest",
+                    "method": "DELETE",
+                    "path": str(manifest_path),
+                    "scope": "npm_stdio_host_instance_manifest",
+                    "service_binding": "memory:project",
+                }
+            ],
+            manifest["planned_host_operations"],
+        )
+        self.assertEqual(["npm_stdio_host_instance_manifest"], [result["kind"] for result in results])
+        self.assertTrue(all(result["ok"] for result in results))
+        self.assertEqual("clean", post["status"])
+        self.assertFalse(manifest_path.exists())
+
+    def test_memory_onboarding_foil_cleanup_host_operations_delete_runtime_before_record(self) -> None:
+        cleanup = _load_script_module(
+            ROOT / "docker/contextforge-harness/scripts/clean_onboarding_foil.py",
+            "clean_onboarding_memory_host_ops_test",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / "server-instances" / "memory-project" / "npm-stdio-service.json"
+            record.parent.mkdir(parents=True)
+            record.write_text(
+                json.dumps(
+                    {
+                        "host_service": "npm-stdio-host",
+                        "service_binding": "memory:project",
+                        "package": "@modelcontextprotocol/server-memory",
+                        "transport": "stdio",
+                        "stdio": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-memory"]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest = record.parent / "instance.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_uri": "contextforge://control-plane/server-instance/v1",
+                        "managed_by": "npm-stdio-host",
+                        "service_binding": "memory:project",
+                        "service": "memory",
+                        "contextforge": {"virtual_server": {"name": "memory-project-server"}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            index = root / "server-instances" / "npm-stdio-host" / "index.json"
+            index.parent.mkdir(parents=True)
+            index.write_text(
+                json.dumps(
+                    {
+                        "schema_uri": "contextforge://control-plane/npm-stdio-host-index/v1",
+                        "host_service": "npm-stdio-host",
+                        "records": {
+                            "memory:project": {
+                                "service_binding": "memory:project",
+                                "record_path": "server-instances/memory-project/npm-stdio-service.json",
+                                "host_service": "npm-stdio-host",
+                                "content_digest": "sha256:test",
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            runtime_dir = root / "server-instances" / "npm-stdio-host" / "services" / "memory-project"
+            runtime_dir.mkdir(parents=True)
+            (runtime_dir / "runtime-state.json").write_text(
+                json.dumps({"service_binding": "memory:project", "pid": 0}),
+                encoding="utf-8",
+            )
+
+            readback = cleanup.host_readback(root, cleanup.FOILS["memory"])
+            results = cleanup.execute_host_operations(root, cleanup.host_operations(readback))
+            post = cleanup.host_readback(root, cleanup.FOILS["memory"])
+
+        self.assertEqual(
+            ["npm_stdio_host_runtime", "npm_stdio_host_instance_manifest", "npm_stdio_host_record"],
+            [result["kind"] for result in results],
+        )
+        self.assertTrue(all(result["ok"] for result in results))
+        self.assertTrue(post["clean"])
+        self.assertFalse(record.exists())
+        self.assertFalse(manifest.exists())
+        self.assertFalse(runtime_dir.exists())
 
     def test_time_onboarding_foil_cleanup_cli_fixture_fails_closed_when_dirty(self) -> None:
         live = {
@@ -1343,6 +1564,69 @@ console.log(JSON.stringify({{
             "CONTEXT7_API_KEY",
         ]:
             self.assertIn(key, dialogue.PI_RESPONDER_FORBIDDEN_API_KEY_ENVS)
+
+    def test_onboarding_runner_target_client_baseline_env_restores_product_surface(self) -> None:
+        dialogue = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+            "onboarding_semantic_target_client_baseline_env_test",
+        )
+
+        pi_env = dialogue.target_client_baseline_env("pi")
+        opencode_env = dialogue.target_client_baseline_env("opencode")
+
+        self.assertEqual("http://host.docker.internal:4445", pi_env["CONTEXTFORGE_BASE_URL"])
+        self.assertEqual("/run/contextforge-client-scoped/contextforge.env", pi_env["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual("/repo/scripts/contextforge_mcp_wrapper.py", pi_env["CONTEXTFORGE_PI_SHIM_WRAPPER"])
+        self.assertEqual(
+            "/home/agent/.local/state/contextforge-client-harness-runtime/project-init/pi-latest-user-message.json",
+            pi_env["CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH"],
+        )
+        self.assertEqual("http://host.docker.internal:4445", opencode_env["CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL"])
+        self.assertEqual(
+            "/run/contextforge-client-scoped/contextforge.env",
+            opencode_env["CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV"],
+        )
+        self.assertEqual("/repo/scripts/contextforge_mcp_wrapper.py", opencode_env["CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT"])
+        self.assertEqual(
+            "/home/agent/.local/state/contextforge-client-harness-runtime/project-init/opencode-latest-user-message.json",
+            opencode_env["CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH"],
+        )
+        for env in (pi_env, opencode_env):
+            for key in dialogue.API_KEY_ENV_NAMES:
+                self.assertNotIn(key, env)
+
+    def test_onboarding_runner_launch_merges_baseline_env_without_host_api_key_passthrough(self) -> None:
+        runner = (ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py").read_text(encoding="utf-8")
+
+        self.assertIn("tested_client_env = {**target_client_baseline_env(args.client), **semantic_overrides}", runner)
+        self.assertIn('"target_client_baseline_env_keys": target_client_baseline_keys', runner)
+        self.assertIn("for key, value in sorted(tested_client_env.items()):", runner)
+        self.assertNotIn('launch_command.extend(["-e", key])', runner)
+        self.assertNotIn('launch_command.extend(["-e", f"{key}={os.environ[key]}"])', runner)
+
+    def test_onboarding_runner_client_scoped_env_uses_bearer_not_admin_credentials(self) -> None:
+        dialogue = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+            "onboarding_semantic_client_scoped_env_test",
+        )
+        env_text = dialogue.onboarding_client_scoped_env_text("http://host.docker.internal:4445", "token-secret")
+
+        self.assertIn("CONTEXTFORGE_BASE_URL=http://host.docker.internal:4445", env_text)
+        self.assertIn("CONTEXTFORGE_BEARER_TOKEN=token-secret", env_text)
+        self.assertIn("CONTEXTFORGE_TOKEN_CACHE=/tmp/contextforge-wrapper-token.local.json", env_text)
+        self.assertNotIn("CONTEXTFORGE_SERVER_ID", env_text)
+        self.assertNotIn("PLATFORM_ADMIN_EMAIL", env_text)
+        self.assertNotIn("PLATFORM_ADMIN_PASSWORD", env_text)
+
+    def test_onboarding_runner_records_and_cleans_client_scoped_token(self) -> None:
+        runner = (ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py").read_text(encoding="utf-8")
+
+        self.assertIn("create_onboarding_client_token", runner)
+        self.assertIn("service_runner.write_host_client_scoped_env", runner)
+        self.assertIn("cleanup_onboarding_client_scoped_env", runner)
+        self.assertIn("service_runner.revoke_probe_token", runner)
+        self.assertIn('"admin_env_mounted_to_target_client": False', runner)
+        self.assertIn('"onboarding_client_token_revoked": onboarding_client_token_revoked', runner)
 
     def test_mentality_manifest_records_dev_docker_surface(self) -> None:
         manifest = (ROOT / "server-instances/mentality/instance.json").read_text(encoding="utf-8")
@@ -1776,6 +2060,7 @@ print(json.dumps(outputs))
         self.assertIn('provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]', bootstrap)
         self.assertIn('provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]', bootstrap)
         self.assertIn('os.environ.get("OPENROUTER_PROVIDER_ROUTES", "")', bootstrap)
+        self.assertIn('provider["models"][0]["maxTokens"] = int(os.environ["CONTEXTFORGE_TEST_MAX_TOKENS"])', bootstrap)
         self.assertIn('provider["compat"].pop("openRouterRouting", None)', bootstrap)
         self.assertIn("Refusing unsafe CONTEXTFORGE_PI_SHIM_INSTALL_DIR", bootstrap)
         self.assertNotIn("/home/dgk/.pi", dockerfile + wrapper + bootstrap)
@@ -1891,10 +2176,14 @@ print(json.dumps(outputs))
             self.assertIn("provider_kind", profile)
             self.assertIn("api_key_env", profile)
             self.assertIn("base_url_env", profile)
+            self.assertIn("max_output_tokens", profile)
             self.assertGreaterEqual(profile["context_window"], 262144)
+            self.assertLessEqual(profile["max_output_tokens"], 16384)
             self.assertIsInstance(profile["route_preferences"], list)
 
         self.assertIn("--semantic-model-profile", runner)
+        self.assertIn("profile_max_output_tokens(profile)", runner)
+        self.assertIn('"CONTEXTFORGE_TEST_MAX_TOKENS": str(profile_max_output_tokens(profile))', runner)
         self.assertIn('if selector == "random"', runner)
         self.assertIn("profile_multi_step_quorum_eligible(profile)", runner)
         self.assertIn("random.choices", runner)
@@ -1931,14 +2220,130 @@ print(json.dumps(outputs))
         self.assertIn("0.0.0.0", proxy)
         self.assertIn("host.docker.internal", proxy)
         self.assertIn("headers[\"Authorization\"] = f\"Bearer {api_key}\"", proxy)
+        self.assertIn("cap_openai_max_tokens", proxy)
+        self.assertIn("--max-output-tokens", proxy)
         for runner in [comprehensive_runner, onboarding_runner]:
             self.assertIn("start_openrouter_proxy", runner)
             self.assertIn("semantic_model_host_proxy", runner)
+            self.assertIn("max_output_tokens=", runner)
             self.assertIn("container_receives_real_semantic_model_api_key", runner)
             self.assertIn("OPENROUTER_BASE_URL", runner)
             self.assertIn("container_api_key", runner)
             self.assertIn("assistant_error_from_json_stream", runner)
             self.assertNotIn('for key in semantic_secret_env_keys_to_pass:\n            launch_command.extend(["-e", key])', runner)
+
+    def test_semantic_model_host_proxy_adds_max_token_cap_when_client_omits_it(self) -> None:
+        module = _load_script_module(
+            ROOT / "docker/client-harness/scripts/semantic_model_host_proxy.py",
+            "semantic_model_host_proxy_cap",
+        )
+
+        body = json.dumps({"model": "qwen/qwen3-coder-next", "messages": []}).encode("utf-8")
+        capped = json.loads(module.OpenRouterProxy.cap_openai_max_tokens(body, 16384).decode("utf-8"))
+
+        self.assertEqual(16384, capped["max_tokens"])
+
+        existing = json.dumps(
+            {"model": "qwen/qwen3-coder-next", "messages": [], "max_completion_tokens": 2048}
+        ).encode("utf-8")
+        unchanged = json.loads(module.OpenRouterProxy.cap_openai_max_tokens(existing, 16384).decode("utf-8"))
+
+        self.assertEqual(2048, unchanged["max_completion_tokens"])
+        self.assertNotIn("max_tokens", unchanged)
+
+    def test_semantic_model_profile_preflight_classifies_openrouter_availability(self) -> None:
+        module = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",
+            "comprehensive_mcp_profile_preflight",
+        )
+        profile = {
+            "id": "openrouter-qwen-qwen3-coder-next",
+            "provider_kind": "openrouter",
+            "model": "qwen/qwen3-coder-next",
+            "api_key_env": "OPENROUTER_API_KEY",
+            "base_url_env": "OPENROUTER_BASE_URL",
+            "default_base_url": "https://openrouter.ai/api/v1",
+            "route_preferences": [],
+            "max_output_tokens": 2048,
+            "preflight_prompt_units": 1024,
+        }
+
+        class Response:
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({"choices": [{"message": {"content": "ok"}}], "usage": {"prompt_tokens": 10}}).encode()
+
+        def success_urlopen(request: Any, timeout: int) -> Response:
+            self.assertEqual("Bearer test-key", request.get_header("Authorization"))
+            self.assertEqual(90, timeout)
+            return Response()
+
+        passed = module.semantic_model_profile_preflight(
+            profile,
+            {"OPENROUTER_API_KEY": "test-key"},
+            urlopen=success_urlopen,
+        )
+
+        self.assertEqual("passed", passed["status"])
+        self.assertEqual("qwen/qwen3-coder-next", passed["model"])
+        self.assertEqual(2048, passed["max_output_tokens_requested"])
+        self.assertNotIn("test-key", json.dumps(passed))
+
+        def failing_urlopen(_request: Any, timeout: int) -> None:
+            self.assertEqual(90, timeout)
+            raise urllib.error.HTTPError(
+                "https://openrouter.ai/api/v1/chat/completions",
+                402,
+                "Payment Required",
+                {},
+                io.BytesIO(
+                    b'{"error":{"message":"Prompt tokens limit exceeded: 17195 > 8502"},'
+                    b'"user_id":"user_real_value"}'
+                ),
+            )
+
+        failed = module.semantic_model_profile_preflight(
+            profile,
+            {"OPENROUTER_API_KEY": "test-key"},
+            urlopen=failing_urlopen,
+        )
+
+        self.assertEqual("failed", failed["status"])
+        self.assertEqual("prompt_token_limit_exceeded", failed["failure_class"])
+        self.assertEqual(402, failed["http_status"])
+        self.assertNotIn("test-key", json.dumps(failed))
+        self.assertNotIn("user_real_value", json.dumps(failed))
+        self.assertIn("<redacted>", failed["sanitized_error"])
+
+    def test_onboarding_semantic_runners_record_model_preflight_gate(self) -> None:
+        dialogue_runner = (
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py"
+        ).read_text(encoding="utf-8")
+        quorum_runner = (
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-quorum.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("--skip-semantic-model-preflight", dialogue_runner)
+        self.assertIn("semantic_model_profile_preflight_failed", dialogue_runner)
+        self.assertIn("environment_setup_model_profile_unavailable", dialogue_runner)
+        self.assertIn("semantic-model-profile-preflight.json", dialogue_runner)
+        self.assertIn('"semantic_model_profile_preflight": semantic_profile_preflight', dialogue_runner)
+
+        self.assertIn("--skip-semantic-model-preflight", quorum_runner)
+        self.assertIn("--semantic-model-preflight-only", quorum_runner)
+        self.assertIn("semantic_model_profile_preflight_failed", quorum_runner)
+        self.assertIn("semantic_model_profile_preflight_passed", quorum_runner)
+        self.assertIn("failed_profile_count", quorum_runner)
+        self.assertIn("semantic-model-profile-preflight.json", quorum_runner)
+        self.assertLess(
+            quorum_runner.index("semantic_model_profile_preflight_failed"),
+            quorum_runner.index("build_command = ["),
+        )
 
     def test_semantic_runners_detect_structured_assistant_errors(self) -> None:
         for script_name, module_name in [
@@ -2129,6 +2534,32 @@ print(json.dumps(outputs))
         self.assertFalse(module.is_candidate_target_client_service_tool("cf_project_init_list_capabilities"))
         self.assertTrue(module.is_candidate_target_client_service_tool("memory-gateway-read-graph"))
 
+    def test_onboarding_runner_detects_project_init_installed_reload_boundary(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "onboarding_semantic_project_init_reload_boundary",
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        stdout = "\n".join(
+            [
+                '{"type":"session","id":"target-session-fresh-1"}',
+                '{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"call-project-init-apply","name":"cf_project_init_apply","arguments":{"projectRoot":"/workspace"}}]}}',
+                '{"type":"message_end","message":{"role":"toolResult","toolCallId":"call-project-init-apply","toolName":"cf_project_init_apply","isError":false,"content":[{"type":"text","text":"{\\"ok\\":true,\\"installation_status\\":\\"installed\\",\\"selected_service_bindings\\":[\\"memory:canonical\\"],\\"installed_service_bindings\\":[\\"memory:canonical\\"],\\"message\\":\\"ContextForge tools are installed for this project. A new session or reload is required before the tools register in the client.\\"}"}]}}',
+            ]
+        )
+
+        structural = module.extract_turn_structural_events(stdout)
+        success = module.turn_project_init_apply_success({"turn": 8, **structural})
+
+        self.assertIsNotNone(success)
+        assert success is not None
+        self.assertEqual(8, success["turn"])
+        self.assertEqual("cf_project_init_apply", success["tool_name"])
+        self.assertEqual("installed", success["installation_status"])
+        self.assertEqual(["memory:canonical"], success["installed_service_bindings"])
+
     def test_onboarding_runner_passes_fresh_session_fact_only_to_human_simulator(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "onboarding_semantic_fresh_session_human_context",
@@ -2229,12 +2660,15 @@ print(json.dumps(outputs))
         self.assertIn("CONTEXTFORGE_RUNTIME_APPLY_PROXY_TOKEN", source)
         self.assertIn("CONTEXTFORGE_RUNTIME_APPLY_PROXY_BASE_URL", source)
         self.assertIn("runtime_apply_host_proxy.summary()", source)
+        self.assertIn("host_project_root=Path(workspace_from_reset(reset_json, harness_root))", source)
 
         proxy = (ROOT / "docker/client-harness/scripts/runtime_apply_host_proxy.py").read_text(encoding="utf-8")
         self.assertIn("ContextForgeRuntimeApplyProxy", proxy)
         self.assertIn("host.docker.internal", proxy)
         self.assertIn("apply_onboarding_runtime_package.py", proxy)
         self.assertIn("ephemeral_redacted", proxy)
+        self.assertIn("client_service_instance_manifest", proxy)
+        self.assertIn("--host-project-root", proxy)
 
     def test_onboarding_runner_redacts_runtime_apply_proxy_token_from_summary(self) -> None:
         spec = importlib.util.spec_from_file_location(
@@ -2266,10 +2700,79 @@ print(json.dumps(outputs))
         self.assertNotIn("secret-token", text)
         self.assertIn("[REDACTED_CONTEXTFORGE_SECRET]", text)
 
-    def test_runtime_apply_host_proxy_maps_only_executor_paths_to_host_root(self) -> None:
+    def test_runtime_apply_host_proxy_maps_executor_paths_to_repo_root_and_activation_manifest_to_client_root(self) -> None:
         module = _load_script_module(
             ROOT / "docker/client-harness/scripts/runtime_apply_host_proxy.py",
             "runtime_apply_host_proxy_path_map",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            client_root = Path(tmp) / "client-workspace"
+            repo_root = Path(tmp) / "repo-root"
+            package = {
+                "project_root": "/workspace",
+                "service_provision_plan": {
+                    "x_backend_home": "/workspace/server-instances/memory-canonical",
+                },
+                "install_artifact_contract": {
+                    "artifacts": {
+                        "npm_stdio_service_record": {
+                            "path": "/workspace/server-instances/memory-canonical/npm-stdio-service.json",
+                            "content": {
+                                "environment": {
+                                    "values": {
+                                        "MEMORY_FILE_PATH": "/workspace/.contextforge/memory/memory.jsonl",
+                                    }
+                                }
+                            },
+                        }
+                    }
+                },
+            }
+
+            translated = module.translate_package_paths_for_host(package, repo_root=repo_root)
+            source_manifest = repo_root / "server-instances/memory-canonical/instance.json"
+            source_manifest.parent.mkdir(parents=True)
+            source_manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_uri": "contextforge://control-plane/server-instance/v1",
+                        "managed_by": "npm-stdio-host",
+                        "service_binding": "memory:canonical",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            mirrored = module.mirror_client_instance_manifest(
+                original_package=package,
+                executor_result={"service_instance_manifest": {"path": str(source_manifest)}},
+                host_project_root=client_root,
+            )
+            assert mirrored is not None
+            mirrored_action = mirrored["action"]
+            mirrored_path = mirrored["path"]
+            mirrored_exists = (client_root / "server-instances/memory-canonical/instance.json").exists()
+
+        self.assertEqual(str(repo_root), translated["project_root"])
+        self.assertEqual(
+            str(repo_root / "server-instances/memory-canonical"),
+            translated["service_provision_plan"]["x_backend_home"],
+        )
+        self.assertEqual(
+            str(repo_root / "server-instances/memory-canonical/npm-stdio-service.json"),
+            translated["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["path"],
+        )
+        self.assertEqual(
+            "/workspace/.contextforge/memory/memory.jsonl",
+            translated["install_artifact_contract"]["artifacts"]["npm_stdio_service_record"]["content"]["environment"]["values"]["MEMORY_FILE_PATH"],
+        )
+        self.assertEqual("created", mirrored_action)
+        self.assertEqual(str(client_root / "server-instances/memory-canonical/instance.json"), mirrored_path)
+        self.assertTrue(mirrored_exists)
+
+    def test_runtime_apply_host_proxy_maps_only_executor_paths_to_host_root(self) -> None:
+        module = _load_script_module(
+            ROOT / "docker/client-harness/scripts/runtime_apply_host_proxy.py",
+            "runtime_apply_host_proxy_path_map_legacy",
         )
         package = {
             "project_root": "/workspace",

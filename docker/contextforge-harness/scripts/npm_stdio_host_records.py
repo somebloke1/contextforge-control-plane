@@ -95,6 +95,24 @@ def remove_empty_record_parent(path: Path, root: Path, actions: list[dict[str, A
         return
 
 
+def remove_managed_instance_manifest(record_path: Path, root: Path, service_binding: str, actions: list[dict[str, Any]]) -> None:
+    manifest_path = record_path.parent / "instance.json"
+    if not manifest_path.exists():
+        return
+    try:
+        manifest = read_json(manifest_path)
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(manifest, Mapping):
+        return
+    if manifest.get("managed_by") != HOST_SERVICE_ID:
+        return
+    if str(manifest.get("service_binding") or "") != service_binding:
+        return
+    manifest_path.unlink()
+    actions.append({"target": str(manifest_path), "action": "removed_managed_instance_manifest", "ok": True})
+
+
 def relative_to_root(project_root: Path, path: Path) -> str:
     return str(path.resolve(strict=False).relative_to(project_root))
 
@@ -206,6 +224,7 @@ def delete_service_record(project_root: str | Path, service_binding: str) -> dic
         if path.exists():
             path.unlink()
             actions.append({"target": str(path), "action": "removed_record", "ok": True})
+            remove_managed_instance_manifest(path, root, service_binding, actions)
             remove_empty_record_parent(path, root, actions, action="removed_empty_record_parent")
     if index.get("records"):
         write_json_atomic(idx_path, index)

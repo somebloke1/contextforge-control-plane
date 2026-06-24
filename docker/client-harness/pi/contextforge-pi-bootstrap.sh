@@ -73,6 +73,8 @@ else:
 provider["models"][0]["id"] = os.environ["OPENROUTER_MODEL"]
 if os.environ.get("CONTEXTFORGE_TEST_CONTEXT_WINDOW"):
     provider["models"][0]["contextWindow"] = int(os.environ["CONTEXTFORGE_TEST_CONTEXT_WINDOW"])
+if os.environ.get("CONTEXTFORGE_TEST_MAX_TOKENS"):
+    provider["models"][0]["maxTokens"] = int(os.environ["CONTEXTFORGE_TEST_MAX_TOKENS"])
 target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 fi

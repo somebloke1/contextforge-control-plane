@@ -73,6 +73,79 @@ def translate_package_paths_for_host(package: dict[str, Any], *, repo_root: Path
     return translated
 
 
+def npm_stdio_record_path(package: dict[str, Any]) -> str:
+    contract = package.get("install_artifact_contract")
+    artifacts = contract.get("artifacts") if isinstance(contract, dict) else None
+    record = artifacts.get("npm_stdio_service_record") if isinstance(artifacts, dict) else None
+    path = record.get("path") if isinstance(record, dict) else None
+    if not isinstance(path, str) or not path:
+        raise RuntimeError("runtime/apply package missing npm_stdio_service_record.path")
+    return path
+
+
+def client_instance_manifest_path(
+    package: dict[str, Any],
+    *,
+    host_project_root: Path,
+    client_project_root: str = "/workspace",
+) -> Path:
+    record_path = map_client_path_to_host(
+        npm_stdio_record_path(package),
+        client_root=client_project_root,
+        host_root=host_project_root,
+    )
+    path = Path(record_path).resolve(strict=False).parent / "instance.json"
+    root = host_project_root.resolve(strict=False)
+    if root / "server-instances" not in (path, *path.parents):
+        raise RuntimeError(f"client instance manifest path must be under project server-instances: {path}")
+    return path
+
+
+def write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def mirror_client_instance_manifest(
+    *,
+    original_package: dict[str, Any],
+    executor_result: dict[str, Any],
+    host_project_root: Path,
+) -> dict[str, Any] | None:
+    manifest_result = executor_result.get("service_instance_manifest")
+    if not isinstance(manifest_result, dict):
+        return None
+    source_path = manifest_result.get("path")
+    if not isinstance(source_path, str) or not source_path:
+        return None
+    source = Path(source_path).resolve(strict=False)
+    if not source.exists():
+        return {
+            "action": "source_missing",
+            "source_path": str(source),
+            "path": str(client_instance_manifest_path(original_package, host_project_root=host_project_root)),
+            "mutation_performed": False,
+        }
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"managed instance manifest is not a JSON object: {source}")
+    target = client_instance_manifest_path(original_package, host_project_root=host_project_root)
+    previous = json.loads(target.read_text(encoding="utf-8")) if target.exists() else None
+    action = "already_applied" if isinstance(previous, dict) and previous == payload else ("updated" if previous is not None else "created")
+    if action != "already_applied":
+        write_json_atomic(target, payload)
+    return {
+        "action": action,
+        "source_path": str(source),
+        "path": str(target),
+        "service_binding": str(payload.get("service_binding") or ""),
+        "mutation_performed": action != "already_applied",
+        "claim_boundary": "Docker harness mirror of managed activation manifest into the tested client's project workspace",
+    }
+
+
 class RuntimeApplyProxy(http.server.BaseHTTPRequestHandler):
     server_version = "ContextForgeRuntimeApplyProxy/1.0"
 
@@ -100,6 +173,8 @@ class RuntimeApplyProxy(http.server.BaseHTTPRequestHandler):
                 raise RuntimeError("runtime/apply proxy request missing target object")
             executor = self.server.executor  # type: ignore[attr-defined]
             repo_root = self.server.repo_root  # type: ignore[attr-defined]
+            host_project_root = self.server.host_project_root  # type: ignore[attr-defined]
+            original_package = copy.deepcopy(package)
             package = translate_package_paths_for_host(package, repo_root=repo_root)
             with tempfile.NamedTemporaryFile("w", suffix="-runtime-apply-package.json", encoding="utf-8", delete=True) as handle:
                 json.dump(package, handle)
@@ -114,6 +189,14 @@ class RuntimeApplyProxy(http.server.BaseHTTPRequestHandler):
                     env_file=Path(str(request.get("env_file") or self.server.default_env_file)),  # type: ignore[attr-defined]
                     wait_attempts=int(request.get("wait_attempts") or 12),
                 )
+            if bool(request.get("apply", True)) and isinstance(result, dict):
+                mirrored = mirror_client_instance_manifest(
+                    original_package=original_package,
+                    executor_result=result,
+                    host_project_root=host_project_root,
+                )
+                if mirrored is not None:
+                    result["client_service_instance_manifest"] = mirrored
             self.send_json(200, result)
         except Exception as exc:  # pragma: no cover - defensive runtime path
             failure_report = getattr(exc, "failure_report", None)
@@ -140,6 +223,7 @@ def serve(args: argparse.Namespace) -> int:
     server = http.server.ThreadingHTTPServer((args.listen_host, args.port), RuntimeApplyProxy)
     server.expected_authorization = f"Bearer {args.expected_token}"  # type: ignore[attr-defined]
     server.repo_root = repo_root  # type: ignore[attr-defined]
+    server.host_project_root = Path(args.host_project_root).resolve()  # type: ignore[attr-defined]
     server.executor = load_executor(repo_root)  # type: ignore[attr-defined]
     server.default_env_file = str(repo_root / "docker" / "contextforge-harness" / "env" / "contextforge.env")  # type: ignore[attr-defined]
     print(
@@ -149,6 +233,7 @@ def serve(args: argparse.Namespace) -> int:
                 "listen_host": args.listen_host,
                 "port": args.port,
                 "container_url": host_gateway_runtime_apply_url(args.port),
+                "host_project_root": str(server.host_project_root),  # type: ignore[attr-defined]
                 "repo_root": str(repo_root),
             },
             sort_keys=True,
@@ -189,7 +274,12 @@ class RuntimeApplyHostProxy:
                 self.process.wait(timeout=5)
 
 
-def start_runtime_apply_host_proxy(*, script_path: Path, repo_root: Path) -> RuntimeApplyHostProxy:
+def start_runtime_apply_host_proxy(
+    *,
+    script_path: Path,
+    repo_root: Path,
+    host_project_root: Path | None = None,
+) -> RuntimeApplyHostProxy:
     port = free_local_port()
     token = "contextforge-runtime-apply-" + secrets.token_urlsafe(24)
     command = [
@@ -202,6 +292,8 @@ def start_runtime_apply_host_proxy(*, script_path: Path, repo_root: Path) -> Run
         str(port),
         "--repo-root",
         str(repo_root),
+        "--host-project-root",
+        str(host_project_root or repo_root),
         "--expected-token",
         token,
     ]
@@ -234,8 +326,11 @@ def main() -> int:
     parser.add_argument("--listen-host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[3]))
+    parser.add_argument("--host-project-root", default="")
     parser.add_argument("--expected-token", default="")
     args = parser.parse_args()
+    if not args.host_project_root:
+        args.host_project_root = args.repo_root
     if args.serve_runtime_apply:
         return serve(args)
     parser.error("--serve-runtime-apply is required")

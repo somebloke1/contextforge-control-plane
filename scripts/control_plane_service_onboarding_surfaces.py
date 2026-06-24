@@ -28,9 +28,9 @@ from project_init_common import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MAX_ONBOARDING_HOW_TO_BYTES = 20_000
 _ONBOARDING_HOW_TO_CACHE: dict[str, dict[str, Any]] = {}
-MAX_SOURCE_RESEARCH_FILES = 12
-MAX_SOURCE_RESEARCH_FILE_BYTES = 16_000
-MAX_SOURCE_RESEARCH_TOTAL_BYTES = 60_000
+MAX_SOURCE_RESEARCH_FILES = 6
+MAX_SOURCE_RESEARCH_FILE_BYTES = 600
+MAX_SOURCE_RESEARCH_TOTAL_BYTES = 1_500
 MAX_SOURCE_RESEARCH_DEPTH = 3
 RUNTIME_EXECUTOR_BASE_URL_ENV = "CONTEXTFORGE_RUNTIME_EXECUTOR_BASE_URL"
 RUNTIME_EXECUTOR_ENV_FILE_ENV = "CONTEXTFORGE_RUNTIME_EXECUTOR_ENV_FILE"
@@ -185,11 +185,14 @@ def fetch_npm_package_metadata(package_name: str) -> dict[str, Any]:
     dist_tags = metadata.get("dist-tags") if isinstance(metadata.get("dist-tags"), Mapping) else {}
     if dist_tags:
         latest = str(dist_tags.get("latest") or "")
+    versions = sorted(str(item) for item in (metadata.get("versions") or {}).keys())
     return {
         "registry": "npm",
         "package": package_name,
         "latest": latest,
         "dist_tags": dict(dist_tags),
+        "published_version_count": len(versions),
+        "published_versions": versions if len(versions) <= 100 else versions[-100:],
         "description": str(metadata.get("description") or ""),
         "repository": metadata.get("repository") if isinstance(metadata.get("repository"), Mapping) else {},
     }
@@ -228,6 +231,10 @@ def source_research_visible_response(result: Mapping[str, Any]) -> str:
     if isinstance(npm_metadata, Mapping) and npm_metadata.get("package"):
         latest = f" latest `{npm_metadata.get('latest')}`" if npm_metadata.get("latest") else ""
         lines.append(f"NPM package metadata: `{npm_metadata.get('package')}`{latest}.")
+        lines.append(
+            "For npm install packaging, use a registry dist-tag or a published npm version; "
+            "do not pin to a source `package.json` version unless registry metadata also lists that version."
+        )
     return "\n".join(lines)
 
 
@@ -242,6 +249,20 @@ def package_name_from_source_files(source_files: Sequence[Mapping[str, Any]]) ->
         name = str(parsed.get("name") or "").strip() if isinstance(parsed, Mapping) else ""
         if name:
             return name
+    return ""
+
+
+def package_version_from_source_files(source_files: Sequence[Mapping[str, Any]]) -> str:
+    for item in source_files:
+        if not str(item.get("path") or "").endswith("package.json"):
+            continue
+        try:
+            parsed = json.loads(str(item.get("content") or "{}"))
+        except json.JSONDecodeError:
+            continue
+        version = str(parsed.get("version") or "").strip() if isinstance(parsed, Mapping) else ""
+        if version:
+            return version
     return ""
 
 
@@ -334,6 +355,14 @@ def research_service_onboarding_source(project_root: str, data: Mapping[str, Any
                 metadata = fetch_npm_package_metadata(package_name)
                 if metadata:
                     result["npm_package_metadata"] = metadata
+                    source_version = package_version_from_source_files(result["source_files"])
+                    published_versions = set(metadata.get("published_versions") or [])
+                    latest = str(metadata.get("latest") or "")
+                    if source_version and source_version != latest and source_version not in published_versions:
+                        result["warnings"].append(
+                            "source package.json version "
+                            f"{source_version} is not listed as a published npm version; use npm registry metadata for install version policy"
+                        )
             except (OSError, urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError) as exc:
                 result["warnings"].append(f"npm metadata fetch failed for {package_name}: {exc.__class__.__name__}: {exc}")
     except (OSError, urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -387,6 +416,10 @@ def service_onboarding_descriptor(data: Mapping[str, Any]) -> dict[str, Any]:
     expected_tools = data.get("expected_tools") or data.get("expectedTools")
     if isinstance(expected_tools, str):
         expected_tools = [expected_tools]
+    if not expected_tools:
+        tool_schema_names = list(_tool_schema_field(data).keys())
+        if tool_schema_names:
+            expected_tools = tool_schema_names
     source_evidence = []
     if source_path and not synthetic_source_summary(str(source_path)):
         source_evidence.append({"type": lead_type(str(source_path)), "ref": str(source_path)})
@@ -681,6 +714,8 @@ def service_management_descriptor(data: Mapping[str, Any]) -> dict[str, Any]:
     tool_schemas = _tool_schema_field(data)
     if tool_schemas:
         descriptor["tool_schemas"] = tool_schemas
+        if not descriptor.get("expected_tools"):
+            descriptor["expected_tools"] = list(tool_schemas.keys())
     tool_schema_summaries = _tool_schema_summaries_field(data)
     if tool_schema_summaries:
         descriptor["tool_schema_summaries"] = tool_schema_summaries
@@ -747,6 +782,9 @@ def runtime_apply_required_input_gaps(descriptor: Mapping[str, Any]) -> list[dic
         gaps.append({"field": "backend_package", "reason": "exact npm package identifier is required"})
     if str(backend.get("package_registry_type") or "").lower() != "npm":
         gaps.append({"field": "package_registry_type", "reason": "initial managed-host target accepts npm packages only"})
+    version_gap = npm_package_version_gap(backend)
+    if version_gap:
+        gaps.append(version_gap)
     if str(backend.get("transport") or "").lower() != "stdio":
         gaps.append({"field": "transport_type", "reason": "initial managed-host target accepts stdio MCP transports only"})
     if not descriptor.get("environment_variables_reviewed"):
@@ -776,6 +814,29 @@ def runtime_apply_required_input_gaps(descriptor: Mapping[str, Any]) -> list[dic
     if not isinstance(detail_prompts, Mapping) or not detail_prompts:
         gaps.append({"field": "prompt_library.detail_prompts", "reason": "lazy-loaded detailed prompt content is mandatory"})
     return gaps
+
+
+def npm_package_version_gap(backend: Mapping[str, Any]) -> dict[str, str] | None:
+    if str(backend.get("package_registry_type") or "").strip().lower() != "npm":
+        return None
+    package = str(backend.get("package") or "").strip()
+    version = str(backend.get("package_version") or "").strip()
+    if not package or not version or version in {"latest", "source-verified-or-pinned"}:
+        return None
+    try:
+        metadata = fetch_npm_package_metadata(package)
+    except (OSError, urllib.error.URLError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    dist_tags = metadata.get("dist_tags") if isinstance(metadata.get("dist_tags"), Mapping) else {}
+    published_versions = set(str(item) for item in metadata.get("published_versions") or [])
+    if version in published_versions or version in {str(value) for value in dist_tags.values()} or version in dist_tags:
+        return None
+    latest = str(metadata.get("latest") or "")
+    reason = f"`{version}` was not found in npm registry metadata for `{package}`"
+    if latest:
+        reason += f"; latest published version is `{latest}`"
+    reason += ". Provide a registry dist-tag, a published npm version, or omit the pin to use the package default policy."
+    return {"field": "package_version", "reason": reason}
 
 
 def runtime_apply_blocked_response(candidate: str, gaps: Sequence[Mapping[str, str]]) -> str:
@@ -1462,7 +1523,12 @@ def install_artifact_contract(
                         "body": {
                             "server": {
                                 "name": virtual_server_name,
-                                "associated_tools": "{tool_ids_from_expected_tools}",
+                                "associated_tools": [],
+                                "x_associated_tools_resolution": {
+                                    "method": "after_gateway_tool_refresh_filter_by_expected_tools",
+                                    "expected_tools": expected,
+                                    "source": "tool_refresh.expected_tools",
+                                },
                                 "visibility": "public",
                                 "tags": ["contextforge", "service-onboarding", service],
                             },
@@ -1892,9 +1958,13 @@ def runtime_execute_visible_response(candidate: str, result: Mapping[str, Any]) 
         [
             "This step may have installed packages and started or restarted hosted service processes inside the shared npm-stdio host; do not say no runtime process was started unless the executor result explicitly proves that.",
             "No client-local MCP config, project activation state, systemd unit, new Docker service, or secret value was written by this step.",
-            "Target-client usability is not proven yet. Start a new Pi/OpenCode session from this project root, confirm the tools are visible there, then use a safe service call before claiming the service is usable.",
+            "Target-client usability is not proven yet. The service still must be bound or imported for the target client through the ContextForge project-init flow before its tools can be expected to appear there.",
         ]
     )
+    if binding:
+        lines.append(
+            f"Next step: start a fresh Pi/OpenCode session from this project root, call the project-init capability list if needed, select `{binding}`, approve the project-local binding/import effects, then start the required fresh/reloaded client session and make a safe service call before claiming usability."
+        )
     return "\n".join(lines)
 
 

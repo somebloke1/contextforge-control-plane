@@ -224,6 +224,7 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
     if operation == "cf_project_init_continue":
         return _mcp_helper().cf_project_init_continue(
             project_root,
+            selected_services=data.get("selected_services") or data.get("selectedServices"),
             client_type=client_type,
             dry_run=bool(data.get("dry_run") or data.get("dryRun")),
         )

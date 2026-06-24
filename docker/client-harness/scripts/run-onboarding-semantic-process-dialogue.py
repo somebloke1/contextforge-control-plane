@@ -18,6 +18,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
+from uuid import uuid4
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -71,6 +72,109 @@ NON_TARGET_CLIENT_SERVICE_TOOL_PREFIXES = (
     "contextforge-helper_",
     "contextforge_helper_",
 )
+DEFAULT_CONTEXTFORGE_HOST_BASE_URL = "http://127.0.0.1:4445"
+DEFAULT_CONTEXTFORGE_CONTAINER_BASE_URL = "http://host.docker.internal:4445"
+CLIENT_SCOPED_ENV_PATH = "/run/contextforge-client-scoped/contextforge.env"
+WRAPPER_TOKEN_CACHE = "/tmp/contextforge-wrapper-token.local.json"
+WRAPPER_TOKEN_LOCK = "/tmp/contextforge-wrapper-token.local.json.lock"
+ONBOARDING_CLIENT_TOKEN_PERMISSIONS = [
+    "servers.use",
+    "tools.read",
+    "tools.execute",
+    "resources.read",
+    "prompts.read",
+]
+PI_BASELINE_ENV = {
+    "PI_CODING_AGENT_DIR": "/home/agent/.pi/agent",
+    "CONTEXTFORGE_PI_SHIM_EXTENSION": "/repo/pi-extensions/contextforge-global-shim/index.ts",
+    "CONTEXTFORGE_PI_SHIM_INSTALL_DIR": "/home/agent/.pi/agent/extensions/contextforge-global-shim",
+    "CONTEXTFORGE_PI_SHIM_PORTAL_ROOT": "/repo",
+    "CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT": "/workspace",
+    "CONTEXTFORGE_PI_SHIM_PYTHON": "/opt/contextforge-wrapper-venv/bin/python",
+    "CONTEXTFORGE_PI_SHIM_WRAPPER": "/repo/scripts/contextforge_mcp_wrapper.py",
+    "CONTEXTFORGE_CONFIG_ENV": "/run/contextforge-client-scoped/contextforge.env",
+    "CONTEXTFORGE_BASE_URL": "http://host.docker.internal:4445",
+    "CONTEXTFORGE_TOKEN_CACHE": "/tmp/contextforge-wrapper-token.local.json",
+    "CONTEXTFORGE_TOKEN_LOCK": "/tmp/contextforge-wrapper-token.local.json.lock",
+    "CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER": "1",
+    "CONTEXTFORGE_PROJECT_INIT_RUN_ROOT": "/home/agent/.local/state/contextforge-client-harness-runtime/project-init",
+    "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": "/home/agent/.local/state/contextforge-client-harness-runtime/project-init/pi-latest-user-message.json",
+    "CONTEXTFORGE_HELPER_REQUIRE_USER_APPROVAL_TEXT": "1",
+    "CONTEXTFORGE_SERENA_NO_SYSTEMD": "1",
+    "CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS": "/workspace",
+}
+OPENCODE_BASELINE_ENV = {
+    "OPENCODE_CONFIG": "/home/agent/.config/opencode/opencode.json",
+    "CONTEXTFORGE_OPENCODE_CONFIG_SOURCE": "/config/opencode/opencode.json",
+    "CONTEXTFORGE_OPENCODE_CONFIG_TARGET": "/home/agent/.config/opencode/opencode.json",
+    "CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE": "/config/opencode/plugins/contextforge-project-init.js",
+    "CONTEXTFORGE_OPENCODE_PLUGIN_TARGET": "/home/agent/.config/opencode/plugins/contextforge-project-init.js",
+    "CONTEXTFORGE_OPENCODE_RULES_SOURCE": "/config/opencode/AGENTS.md",
+    "CONTEXTFORGE_OPENCODE_RULES_TARGET": "/home/agent/.config/opencode/AGENTS.md",
+    "CONTEXTFORGE_OPENCODE_HOOK": "/repo/scripts/opencode_project_init_hook.py",
+    "CONTEXTFORGE_OPENCODE_HOOK_PYTHON": "/opt/contextforge-helper-venv/bin/python",
+    "CONTEXTFORGE_OPENCODE_WRAPPER_PYTHON": "/opt/contextforge-helper-venv/bin/python",
+    "CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT": "/repo/scripts/contextforge_mcp_wrapper.py",
+    "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/run/contextforge-client-scoped/contextforge.env",
+    "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+    "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/tmp/contextforge-wrapper-token.local.json",
+    "CONTEXTFORGE_PROJECT_INIT_USE_DEV_DOCKER_VIRTUAL_SERVER": "1",
+    "CONTEXTFORGE_PROJECT_INIT_RUN_ROOT": "/home/agent/.local/state/contextforge-client-harness-runtime/project-init",
+    "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": "/home/agent/.local/state/contextforge-client-harness-runtime/project-init/opencode-latest-user-message.json",
+    "CONTEXTFORGE_SERENA_NO_SYSTEMD": "1",
+    "CONTEXTFORGE_HELPER_PYTHON": "/opt/contextforge-helper-venv/bin/python",
+    "CONTEXTFORGE_HELPER_SCRIPT": "/repo/scripts/contextforge_helper_mcp.py",
+    "CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS": "/workspace",
+}
+
+
+def target_client_baseline_env(client: str) -> dict[str, str]:
+    """Return non-secret product integration env required by client harnesses."""
+    if client == "pi":
+        return dict(PI_BASELINE_ENV)
+    if client == "opencode":
+        return dict(OPENCODE_BASELINE_ENV)
+    return {}
+
+
+def onboarding_client_scoped_env_text(container_base_url: str, access_token: str) -> str:
+    return "\n".join(
+        [
+            f"CONTEXTFORGE_BASE_URL={container_base_url.rstrip('/')}",
+            f"CONTEXTFORGE_BEARER_TOKEN={access_token}",
+            f"CONTEXTFORGE_TOKEN_CACHE={WRAPPER_TOKEN_CACHE}",
+            f"CONTEXTFORGE_TOKEN_LOCK={WRAPPER_TOKEN_LOCK}",
+            "",
+        ]
+    )
+
+
+def create_onboarding_client_token(service_runner: Any, base_url: str, admin_token: str, foil_id: str, client: str) -> tuple[str, str]:
+    response = service_runner.request_json(
+        "POST",
+        base_url,
+        "/tokens",
+        token=admin_token,
+        body={
+            "name": f"onboarding-semantic-{foil_id}-{client}-{uuid4().hex[:12]}",
+            "description": (
+                "Ephemeral client-harness token for source-lead onboarding proof. "
+                "The target virtual server does not exist before onboarding, so the "
+                "wrapper must discover the newly created server by name after install."
+            ),
+            "expires_in_days": 1,
+            "scope": {"permissions": ONBOARDING_CLIENT_TOKEN_PERMISSIONS},
+            "tags": ["contextforge", "onboarding-semantic", foil_id, client, "ephemeral"],
+        },
+    )
+    token_record = response.get("token") if isinstance(response, dict) else None
+    token_id = token_record.get("id") if isinstance(token_record, dict) else None
+    access_token = response.get("access_token") if isinstance(response, dict) else None
+    if not isinstance(token_id, str) or not token_id:
+        raise RuntimeError("ContextForge onboarding client token create did not return token.id")
+    if not isinstance(access_token, str) or not access_token:
+        raise RuntimeError("ContextForge onboarding client token create did not return access_token")
+    return token_id, access_token
 
 
 def load_script_module(filename: str, module_name: str) -> Any:
@@ -734,6 +838,9 @@ def _summarize_tool_result(result: Mapping[str, Any]) -> dict[str, Any]:
         summary["parsed_status"] = parsed.get("status")
         summary["parsed_ok"] = parsed.get("ok")
         summary["mutation_performed"] = parsed.get("mutation_performed")
+        summary["installation_status"] = parsed.get("installation_status")
+        summary["selected_service_bindings"] = parsed.get("selected_service_bindings")
+        summary["installed_service_bindings"] = parsed.get("installed_service_bindings")
     return summary
 
 
@@ -904,6 +1011,29 @@ def turn_runtime_apply_success(turn: Mapping[str, Any]) -> dict[str, Any] | None
                 "ok": result.get("parsed_ok"),
                 "mutation_performed": result.get("mutation_performed"),
             }
+    return None
+
+
+def turn_project_init_apply_success(turn: Mapping[str, Any]) -> dict[str, Any] | None:
+    for result in turn.get("tool_results") or []:
+        if not isinstance(result, Mapping):
+            continue
+        tool_name = str(result.get("tool_name") or "")
+        if not tool_name.startswith("cf_project_init_"):
+            continue
+        if result.get("parsed_ok") is not True:
+            continue
+        if result.get("installation_status") != "installed":
+            continue
+        return {
+            "turn": turn.get("turn"),
+            "tool_call_id": result.get("tool_call_id"),
+            "tool_name": result.get("tool_name"),
+            "installation_status": result.get("installation_status"),
+            "ok": result.get("parsed_ok"),
+            "installed_service_bindings": result.get("installed_service_bindings"),
+            "selected_service_bindings": result.get("selected_service_bindings"),
+        }
     return None
 
 
@@ -1195,6 +1325,11 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_THINKING", DEFAULT_PI_RESPONDER_THINKING),
     )
     parser.add_argument("--semantic-model-profile", default=os.environ.get("CONTEXTFORGE_SEMANTIC_MODEL_PROFILE", "random"))
+    parser.add_argument(
+        "--skip-semantic-model-preflight",
+        action="store_true",
+        help="Debug only: skip provider/profile availability preflight before launching the tested client.",
+    )
     parser.add_argument("--persona-seed", type=int)
     parser.add_argument("--persona-index", type=int, default=1)
     parser.add_argument(
@@ -1205,6 +1340,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--run-suffix", default="")
     parser.add_argument("--isolation-root", type=Path)
+    parser.add_argument("--contextforge-host-base-url", default=os.environ.get("CONTEXTFORGE_HOST_BASE_URL", DEFAULT_CONTEXTFORGE_HOST_BASE_URL))
+    parser.add_argument("--contextforge-container-base-url", default=os.environ.get("CONTEXTFORGE_CONTAINER_BASE_URL", DEFAULT_CONTEXTFORGE_CONTAINER_BASE_URL))
+    parser.add_argument(
+        "--contextforge-env-file",
+        type=Path,
+        default=Path(os.environ["CONTEXTFORGE_DEV_ENV_FILE"]) if os.environ.get("CONTEXTFORGE_DEV_ENV_FILE") else None,
+    )
     parser.add_argument(
         "--allow-preexisting-foil-artifacts",
         action="store_true",
@@ -1224,6 +1366,8 @@ def main(argv: list[str] | None = None) -> int:
 
     repo_root = Path(__file__).resolve().parents[3]
     harness_root = repo_root / "docker" / "client-harness"
+    if args.contextforge_env_file is None:
+        args.contextforge_env_file = repo_root / "docker" / "contextforge-harness" / "env" / "contextforge.env"
     scenarios = load_scenarios(harness_root)
     foil = foil_record(scenarios, args.foil)
     persona = compose_persona(scenarios, seed=args.persona_seed, index=args.persona_index)
@@ -1256,6 +1400,13 @@ def main(argv: list[str] | None = None) -> int:
     lock_file = None
     semantic_host_proxy = None
     runtime_apply_host_proxy = None
+    client_scoped_dir = harness_root / "client-scoped"
+    host_scoped_env_file: Path | None = None
+    client_scoped_env_installed = False
+    client_scoped_env_removed = False
+    onboarding_client_token_id = ""
+    onboarding_client_token_revoked = False
+    contextforge_admin_token = ""
 
     def stop_host_proxies() -> None:
         if semantic_host_proxy is not None:
@@ -1263,9 +1414,59 @@ def main(argv: list[str] | None = None) -> int:
         if runtime_apply_host_proxy is not None:
             runtime_apply_host_proxy.stop()
 
+    def cleanup_client_scoped_token_cache(container_name: str | None) -> dict[str, Any] | None:
+        if not container_name:
+            return None
+        try:
+            return uc1.run(
+                [
+                    "docker",
+                    "exec",
+                    container_name,
+                    "bash",
+                    "-lc",
+                    f"rm -f {WRAPPER_TOKEN_CACHE} {WRAPPER_TOKEN_LOCK}",
+                ],
+                cwd=repo_root,
+                timeout=30,
+                commands=commands,
+            )
+        except Exception as exc:  # pragma: no cover - best-effort cleanup path
+            return {"returncode": 1, "timeout": False, "error": str(exc)}
+
+    def cleanup_onboarding_client_scoped_env(container_name: str | None = None) -> dict[str, Any]:
+        nonlocal client_scoped_env_removed, onboarding_client_token_revoked
+        cache_cleanup = cleanup_client_scoped_token_cache(container_name)
+        if host_scoped_env_file is not None:
+            try:
+                host_scoped_env_file.unlink()
+                client_scoped_env_removed = True
+            except FileNotFoundError:
+                client_scoped_env_removed = True
+        else:
+            client_scoped_env_removed = bool(cache_cleanup and cache_cleanup.get("returncode") == 0)
+        revoke_error = None
+        if onboarding_client_token_id and contextforge_admin_token and not onboarding_client_token_revoked:
+            try:
+                service_runner.revoke_probe_token(args.contextforge_host_base_url, contextforge_admin_token, onboarding_client_token_id)
+                onboarding_client_token_revoked = True
+            except Exception as exc:  # pragma: no cover - best-effort cleanup path
+                revoke_error = str(exc)
+        return {
+            "client_scoped_env_removed": client_scoped_env_removed,
+            "onboarding_client_token_revoked": onboarding_client_token_revoked,
+            "wrapper_token_cache_cleanup": None
+            if cache_cleanup is None
+            else {
+                "returncode": cache_cleanup.get("returncode"),
+                "timeout": cache_cleanup.get("timeout"),
+            },
+            "revoke_error": revoke_error,
+        }
+
     if not args.dry_run:
         if args.isolation_root is not None:
-            compose_env, isolated_reset, _client_scoped_dir = service_runner.prepare_isolated_harness(args, harness_root)
+            compose_env, isolated_reset, client_scoped_dir = service_runner.prepare_isolated_harness(args, harness_root)
             reset_json = isolated_reset
             commands.append(
                 {
@@ -1312,6 +1513,58 @@ def main(argv: list[str] | None = None) -> int:
             available_model_env,
         )
     secret_env_keys = sorted(set(selected_secret_env_keys))
+    semantic_profile_preflight: dict[str, Any] | None = None
+    if selected_profile is not None and not args.dry_run and not args.skip_semantic_model_preflight:
+        semantic_profile_preflight = service_runner.semantic_model_profile_preflight(selected_profile, available_model_env)
+        write_redacted_summary(output_root / "semantic-model-profile-preflight.json", semantic_profile_preflight)
+        if semantic_profile_preflight.get("status") == "failed":
+            summary = {
+                "schema_uri": "contextforge://client-harness/onboarding-semantic-process-dialogue-run/v1",
+                "ok_scope": "runner package only; semantic acceptance requires evaluator review",
+                "semantic_acceptance": "requires_non_spark_evaluator",
+                "deterministic_semantic_oracles_allowed": False,
+                "client": args.client,
+                "foil": args.foil,
+                "source_lead": foil["source_lead"],
+                "timestamp": timestamp,
+                "run_id": run_id,
+                "output_root": str(output_root),
+                "persona_seed": args.persona_seed,
+                "persona_index": args.persona_index,
+                "persona": persona,
+                "simulated_human_responder_mode": responder_mode,
+                "semantic_model_profile": profile_summary(
+                    service_runner,
+                    selected_profile,
+                    semantic_overrides,
+                    secret_env_keys,
+                    args.semantic_model_profile,
+                    available_model_env,
+                ),
+                "semantic_model_profile_preflight": semantic_profile_preflight,
+                "dialogue_stop_reason": "semantic_model_profile_preflight_failed",
+                "failure_class": "environment_setup_model_profile_unavailable",
+                "dry_run": False,
+                "exit_code": 1,
+                "turns": [],
+                "command_ledger": commands,
+                "deterministic_scope": (
+                    "provider/profile execution availability only; this does not judge "
+                    "assistant meaning or semantic acceptance"
+                ),
+            }
+            redacted_summary = write_redacted_summary(output_root / "run-summary.json", summary)
+            print(json.dumps(redacted_summary, indent=2, sort_keys=True))
+            stop_host_proxies()
+            if lock_file is not None:
+                lock_file.close()
+            return 1
+    elif selected_profile is not None and args.skip_semantic_model_preflight:
+        semantic_profile_preflight = {
+            "status": "skipped",
+            "reason": "explicit --skip-semantic-model-preflight debug flag",
+            "deterministic_scope": "provider/profile execution availability preflight skipped by controller",
+        }
     if selected_profile is not None and str(selected_profile.get("provider_kind") or "") == "openrouter":
         api_key_env = str(selected_profile.get("api_key_env") or "OPENROUTER_API_KEY")
         upstream_base_url = (
@@ -1325,6 +1578,7 @@ def main(argv: list[str] | None = None) -> int:
                 api_key_env=api_key_env,
                 upstream_base_url=upstream_base_url,
                 host_env=available_model_env,
+                max_output_tokens=service_runner.profile_max_output_tokens(selected_profile),
             )
             semantic_overrides["OPENROUTER_BASE_URL"] = semantic_host_proxy.container_base_url
             semantic_overrides[api_key_env] = semantic_host_proxy.container_api_key
@@ -1332,6 +1586,7 @@ def main(argv: list[str] | None = None) -> int:
         runtime_apply_host_proxy = start_runtime_apply_host_proxy(
             script_path=harness_root / "scripts" / "runtime_apply_host_proxy.py",
             repo_root=repo_root,
+            host_project_root=Path(workspace_from_reset(reset_json, harness_root)).resolve(strict=False),
         )
         semantic_overrides["CONTEXTFORGE_RUNTIME_APPLY_PROXY_URL"] = runtime_apply_host_proxy.container_url
         semantic_overrides["CONTEXTFORGE_RUNTIME_APPLY_PROXY_TOKEN"] = runtime_apply_host_proxy.token
@@ -1371,6 +1626,9 @@ def main(argv: list[str] | None = None) -> int:
             "tools_enabled": False,
             "context_files_enabled": False,
         }
+
+    tested_client_env = {**target_client_baseline_env(args.client), **semantic_overrides}
+    target_client_baseline_keys = sorted(target_client_baseline_env(args.client))
 
     summary_base = {
         "schema_uri": "contextforge://client-harness/onboarding-semantic-process-dialogue-run/v1",
@@ -1417,8 +1675,10 @@ def main(argv: list[str] | None = None) -> int:
         "prompt_count_scope": "initial_or_dry_run_preview_until_final_summary_overrides",
         "prompts": prompts,
         "semantic_model_profile": semantic_profile,
+        "semantic_model_profile_preflight": semantic_profile_preflight,
         "semantic_model_host_proxy": None if semantic_host_proxy is None else semantic_host_proxy.summary(),
         "runtime_apply_host_proxy": None if runtime_apply_host_proxy is None else runtime_apply_host_proxy.summary(),
+        "target_client_baseline_env_keys": target_client_baseline_keys,
         "container_receives_real_semantic_model_api_key": False,
         "reset": reset_json,
         "isolation": isolated_reset,
@@ -1493,6 +1753,68 @@ def main(argv: list[str] | None = None) -> int:
             lock_file.close()
         return 1
 
+    try:
+        if args.contextforge_env_file is None or not args.contextforge_env_file.exists():
+            raise RuntimeError(
+                "onboarding semantic target-client runs require --contextforge-env-file "
+                "or the ignored dev harness env file at docker/contextforge-harness/env/contextforge.env"
+            )
+        contextforge_admin_token = service_runner.login(args.contextforge_host_base_url, args.contextforge_env_file)
+        onboarding_client_token_id, onboarding_client_access_token = create_onboarding_client_token(
+            service_runner,
+            args.contextforge_host_base_url,
+            contextforge_admin_token,
+            args.foil,
+            args.client,
+        )
+        host_scoped_env_file = service_runner.write_host_client_scoped_env(
+            client_scoped_dir,
+            onboarding_client_scoped_env_text(args.contextforge_container_base_url, onboarding_client_access_token),
+        )
+        client_scoped_env_installed = True
+        summary_base["target_client_contextforge_scoped_env"] = {
+            "host_base_url": args.contextforge_host_base_url,
+            "container_base_url": args.contextforge_container_base_url,
+            "host_client_scoped_env_file": str(host_scoped_env_file),
+            "container_client_scoped_env_path": CLIENT_SCOPED_ENV_PATH,
+            "onboarding_client_token_id": onboarding_client_token_id,
+            "token_delivery": "client_scoped_env_file",
+            "token_scope_note": (
+                "ephemeral catalog token for onboarding runs where the target virtual server "
+                "does not exist before the tested assistant creates it"
+            ),
+            "admin_env_mounted_to_target_client": False,
+            "client_scoped_env_installed": client_scoped_env_installed,
+        }
+    except Exception as exc:
+        summary = {
+            **summary_base,
+            "dry_run": False,
+            "status": "failed_to_prepare_target_client_contextforge_scoped_env",
+            "exit_code": 1,
+            "target_client_contextforge_scoped_env": {
+                "host_base_url": args.contextforge_host_base_url,
+                "container_base_url": args.contextforge_container_base_url,
+                "host_client_scoped_env_file": str(host_scoped_env_file) if host_scoped_env_file else None,
+                "container_client_scoped_env_path": CLIENT_SCOPED_ENV_PATH,
+                "onboarding_client_token_id": onboarding_client_token_id or None,
+                "admin_env_mounted_to_target_client": False,
+                "error": str(exc),
+            },
+            "turns": [],
+            "responder_turns": [],
+            "prompt_count": 0,
+            "prompts": [],
+            "command_ledger": commands,
+        }
+        redacted_summary = write_redacted_summary(output_root / "run-summary.json", summary)
+        print(json.dumps(redacted_summary, indent=2, sort_keys=True))
+        cleanup_onboarding_client_scoped_env()
+        stop_host_proxies()
+        if lock_file is not None:
+            lock_file.close()
+        return 1
+
     if responder_mode == "pi_gpt_5_5_simulated_human_responder" and responder_config is not None:
         image_check = uc1.run(
             ["docker", "image", "inspect", responder_config["image"]],
@@ -1501,6 +1823,7 @@ def main(argv: list[str] | None = None) -> int:
             commands=commands,
         )
         if image_check["returncode"] != 0 or image_check["timeout"]:
+            scoped_env_cleanup = cleanup_onboarding_client_scoped_env()
             summary = {
                 **summary_base,
                 "dry_run": False,
@@ -1514,6 +1837,10 @@ def main(argv: list[str] | None = None) -> int:
                         f"Pi simulated-human responder image {responder_config['image']!r} is unavailable; "
                         "create/authenticate the baseline image before model-backed acceptance runs."
                     ),
+                },
+                "target_client_contextforge_scoped_env": {
+                    **dict(summary_base.get("target_client_contextforge_scoped_env") or {}),
+                    **scoped_env_cleanup,
                 },
                 "turns": [],
                 "responder_turns": [],
@@ -1551,7 +1878,7 @@ def main(argv: list[str] | None = None) -> int:
         "--no-deps",
         "-d",
     ]
-    for key, value in sorted(semantic_overrides.items()):
+    for key, value in sorted(tested_client_env.items()):
         launch_command.extend(["-e", f"{key}={value}"])
     launch_command.extend([uc1.compose_service_name(args.client), "sleep", "infinity"])
     launch = uc1.run(launch_command, cwd=repo_root, timeout=120, commands=commands, env=docker_run_env or None)
@@ -1611,6 +1938,8 @@ def main(argv: list[str] | None = None) -> int:
     target_session_ids: list[str] = [session_id]
     target_session_boundary_events: list[dict[str, Any]] = []
     pending_fresh_target_session: dict[str, Any] | None = None
+    runtime_apply_fresh_boundary_requested = False
+    project_init_fresh_boundary_requested = False
     fresh_target_session_count = 0
     turns: list[dict[str, Any]] = []
     responder_turns: list[dict[str, Any]] = []
@@ -1635,7 +1964,12 @@ def main(argv: list[str] | None = None) -> int:
                 "other service-specific facts not visible in the dialogue."
             )
             turn_session_boundary_event = {
-                "type": "fresh_target_client_session_after_runtime_apply",
+                "type": str(
+                    pending_fresh_target_session.get(
+                        "boundary_type",
+                        "fresh_target_client_session_after_runtime_apply",
+                    )
+                ),
                 "before_turn": index,
                 "previous_session_id": old_session_id,
                 "requested_session_id": requested_session_id,
@@ -1831,12 +2165,31 @@ def main(argv: list[str] | None = None) -> int:
         if turn_session_boundary_event is not None:
             target_session_boundary_events.append(turn_session_boundary_event)
         success = turn_runtime_apply_success(turn_record)
-        if success is not None and fresh_target_session_count == 0 and pending_fresh_target_session is None:
+        if (
+            success is not None
+            and not runtime_apply_fresh_boundary_requested
+            and pending_fresh_target_session is None
+        ):
             pending_fresh_target_session = {
                 "after_turn": index,
+                "boundary_type": "fresh_target_client_session_after_runtime_apply",
                 "runtime_apply_success": success,
                 "deterministic_scope": "structured runtime-apply result only; semantic adequacy remains evaluator-owned",
             }
+            runtime_apply_fresh_boundary_requested = True
+        project_init_success = turn_project_init_apply_success(turn_record)
+        if (
+            project_init_success is not None
+            and not project_init_fresh_boundary_requested
+            and pending_fresh_target_session is None
+        ):
+            pending_fresh_target_session = {
+                "after_turn": index,
+                "boundary_type": "fresh_target_client_session_after_project_init_apply",
+                "project_init_apply_success": project_init_success,
+                "deterministic_scope": "structured project-init install result only; semantic adequacy remains evaluator-owned",
+            }
+            project_init_fresh_boundary_requested = True
         if result["timeout"]:
             dialogue_stop_reason = "tested_assistant_timeout"
             break
@@ -1901,6 +2254,7 @@ def main(argv: list[str] | None = None) -> int:
     write_json(native_transcript_export_manifest, {"exports": native_transcript_exports})
     generation_report = build_generation_report(client=args.client, session_id=session_id, turns=turns)
     structural_onboarding_proof = build_structural_onboarding_proof_report(turns)
+    scoped_env_cleanup = cleanup_onboarding_client_scoped_env(container)
     summary = {
         **summary_base,
         "dry_run": False,
@@ -1912,6 +2266,10 @@ def main(argv: list[str] | None = None) -> int:
         "build_returncode": None if build_result is None else build_result["returncode"],
         "launch_returncode": launch["returncode"],
         "runtime_returncode": runtime["returncode"],
+        "target_client_contextforge_scoped_env": {
+            **dict(summary_base.get("target_client_contextforge_scoped_env") or {}),
+            **scoped_env_cleanup,
+        },
         "simulated_human_responder_runtime": responder_runtime,
         "evidence_exports": {
             "native_pi_transcript_manifest": str(native_transcript_export_manifest),

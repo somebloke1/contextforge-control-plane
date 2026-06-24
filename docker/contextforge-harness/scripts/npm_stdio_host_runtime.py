@@ -271,6 +271,16 @@ def wait_for_bridge_endpoint(
     raise RuntimeError(f"bridge endpoint did not become reachable at {host}:{port}: {last_error}")
 
 
+def endpoint_accepts_connection(bridge_endpoint: Mapping[str, Any], *, timeout: float = 0.5) -> bool:
+    host = bridge_probe_host(str(bridge_endpoint.get("host") or "127.0.0.1"))
+    port = int(bridge_endpoint["port"])
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def read_state(project_root: Path, service_binding: str) -> dict[str, Any] | None:
     path = runtime_state_path(project_root, service_binding)
     if not path.exists():
@@ -360,6 +370,9 @@ def launch_bridge(
         if process.poll() is not None:
             raise RuntimeError(f"bridge process exited during startup with code {process.returncode}")
         readiness = wait_for_bridge_endpoint(bridge_endpoint, process)
+        time.sleep(0.5)
+        if process.poll() is not None:
+            raise RuntimeError(f"bridge process exited after endpoint readiness with code {process.returncode}")
     except Exception:
         log_handle.close()
         stop_pid(int(process.pid))
@@ -481,6 +494,12 @@ def apply_service(project_root: str | Path, service_binding: str, *, runner=subp
     stopped_previous = False
     if previous_state and previous_state.get("pid") and bridge_state_running(previous_state):
         stopped_previous = stop_pid(int(previous_state["pid"]))
+    bridge_endpoint = endpoint(record, service_binding)
+    if endpoint_accepts_connection(bridge_endpoint):
+        raise RuntimeError(
+            "managed npm-stdio endpoint port is already in use before bridge launch "
+            f"for {service_binding}: {bridge_probe_host(str(bridge_endpoint.get('host') or '127.0.0.1'))}:{int(bridge_endpoint['port'])}"
+        )
     try:
         bridge = launch_bridge(record, service_binding, runtime_dir, popen=popen)
     except Exception as exc:

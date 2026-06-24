@@ -263,6 +263,14 @@ The runner must:
   MCP service, tools, virtual server, prompts, and resources plus
   available-capabilities readback for activation-menu exposure; stop as invalid
   if the foil is already visible;
+- preflight each selected semantic-test model profile against the current
+  provider using a representative prompt and output-token envelope before
+  Docker build or target-client dialogue. Provider authentication, route,
+  rate, credit, prompt-token, or output-token failures are setup failures, not
+  ContextForge product failures. Stop and package that evidence rather than
+  consuming a full semantic dialogue. Do not reduce the preflight envelope
+  merely to make a profile pass unless the profile's eligibility and
+  acceptance scope are explicitly changed;
 - choose one semantic-test model profile for the full run;
 - start non-ephemeral Pi/OpenCode containers;
 - maintain distinct session ids for tested assistant and simulated human;

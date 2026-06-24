@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import register_time_dev as registration
+import npm_stdio_host_records
+import npm_stdio_host_runtime
 
 
 SCHEMA_URI = "contextforge://diagnostics/onboarding-foil-cleanup/v1"
@@ -29,6 +31,9 @@ READ_ENDPOINTS = {
 FOILS = {
     "time": {
         "service_binding": "time:canonical",
+        "host_service_bindings": ["time:canonical", "time:project"],
+        "host_service_binding_prefixes": ["time:"],
+        "host_runtime_slug_prefixes": ["time"],
         "gateway_names": ["time-dev-docker", "time"],
         "server_names": ["time_dev_docker_server", "time_server"],
         "tool_name_prefixes": ["time-dev-docker-", "time-"],
@@ -55,8 +60,11 @@ FOILS = {
     },
     "memory": {
         "service_binding": "memory:canonical",
-        "gateway_names": ["memory-canonical-gateway", "memory-gateway", "memory"],
-        "server_names": ["memory-canonical-server", "memory-server"],
+        "host_service_bindings": ["memory:canonical", "memory:project"],
+        "host_service_binding_prefixes": ["memory:", "memory-"],
+        "host_runtime_slug_prefixes": ["memory"],
+        "gateway_names": ["memory-canonical-gateway", "memory-gateway", "memory-project-gateway", "memory"],
+        "server_names": ["memory-canonical-server", "memory-server", "memory-project-server"],
         "tool_name_prefixes": ["memory-", "memory_"],
         "prompt_name_prefixes": ["memory-", "memory_"],
         "resource_uri_prefixes": [
@@ -75,6 +83,9 @@ FOILS = {
         ],
     }
 }
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def now_iso() -> str:
@@ -213,10 +224,9 @@ def contextforge_server_readback(live: dict[str, list[dict[str, Any]]]) -> list[
 
 
 def repo_artifact_readback(foil: dict[str, Any]) -> dict[str, Any]:
-    repo_root = Path(__file__).resolve().parents[3]
     paths = [str(item) for item in foil.get("repo_artifact_paths") or [] if str(item).strip()]
     matches = [
-        {"path": path, "present": (repo_root / path).exists()}
+        {"path": path, "present": (REPO_ROOT / path).exists()}
         for path in paths
     ]
     return {
@@ -227,7 +237,183 @@ def repo_artifact_readback(foil: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_manifest(*, foil_id: str, base_url: str, live: dict[str, list[dict[str, Any]]], apply: bool) -> dict[str, Any]:
+def host_binding_matches(binding: str, foil: dict[str, Any]) -> bool:
+    if binding in set(foil.get("host_service_bindings") or []):
+        return True
+    return any(binding.startswith(str(prefix)) for prefix in foil.get("host_service_binding_prefixes") or [])
+
+
+def host_runtime_dir_matches(path: Path, foil: dict[str, Any]) -> bool:
+    name = path.name
+    return any(name.startswith(str(prefix)) for prefix in foil.get("host_runtime_slug_prefixes") or [])
+
+
+def managed_instance_manifest_matches(manifest: dict[str, Any], foil: dict[str, Any]) -> bool:
+    if manifest.get("managed_by") != npm_stdio_host_records.HOST_SERVICE_ID:
+        return False
+    service_binding = str(manifest.get("service_binding") or "").strip()
+    if service_binding and host_binding_matches(service_binding, foil):
+        return True
+    slug = str(manifest.get("slug") or "").strip()
+    service = str(manifest.get("service") or "").strip()
+    return any(
+        value and any(value.startswith(str(prefix)) for prefix in foil.get("host_runtime_slug_prefixes") or [])
+        for value in (slug, service)
+    )
+
+
+def managed_instance_manifest_readback(root: Path, foil: dict[str, Any]) -> list[dict[str, Any]]:
+    instances_root = root / "server-instances"
+    if not instances_root.exists():
+        return []
+    manifests: list[dict[str, Any]] = []
+    for path in sorted(instances_root.glob("*/instance.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict) or not managed_instance_manifest_matches(payload, foil):
+            continue
+        manifests.append(
+            {
+                "service_binding": str(payload.get("service_binding") or ""),
+                "service": str(payload.get("service") or ""),
+                "slug": str(payload.get("slug") or path.parent.name),
+                "manifest_path": str(path.resolve(strict=False)),
+                "manifest_exists": path.exists(),
+            }
+        )
+    return manifests
+
+
+def host_readback(project_root: Path | None, foil: dict[str, Any]) -> dict[str, Any]:
+    if project_root is None:
+        return {
+            "enabled": False,
+            "claim_boundary": "host readback skipped only for fixture mode without --project-root",
+            "counts": {"host_records": 0, "host_runtime_services": 0, "host_managed_instance_manifests": 0},
+            "matches": {"host_records": [], "host_runtime_services": [], "host_managed_instance_manifests": []},
+            "clean": True,
+        }
+    root = project_root.resolve(strict=False)
+    index = npm_stdio_host_records.load_index(root)
+    records: list[dict[str, Any]] = []
+    for service_binding, entry in sorted((index.get("records") or {}).items()):
+        if not isinstance(service_binding, str) or not host_binding_matches(service_binding, foil):
+            continue
+        record_path = ""
+        record_exists = False
+        if isinstance(entry, dict) and entry.get("record_path"):
+            path = (root / str(entry["record_path"])).resolve(strict=False)
+            record_path = str(path)
+            record_exists = path.exists()
+        records.append(
+            {
+                "service_binding": service_binding,
+                "index_entry_present": True,
+                "record_path": record_path,
+                "record_exists": record_exists,
+            }
+        )
+
+    runtime_services: list[dict[str, Any]] = []
+    services_root = (root / npm_stdio_host_runtime.SERVICES_ROOT).resolve(strict=False)
+    if services_root.exists():
+        for path in sorted(item for item in services_root.iterdir() if item.is_dir()):
+            if not host_runtime_dir_matches(path, foil):
+                continue
+            state_path = path / "runtime-state.json"
+            service_binding = path.name
+            running = False
+            if state_path.exists():
+                try:
+                    state = json.loads(state_path.read_text(encoding="utf-8"))
+                    if isinstance(state, dict):
+                        service_binding = str(state.get("service_binding") or service_binding)
+                        running = npm_stdio_host_runtime.bridge_state_running(state)
+                except (OSError, json.JSONDecodeError):
+                    pass
+            runtime_services.append(
+                {
+                    "service_binding": service_binding,
+                    "runtime_dir": str(path),
+                    "runtime_state_path": str(state_path),
+                    "runtime_state_exists": state_path.exists(),
+                    "running": running,
+                }
+            )
+    managed_instance_manifests = managed_instance_manifest_readback(root, foil)
+    counts = {
+        "host_records": len(records),
+        "host_runtime_services": len(runtime_services),
+        "host_managed_instance_manifests": len(managed_instance_manifests),
+    }
+    return {
+        "enabled": True,
+        "project_root": str(root),
+        "host_service": npm_stdio_host_records.HOST_SERVICE_ID,
+        "counts": counts,
+        "matches": {
+            "host_records": records,
+            "host_runtime_services": runtime_services,
+            "host_managed_instance_manifests": managed_instance_manifests,
+        },
+        "clean": all(value == 0 for value in counts.values()),
+        "claim_boundary": "host readback covers managed npm-stdio host records, runtime dirs, and managed instance manifests; ContextForge registry scopes are counted separately",
+    }
+
+
+def host_operations(readback: dict[str, Any]) -> list[dict[str, Any]]:
+    operations: list[dict[str, Any]] = []
+    if not readback.get("enabled"):
+        return operations
+    for record in readback.get("matches", {}).get("host_runtime_services", []):
+        service_binding = str(record.get("service_binding") or "").strip()
+        if service_binding:
+            operations.append(
+                {
+                    "kind": "npm_stdio_host_runtime",
+                    "service_binding": service_binding,
+                    "scope": "npm_stdio_host_runtime",
+                    "method": "DELETE",
+                    "path": record.get("runtime_dir") or "",
+                }
+            )
+    for record in readback.get("matches", {}).get("host_managed_instance_manifests", []):
+        path = str(record.get("manifest_path") or "").strip()
+        if path:
+            operations.append(
+                {
+                    "kind": "npm_stdio_host_instance_manifest",
+                    "service_binding": str(record.get("service_binding") or "").strip(),
+                    "scope": "npm_stdio_host_instance_manifest",
+                    "method": "DELETE",
+                    "path": path,
+                }
+            )
+    for record in readback.get("matches", {}).get("host_records", []):
+        service_binding = str(record.get("service_binding") or "").strip()
+        if service_binding:
+            operations.append(
+                {
+                    "kind": "npm_stdio_host_record",
+                    "service_binding": service_binding,
+                    "scope": "npm_stdio_host_record",
+                    "method": "DELETE",
+                    "path": record.get("record_path") or "",
+                }
+            )
+    return operations
+
+
+def build_manifest(
+    *,
+    foil_id: str,
+    base_url: str,
+    live: dict[str, list[dict[str, Any]]],
+    apply: bool,
+    project_root: Path | None = None,
+) -> dict[str, Any]:
     foil = FOILS[foil_id]
     matches = collect_matches(live, foil)
     operations: list[dict[str, Any]] = []
@@ -243,8 +429,10 @@ def build_manifest(*, foil_id: str, base_url: str, live: dict[str, list[dict[str
             operations.append({**operation(kind, row), "scope": scope})
 
     counts = {scope: len(rows) for scope, rows in matches.items()}
+    host = host_readback(project_root, foil)
+    host_planned_operations = host_operations(host)
     operation_counts = Counter(op["path"] for op in operations)
-    clean = all(counts[scope] == 0 for scope in foil["required_clean_scopes"])
+    clean = all(counts[scope] == 0 for scope in foil["required_clean_scopes"]) and host["clean"]
     return {
         "schema_uri": SCHEMA_URI,
         "generated_at": now_iso(),
@@ -259,16 +447,19 @@ def build_manifest(*, foil_id: str, base_url: str, live: dict[str, list[dict[str
         "contextforge_servers": contextforge_server_readback(live),
         "repo_artifact_readback": repo_artifact_readback(foil),
         "counts": counts,
+        "npm_stdio_host_readback": host,
         "matches": {
             scope: [{"id": item_id(row), "name": item_name(row), "enabled": row.get("enabled")} for row in rows]
             for scope, rows in matches.items()
         },
         "planned_operations": operations,
+        "planned_host_operations": host_planned_operations,
         "operation_counts": dict(sorted(operation_counts.items())),
         "non_actions": [
             "does not mutate legacy/live 4444 unless explicitly pointed at that base URL",
             "does not write directly to the ContextForge database",
-            "does not remove Docker volumes, server-instance directories, or client harness evidence",
+            "does not remove Docker volumes or client harness evidence",
+            "removes only scoped managed npm-stdio host records, runtime dirs, and managed instance manifests when --apply is used",
         ],
     }
 
@@ -292,6 +483,59 @@ def execute_operations(base_url: str, token: str, operations: list[dict[str, Any
     return results
 
 
+def execute_host_operations(project_root: Path, operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for op in operations:
+        service_binding = str(op.get("service_binding") or "")
+        path = str(op.get("path") or "")
+        key = (str(op.get("kind") or ""), path or service_binding)
+        if not (service_binding or path) or key in seen:
+            continue
+        seen.add(key)
+        result = {**op}
+        try:
+            if op["kind"] == "npm_stdio_host_runtime":
+                details = npm_stdio_host_runtime.delete_service(project_root, service_binding)
+                result["status"] = "deleted_or_absent"
+                result["details"] = details
+                result["ok"] = details.get("rollback_result") == "passed"
+            elif op["kind"] == "npm_stdio_host_record":
+                details = npm_stdio_host_records.delete_service_record(project_root, service_binding)
+                result["status"] = "deleted_or_absent"
+                result["details"] = details
+                result["ok"] = bool(details.get("ok"))
+            elif op["kind"] == "npm_stdio_host_instance_manifest":
+                manifest_path = Path(path).resolve(strict=False)
+                details: dict[str, Any] = {"path": str(manifest_path), "removed": False}
+                if manifest_path.exists():
+                    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    matching_foils = [
+                        item
+                        for item in FOILS.values()
+                        if isinstance(payload, dict)
+                        and managed_instance_manifest_matches(payload, item)
+                        and (not service_binding or host_binding_matches(service_binding, item))
+                    ]
+                    if not matching_foils:
+                        raise RuntimeError(f"refusing to remove unmanaged or nonmatching instance manifest: {manifest_path}")
+                    manifest_path.unlink()
+                    details["removed"] = True
+                result["status"] = "deleted_or_absent"
+                result["details"] = details
+                result["ok"] = True
+            else:
+                result["status"] = "failed"
+                result["ok"] = False
+                result["error"] = f"unsupported host cleanup kind: {op['kind']}"
+        except Exception as exc:  # noqa: BLE001
+            result["status"] = "failed"
+            result["ok"] = False
+            result["error"] = str(exc)
+        results.append(result)
+    return results
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--foil", choices=sorted(FOILS), default="time")
@@ -300,23 +544,37 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--live-json", type=Path, help="Fixture JSON with gateways, tools, servers, prompts, and resources.")
     parser.add_argument("--output", type=Path, help="Write the full readback manifest JSON here.")
     parser.add_argument("--apply", action="store_true", help="Delete matched foil artifacts from the selected development surface.")
+    parser.add_argument("--project-root", type=Path, help="Project root for managed npm-stdio host record/runtime cleanup.")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     live = load_live(args.live_json, base_url=args.base_url, env_file=args.env_file)
-    manifest = build_manifest(foil_id=args.foil, base_url=args.base_url, live=live, apply=args.apply)
+    project_root = args.project_root
+    if project_root is None and args.live_json is None:
+        project_root = REPO_ROOT
+    manifest = build_manifest(foil_id=args.foil, base_url=args.base_url, live=live, apply=args.apply, project_root=project_root)
 
-    if args.apply and manifest["planned_operations"]:
+    if args.apply and (manifest["planned_operations"] or manifest["planned_host_operations"]):
         if args.live_json is not None:
             raise RuntimeError("--apply cannot be used with --live-json fixture mode")
         token = registration.login(args.base_url, registration.read_env(args.env_file))
         manifest["operation_results"] = execute_operations(args.base_url, token, manifest["planned_operations"])
-        manifest["live_mutation_performed"] = True
+        manifest["host_operation_results"] = execute_host_operations(project_root or REPO_ROOT, manifest["planned_host_operations"])
+        manifest["live_mutation_performed"] = bool(manifest["operation_results"] or manifest["host_operation_results"])
         post_live = read_live(args.base_url, args.env_file)
-        manifest["post_apply_readback"] = build_manifest(foil_id=args.foil, base_url=args.base_url, live=post_live, apply=False)
-        if any(result.get("status") == "failed" for result in manifest["operation_results"]):
+        manifest["post_apply_readback"] = build_manifest(
+            foil_id=args.foil,
+            base_url=args.base_url,
+            live=post_live,
+            apply=False,
+            project_root=project_root,
+        )
+        if any(result.get("status") == "failed" for result in manifest["operation_results"]) or any(
+            result.get("status") == "failed" or result.get("ok") is False
+            for result in manifest["host_operation_results"]
+        ):
             manifest["status"] = "cleanup_failed"
         else:
             manifest["status"] = manifest["post_apply_readback"]["status"]

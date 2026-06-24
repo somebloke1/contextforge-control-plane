@@ -83,7 +83,7 @@ def context7_safe_probe_validation(target_client: str = "codex") -> dict[str, An
 def npm_stdio_required_payload() -> dict[str, Any]:
     return {
         "packageRegistryType": "npm",
-        "packageVersion": "1.0.0",
+        "packageVersion": "latest",
         "runtimeHint": "npx",
         "npmPackageConfirmed": True,
         "environmentVariablesReviewed": True,
@@ -256,6 +256,58 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         service_ids = {service["service_binding"] for service in capabilities["available_services"]}
         self.assertIn(f"serena:{identity.hash}", service_ids)
+
+    def test_capability_menu_includes_project_local_onboarded_service_manifest(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            instance = root / "server-instances" / "memory-canonical"
+            instance.mkdir(parents=True)
+            (instance / "instance.json").write_text(
+                json.dumps(
+                    {
+                        "schema_uri": "contextforge://control-plane/server-instance/v1",
+                        "enabled": True,
+                        "kind": "mcp",
+                        "name": "memory",
+                        "service": "memory",
+                        "slug": "memory-canonical",
+                        "service_binding": "memory:canonical",
+                        "managed_by": "npm-stdio-host",
+                        "backend": {
+                            "transport": "stdio",
+                            "package": "@modelcontextprotocol/server-memory",
+                            "command": "npx",
+                            "args": ["-y", "@modelcontextprotocol/server-memory@2026.1.26"],
+                        },
+                        "bridge": {
+                            "needed": True,
+                            "provider": "npm-stdio-host",
+                            "streamable_http_url": "http://npm-stdio-host:34975/mcp",
+                        },
+                        "contextforge": {
+                            "gateway": {"id": "gw-memory", "name": "memory-gateway"},
+                            "virtual_server": {"id": "vs-memory", "name": "memory-server"},
+                        },
+                        "registration": {
+                            "status": "registered",
+                            "registered_tools": ["memory-gateway-read-graph"],
+                        },
+                        "scope": {
+                            "scope_type": "managed_npm_stdio_host_service",
+                            "requires_local_project_scope": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            capabilities = helper.list_available_capabilities(project_root=root, client_type="pi")
+
+        services = {service["service_binding"]: service for service in capabilities["available_services"]}
+        self.assertIn("memory:canonical", services)
+        self.assertIn("memory:canonical", {choice["id"] for choice in capabilities["next_turn"]["choices"]})
+        self.assertEqual("server-instances/memory-canonical", services["memory:canonical"]["backend_instance"])
+        self.assertEqual("shared_canonical", services["memory:canonical"]["activation_class"])
 
     def test_discovery_adds_unprovisioned_serena_candidate_for_new_workspace_project(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2142,7 +2194,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 sourcePath="https://github.com/modelcontextprotocol/servers/tree/main/src/time",
                 backendPackage="mcp-server-time",
                 packageRegistryType="npm",
-                packageVersion="1.0.0",
+                packageVersion="latest",
                 npmPackageConfirmed=True,
                 clientType="pi",
             )
@@ -2330,6 +2382,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         package_metadata = {
             "description": "Memory MCP server",
             "dist-tags": {"latest": "2026.1.26"},
+            "versions": {
+                "2025.11.25": {},
+                "2026.1.26": {},
+            },
             "repository": {"type": "git", "url": "git+https://github.com/modelcontextprotocol/servers.git"},
         }
 
@@ -2346,7 +2402,126 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("@modelcontextprotocol/server-memory", result["npm_package_metadata"]["package"])
         self.assertEqual("2026.1.26", result["npm_package_metadata"]["latest"])
+        self.assertEqual(2, result["npm_package_metadata"]["published_version_count"])
+        self.assertIn("source package.json version 0.6.3 is not listed", "; ".join(result["warnings"]))
         self.assertIn("NPM package metadata", result["assistant_visible_response"])
+        self.assertIn("do not pin to a source `package.json` version", result["assistant_visible_response"])
+
+    def test_service_onboarding_runtime_apply_blocks_unpublished_npm_version_pin(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            onboarding_surfaces,
+            "fetch_npm_package_metadata",
+            return_value={
+                "registry": "npm",
+                "package": "@modelcontextprotocol/server-memory",
+                "latest": "2026.1.26",
+                "dist_tags": {"latest": "2026.1.26"},
+                "published_versions": ["2025.11.25", "2026.1.26"],
+                "published_version_count": 2,
+            },
+        ):
+            root = Path(tmp).resolve()
+            result = onboarding_surfaces.build_service_onboarding_runtime_apply_package(
+                str(root),
+                {
+                    "candidateService": "memory",
+                    "operatorGoal": "Add the Memory MCP service.",
+                    "sourcePath": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
+                    "backendPackage": "@modelcontextprotocol/server-memory",
+                    "backendCommand": "npx",
+                    "transportType": "stdio",
+                    "localizationType": "shared_canonical",
+                    "functionalType": "governance_memory",
+                    "stateType": "runtime_evidence_state",
+                    "credentialBoundary": "no credentials required",
+                    "expectedTools": ["read_graph"],
+                    "packageRegistryType": "npm",
+                    "packageVersion": "0.6.3",
+                    "runtimeHint": "npx",
+                    "npmPackageConfirmed": True,
+                    "environmentVariablesReviewed": True,
+                    "packageArgumentsReviewed": True,
+                    "environmentVariables": [],
+                    "packageArguments": ["-y", "@modelcontextprotocol/server-memory"],
+                    "requiredSecretNames": [],
+                    "toolSchemas": {
+                        "read_graph": {
+                            "description": "Read the memory graph.",
+                            "inputSchema": {"type": "object", "properties": {}},
+                            "source_anchor": "src/memory/README.md",
+                        }
+                    },
+                    "promptLibrary": {
+                        "abstractPrompt": "Memory provides graph-backed entity and relation tools.",
+                        "detailPrompts": {"usage": "Use Memory for durable knowledge graph facts."},
+                    },
+                },
+            )
+
+        self.assertEqual("service_onboarding_runtime_apply_blocked", result["status"])
+        gaps = {gap["field"]: gap["reason"] for gap in result["required_inputs"]}
+        self.assertIn("package_version", gaps)
+        self.assertIn("0.6.3", gaps["package_version"])
+        self.assertIn("2026.1.26", gaps["package_version"])
+        self.assertFalse(result["mutation_allowed"])
+
+    def test_service_onboarding_runtime_apply_derives_expected_tools_from_tool_schema_records(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            result = onboarding_surfaces.build_service_onboarding_runtime_apply_package(
+                str(root),
+                {
+                    "candidateService": "memory",
+                    "operatorGoal": "Add the Memory MCP service.",
+                    "sourcePath": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
+                    "backendPackage": "@modelcontextprotocol/server-memory",
+                    "backendCommand": "npx",
+                    "backendArgs": ["-y", "@modelcontextprotocol/server-memory"],
+                    "transportType": "stdio",
+                    "localizationType": "project_scoped",
+                    "functionalType": "governance_memory",
+                    "stateType": "local_filesystem_state",
+                    "credentialBoundary": "no credentials required",
+                    "packageRegistryType": "npm",
+                    "packageVersion": "2026.1.26",
+                    "runtimeHint": "npx",
+                    "npmPackageConfirmed": True,
+                    "environmentVariablesReviewed": True,
+                    "packageArgumentsReviewed": True,
+                    "environmentVariables": [{"name": "MEMORY_FILE_PATH", "value": "/workspace/.contextforge/services/memory/memory.jsonl"}],
+                    "packageArguments": ["-y", "@modelcontextprotocol/server-memory"],
+                    "requiredSecretNames": [],
+                    "toolSchemaRecords": [
+                        {
+                            "name": "create_entities",
+                            "description": "Create entities in the memory graph.",
+                            "inputSchema": {"type": "object", "properties": {"entities": {"type": "array"}}},
+                            "sourceAnchor": "src/memory/index.ts",
+                        },
+                        {
+                            "name": "read_graph",
+                            "description": "Read the memory graph.",
+                            "inputSchema": {"type": "object", "properties": {}},
+                            "sourceAnchor": "src/memory/index.ts",
+                        },
+                    ],
+                    "promptLibrary": {
+                        "abstractPrompt": "Memory provides graph-backed entity and relation tools.",
+                        "detailPrompts": {"usage": "Use Memory for durable knowledge graph facts."},
+                    },
+                },
+            )
+
+        self.assertEqual("service_onboarding_runtime_apply_package", result["status"])
+        expected = ["create_entities", "read_graph"]
+        self.assertEqual(
+            expected,
+            result["install_artifact_contract"]["artifacts"]["contextforge_api_json"]["content"]["expected_tools"],
+        )
+        self.assertEqual(
+            expected,
+            result["contextforge_registration_plan"]["candidate_descriptor"]["expected_tools"],
+        )
 
     def test_contextforge_helper_mcp_exposes_source_research_payload_to_client(self) -> None:
         listing = [
@@ -2595,6 +2770,17 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             ["get_current_time", "convert_time"],
             contract["artifacts"]["contextforge_api_json"]["content"]["expected_tools"],
         )
+        server_body = contract["artifacts"]["contextforge_api_json"]["content"]["virtual_server"]["body"]["server"]
+        self.assertEqual([], server_body["associated_tools"])
+        self.assertEqual(
+            {
+                "method": "after_gateway_tool_refresh_filter_by_expected_tools",
+                "expected_tools": ["get_current_time", "convert_time"],
+                "source": "tool_refresh.expected_tools",
+            },
+            server_body["x_associated_tools_resolution"],
+        )
+        self.assertNotIn("tool_ids_from_expected_tools", json.dumps(contract["artifacts"]["contextforge_api_json"]))
         self.assertEqual(
             "package_bridge_stdio_to_http_sse",
             parsed["contextforge_registration_plan"]["transport_decision"]["decision"],
@@ -2838,7 +3024,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("agent_hidden_onboarding_how_to", result)
         self.assertNotIn("executor_result", result)
         self.assertIn("ContextForge development surface", result["assistant_visible_response"])
-        self.assertIn("new Pi/OpenCode session", result["assistant_visible_response"])
+        self.assertIn("project-init flow", result["assistant_visible_response"])
+        self.assertIn("select `time:canonical`", result["assistant_visible_response"])
+        self.assertIn("fresh/reloaded client session", result["assistant_visible_response"])
         self.assertIn("may have installed packages and started or restarted hosted service processes", result["assistant_visible_response"])
         self.assertIn("Target-client usability is not proven yet", result["assistant_visible_response"])
 
@@ -2885,6 +3073,71 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             approval_source = root / "latest-user.json"
             approval_source.write_text(
                 json.dumps({"cwd": str(root), "text": f"approve runtime execute for time through time-gateway using package {package_id}"}),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}, clear=False),
+                mock.patch.object(onboarding_surfaces, "load_runtime_package_executor", return_value=FakeExecutor),
+            ):
+                result = contextforge_helper_mcp.cf_project_service_onboarding_runtime_execute(
+                    project_root=str(root),
+                    runtime_apply_package_id=package_id,
+                    client_type="opencode",
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("service_onboarding_runtime_applied", result["status"])
+        self.assertEqual(package_id, result["runtime_apply_package_id"])
+        self.assertEqual(["time-dev-docker-get-current-time", "time-dev-docker-convert-time"], result["tool_names"])
+
+    def test_contextforge_helper_mcp_runtime_execute_accepts_package_id_plus_gateway_identity_approval(self) -> None:
+        class FakeExecutor:
+            @staticmethod
+            def run(**kwargs: Any) -> dict[str, Any]:
+                self.assertEqual("time-gateway", kwargs["gateway_name"])
+                self.assertEqual("time-server", kwargs["server_name"])
+                self.assertTrue(kwargs["apply"])
+                return {
+                    "mutation_performed": True,
+                    "package": {"service_binding": "time:canonical"},
+                    "gateway": {"action": "ready", "name": "time-gateway"},
+                    "server": {"action": "ready", "name": "time-server"},
+                    "tool_names": ["time-dev-docker-get-current-time", "time-dev-docker-convert-time"],
+                }
+
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            package = onboarding_surfaces.build_service_onboarding_runtime_apply_package(
+                str(root),
+                {
+                    "candidate_service": "time",
+                    "operator_goal": "Add the Time MCP service.",
+                    "source_path": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+                    "backend_package": "mcp-server-time",
+                    "backend_command": "uvx",
+                    "backend_args": ["mcp-server-time", "--local-timezone", "UTC"],
+                    "transport_type": "stdio",
+                    "localization_type": "shared_canonical",
+                    "functional_type": "time_timezone",
+                    "state_type": "stateless",
+                    "credential_boundary": "no credentials required",
+                    "approval_type": "runtime_registration",
+                    "expected_tools": ["get_current_time", "convert_time"],
+                    **npm_stdio_required_kwargs(),
+                },
+            )
+            package_id = package["runtime_apply_package_id"]
+            approval_source = root / "latest-user.json"
+            approval_source.write_text(
+                json.dumps(
+                    {
+                        "cwd": str(root),
+                        "text": (
+                            f"Approved to run the ContextForge runtime executor with package id `{package_id}`, "
+                            "bounded to the time-gateway / time-server registration only. Do not touch unrelated services."
+                        ),
+                    }
+                ),
                 encoding="utf-8",
             )
             with (
@@ -5032,6 +5285,160 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
             self.assertIn("assistant_visible_response", proposal)
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
+
+    def test_pi_continue_honors_explicit_selected_services_over_pending_serena_input(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "pi-latest-user-message.json"
+            instance = root / "server-instances" / "memory-project"
+            instance.mkdir(parents=True)
+            (instance / "instance.json").write_text(
+                json.dumps(
+                    {
+                        "schema_uri": "contextforge://control-plane/server-instance/v1",
+                        "enabled": True,
+                        "kind": "mcp",
+                        "name": "memory",
+                        "service": "memory",
+                        "slug": "memory-project",
+                        "service_binding": "memory:project",
+                        "managed_by": "npm-stdio-host",
+                        "backend": {
+                            "transport": "stdio",
+                            "package": "@modelcontextprotocol/server-memory",
+                            "command": "npx",
+                            "args": ["-y", "@modelcontextprotocol/server-memory@2026.1.26"],
+                        },
+                        "bridge": {
+                            "needed": True,
+                            "provider": "npm-stdio-host",
+                            "streamable_http_url": "http://npm-stdio-host:34975/mcp",
+                        },
+                        "contextforge": {
+                            "gateway": {"id": "gw-memory", "name": "memory-gateway"},
+                            "virtual_server": {"id": "vs-memory", "name": "memory-server"},
+                        },
+                        "registration": {
+                            "status": "registered",
+                            "registered_tools": ["memory-gateway-read-graph"],
+                        },
+                        "scope": {
+                            "scope_type": "managed_npm_stdio_host_service",
+                            "requires_local_project_scope": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            identity = common.project_identity(root)
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            contextforge_helper_mcp._remember_pending_project_init_input(
+                str(root),
+                ["memory:project", f"serena:{identity.hash}"],
+            )
+            approval_source.write_text(
+                json.dumps({"cwd": str(root), "text": "I only want memory now"}) + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                proposal = contextforge_helper_mcp.cf_project_init_continue(
+                    str(root),
+                    selected_services=["memory:project"],
+                    client_type="pi",
+                )
+                cli_result = pi_project_init_helper_cli.dispatch(
+                    "cf_project_init_continue",
+                    {
+                        "projectRoot": str(root),
+                        "clientType": "pi",
+                        "selectedServices": ["memory:project"],
+                    },
+                )
+
+        self.assertTrue(proposal["ok"], proposal)
+        self.assertEqual("project_init", proposal["workflow"])
+        self.assertEqual(["memory:project"], proposal["selected_service_bindings"])
+        self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
+        self.assertNotIn("Which language", proposal["assistant_visible_response"])
+        self.assertTrue(cli_result["ok"], cli_result)
+        self.assertEqual(["memory:project"], cli_result["selected_service_bindings"])
+        self.assertNotIn("Which language", cli_result["assistant_visible_response"])
+
+    def test_pi_continue_approval_wins_over_repeated_selected_services(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "pi-latest-user-message.json"
+            instance = root / "server-instances" / "memory-project"
+            instance.mkdir(parents=True)
+            (instance / "instance.json").write_text(
+                json.dumps(
+                    {
+                        "schema_uri": "contextforge://control-plane/server-instance/v1",
+                        "enabled": True,
+                        "kind": "mcp",
+                        "name": "memory",
+                        "service": "memory",
+                        "slug": "memory-project",
+                        "service_binding": "memory:project",
+                        "managed_by": "npm-stdio-host",
+                        "backend": {
+                            "transport": "stdio",
+                            "package": "@modelcontextprotocol/server-memory",
+                            "command": "npx",
+                            "args": ["-y", "@modelcontextprotocol/server-memory@2026.1.26"],
+                        },
+                        "bridge": {
+                            "needed": True,
+                            "provider": "npm-stdio-host",
+                            "streamable_http_url": "http://npm-stdio-host:34975/mcp",
+                        },
+                        "contextforge": {
+                            "gateway": {"id": "gw-memory", "name": "memory-gateway"},
+                            "virtual_server": {"id": "vs-memory", "name": "memory-server"},
+                        },
+                        "registration": {
+                            "status": "registered",
+                            "registered_tools": ["memory-gateway-read-graph"],
+                        },
+                        "scope": {
+                            "scope_type": "managed_npm_stdio_host_service",
+                            "requires_local_project_scope": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                approval_source.write_text(json.dumps({"cwd": str(root), "text": "memory"}) + "\n", encoding="utf-8")
+                proposal = contextforge_helper_mcp.cf_project_init_continue(
+                    str(root),
+                    selected_services=["memory:project"],
+                    client_type="pi",
+                )
+                approval_source.write_text(
+                    json.dumps({"cwd": str(root), "text": "I approve this client import/bind plan for memory:project"}) + "\n",
+                    encoding="utf-8",
+                )
+                applied = contextforge_helper_mcp.cf_project_init_continue(
+                    str(root),
+                    selected_services=["memory:project"],
+                    client_type="pi",
+                )
+
+        self.assertTrue(proposal["ok"], proposal)
+        self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
+        self.assertTrue(applied["ok"], applied)
+        self.assertEqual("installed", applied["installation_status"])
+        self.assertEqual(["memory:project"], applied["installed_service_bindings"])
+        self.assertIn("reload", applied["message"].lower())
+        self.assertNotIn("Approve or decline?", applied["message"])
 
     def test_pi_continue_maps_pending_serena_numeric_defer_to_non_serena_plan(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:

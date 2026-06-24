@@ -256,6 +256,16 @@ The runner package should emit a manifest-first evidence bundle with:
 - evaluator score sheet and final narrative prompt for one after-action
   judgment covering every turn and the whole dialogue.
 
+Before launching live target-client dialogue, run a semantic-model provider
+availability preflight for each selected profile using a representative prompt
+and output-token envelope for the current harness. This is deterministic setup
+evidence only. If a profile fails for provider authentication, rate, credit,
+prompt-token, output-token, or route limits, classify the run as
+environment/setup model-profile unavailable and stop before Docker build or
+target-client launch. Do not report that as a ContextForge onboarding product
+failure, and do not lower the envelope merely to pass unless the profile's
+eligibility and the reduced acceptance scope are explicitly changed.
+
 During live semantic runs, controller-facing progress checks should be limited
 to run start, the 2-minute mark, the 6-minute mark, and terminal completion or
 error. Do not add ad hoc live polling updates unless the run itself fails or

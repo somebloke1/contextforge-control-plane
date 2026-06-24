@@ -1692,7 +1692,12 @@ def _latest_text_is_approval(text: str) -> bool:
         lowered in {"approve", "approved", "yes approve", "i approve", "ok approve", "okay approve"}
         or lowered.startswith("approve ")
         or lowered.startswith("approved ")
-    )
+        or lowered.startswith("i approve ")
+        or lowered.startswith("yes, approve ")
+        or lowered.startswith("yes approve ")
+        or lowered.startswith("ok, approve ")
+        or lowered.startswith("okay, approve ")
+        )
 
 
 def _latest_text_has_approval_negation(text: str) -> bool:
@@ -1817,6 +1822,20 @@ def _text_contains_runtime_identity(text: str, identity_terms: set[str]) -> bool
     return False
 
 
+def _runtime_apply_gateway_identity_terms(service_binding: str) -> set[str]:
+    if not service_binding or ":" not in service_binding:
+        return set()
+    service = service_binding.split(":", 1)[0].strip().lower()
+    if not service:
+        return set()
+    return {
+        f"{service}-gateway",
+        f"{service}-server",
+        f"{service}:project",
+        f"{service}:canonical",
+    }
+
+
 def _runtime_apply_exact_approval_phrase(
     *,
     service_binding: str = "",
@@ -1874,6 +1893,7 @@ def _require_runtime_apply_approval_text(
             f"Exact approval phrase: {exact_phrase}"
         )
     identity_terms = _runtime_apply_identity_terms(candidate_service, service_binding, source_path, backend_package)
+    identity_terms |= _runtime_apply_gateway_identity_terms(service_binding)
     if identity_terms and not _text_contains_runtime_identity(lowered, identity_terms):
         raise PermissionError(
             "latest user message does not identify the service being approved for runtime/apply; "
@@ -3406,6 +3426,7 @@ def cf_project_init_record_service_decision(
 @server.tool()
 def cf_project_init_continue(
     project_root: str,
+    selected_services: list[dict[str, Any] | str] | None = None,
     client_type: str = DEFAULT_CLIENT_TYPE,
     dry_run: bool = False,
 ) -> dict[str, Any]:
@@ -3489,6 +3510,17 @@ def cf_project_init_continue(
                 dry_run=dry_run,
             )
             return client_visible_project_init_apply_payload(result)
+        if selected_services:
+            result = propose_project_init(
+                project_root=project_root,
+                selected_services=selected_services,
+                client_type=client_type,
+            )
+            if result.get("status") == "needs_input":
+                _remember_pending_project_init_input(project_root, selected_services)
+            elif result.get("ok") is not False:
+                _clear_pending_project_init_input(project_root)
+            return client_visible_project_init_plan_payload(result, include_next_turn=client_type != "codex")
         capabilities = helper.list_available_capabilities(
             project_root=project_root,
             client_type=client_type,

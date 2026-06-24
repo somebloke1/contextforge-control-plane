@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import random
+import re
 import shutil
 import sys
 import urllib.error
@@ -260,6 +261,22 @@ def profile_context_window(profile: dict[str, Any]) -> int:
         return 0
 
 
+def profile_max_output_tokens(profile: dict[str, Any]) -> int:
+    try:
+        value = int(profile.get("max_output_tokens", 16384))
+    except (TypeError, ValueError):
+        value = 16384
+    return max(1024, value)
+
+
+def profile_preflight_prompt_units(profile: dict[str, Any]) -> int:
+    try:
+        value = int(profile.get("preflight_prompt_units", 32000))
+    except (TypeError, ValueError):
+        value = 32000
+    return max(1024, value)
+
+
 def route_preferences(profile: dict[str, Any]) -> list[str]:
     raw = profile.get("route_preferences")
     if raw is None:
@@ -344,6 +361,139 @@ def choose_semantic_model_profile(
     return matches[0]
 
 
+def openrouter_base_url(profile: dict[str, Any], available_env: dict[str, str]) -> str:
+    base_url_env = str(profile.get("base_url_env") or "").strip()
+    return (
+        (os.environ.get(base_url_env) or available_env.get(base_url_env))
+        if base_url_env
+        else ""
+    ) or str(profile.get("default_base_url") or "https://openrouter.ai/api/v1")
+
+
+def classify_openrouter_preflight_failure(status_code: int, detail: str) -> str:
+    lower = detail.lower()
+    if status_code == 402 and "prompt tokens limit exceeded" in lower:
+        return "prompt_token_limit_exceeded"
+    if status_code == 402 and ("can only afford" in lower or "add more credits" in lower):
+        return "output_token_or_credit_limit"
+    if status_code in {401, 403}:
+        return "authentication_or_authorization_failed"
+    if status_code == 404:
+        return "model_or_route_not_found"
+    if status_code == 429:
+        return "rate_limited"
+    return f"http_{status_code}"
+
+
+def sanitize_provider_error_detail(detail: str) -> str:
+    return re.sub(r'("user_id"\s*:\s*)"[^"]+"', r'\1"<redacted>"', detail)
+
+
+def semantic_model_profile_preflight(
+    profile: dict[str, Any],
+    available_env: dict[str, str],
+    *,
+    urlopen: Any = urllib.request.urlopen,
+    timeout: int = 90,
+) -> dict[str, Any]:
+    provider_kind = str(profile.get("provider_kind") or "").strip()
+    record: dict[str, Any] = {
+        "status": "skipped",
+        "provider_kind": provider_kind,
+        "profile_id": profile.get("id"),
+        "model": profile.get("model"),
+        "deterministic_scope": (
+            "provider execution availability only; this does not judge assistant meaning "
+            "or semantic acceptance"
+        ),
+    }
+    if provider_kind != "openrouter":
+        record["reason"] = "provider preflight not implemented for this provider_kind"
+        return record
+    model = str(profile.get("model") or "").strip()
+    key_env = str(profile.get("api_key_env") or "OPENROUTER_API_KEY")
+    api_key = os.environ.get(key_env) or available_env.get(key_env)
+    if not api_key:
+        record.update({"status": "failed", "failure_class": "missing_api_key", "api_key_env": key_env})
+        return record
+    base_url = openrouter_base_url(profile, available_env).rstrip("/")
+    max_output_tokens = profile_max_output_tokens(profile)
+    prompt_units = profile_preflight_prompt_units(profile)
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "ContextForge semantic-test model availability preflight. "
+                    "Reply with the single word ok."
+                ),
+            },
+            {
+                "role": "user",
+                "content": ("x " * prompt_units) + "\nReply exactly: ok",
+            },
+        ],
+        "temperature": 0,
+        "max_tokens": max_output_tokens,
+    }
+    routes = route_preferences(profile)
+    if routes:
+        body["provider"] = {"order": routes, "allow_fallbacks": True}
+    request = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    record.update(
+        {
+            "status": "pending",
+            "api_key_env": key_env,
+            "api_key_present": True,
+            "base_url_env": profile.get("base_url_env"),
+            "base_url": base_url,
+            "route_preferences": routes,
+            "max_output_tokens_requested": max_output_tokens,
+            "prompt_repetition_units": prompt_units,
+        }
+    )
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = sanitize_provider_error_detail(exc.read().decode(errors="replace"))
+        record.update(
+            {
+                "status": "failed",
+                "http_status": exc.code,
+                "failure_class": classify_openrouter_preflight_failure(exc.code, detail),
+                "sanitized_error": detail,
+            }
+        )
+        return record
+    except Exception as exc:
+        record.update({"status": "failed", "failure_class": "request_failed", "sanitized_error": str(exc)})
+        return record
+    choices = payload.get("choices") if isinstance(payload, dict) else None
+    if not isinstance(choices, list) or not choices:
+        record.update({"status": "failed", "failure_class": "missing_choices"})
+        return record
+    usage = payload.get("usage") if isinstance(payload, dict) else None
+    record.update(
+        {
+            "status": "passed",
+            "http_status": 200,
+            "usage": usage if isinstance(usage, dict) else None,
+        }
+    )
+    return record
+
+
 def selected_profile_env(
     profile: dict[str, Any] | None,
     client: str,
@@ -362,6 +512,7 @@ def selected_profile_env(
         "CONTEXTFORGE_TEST_MODEL": model,
         "CONTEXTFORGE_TEST_MODEL_NAME": display_name,
         "CONTEXTFORGE_TEST_CONTEXT_WINDOW": str(profile_context_window(profile)),
+        "CONTEXTFORGE_TEST_MAX_TOKENS": str(profile_max_output_tokens(profile)),
     }
     secret_env_keys: list[str] = []
     key_env = str(profile.get("api_key_env") or "").strip()
@@ -805,6 +956,7 @@ def main(argv: list[str] | None = None) -> int:
                 api_key_env=api_key_env,
                 upstream_base_url=upstream_base_url,
                 host_env=available_model_env,
+                max_output_tokens=profile_max_output_tokens(selected_profile),
             )
             semantic_overrides["OPENROUTER_BASE_URL"] = semantic_host_proxy.container_base_url
             semantic_overrides[api_key_env] = semantic_host_proxy.container_api_key

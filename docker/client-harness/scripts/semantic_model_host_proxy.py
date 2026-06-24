@@ -90,6 +90,9 @@ class OpenRouterProxy(http.server.BaseHTTPRequestHandler):
             return
         length = int(self.headers.get("Content-Length", "0") or "0")
         body = self.rfile.read(length) if length else None
+        max_output_tokens = int(getattr(self.server, "max_output_tokens", 0) or 0)  # type: ignore[attr-defined]
+        if body is not None and max_output_tokens > 0:
+            body = self.cap_openai_max_tokens(body, max_output_tokens)
         suffix = strip_api_v1_prefix(self.path)
         target = upstream_base + suffix
         headers = {
@@ -126,6 +129,18 @@ class OpenRouterProxy(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(payload)
 
+    @staticmethod
+    def cap_openai_max_tokens(body: bytes, max_output_tokens: int) -> bytes:
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except Exception:
+            return body
+        if not isinstance(payload, dict):
+            return body
+        if "max_tokens" not in payload and "max_completion_tokens" not in payload:
+            payload["max_tokens"] = max_output_tokens
+        return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
 
 def serve(args: argparse.Namespace) -> int:
     api_key = os.environ.get(args.api_key_env)
@@ -137,6 +152,7 @@ def serve(args: argparse.Namespace) -> int:
     server.upstream_base_url = args.upstream_base_url.rstrip("/")  # type: ignore[attr-defined]
     server.api_key = api_key  # type: ignore[attr-defined]
     server.expected_authorization = f"Bearer {args.expected_dummy_key}"  # type: ignore[attr-defined]
+    server.max_output_tokens = args.max_output_tokens  # type: ignore[attr-defined]
     print(
         json.dumps(
             {
@@ -147,6 +163,7 @@ def serve(args: argparse.Namespace) -> int:
                 "upstream_base_url": redact_url(args.upstream_base_url.rstrip("/")),
                 "api_key_env": args.api_key_env,
                 "dummy_key_present": True,
+                "max_output_tokens": args.max_output_tokens,
             },
             sort_keys=True,
         ),
@@ -163,6 +180,7 @@ class HostProxy:
     upstream_base_url: str
     port: int
     container_api_key: str
+    max_output_tokens: int
     process: subprocess.Popen[str]
 
     @property
@@ -180,6 +198,7 @@ class HostProxy:
             "container_base_url": self.container_base_url,
             "upstream_base_url": redact_url(self.upstream_base_url),
             "port": self.port,
+            "max_output_tokens": self.max_output_tokens,
         }
 
     def stop(self) -> None:
@@ -198,6 +217,7 @@ def start_openrouter_proxy(
     api_key_env: str,
     upstream_base_url: str,
     host_env: dict[str, str],
+    max_output_tokens: int = 0,
 ) -> HostProxy:
     api_key = host_env.get(api_key_env) or os.environ.get(api_key_env)
     if not api_key:
@@ -220,6 +240,8 @@ def start_openrouter_proxy(
         upstream_base_url,
         "--expected-dummy-key",
         container_api_key,
+        "--max-output-tokens",
+        str(max_output_tokens),
     ]
     process = subprocess.Popen(
         command,
@@ -242,6 +264,7 @@ def start_openrouter_proxy(
                     upstream_base_url=upstream_base_url,
                     port=port,
                     container_api_key=container_api_key,
+                    max_output_tokens=max_output_tokens,
                     process=process,
                 )
         if process.poll() is not None:
@@ -260,6 +283,7 @@ def main() -> int:
     parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
     parser.add_argument("--upstream-base-url", default="https://openrouter.ai/api/v1")
     parser.add_argument("--expected-dummy-key", default="")
+    parser.add_argument("--max-output-tokens", type=int, default=0)
     args = parser.parse_args()
     if args.serve_openrouter:
         return serve(args)

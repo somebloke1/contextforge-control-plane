@@ -19,6 +19,7 @@ MIN_MODEL_QUORUM = 3
 DEFAULT_ONBOARDING_TURNS = 32
 DEFAULT_DIALOGUE_SECONDS = 600
 DEFAULT_HUMAN_HELP_DETERMINATION = 15
+CHILD_DIALOGUE_TIMEOUT_MARGIN_SECONDS = 300
 TURN_BUDGET_POLICY = (
     "capture each live interaction without evaluator calls until it reaches a "
     "completion point or safety bound; default safety bounds are 32 turns or "
@@ -40,6 +41,21 @@ def load_script_module(filename: str, module_name: str) -> Any:
 def write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def timeout_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def child_dialogue_subprocess_timeout(args: argparse.Namespace) -> int:
+    return max(
+        int(args.timeout) + CHILD_DIALOGUE_TIMEOUT_MARGIN_SECONDS,
+        int(args.max_dialogue_seconds) + CHILD_DIALOGUE_TIMEOUT_MARGIN_SECONDS,
+    )
 
 
 def profile_record(service_runner: Any, profile: dict[str, Any]) -> dict[str, Any]:
@@ -204,10 +220,24 @@ def main(argv: list[str] | None = None) -> int:
         choices=["off", "minimal", "low", "medium", "high", "xhigh"],
         default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_THINKING", "low"),
     )
+    parser.add_argument(
+        "--skip-semantic-model-preflight",
+        action="store_true",
+        help="Debug only: skip provider/profile availability preflight before launching child dialogue runs.",
+    )
+    parser.add_argument(
+        "--semantic-model-preflight-only",
+        action="store_true",
+        help="Run selected-profile provider availability preflight and stop before Docker build or child dialogue runs.",
+    )
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
+    if args.semantic_model_preflight_only and args.skip_semantic_model_preflight:
+        raise SystemExit("--semantic-model-preflight-only cannot be combined with --skip-semantic-model-preflight")
+    if args.semantic_model_preflight_only and args.dry_run:
+        raise SystemExit("--semantic-model-preflight-only cannot be combined with --dry-run")
     if args.count < MIN_MODEL_QUORUM:
         raise SystemExit(f"--count must be at least {MIN_MODEL_QUORUM}")
     if args.profile and len(args.profile) < MIN_MODEL_QUORUM:
@@ -227,6 +257,74 @@ def main(argv: list[str] | None = None) -> int:
     output_root = harness_root / "evidence" / "onboarding-semantic-process-quorum" / args.foil / args.client / timestamp
     output_root.mkdir(parents=True, exist_ok=True)
     jobs = args.jobs or len(profiles)
+    semantic_profile_preflights: list[dict[str, Any]] = []
+
+    if not args.dry_run and not args.skip_semantic_model_preflight:
+        available_env = service_runner.read_env(harness_root / "env" / "semantic-model.env")
+        for profile in profiles:
+            semantic_profile_preflights.append(service_runner.semantic_model_profile_preflight(profile, available_env))
+        write_json(output_root / "semantic-model-profile-preflight.json", semantic_profile_preflights)
+        failed_preflights = [item for item in semantic_profile_preflights if item.get("status") == "failed"]
+        if failed_preflights:
+            summary = {
+                "schema_uri": "contextforge://client-harness/onboarding-semantic-process-quorum/v1",
+                "ok_scope": "structural onboarding process quorum package only",
+                "semantic_acceptance": "requires_non_spark_evaluator_per_model_and_quorum",
+                "deterministic_semantic_oracles_allowed": False,
+                "quorum_status": "semantic_model_profile_preflight_failed",
+                "minimum_model_quorum_per_client": MIN_MODEL_QUORUM,
+                "client": args.client,
+                "foil": args.foil,
+                "source_lead": foil["source_lead"],
+                "timestamp": timestamp,
+                "output_root": str(output_root),
+                "selected_profiles": [profile_record(service_runner, profile) for profile in profiles],
+                "semantic_model_profile_preflight": semantic_profile_preflights,
+                "failed_profile_count": len(failed_preflights),
+                "failure_class": "environment_setup_model_profile_unavailable",
+                "runs": [],
+                "deterministic_scope": (
+                    "provider/profile execution availability only; this does not judge "
+                    "assistant meaning or semantic acceptance"
+                ),
+            }
+            write_json(output_root / "quorum-summary.json", summary)
+            print(json.dumps(summary, indent=2, sort_keys=True))
+            return 1
+        if args.semantic_model_preflight_only:
+            summary = {
+                "schema_uri": "contextforge://client-harness/onboarding-semantic-process-quorum/v1",
+                "ok_scope": "semantic model profile availability preflight only",
+                "semantic_acceptance": "not_applicable_no_dialogue_run",
+                "deterministic_semantic_oracles_allowed": False,
+                "quorum_status": "semantic_model_profile_preflight_passed",
+                "minimum_model_quorum_per_client": MIN_MODEL_QUORUM,
+                "client": args.client,
+                "foil": args.foil,
+                "source_lead": foil["source_lead"],
+                "timestamp": timestamp,
+                "output_root": str(output_root),
+                "selected_profiles": [profile_record(service_runner, profile) for profile in profiles],
+                "semantic_model_profile_preflight": semantic_profile_preflights,
+                "runs": [],
+                "deterministic_scope": (
+                    "provider/profile execution availability only; this does not judge "
+                    "assistant meaning or semantic acceptance"
+                ),
+            }
+            write_json(output_root / "quorum-summary.json", summary)
+            print(json.dumps(summary, indent=2, sort_keys=True))
+            return 0
+    elif args.skip_semantic_model_preflight:
+        semantic_profile_preflights = [
+            {
+                "status": "skipped",
+                "profile_id": profile.get("id"),
+                "model": profile.get("model"),
+                "reason": "explicit --skip-semantic-model-preflight debug flag",
+            }
+            for profile in profiles
+        ]
 
     prebuild: dict[str, Any] | None = None
     if not args.no_build and not args.dry_run:
@@ -304,25 +402,42 @@ def main(argv: list[str] | None = None) -> int:
         ]
         if args.seed is not None:
             command.extend(["--persona-seed", str(args.seed)])
+        if not args.skip_semantic_model_preflight:
+            command.append("--skip-semantic-model-preflight")
         command.append("--no-build")
         if args.dry_run:
             command.append("--dry-run")
-        result = subprocess.run(command, cwd=repo_root, text=True, capture_output=True, timeout=args.timeout + 180)
         stdout_path = output_root / f"{index:02d}-{profile_id}.stdout.json"
         stderr_path = output_root / f"{index:02d}-{profile_id}.stderr.txt"
-        stdout_path.write_text(result.stdout, encoding="utf-8")
-        stderr_path.write_text(result.stderr, encoding="utf-8")
-        run_summary = parse_summary(result.stdout)
+        child_timeout = child_dialogue_subprocess_timeout(args)
+        timed_out = False
+        timeout_error = ""
+        try:
+            result = subprocess.run(command, cwd=repo_root, text=True, capture_output=True, timeout=child_timeout)
+            stdout = result.stdout
+            stderr = result.stderr
+            returncode = result.returncode
+        except subprocess.TimeoutExpired as exc:
+            stdout = timeout_text(exc.stdout)
+            stderr = timeout_text(exc.stderr)
+            returncode = 124
+            timed_out = True
+            timeout_error = f"child dialogue subprocess exceeded parent timeout of {child_timeout} seconds"
+        stdout_path.write_text(stdout, encoding="utf-8")
+        stderr_path.write_text(stderr, encoding="utf-8")
+        run_summary = parse_summary(stdout)
         acceptance_matrix_eligible = dialogue_summary_acceptance_eligible(run_summary)
         onboarding_successful = structural_onboarding_successful(run_summary)
-        return {
+        record = {
             "index": index,
             "profile": profile_record(service_runner, profile),
             "persona_index": persona_index,
             "persona": dialogue.compose_persona(scenarios, seed=args.seed, index=persona_index),
             "human_help_determination": help_determination,
             "structural_onboarding_successful": onboarding_successful,
-            "returncode": result.returncode,
+            "returncode": returncode,
+            "timeout": timed_out,
+            "child_dialogue_subprocess_timeout_seconds": child_timeout,
             "acceptance_matrix_eligible": acceptance_matrix_eligible,
             "acceptance_matrix_eligibility": None if run_summary is None else run_summary.get("acceptance_matrix_eligibility"),
             "stdout_path": str(stdout_path),
@@ -333,6 +448,9 @@ def main(argv: list[str] | None = None) -> int:
             else str(Path(str(run_summary["output_root"])) / "run-summary.json"),
             "run_suffix": run_suffix,
         }
+        if timeout_error:
+            record["error"] = timeout_error
+        return record
 
     adaptive_help = not args.disable_adaptive_human_help_determination
     batch_help = args.human_help_determination_start
@@ -385,6 +503,7 @@ def main(argv: list[str] | None = None) -> int:
         "jobs": jobs,
         "prebuild": prebuild,
         "selected_profiles": [profile_record(service_runner, profile) for profile in profiles],
+        "semantic_model_profile_preflight": semantic_profile_preflights,
         "persona_seed": args.seed,
         "persona_indices": persona_indices,
         "persona_coverage": coverage,

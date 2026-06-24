@@ -26,6 +26,7 @@ DEFAULT_ENV_FILE = ROOT / "env" / "contextforge.env"
 DEFAULT_BASE_URL = "http://127.0.0.1:4445"
 OWNER = "admin@contextforge-harness.dev"
 SCHEMA_URI = "contextforge://control-plane/service-onboarding-runtime-package-apply/v1"
+INSTANCE_MANIFEST_SCHEMA_URI = "contextforge://control-plane/server-instance/v1"
 VISIBILITY = "public"
 SQL_TRIGGER_RE = re.compile(r"(?i)(union|select|insert|update|delete|drop)(?=\s)")
 INLINE_CODE_RE = re.compile(r"`([^`]+)`")
@@ -235,6 +236,10 @@ def load_package(path: Path) -> dict[str, Any]:
     return data
 
 
+def read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def validate_package(package: Mapping[str, Any]) -> None:
     if package.get("status") != "service_onboarding_runtime_apply_package":
         raise RuntimeError("package status must be service_onboarding_runtime_apply_package")
@@ -284,6 +289,14 @@ def package_record_content(package: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(content, Mapping):
         raise RuntimeError("npm_stdio_service_record.content is required")
     return content
+
+
+def package_record_path(package: Mapping[str, Any]) -> Path:
+    return npm_stdio_host_records.record_path(package)
+
+
+def package_instance_manifest_path(package: Mapping[str, Any]) -> Path:
+    return package_record_path(package).parent / "instance.json"
 
 
 def package_upstream_url(package: Mapping[str, Any]) -> str:
@@ -457,6 +470,118 @@ def service_guidance_resource_uris(package: Mapping[str, Any]) -> list[str]:
         detail_slug = re.sub(r"[^a-z0-9_.-]+", "-", str(key).lower()).strip(".-") or "detail"
         uris.append(f"{detail_prefix}{detail_slug}/v1")
     return uris
+
+
+def write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def service_instance_manifest(
+    package: Mapping[str, Any],
+    *,
+    gateway: Mapping[str, Any],
+    server: Mapping[str, Any],
+    upstream_url: str,
+    selected_tools: list[dict[str, Any]],
+) -> dict[str, Any]:
+    descriptor = package_descriptor(package)
+    record = package_record_content(package)
+    service_binding = package_service_binding(package)
+    service = package_service_name(package)
+    slug = package_service_slug(package)
+    backend_command = record.get("stdio") if isinstance(record.get("stdio"), Mapping) else {}
+    endpoint = record.get("endpoint") if isinstance(record.get("endpoint"), Mapping) else {}
+    scope = {
+        "requires_local_project_scope": False,
+        "scope_type": "managed_npm_stdio_host_service",
+        "configuration_signal": "service-specific tool arguments and declared environment boundary",
+        "notes": "Service is hosted by the shared ContextForge-managed npm-stdio host and bound into clients through ContextForge project init.",
+    }
+    return {
+        "schema_uri": INSTANCE_MANIFEST_SCHEMA_URI,
+        "name": service,
+        "slug": slug,
+        "service": service,
+        "service_binding": service_binding,
+        "managed_by": npm_stdio_host_records.HOST_SERVICE_ID,
+        "source": descriptor.get("source_lead") or "",
+        "enabled": True,
+        "kind": "mcp",
+        "client": "canonical",
+        "scope": scope,
+        "backend": {
+            "transport": "stdio",
+            "package": record.get("package") or descriptor.get("backend_package") or "",
+            "version_policy": record.get("version_policy") or "",
+            "command": backend_command.get("command") if isinstance(backend_command, Mapping) else "",
+            "args": backend_command.get("args") if isinstance(backend_command, Mapping) else [],
+            "env_vars": record.get("environment", {}).get("required_secret_names", [])
+            if isinstance(record.get("environment"), Mapping)
+            else [],
+        },
+        "bridge": {
+            "needed": True,
+            "provider": npm_stdio_host_records.HOST_SERVICE_ID,
+            "reason": "npm stdio MCP service is exposed to ContextForge through the shared managed npm-stdio host.",
+            "streamable_http_url": (endpoint.get("streamable_http_url") or upstream_url) if isinstance(endpoint, Mapping) else upstream_url,
+            "sse_url": endpoint.get("sse_url") if isinstance(endpoint, Mapping) else None,
+        },
+        "contextforge": {
+            "gateway": {
+                "name": gateway.get("name"),
+                "url": gateway.get("url") or upstream_url,
+                "transport": gateway.get("transport") or "STREAMABLEHTTP",
+                "id": gateway.get("id"),
+            },
+            "virtual_server": {
+                "name": server.get("name"),
+                "id": server.get("id"),
+                "grouping": "managed-npm-stdio",
+            },
+        },
+        "registration": {
+            "status": "registered",
+            "registered_tools": [str(tool.get("name")) for tool in selected_tools if tool.get("name")],
+            "verified": {
+                "contextforge": "gateway refresh exposed expected tools and virtual server was created or updated",
+            },
+        },
+    }
+
+
+def write_service_instance_manifest(
+    package: Mapping[str, Any],
+    *,
+    gateway: Mapping[str, Any],
+    server: Mapping[str, Any],
+    upstream_url: str,
+    selected_tools: list[dict[str, Any]],
+) -> dict[str, Any]:
+    path = package_instance_manifest_path(package)
+    root = npm_stdio_host_records.project_root_from_package(package)
+    resolved = path.resolve(strict=False)
+    if root / "server-instances" not in (resolved, *resolved.parents):
+        raise RuntimeError(f"managed instance manifest path must be under server-instances: {path}")
+    previous = read_json(path) if path.exists() else None
+    manifest = service_instance_manifest(
+        package,
+        gateway=gateway,
+        server=server,
+        upstream_url=upstream_url,
+        selected_tools=selected_tools,
+    )
+    action = "already_applied" if isinstance(previous, Mapping) and previous == manifest else ("updated" if previous is not None else "created")
+    if action != "already_applied":
+        write_json_atomic(path, manifest)
+    return {
+        "action": action,
+        "path": str(path),
+        "service_binding": package_service_binding(package),
+        "manifest_digest": npm_stdio_host_records.stable_digest(manifest),
+    }
 
 
 def by_uri(rows: list[dict[str, Any]], uri: str) -> dict[str, Any] | None:
@@ -743,6 +868,14 @@ def apply_package(
             server_action = "created"
             created_server_id = row_id(server)
             contextforge_rollback_tokens.append({"action": "delete_created_server", "id": created_server_id})
+        failed_stage = "service_instance_manifest"
+        instance_manifest = write_service_instance_manifest(
+            package,
+            gateway=gateway,
+            server=server,
+            upstream_url=upstream_url,
+            selected_tools=selected_tools,
+        )
     except Exception as exc:
         rollback_actions = rollback_guidance_resources(client, guidance_resource_rollback_tokens)
         rollback_actions.extend(rollback_contextforge_state(client, rollback_tokens=contextforge_rollback_tokens))
@@ -773,6 +906,7 @@ def apply_package(
             "actions": guidance_resources,
             "resource_ids": guidance_resource_ids,
         },
+        "service_instance_manifest": instance_manifest,
         "rollback_boundary": {
             "created_gateway_id": created_gateway_id,
             "created_server_id": created_server_id,
@@ -796,6 +930,19 @@ def delete_package(
     server_name: str,
 ) -> dict[str, Any]:
     actions: list[dict[str, Any]] = []
+    manifest_path = package_instance_manifest_path(package)
+    if manifest_path.exists():
+        try:
+            manifest = read_json(manifest_path)
+            if (
+                isinstance(manifest, Mapping)
+                and manifest.get("managed_by") == npm_stdio_host_records.HOST_SERVICE_ID
+                and str(manifest.get("service_binding") or "") == package_service_binding(package)
+            ):
+                manifest_path.unlink()
+                actions.append({"target": str(manifest_path), "action": "delete_managed_instance_manifest", "ok": True})
+        except Exception as exc:
+            actions.append({"target": str(manifest_path), "action": "delete_managed_instance_manifest", "ok": False, "error": sanitize_error(exc)})
     servers = best_effort_items(
         client,
         "/servers?include_inactive=true&limit=1000",
