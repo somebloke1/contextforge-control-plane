@@ -6668,7 +6668,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         self.assertTrue(result["ok"], result)
         self.assertEqual("context7:canonical", result["available_services"][0]["service_binding"])
-        self.assertIn("context7 - Available", result["assistant_visible_response"])
+        self.assertIn("1. context7 - Available", result["assistant_visible_response"])
+
+    def test_service_management_list_numbers_visible_service_choices(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7"), registry_service_descriptor("github")],
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.service_management_list(str(root), client_type="opencode")
+
+        self.assertTrue(result["ok"], result)
+        self.assertIn("1. context7 - Available", result["assistant_visible_response"])
+        self.assertIn("2. github - Available", result["assistant_visible_response"])
+        self.assertIn("Reply with service names or numbers", result["assistant_visible_response"])
 
     def test_service_management_list_does_not_resurrect_state_only_services(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(

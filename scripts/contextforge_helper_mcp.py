@@ -347,11 +347,13 @@ def client_visible_project_init_list_payload(value: dict[str, Any]) -> dict[str,
     if services:
         public["available_services"] = services
     if services and not is_alignment_import:
-        service_lines = [
-            f"{service.get('display_name')} - Available - {_capability_label(str(service.get('service_binding') or '').split(':', 1)[0])}."
-            for service in services
-            if service.get("display_name")
-        ]
+        service_lines = []
+        for index, service in enumerate(services, start=1):
+            binding = str(service.get("service_binding") or "")
+            service_name = binding.split(":", 1)[0] if binding else str(service.get("display_name") or "")
+            if not service_name:
+                continue
+            service_lines.append(f"{index}. {service_name} - Available - {_capability_label(service_name)}.")
         public["assistant_visible_response"] = _visible_helper_response(
             "ContextForge services",
             [
@@ -1578,12 +1580,23 @@ def _public_service_management_rows(rows: Sequence[Mapping[str, Any]]) -> list[d
     return [_public_service_management_row(row) for row in rows]
 
 
+def _service_menu_name(row: Mapping[str, Any]) -> str:
+    binding = str(row.get("service_binding") or "")
+    if binding:
+        return binding.split(":", 1)[0]
+    family = str(row.get("service_family") or "")
+    if family:
+        return family
+    return str(row.get("display_name") or "")
+
+
 def _simple_service_lines(rows: Sequence[Mapping[str, Any]]) -> list[str]:
-    return [
-        f"{row['display_name']} - {row['status']} - {row['description']}."
-        for row in rows
-        if row.get("display_name") and row.get("status") and row.get("description")
-    ]
+    lines: list[str] = []
+    for index, row in enumerate(rows, start=1):
+        service_name = _service_menu_name(row)
+        if service_name and row.get("status") and row.get("description"):
+            lines.append(f"{index}. {service_name} - {row['status']} - {row['description']}.")
+    return lines
 
 
 def _client_reload_line(client_type: str) -> str:
@@ -1632,7 +1645,7 @@ def service_management_list(project_root: str, client_type: str = DEFAULT_CLIENT
         "ContextForge services",
         [
             "\n".join(_simple_service_lines(rows) or ["No ContextForge services are available."]),
-            _client_reload_line(client_type),
+            "Reply with service names or numbers to enable them, or choose none.",
         ],
     )
     return {
