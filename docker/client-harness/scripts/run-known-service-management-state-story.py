@@ -7,20 +7,25 @@ import argparse
 import importlib.util
 import json
 import os
+import queue
+import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from harness_redaction import redact_value
+from harness_redaction import redact_text, redact_value
 
 LOCAL_QWEN_ENV = Path("env/local-llama.env")
 DEFAULT_CONTEXTFORGE_GATEWAY_CONTAINER = "contextforge-harness-contextforge-gateway-1"
@@ -28,6 +33,15 @@ DEFAULT_CONTEXTFORGE_HOST_BASE_URL = "http://127.0.0.1:4445"
 DEFAULT_CONTEXTFORGE_CONTAINER_BASE_URL = "http://host.docker.internal:4445"
 WRAPPER_TOKEN_CACHE = "/tmp/contextforge-wrapper-token.local.json"
 WRAPPER_TOKEN_LOCK = "/tmp/contextforge-wrapper-token.local.json.lock"
+SESS_OBS_STATE_PATH = Path.home() / ".sess-obs.json"
+SESS_OBS_STREAM_NAME = "sess-obs-stream.jsonl"
+SCOPED_TOKEN_PERMISSIONS = [
+    "resources.read",
+    "servers.read",
+    "gateways.read",
+    "tools.read",
+    "prompts.read",
+]
 
 EXPECTED_SERVICE_BINDINGS = [
     "context7:canonical",
@@ -61,6 +75,8 @@ STATE_STORY_PROMPTS = [
     "Disable all currently enabled ContextForge services.",
     "approve",
     "Enable all available ContextForge services. If Serena asks for a language, choose Python.",
+    "python",
+    "approve",
     "python",
     "approve",
     "Show final service status and details for all enabled services.",
@@ -143,8 +159,127 @@ def contextforge_login_token(*, gateway_container: str, host_base_url: str) -> t
     raise RuntimeError(f"ContextForge login did not return an access token: {last_error}")
 
 
+def create_client_scoped_token(*, host_base_url: str, admin_token: str, run_id: str) -> tuple[str, str, dict[str, Any]]:
+    response = request_json(
+        "POST",
+        host_base_url,
+        "/tokens",
+        token=admin_token,
+        body={
+            "name": f"known-service-state-story-{run_id}-{uuid4().hex[:10]}",
+            "description": "Ephemeral known-service management state-story token.",
+            "expires_in_days": 1,
+            "scope": {"permissions": SCOPED_TOKEN_PERMISSIONS},
+            "tags": ["contextforge", "known-service-state-story", "client-harness", "ephemeral"],
+        },
+    )
+    token_record = response.get("token") if isinstance(response, dict) else None
+    token_id = token_record.get("id") if isinstance(token_record, dict) else None
+    access_token = response.get("access_token") if isinstance(response, dict) else None
+    if not isinstance(token_id, str) or not token_id:
+        raise RuntimeError("ContextForge token create did not return token.id")
+    if not isinstance(access_token, str) or not access_token:
+        raise RuntimeError("ContextForge token create did not return access_token")
+    return token_id, access_token, {
+        "token_id": token_id,
+        "expires_in_days": 1,
+        "permissions": SCOPED_TOKEN_PERMISSIONS,
+        "token_present": True,
+    }
+
+
+def revoke_client_scoped_token(*, host_base_url: str, admin_token: str, token_id: str) -> None:
+    request_json(
+        "DELETE",
+        host_base_url,
+        f"/tokens/{token_id}",
+        token=admin_token,
+        body={"reason": "known service management state-story run complete"},
+    )
+
+
 def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def append_jsonl(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(redact_value(data), sort_keys=True) + "\n")
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def write_sess_obs_state(
+    output_root: Path,
+    *,
+    client: str,
+    run_id: str,
+    session_id: str,
+    container: str,
+    status: str,
+    current_turn: int | None = None,
+    current_prompt: str | None = None,
+) -> None:
+    stream_path = str(output_root / SESS_OBS_STREAM_NAME)
+    last_offset = 0
+    last_raw_files: list[str] = []
+    try:
+        existing = json.loads(SESS_OBS_STATE_PATH.read_text(encoding="utf-8"))
+        if isinstance(existing, dict) and existing.get("stream_path") == stream_path:
+            last_offset = int(existing.get("last_offset") or 0)
+            last_raw_files = [str(item) for item in existing.get("last_raw_files", []) if isinstance(item, str)]
+    except Exception:
+        pass
+    state = {
+        "version": 1,
+        "source_type": "semantic_test_session",
+        "client_type": client,
+        "session_id": session_id,
+        "run_id": run_id,
+        "container": container,
+        "output_root": str(output_root),
+        "stream_path": stream_path,
+        "summary_path": str(output_root / "run-summary.json"),
+        "raw_glob": str(output_root / "turn-*.raw.txt"),
+        "status": status,
+        "current_turn": current_turn,
+        "current_prompt": current_prompt,
+        "runner_pid": os.getpid(),
+        "updated_at": utc_now_iso(),
+        "last_offset": last_offset,
+        "last_raw_files": last_raw_files,
+    }
+    tmp = SESS_OBS_STATE_PATH.with_suffix(SESS_OBS_STATE_PATH.suffix + ".tmp")
+    tmp.write_text(json.dumps(redact_value(state), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(tmp, SESS_OBS_STATE_PATH)
+
+
+def sess_obs_event(
+    output_root: Path,
+    event_type: str,
+    text: str = "",
+    *,
+    client: str,
+    run_id: str,
+    session_id: str,
+    turn_index: int | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "type": event_type,
+        "client_type": client,
+        "run_id": run_id,
+        "session_id": session_id,
+        "turn": turn_index,
+        "text": text,
+        "timestamp": utc_now_iso(),
+    }
+    if extra:
+        payload.update(extra)
+    append_jsonl(output_root / SESS_OBS_STREAM_NAME, payload)
 
 
 def safe_run_suffix(value: str) -> str:
@@ -202,8 +337,14 @@ def write_client_scoped_env(
     gateway_container: str,
     host_base_url: str,
     container_base_url: str,
-) -> tuple[Path, dict[str, Any]]:
-    token, auth_summary = contextforge_login_token(gateway_container=gateway_container, host_base_url=host_base_url)
+    run_id: str,
+) -> tuple[Path, dict[str, Any], dict[str, str]]:
+    admin_token, auth_summary = contextforge_login_token(gateway_container=gateway_container, host_base_url=host_base_url)
+    token_id, token, token_summary = create_client_scoped_token(
+        host_base_url=host_base_url,
+        admin_token=admin_token,
+        run_id=run_id,
+    )
     client_scoped_dir = run_root / "client-scoped"
     client_scoped_dir.mkdir(parents=True, exist_ok=True)
     env_path = client_scoped_dir / "contextforge.env"
@@ -227,9 +368,15 @@ def write_client_scoped_env(
         "path": str(env_path),
         "base_url": container_base_url.rstrip("/"),
         "bearer_token_present": True,
-        "token_source": "contextforge_harness_admin_login",
+        "token_source": "contextforge_harness_ephemeral_scoped_token",
         "auth": auth_summary,
+        "scoped_token": token_summary,
         "shared_harness_env_mutated": False,
+    }, {
+        "host_base_url": host_base_url.rstrip("/"),
+        "gateway_container": gateway_container,
+        "admin_token": admin_token,
+        "token_id": token_id,
     }
 
 
@@ -285,12 +432,204 @@ print(json.dumps(payload, indent=2, sort_keys=True))
     return "python3 - <<'PY'\n" + script.strip() + "\nPY"
 
 
+def extract_session_id_from_line(line: str) -> str:
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        event = None
+    if isinstance(event, dict):
+        for key in ("sessionID", "session_id"):
+            value = event.get(key)
+            if isinstance(value, str) and value:
+                return value
+        part = event.get("part")
+        if isinstance(part, dict):
+            value = part.get("sessionID")
+            if isinstance(value, str) and value:
+                return value
+        if event.get("type") == "session":
+            value = event.get("id")
+            if isinstance(value, str) and value:
+                return value
+    match = re.search(r'"sessionID"\s*:\s*"([^"]+)"', line)
+    if match:
+        return match.group(1)
+    match = re.search(r"\bses_[A-Za-z0-9_:-]+", line)
+    return match.group(0) if match else ""
+
+
+def sess_obs_events_from_stdout_line(client: str, line: str) -> list[tuple[str, str]]:
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(event, dict):
+        return []
+    events: list[tuple[str, str]] = []
+    if client == "opencode":
+        part = event.get("part")
+        if isinstance(part, dict):
+            part_type = part.get("type")
+            if event.get("type") == "text" or part_type == "text":
+                text = str(part.get("text") or "")
+                if text:
+                    events.append(("assistant", text))
+            elif part_type in {"thinking", "reasoning"}:
+                text = str(part.get("text") or part.get("thinking") or "")
+                if text:
+                    events.append(("thinking", text))
+        return events
+    if client == "pi" and event.get("type") == "message_end":
+        message = event.get("message")
+        if isinstance(message, dict) and message.get("role") == "assistant":
+            content = message.get("content")
+            if isinstance(content, list):
+                assistant_parts: list[str] = []
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") == "thinking":
+                        if assistant_parts:
+                            events.append(("assistant", "\n".join(part for part in assistant_parts if part)))
+                            assistant_parts = []
+                        thinking = str(block.get("thinking") or "")
+                        if thinking:
+                            events.append(("thinking", thinking))
+                    elif block.get("type") == "text":
+                        assistant_parts.append(str(block.get("text") or ""))
+                if assistant_parts:
+                    events.append(("assistant", "\n".join(part for part in assistant_parts if part)))
+            elif isinstance(content, str) and content:
+                events.append(("assistant", content))
+    return events
+
+
+def read_pipe_lines(pipe: Any, name: str, output: "queue.Queue[tuple[str, str | None]]") -> None:
+    try:
+        for line in iter(pipe.readline, ""):
+            output.put((name, line))
+    finally:
+        output.put((name, None))
+
+
+def run_observed_client_command(
+    uc1: Any,
+    cmd: list[str],
+    *,
+    cwd: Path,
+    timeout: int,
+    commands: list[dict[str, Any]],
+    client: str,
+    output_root: Path,
+    run_id: str,
+    session_id: str,
+    container: str,
+    turn_index: int,
+) -> tuple[str, dict[str, Any]]:
+    command_text = uc1.shell_join(cmd)
+    stdout_parts: list[str] = []
+    stderr_parts: list[str] = []
+    seen_session_id = session_id
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(cwd),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    output: "queue.Queue[tuple[str, str | None]]" = queue.Queue()
+    threads = [
+        threading.Thread(target=read_pipe_lines, args=(proc.stdout, "stdout", output), daemon=True),
+        threading.Thread(target=read_pipe_lines, args=(proc.stderr, "stderr", output), daemon=True),
+    ]
+    for thread in threads:
+        thread.start()
+    deadline = time.monotonic() + timeout
+    finished_streams: set[str] = set()
+    timed_out = False
+    while len(finished_streams) < 2:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            timed_out = True
+            proc.kill()
+            break
+        try:
+            stream_name, line = output.get(timeout=min(0.2, remaining))
+        except queue.Empty:
+            continue
+        if line is None:
+            finished_streams.add(stream_name)
+            continue
+        if stream_name == "stdout":
+            stdout_parts.append(line)
+            discovered = extract_session_id_from_line(line)
+            if discovered and discovered != seen_session_id:
+                seen_session_id = discovered
+                write_sess_obs_state(
+                    output_root,
+                    client=client,
+                    run_id=run_id,
+                    session_id=seen_session_id,
+                    container=container,
+                    status="running",
+                    current_turn=turn_index,
+                )
+            for event_type, text in sess_obs_events_from_stdout_line(client, line):
+                sess_obs_event(
+                    output_root,
+                    event_type,
+                    text,
+                    client=client,
+                    run_id=run_id,
+                    session_id=seen_session_id,
+                    turn_index=turn_index,
+                )
+        else:
+            stderr_parts.append(line)
+    try:
+        returncode = proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        proc.kill()
+        returncode = proc.wait(timeout=5)
+    for thread in threads:
+        thread.join(timeout=1)
+    while not output.empty():
+        stream_name, line = output.get_nowait()
+        if line is None:
+            continue
+        if stream_name == "stdout":
+            stdout_parts.append(line)
+        else:
+            stderr_parts.append(line)
+    result = {
+        "command": cmd,
+        "command_text": command_text,
+        "cwd": str(cwd),
+        "returncode": 124 if timed_out else returncode,
+        "stdout": redact_text("".join(stdout_parts)),
+        "stderr": redact_text("".join(stderr_parts)),
+        "timeout": timed_out,
+    }
+    if timed_out:
+        cleanup = uc1.run_timeout_cleanup(cmd, cwd=cwd, env=None)
+        if cleanup is not None:
+            result["timeout_cleanup"] = cleanup
+    commands.append({key: result[key] for key in ("command_text", "cwd", "returncode", "timeout")})
+    if result.get("timeout_cleanup"):
+        cleanup = dict(result["timeout_cleanup"])
+        cleanup["cwd"] = str(cwd)
+        commands.append({key: cleanup[key] for key in ("command_text", "cwd", "returncode", "timeout")})
+    return seen_session_id, result
+
+
 def run_turn(
     uc1: Any,
     *,
     client: str,
     container: str,
     session_id: str,
+    run_id: str,
     prompt: str,
     turn_index: int,
     output_root: Path,
@@ -304,13 +643,40 @@ def run_turn(
         prompt,
         create_session=client == "opencode" and turn_index == 1,
     )
-    result = uc1.run(["docker", "exec", container, "bash", "-lc", command], cwd=repo_root, timeout=timeout, commands=commands)
+    write_sess_obs_state(
+        output_root,
+        client=client,
+        run_id=run_id,
+        session_id=session_id,
+        container=container,
+        status="running",
+        current_turn=turn_index,
+        current_prompt=prompt,
+    )
+    sess_obs_event(
+        output_root,
+        "prompt",
+        prompt,
+        client=client,
+        run_id=run_id,
+        session_id=session_id,
+        turn_index=turn_index,
+    )
+    session_id, result = run_observed_client_command(
+        uc1,
+        ["docker", "exec", container, "bash", "-lc", command],
+        cwd=repo_root,
+        timeout=timeout,
+        commands=commands,
+        client=client,
+        output_root=output_root,
+        run_id=run_id,
+        session_id=session_id,
+        container=container,
+        turn_index=turn_index,
+    )
     raw_path = output_root / f"turn-{turn_index:02d}.raw.txt"
     raw_path.write_text(uc1.render_command_block(result), encoding="utf-8")
-    if client == "opencode" and turn_index == 1:
-        discovered = uc1.extract_opencode_session_id(str(result.get("stdout") or ""))
-        if discovered:
-            session_id = discovered
     readback = uc1.run(
         ["docker", "exec", container, "bash", "-lc", state_readback_command(EXPECTED_SERVICE_BINDINGS)],
         cwd=repo_root,
@@ -360,13 +726,31 @@ def main(argv: list[str] | None = None) -> int:
     session_id = default_session_id(args.client, run_id)
     commands: list[dict[str, Any]] = []
     launched = False
+    scoped_token_revoke: dict[str, str] | None = None
+    write_sess_obs_state(
+        output_root,
+        client=args.client,
+        run_id=run_id,
+        session_id=session_id,
+        container=container,
+        status="initializing",
+    )
+    sess_obs_event(
+        output_root,
+        "session",
+        client=args.client,
+        run_id=run_id,
+        session_id=session_id,
+        extra={"status": "initializing", "output_root": str(output_root)},
+    )
     try:
         qwen_env, qwen_summary = qwen_launch_env(harness_root)
-        client_scoped_dir, client_scoped_summary = write_client_scoped_env(
+        client_scoped_dir, client_scoped_summary, scoped_token_revoke = write_client_scoped_env(
             output_root,
             gateway_container=args.contextforge_gateway_container,
             host_base_url=args.contextforge_host_base_url,
             container_base_url=args.contextforge_container_base_url,
+            run_id=run_id,
         )
         compose_env = {
             "CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED": str(client_scoped_dir),
@@ -431,6 +815,7 @@ def main(argv: list[str] | None = None) -> int:
                 client=args.client,
                 container=container,
                 session_id=session_id,
+                run_id=run_id,
                 prompt=prompt,
                 turn_index=index,
                 output_root=output_root,
@@ -494,11 +879,38 @@ def main(argv: list[str] | None = None) -> int:
             "command_ledger": redact_value(commands),
         }
         write_json(output_root / "run-summary.json", redact_value(summary))
+        final_status = "complete" if all(structural_checks[key] for key in ("all_turn_commands_completed", "all_state_readbacks_completed", "final_state_exists", "final_all_expected_present")) else "failed"
+        write_sess_obs_state(
+            output_root,
+            client=args.client,
+            run_id=run_id,
+            session_id=session_id,
+            container=container,
+            status=final_status,
+            current_turn=len(STATE_STORY_PROMPTS),
+        )
+        sess_obs_event(
+            output_root,
+            "session",
+            client=args.client,
+            run_id=run_id,
+            session_id=session_id,
+            extra={"status": final_status, "output_root": str(output_root)},
+        )
         print(json.dumps(redact_value(summary), indent=2, sort_keys=True))
-        return 0 if all(structural_checks[key] for key in ("all_turn_commands_completed", "all_state_readbacks_completed", "final_state_exists", "final_all_expected_present")) else 1
+        return 0 if final_status == "complete" else 1
     finally:
         if launched:
             uc1.run(["docker", "rm", "-f", container], cwd=repo_root, timeout=30, commands=commands)
+        if scoped_token_revoke is not None:
+            try:
+                revoke_client_scoped_token(
+                    host_base_url=scoped_token_revoke["host_base_url"],
+                    admin_token=scoped_token_revoke["admin_token"],
+                    token_id=scoped_token_revoke["token_id"],
+                )
+            except Exception:
+                pass
         try:
             shutil.rmtree(output_root / "client-scoped")
         except FileNotFoundError:
