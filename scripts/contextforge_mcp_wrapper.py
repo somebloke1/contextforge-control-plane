@@ -87,7 +87,14 @@ def _log_bootstrap_error(server_name: str, stage: str, exc: Exception | str) -> 
         "stage": stage,
         "error_type": exc.__class__.__name__ if isinstance(exc, Exception) else "RuntimeError",
         "error": str(exc),
+        "contextforge_base_url": GATEWAY_BASE,
+        "contextforge_config_env": str(CONFIG_ENV),
+        "contextforge_config_env_exists": CONFIG_ENV.exists(),
+        "contextforge_token_cache": str(TOKEN_CACHE),
     }
+    if isinstance(exc, urllib.error.HTTPError):
+        payload["http_status"] = exc.code
+        payload["http_reason"] = exc.reason
     print(json.dumps(payload, sort_keys=True), file=sys.stderr, flush=True)
 
 
@@ -517,8 +524,8 @@ def main() -> int:
     env_bearer_token = env.get("CONTEXTFORGE_BEARER_TOKEN") or os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
     try:
         token = _token(email, password, env_bearer_token)
-    except RuntimeError as exc:
-        _log_bootstrap_error(server_name, "auth_token", exc)
+    except Exception as exc:
+        _log_bootstrap_error(server_name, "wrapper_bootstrap_contextforge_api_auth_token", exc)
         print(str(exc), file=sys.stderr)
         return 1
 

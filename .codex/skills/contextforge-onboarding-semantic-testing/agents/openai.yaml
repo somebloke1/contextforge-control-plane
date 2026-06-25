@@ -1,4 +1,4 @@
 interface:
-  display_name: "ContextForge Onboarding Semantic Testing"
-  short_description: "Run Pi/OpenCode onboarding process proofs."
-  default_prompt: "Use this skill to design, run, or evaluate ContextForge MCP onboarding process gates where a real Pi or OpenCode assistant starts from only a source lead and generic onboarding support."
+  display_name: "ContextForge Onboarding Semantic Testing (Legacy)"
+  short_description: "Legacy/quarantined source-lead onboarding process proofs."
+  default_prompt: "This skill is legacy/quarantined. Do not run source-lead onboarding process gates unless a later explicit governance decision revives arbitrary/new MCP onboarding."

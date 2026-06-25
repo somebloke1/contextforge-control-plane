@@ -655,6 +655,7 @@ def list_available_capabilities(
     project_root: str | Path,
     client_type: str = "codex",
     contextforge_servers: Iterable[dict[str, Any]] | None = None,
+    contextforge_service_offerings: Iterable[dict[str, Any]] | None = None,
     server_instances_root: str | Path | None = None,
 ) -> dict[str, Any]:
     root = project_state.validate_project_root(project_root, require_workspace=True)
@@ -694,12 +695,15 @@ def list_available_capabilities(
                 "root_attestation": readiness["root_attestation"],
                 **alignment_offer,
             }
-    live_contextforge_readback_supplied = contextforge_servers is not None
-    services = discover_contextforge_hosted_services(
-        project_root=project_root,
-        contextforge_servers=contextforge_servers,
-        **({"server_instances_root": server_instances_root} if server_instances_root is not None else {}),
-    )
+    live_contextforge_readback_supplied = contextforge_servers is not None or contextforge_service_offerings is not None
+    if contextforge_service_offerings is not None:
+        services = [service for service in contextforge_service_offerings if isinstance(service, Mapping)]
+    else:
+        services = discover_contextforge_hosted_services(
+            project_root=project_root,
+            contextforge_servers=contextforge_servers,
+            **({"server_instances_root": server_instances_root} if server_instances_root is not None else {}),
+        )
     candidates = [
         _candidate(service, client_type=client_type)
         for service in services
@@ -935,6 +939,7 @@ def propose_project_init(
     client_type: str = "codex",
     inputs: Mapping[str, Any] | None = None,
     contextforge_servers: Iterable[dict[str, Any]] | None = None,
+    contextforge_service_offerings: Iterable[dict[str, Any]] | None = None,
     server_instances_root: str | Path | None = None,
     catalog_revision_or_etag: str | None = "fixture-catalog",
 ) -> dict[str, Any]:
@@ -988,6 +993,7 @@ def propose_project_init(
         selected_services,
         client_type=client_type,
         contextforge_servers=contextforge_servers,
+        contextforge_service_offerings=contextforge_service_offerings,
         server_instances_root=server_instances_root,
     )
     if not services:
@@ -3127,16 +3133,18 @@ def _resolve_selected_services(
     *,
     client_type: str = "codex",
     contextforge_servers: Iterable[dict[str, Any]] | None = None,
+    contextforge_service_offerings: Iterable[dict[str, Any]] | None = None,
     server_instances_root: str | Path | None = None,
 ) -> list[dict[str, Any]]:
-    available = [
-        _candidate(service, client_type=client_type)
-        for service in discover_contextforge_hosted_services(
+    if contextforge_service_offerings is not None:
+        services = [service for service in contextforge_service_offerings if isinstance(service, Mapping)]
+    else:
+        services = discover_contextforge_hosted_services(
             project_root=project_root,
             contextforge_servers=contextforge_servers,
             **({"server_instances_root": server_instances_root} if server_instances_root is not None else {}),
         )
-    ]
+    available = [_candidate(service, client_type=client_type) for service in services]
     by_key: dict[str, dict[str, Any]] = {}
     for service in available:
         keys = {
