@@ -2588,7 +2588,7 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertEqual("tools_registered_observed", client_state["reload_status"])
             self.assertEqual("installed", client_state["validation_status"])
 
-    def test_codex_uncataloged_service_onboarding_prompt_uses_source_only_guidance(self) -> None:
+    def test_codex_uncataloged_service_onboarding_prompt_redirects_to_known_services_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
             root = Path(tmp).resolve()
             service = service_descriptor("context7")
@@ -2633,18 +2633,17 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertEqual(0, code)
             emitted = json.loads(stdout.getvalue())
             context = emitted["hookSpecificOutput"]["additionalContext"]
-            self.assertIn("<contextforge-uncataloged-service-onboarding>", context)
-            self.assertIn("source-only intake and planning conversation", context)
-            self.assertIn("Do not implement code", context)
-            self.assertIn("edit `.codex/config.toml`", context)
-            self.assertIn("run an MCP handshake", context)
-            self.assertIn("no service has been installed, exposed, registered, started, imported", context)
-            self.assertIn("candidate is outside the project service graph", context)
+            self.assertIn("<contextforge-known-service-management-only>", context)
+            self.assertIn("known ContextForge registry/catalog service offerings", context)
+            self.assertIn("Do not guide arbitrary MCP service onboarding", context)
+            self.assertIn("Do not produce a source-only onboarding handoff plan", context)
+            self.assertIn("list known services or show details", context)
+            self.assertIn("separate development process outside ordinary project helper flow", context)
             self.assertIn("Do not call contextforge-helper project-init activation", context)
             self.assertNotIn("<contextforge-context7-normal-use>", context)
             self.assertNotIn("cf_project_init_continue", context)
 
-    def test_codex_uncataloged_service_plan_prompt_stays_source_only(self) -> None:
+    def test_codex_uncataloged_service_plan_prompt_stays_known_services_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
             root = Path(tmp).resolve()
             service = service_descriptor("context7")
@@ -2686,11 +2685,11 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertEqual(0, code)
             emitted = json.loads(stdout.getvalue())
             context = emitted["hookSpecificOutput"]["additionalContext"]
-            self.assertIn("<contextforge-uncataloged-service-onboarding>", context)
-            self.assertIn("If the user says the service is local stdio", context)
-            self.assertIn("produce a source-only handoff plan", context)
-            self.assertIn("Do not implement code", context)
-            self.assertIn("Do not use shell commands or local file writes", context)
+            self.assertIn("<contextforge-known-service-management-only>", context)
+            self.assertIn("known ContextForge registry/catalog service offerings", context)
+            self.assertIn("Do not guide arbitrary MCP service onboarding", context)
+            self.assertIn("Do not produce a source-only onboarding handoff plan", context)
+            self.assertIn("separate development process outside ordinary project helper flow", context)
             self.assertNotIn("<contextforge-context7-normal-use>", context)
             self.assertNotIn("cf_project_init_continue", context)
 
