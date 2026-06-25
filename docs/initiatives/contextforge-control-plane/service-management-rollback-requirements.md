@@ -9,6 +9,13 @@ services.
 Drafted through live operator dialogue. This document is intentionally updated
 as decisions are made.
 
+Implementation note, 2026-06-25: PR #390 is a first rollback slice for the
+client/helper product surface and OpenCode qwen acceptance path. It does not
+complete Decision 2. Current service discovery still uses repo-local
+`server-instances/*/instance.json` descriptors with optional live ContextForge
+readback, so the registry/catalog source-of-truth requirement remains open in
+issue #389 after PR #390.
+
 ## Decision 1: Abandoned Product Scope
 
 Agent-guided onboarding of unknown or new MCP services is fully abandoned from

@@ -1832,6 +1832,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Do not end with an empty assistant message after this tool succeeds.", text)
         self.assertIn("plainUserFacingRouteResult", text)
         self.assertIn("isUserFacingReadbackOperation", text)
+        self.assertIn('"service_list"', text)
+        self.assertIn('"service_disable"', text)
+        self.assertIn('"service_remove"', text)
+        self.assertIn("const disabledServices = new Set<string>()", text)
+        self.assertIn("disabledServices.has(effectiveBinding)", text)
         self.assertIn("staticServiceRouteReadbackTools", text)
         self.assertIn("staticReadbackTool", text)
         self.assertIn("cf_mentality_governance_list", text)
@@ -1906,6 +1911,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("completed_unverified", text)
         self.assertIn("serviceIdentityToolSegment", text)
         self.assertIn("shouldRefreshAfterHelperOperation", text)
+        self.assertIn('"service_enable"', text)
+        self.assertIn('"service_repair"', text)
         self.assertIn("acceptStderr(chunk)", text)
         self.assertIn("contextforge-root.json", text)
         self.assertIn("CONTEXTFORGE_PI_SHIM_WORKSPACE_ROOT", text)
@@ -1935,6 +1942,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("asksForDirectClientMcpConfig", text)
         self.assertNotIn("install_artifact_contract", text)
         self.assertNotIn("non-mutating runtime/apply package", text)
+        self.assertIn("transcriptShowsProjectInitContinuation", text)
+        self.assertIn("approve or decline?", text)
+        self.assertIn("sameRecordedSession || transcriptShowsProjectInitContinuation(output.messages)", text)
 
     def test_pi_helper_cli_stdout_is_clean_json(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -6364,6 +6374,108 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("context7 - Available", result["assistant_visible_response"])
         self.assertNotIn("activation_class", result["assistant_visible_response"])
         self.assertNotIn("virtual server", result["assistant_visible_response"].lower())
+
+    def test_service_management_enable_confirm_applies_project_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            return_value=[service_descriptor("context7")],
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.service_management_enable(
+                str(root),
+                "context7",
+                client_type="opencode",
+                confirm=True,
+            )
+            state = project_state.load_state(root)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("enabled", result["status"])
+        self.assertIn("context7 is Enabled", result["assistant_visible_response"])
+        self.assertIn("context7:canonical", state["services"])
+        self.assertEqual("reload_required", state["project_init"]["client_states"]["opencode"]["reload_status"])
+
+    def test_service_management_repair_enables_available_service(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            return_value=[service_descriptor("context7")],
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.service_management_repair(
+                str(root),
+                "context7",
+                client_type="opencode",
+                confirm=True,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("enabled", result["status"])
+
+    def test_service_management_disable_removes_owned_opencode_exposure_and_preserves_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            return_value=[service_descriptor("context7")],
+        ):
+            root = Path(tmp).resolve()
+            enabled = contextforge_helper_mcp.service_management_enable(
+                str(root),
+                "context7",
+                client_type="opencode",
+                confirm=True,
+            )
+            self.assertTrue(enabled["ok"], enabled)
+            self.assertIn("context7", json.loads((root / "opencode.json").read_text(encoding="utf-8"))["mcp"])
+
+            disabled = contextforge_helper_mcp.service_management_disable(
+                str(root),
+                "context7",
+                client_type="opencode",
+                confirm=True,
+            )
+            config = json.loads((root / "opencode.json").read_text(encoding="utf-8"))
+            state = project_state.load_state(root)
+            listed = contextforge_helper_mcp.service_management_list(str(root), client_type="opencode")
+
+        self.assertTrue(disabled["ok"], disabled)
+        self.assertEqual("disabled", disabled["status"])
+        self.assertNotIn("context7", config.get("mcp", {}))
+        self.assertIn("context7:canonical", state["services"])
+        self.assertEqual("disabled", state["decisions"]["context7:canonical"]["state"])
+        self.assertEqual("Disabled", listed["services"][0]["status"])
+
+    def test_service_management_remove_removes_owned_opencode_exposure_and_project_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            return_value=[service_descriptor("context7")],
+        ):
+            root = Path(tmp).resolve()
+            enabled = contextforge_helper_mcp.service_management_enable(
+                str(root),
+                "context7",
+                client_type="opencode",
+                confirm=True,
+            )
+            self.assertTrue(enabled["ok"], enabled)
+            self.assertIn("context7", json.loads((root / "opencode.json").read_text(encoding="utf-8"))["mcp"])
+
+            removed = contextforge_helper_mcp.service_management_remove(
+                str(root),
+                "context7",
+                client_type="opencode",
+                confirmation="context7",
+            )
+            config = json.loads((root / "opencode.json").read_text(encoding="utf-8"))
+            state = project_state.load_state(root)
+
+        self.assertTrue(removed["ok"], removed)
+        self.assertEqual("removed_from_project", removed["status"])
+        self.assertNotIn("context7", config.get("mcp", {}))
+        self.assertNotIn("context7:canonical", state["services"])
+        self.assertNotIn("context7:canonical", state["decisions"])
 
     def test_service_management_remove_requires_typed_service_name(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(

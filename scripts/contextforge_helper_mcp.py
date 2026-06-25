@@ -1379,6 +1379,9 @@ def _service_management_catalog_rows(root: Path, client_type: str) -> list[dict[
             "description": _capability_label(family),
             "scope": str(candidate.get("scope_label") or candidate.get("activation_class") or candidate.get("instantiation_class") or "global"),
             "client_type": client_type,
+            "service_family": family,
+            "codex_alias": str(candidate.get("codex_alias") or family),
+            "virtual_server": str(candidate.get("virtual_server") or ""),
         }
 
     for binding, service in services.items():
@@ -1395,6 +1398,9 @@ def _service_management_catalog_rows(root: Path, client_type: str) -> list[dict[
             "description": _capability_label(family),
             "scope": str(service.get("scope_label") or service.get("instantiation_class") or "known service"),
             "client_type": client_type,
+            "service_family": family,
+            "codex_alias": str(service.get("codex_alias") or family),
+            "virtual_server": str(service.get("virtual_server") or ""),
         }
 
     order = {"Enabled": 0, "Available": 1, "Disabled": 2}
@@ -1515,6 +1521,58 @@ def _write_removed_service_state(root: Path, row: Mapping[str, Any], *, dry_run:
     return project_state.write_state_atomic(root, state, updated_by="contextforge_helper_service_management")
 
 
+def _remove_opencode_service_entry(root: Path, row: Mapping[str, Any], *, dry_run: bool) -> dict[str, Any]:
+    config_path = root / "opencode.json"
+    if not config_path.exists():
+        return {"actions": [], "refusals": []}
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return {"actions": [], "refusals": [{"surface": str(config_path), "reason": "invalid_json_preserved", "message": str(exc)}]}
+    if not isinstance(config, dict):
+        return {"actions": [], "refusals": [{"surface": str(config_path), "reason": "non_object_json_preserved"}]}
+    mcp = config.get("mcp")
+    if not isinstance(mcp, dict):
+        return {"actions": [], "refusals": []}
+    alias = common.normalize_codex_alias(str(row.get("codex_alias") or row.get("service_family") or str(row.get("service_binding") or "").split(":", 1)[0]))
+    if not alias or alias not in mcp:
+        return {"actions": [], "refusals": []}
+    existing = mcp.get(alias)
+    if not helper._json_mcp_entry_is_contextforge_owned(existing):
+        return {
+            "actions": [],
+            "refusals": [
+                {
+                    "surface": str(config_path),
+                    "alias": alias,
+                    "reason": "unmanaged_or_drifted_opencode_mcp_entry_preserved",
+                }
+            ],
+        }
+    if not dry_run:
+        del mcp[alias]
+        if not mcp:
+            config.pop("mcp", None)
+        config_path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        "actions": [
+            {
+                "surface": str(config_path),
+                "alias": alias,
+                "operation": "remove_owned_opencode_mcp_entry",
+                "dry_run": dry_run,
+            }
+        ],
+        "refusals": [],
+    }
+
+
+def _remove_service_client_exposure(root: Path, row: Mapping[str, Any], *, client_type: str, dry_run: bool) -> dict[str, Any]:
+    if client_type == "opencode":
+        return _remove_opencode_service_entry(root, row, dry_run=dry_run)
+    return {"actions": [], "refusals": [], "non_actions": [f"no project-local client config removal implemented for {client_type}"]}
+
+
 def service_management_disable(
     project_root: str,
     service: str,
@@ -1530,9 +1588,10 @@ def service_management_disable(
     if not confirm:
         visible = f"Disable {row['display_name']}? This will stop exposing it to this project and preserve backing state. Reply approve to continue."
         return {"ok": True, "status": "disable_preview", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    client_exposure = _remove_service_client_exposure(root, row, client_type=client_type, dry_run=dry_run)
     written = _write_disabled_decision(root, row, dry_run=dry_run, notes="disabled by known-service management helper")
     visible = f"{row['display_name']} is Disabled for this project. {_client_reload_line(client_type)}"
-    return {"ok": True, "status": "disabled", "service": {**row, "status": "Disabled"}, "state_revision": project_state.state_revision(written), "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    return {"ok": True, "status": "disabled", "service": {**row, "status": "Disabled"}, "state_revision": project_state.state_revision(written), "client_exposure": client_exposure, "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
 
 
 def service_management_remove(
@@ -1551,9 +1610,10 @@ def service_management_remove(
     if confirmation != expected and confirmation != str(row["service_binding"]):
         visible = f'Remove {expected}? This may delete project-scoped service state. Type "{expected}" to confirm.'
         return {"ok": True, "status": "remove_confirmation_required", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    client_exposure = _remove_service_client_exposure(root, row, client_type=client_type, dry_run=dry_run)
     written = _write_removed_service_state(root, row, dry_run=dry_run)
     visible = f"{expected} was removed from this project. {_client_reload_line(client_type)}"
-    return {"ok": True, "status": "removed_from_project", "service": {**row, "status": "Available"}, "state_revision": project_state.state_revision(written), "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    return {"ok": True, "status": "removed_from_project", "service": {**row, "status": "Available"}, "state_revision": project_state.state_revision(written), "client_exposure": client_exposure, "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
 
 
 def service_management_enable(
@@ -1577,10 +1637,38 @@ def service_management_enable(
     plan = propose_project_init(str(root), [str(row["service_binding"])], client_type=client_type)
     if not plan.get("ok", True) or plan.get("status") == "needs_input":
         return client_visible_project_init_payload(plan)
-    approval = approve_project_init_plan(str(root), _unwrap_tool_envelope(plan), {"approved": True, "approval_text": "approve"})
-    if not approval.get("ok"):
-        return approval
-    applied = apply_approved_project_init(str(root), _unwrap_tool_envelope(plan), approval.get("receipts") or [], dry_run=False)
+    clean_plan = _unwrap_tool_envelope(plan)
+    challenge = clean_plan.get("approval_challenge") if isinstance(clean_plan.get("approval_challenge"), Mapping) else {}
+    helper.restore_process_local_approval_session(project_root=str(root), plan=clean_plan)
+    local_event = helper.record_local_approval_event(
+        project_root=str(root),
+        plan=clean_plan,
+        issuer_token=helper._LOCAL_APPROVAL_ISSUER_TOKEN,
+        channel="interactive_user",
+    )
+    approval = {
+        "decision": "approve",
+        "challenge_id": str(challenge.get("challenge_id") or ""),
+        "plan_digest": str(clean_plan.get("plan_digest") or ""),
+    }
+    approved = {
+        "ok": True,
+        **helper.approve_project_init_plan(
+            project_root=str(root),
+            plan=clean_plan,
+            approval=approval,
+            local_approval_event_ref=str(local_event["event_ref"]),
+            actor="developer",
+            source_client=client_type,
+            source_client_auth_strength="shared_token",
+        ),
+    }
+    if approved.get("decision") not in {"allow", "approve"}:
+        visible_error = "; ".join(str(reason) for reason in approved.get("reasons") or []) or "enable approval failed"
+        return {"ok": False, "status": "enable_blocked", "service": row, "assistant_visible_response": visible_error, "message": visible_error, "approval": approved}
+    _remember_plan(str(root), clean_plan)
+    _remember_receipts(str(root), list(approved.get("receipts") or []))
+    applied = apply_approved_project_init(str(root), clean_plan, approved.get("receipts") or [], dry_run=False)
     if not applied.get("ok"):
         return applied
     visible = f"{row['display_name']} is Enabled for this project. {_client_reload_line(client_type)}"

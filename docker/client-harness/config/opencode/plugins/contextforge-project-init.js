@@ -143,6 +143,26 @@ const previousRecordedSessionID = () => {
   }
 }
 
+const transcriptText = (messages) => {
+  return Array.isArray(messages)
+    ? messages
+        .map((message) => textFromParts(Array.isArray(message?.parts) ? message.parts : []))
+        .filter((text) => text.trim())
+        .join("\n")
+    : ""
+}
+
+const transcriptShowsProjectInitContinuation = (messages) => {
+  const lowered = transcriptText(messages).toLowerCase()
+  return (
+    lowered.includes("which contextforge services should i enable for this project?") ||
+    lowered.includes("which contextforge services should i activate for this project?") ||
+    lowered.includes("plan ready for") ||
+    lowered.includes("approve or decline?") ||
+    lowered.includes("approve the listed project-local contextforge activation effects?")
+  )
+}
+
 const asksForContextForgeTools = (text) => {
   const lowered = String(text ?? "").toLowerCase()
   return lowered.includes("contextforge") && lowered.includes("tool") && (lowered.includes("available") || lowered.includes("what"))
@@ -511,7 +531,10 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         injected = true
         return
       }
-      const continuationHint = sameRecordedSession ? projectInitContinuationHint(latestText) : ""
+      const continuationHint =
+        sameRecordedSession || transcriptShowsProjectInitContinuation(output.messages)
+          ? projectInitContinuationHint(latestText)
+          : ""
       if (continuationHint) {
         output.messages.unshift({
           info: {

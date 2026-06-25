@@ -1276,6 +1276,13 @@ function plainUserFacingRouteResult(operation: string, visible: JsonObject): str
     "get_project_tool_availability",
     "get_project_capability_summary",
     "get_project_state_readback",
+    "service_list",
+    "service_status",
+    "service_details",
+    "service_enable",
+    "service_disable",
+    "service_remove",
+    "service_repair",
   ].includes(operation)) {
     return undefined;
   }
@@ -1549,18 +1556,33 @@ function shouldRefreshAfterHelperOperation(operation: string, payload: JsonObjec
   return [
     "apply_approved_project_init",
     "repair_pending_project_init_config",
+    "service_enable",
+    "service_disable",
+    "service_remove",
+    "service_repair",
   ].includes(operation);
 }
 
 function approvedPiServices(state: JsonObject): ProjectService[] {
   const rawServices = asObject(state.services);
+  const disabledServices = new Set<string>();
+  const decisions = asObject(state.decisions);
+  for (const [decisionKey, rawDecision] of Object.entries(decisions)) {
+    const decision = asObject(rawDecision);
+    if (!["declined", "deferred", "disabled"].includes(String(decision.state || ""))) continue;
+    const serviceBinding = String(decision.service_binding || decisionKey);
+    if (serviceBinding) disabledServices.add(serviceBinding);
+  }
   const services: ProjectService[] = [];
   for (const [serviceBinding, rawService] of Object.entries(rawServices)) {
+    if (disabledServices.has(serviceBinding)) continue;
     const service = asObject(rawService);
+    const effectiveBinding = String(service.service_binding || serviceBinding);
+    if (disabledServices.has(effectiveBinding)) continue;
     const pi = asObject(asObject(service.target_clients).pi);
     if (!pi.status || String(pi.status) === "blocked") continue;
     services.push({
-      serviceBinding: String(service.service_binding || serviceBinding),
+      serviceBinding: effectiveBinding,
       serviceFamily: String(service.service_family || serviceBinding),
       serviceIdentityId: String(asObject(service.x_service_identity).id || service.x_service_identity_id || ""),
       contextforgeServerId: String(service.x_contextforge_server_id || ""),
