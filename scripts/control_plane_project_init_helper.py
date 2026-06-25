@@ -711,7 +711,7 @@ def list_available_capabilities(
         "available_services": candidates,
         "next_turn": next_turn(
             question_id="select-services",
-            prompt="Which ContextForge services should I activate for this project?",
+            prompt="Which ContextForge services should I enable for this project?",
             choices=[
                 {
                     "id": candidate["service_binding"],
@@ -721,7 +721,7 @@ def list_available_capabilities(
                 }
                 for candidate in candidates
             ]
-            + [{"id": "none", "label": "None", "effect": "Record no service activation."}],
+            + [{"id": "none", "label": "None", "effect": "Do not enable a service now."}],
             allowed_response_shape="list service ids, selection numbers, or choose none",
             selection_mode="multi",
         ),
@@ -3199,17 +3199,11 @@ def _activation_class(service: Mapping[str, Any]) -> str:
 
 
 def _effect_label(activation_class: str, *, client_type: str = "codex") -> str:
-    if client_type == "pi":
-        if activation_class == "shared_canonical":
-            return "Bind project state so the global Pi extension shim can import the existing ContextForge virtual server."
-        if activation_class == "client_local_project_scoped":
-            return "Run an allowlisted local project-scoped helper operation, then bind project state for the global Pi extension shim."
-        return "Request server-side provisioning through an explicit ContextForge provisioner, then bind project state for the global Pi extension shim."
     if activation_class == "shared_canonical":
-        return "Bind project-local client config to an existing ContextForge virtual server."
+        return "Enable this existing ContextForge service for this project."
     if activation_class == "client_local_project_scoped":
-        return "Run an allowlisted local project-scoped helper operation, then bind project-local client config."
-    return "Request server-side provisioning through an explicit ContextForge provisioner, then bind project-local client config."
+        return "Prepare this project-scoped ContextForge service and enable it for this project."
+    return "Prepare this ContextForge service and enable it for this project."
 
 
 def _scope_label(service: Mapping[str, Any], activation_class: str) -> str:

@@ -9,7 +9,7 @@ visible final answer, preserve these facts from the helper response:
 - skipped or unavailable ContextForge service status;
 - available ContextForge tool names.
 
-Do not restart service selection, propose activation, apply project-init state,
+Do not restart service selection, propose enablement, apply project-init state,
 validate or probe tools, mutate configuration, or mention hidden helper
 mechanics in the visible answer.
 
@@ -42,7 +42,7 @@ evidence and include concise source signal such as ledger names, entry ids, or
 entry titles when available.
 
 Do not read or rewrite local ledger files directly, mutate governance entries,
-restart service selection, propose activation, substitute helper availability
+restart service selection, propose enablement, substitute helper availability
 or capability-summary readback for a requested governance/mentality task, or
 expose helper mechanics in the visible answer.
 

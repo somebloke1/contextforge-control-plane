@@ -194,7 +194,6 @@ def client_visible_project_init_list_payload(value: dict[str, Any]) -> dict[str,
                 for key in (
                     "service_binding",
                     "display_name",
-                    "activation_class",
                     "scope_label",
                     "user_visible_effect",
                     "project_service_state",
@@ -206,8 +205,45 @@ def client_visible_project_init_list_payload(value: dict[str, Any]) -> dict[str,
                 if key in service
             }
         )
+    is_alignment_import = bool(cleaned.get("alignment_import_offer"))
     if services:
         public["available_services"] = services
+    if services and not is_alignment_import:
+        service_lines = [
+            f"{service.get('display_name')} - Available - {_capability_label(str(service.get('service_binding') or '').split(':', 1)[0])}."
+            for service in services
+            if service.get("display_name")
+        ]
+        public["assistant_visible_response"] = _visible_helper_response(
+            "ContextForge services",
+            [
+                "\n".join(service_lines),
+                "Reply with service names or numbers to enable them, or choose none.",
+            ],
+        )
+        public["message"] = public["assistant_visible_response"]
+        public["copy_as_complete_visible_response"] = True
+        public["do_not_summarize"] = True
+    next_turn_value = public.get("next_turn")
+    if isinstance(next_turn_value, dict) and not is_alignment_import:
+        choices = []
+        for choice in next_turn_value.get("choices") or []:
+            if not isinstance(choice, dict):
+                continue
+            choices.append(
+                {
+                    key: choice[key]
+                    for key in ("number", "id", "label", "effect")
+                    if key in choice
+                }
+            )
+        next_turn_value["prompt"] = "Which ContextForge services should I enable for this project?"
+        next_turn_value["choices"] = choices
+        response_form = next_turn_value.get("response_form")
+        if isinstance(response_form, dict):
+            response_form["options"] = choices
+            response_form["respond_with"] = "service name, selection number, or option id"
+        next_turn_value["allowed_response_shape"] = "service name(s), selection number(s), service id(s), or choose none"
     return public
 
 
@@ -239,11 +275,24 @@ def client_visible_project_init_plan_payload(value: dict[str, Any], *, include_n
     if "message" not in public and isinstance(cleaned.get("plan_summary"), dict):
         summary = cleaned["plan_summary"]
         bindings = summary.get("bindings") if isinstance(summary.get("bindings"), list) else []
+        display_by_binding = {
+            str(service.get("service_binding")): str(
+                service.get("display_name")
+                or service.get("canonical_service")
+                or service.get("service_family")
+                or str(service.get("service_binding")).split(":", 1)[0]
+            )
+            for service in cleaned.get("selected_services") or []
+            if isinstance(service, dict) and service.get("service_binding")
+        }
         service_names = ", ".join(
-            str(binding.get("service_binding"))
+            display_by_binding.get(
+                str(binding.get("service_binding") or ""),
+                str(binding.get("display_name") or binding.get("service_binding") or "").split(":", 1)[0],
+            )
             for binding in bindings
             if isinstance(binding, dict) and binding.get("service_binding")
-        ) or ", ".join(public.get("selected_service_bindings") or [])
+        ) or ", ".join(str(item).split(":", 1)[0] for item in public.get("selected_service_bindings") or [])
         writes = summary.get("project_local_writes") if isinstance(summary.get("project_local_writes"), list) else []
         writes_text = ", ".join(str(path) for path in writes) or "project-local ContextForge state"
         required_inputs = _visible_required_input_summary(cleaned.get("required_inputs"))
@@ -1302,6 +1351,264 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
             "no arbitrary service onboarding",
         ],
     }
+
+
+def _service_management_catalog_rows(root: Path, client_type: str) -> list[dict[str, Any]]:
+    state = project_state.read_or_default(root)
+    services = state.get("services") if isinstance(state.get("services"), Mapping) else {}
+    decisions = state.get("decisions") if isinstance(state.get("decisions"), Mapping) else {}
+    disabled = {
+        str((decision.get("service_binding") if isinstance(decision, Mapping) else "") or key)
+        for key, decision in decisions.items()
+        if isinstance(decision, Mapping) and str(decision.get("state") or "") == "disabled"
+    }
+    rows_by_binding: dict[str, dict[str, Any]] = {}
+
+    for candidate in common.discover_contextforge_hosted_services(project_root=root):
+        if not isinstance(candidate, Mapping):
+            continue
+        binding = str(candidate.get("service_binding") or "")
+        if not binding:
+            continue
+        family = str(candidate.get("canonical_service") or candidate.get("service_family") or binding.split(":", 1)[0])
+        status = "Enabled" if binding in services and binding not in disabled else "Disabled" if binding in disabled else "Available"
+        rows_by_binding[binding] = {
+            "service_binding": binding,
+            "display_name": str(candidate.get("display_name") or family),
+            "status": status,
+            "description": _capability_label(family),
+            "scope": str(candidate.get("scope_label") or candidate.get("activation_class") or candidate.get("instantiation_class") or "global"),
+            "client_type": client_type,
+        }
+
+    for binding, service in services.items():
+        if not isinstance(service, Mapping):
+            continue
+        service_binding = str(service.get("service_binding") or binding)
+        if service_binding in rows_by_binding:
+            continue
+        family = _service_family_from_state(service_binding, service)
+        rows_by_binding[service_binding] = {
+            "service_binding": service_binding,
+            "display_name": str(service.get("display_name") or family),
+            "status": "Disabled" if service_binding in disabled else "Enabled",
+            "description": _capability_label(family),
+            "scope": str(service.get("scope_label") or service.get("instantiation_class") or "known service"),
+            "client_type": client_type,
+        }
+
+    order = {"Enabled": 0, "Available": 1, "Disabled": 2}
+    return sorted(rows_by_binding.values(), key=lambda row: (order.get(str(row["status"]), 9), str(row["display_name"]).lower()))
+
+
+def _service_management_row(root: Path, client_type: str, service: str) -> dict[str, Any]:
+    wanted = service.strip().lower()
+    if not wanted:
+        raise ValueError("service is required")
+    rows = _service_management_catalog_rows(root, client_type)
+    for row in rows:
+        aliases = {
+            str(row.get("display_name") or "").lower(),
+            str(row.get("service_binding") or "").lower(),
+            str(row.get("service_binding") or "").split(":", 1)[0].lower(),
+        }
+        if wanted in aliases:
+            return row
+    raise ValueError(f"unknown ContextForge service: {service}")
+
+
+def _simple_service_lines(rows: Sequence[Mapping[str, Any]]) -> list[str]:
+    return [
+        f"{row['display_name']} - {row['status']} - {row['description']}."
+        for row in rows
+        if row.get("display_name") and row.get("status") and row.get("description")
+    ]
+
+
+def _client_reload_line(client_type: str) -> str:
+    requirement = common.client_reload_requirement(client_type, event="project_activation_apply")
+    if isinstance(requirement, Mapping):
+        command = str(requirement.get("command") or "reload")
+        return f"Reload after changes: {command}."
+    return "Reload after changes if your client does not show the updated tools."
+
+
+def service_management_list(project_root: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
+    rows = _service_management_catalog_rows(root, client_type)
+    visible = _visible_helper_response(
+        "ContextForge services",
+        [
+            "\n".join(_simple_service_lines(rows) or ["No ContextForge services are available."]),
+            _client_reload_line(client_type),
+        ],
+    )
+    return {
+        "ok": True,
+        "status": "service_management_list",
+        "client_type": client_type,
+        "project_root": str(root),
+        "services": rows,
+        "assistant_visible_response": visible,
+        "message": visible,
+        "copy_as_complete_visible_response": True,
+        "do_not_summarize": True,
+        "non_actions": ["read-only service list", "no service mutation"],
+    }
+
+
+def service_management_details(project_root: str, service: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
+    row = _service_management_row(root, client_type, service)
+    visible = _visible_helper_response(
+        f"{row['display_name']} details",
+        [
+            f"Status: {row['status']}",
+            f"Description: {row['description']}.",
+            f"Scope: {row['scope']}.",
+            f"Service id: {row['service_binding']}.",
+            _client_reload_line(client_type),
+        ],
+    )
+    return {
+        "ok": True,
+        "status": "service_management_details",
+        "client_type": client_type,
+        "project_root": str(root),
+        "service": row,
+        "assistant_visible_response": visible,
+        "message": visible,
+        "copy_as_complete_visible_response": True,
+        "do_not_summarize": True,
+        "non_actions": ["read-only service details", "no service mutation"],
+    }
+
+
+def service_management_status(project_root: str, service: str = "", client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
+    if service.strip():
+        return service_management_details(project_root, service, client_type=client_type)
+    return service_management_list(project_root, client_type=client_type)
+
+
+def _write_disabled_decision(root: Path, row: Mapping[str, Any], *, dry_run: bool, notes: str) -> dict[str, Any]:
+    state = project_state.read_or_default(root)
+    binding = str(row["service_binding"])
+    decisions = state.setdefault("decisions", {})
+    decision = project_state.decision_record("disabled", notes=notes)
+    decision["service_binding"] = binding
+    decision["decided_by"] = "contextforge_helper_service_management"
+    decisions[binding] = decision
+    if dry_run:
+        return state
+    return project_state.write_state_atomic(root, state, updated_by="contextforge_helper_service_management")
+
+
+def _write_removed_service_state(root: Path, row: Mapping[str, Any], *, dry_run: bool) -> dict[str, Any]:
+    state = project_state.read_or_default(root)
+    binding = str(row["service_binding"])
+    services = state.get("services") if isinstance(state.get("services"), dict) else {}
+    decisions = state.get("decisions") if isinstance(state.get("decisions"), dict) else {}
+    services.pop(binding, None)
+    decisions.pop(binding, None)
+    if dry_run:
+        return state
+    return project_state.write_state_atomic(root, state, updated_by="contextforge_helper_service_management")
+
+
+def service_management_disable(
+    project_root: str,
+    service: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
+    row = _service_management_row(root, client_type, service)
+    if row["status"] != "Enabled":
+        visible = f"{row['display_name']} is not enabled for this project."
+        return {"ok": False, "status": "not_enabled", "assistant_visible_response": visible, "message": visible}
+    if not confirm:
+        visible = f"Disable {row['display_name']}? This will stop exposing it to this project and preserve backing state. Reply approve to continue."
+        return {"ok": True, "status": "disable_preview", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    written = _write_disabled_decision(root, row, dry_run=dry_run, notes="disabled by known-service management helper")
+    visible = f"{row['display_name']} is Disabled for this project. {_client_reload_line(client_type)}"
+    return {"ok": True, "status": "disabled", "service": {**row, "status": "Disabled"}, "state_revision": project_state.state_revision(written), "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+
+
+def service_management_remove(
+    project_root: str,
+    service: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    confirmation: str = "",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
+    row = _service_management_row(root, client_type, service)
+    if row["status"] == "Available":
+        visible = f"{row['display_name']} is not enabled for this project."
+        return {"ok": False, "status": "not_enabled", "assistant_visible_response": visible, "message": visible}
+    expected = str(row["display_name"])
+    if confirmation != expected and confirmation != str(row["service_binding"]):
+        visible = f'Remove {expected}? This may delete project-scoped service state. Type "{expected}" to confirm.'
+        return {"ok": True, "status": "remove_confirmation_required", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    written = _write_removed_service_state(root, row, dry_run=dry_run)
+    visible = f"{expected} was removed from this project. {_client_reload_line(client_type)}"
+    return {"ok": True, "status": "removed_from_project", "service": {**row, "status": "Available"}, "state_revision": project_state.state_revision(written), "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+
+
+def service_management_enable(
+    project_root: str,
+    service: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
+    row = _service_management_row(root, client_type, service)
+    if row["status"] == "Enabled":
+        visible = f"{row['display_name']} is already Enabled for this project."
+        return {"ok": True, "status": "already_enabled", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    if not confirm:
+        visible = f"Enable {row['display_name']}? This will update project configuration for this client. {_client_reload_line(client_type)} Reply approve to continue."
+        return {"ok": True, "status": "enable_preview", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    if dry_run:
+        visible = f"Enable {row['display_name']}? Dry run only; no project files were changed. {_client_reload_line(client_type)}"
+        return {"ok": True, "status": "enable_preview", "service": row, "dry_run": True, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    plan = propose_project_init(str(root), [str(row["service_binding"])], client_type=client_type)
+    if not plan.get("ok", True) or plan.get("status") == "needs_input":
+        return client_visible_project_init_payload(plan)
+    approval = approve_project_init_plan(str(root), _unwrap_tool_envelope(plan), {"approved": True, "approval_text": "approve"})
+    if not approval.get("ok"):
+        return approval
+    applied = apply_approved_project_init(str(root), _unwrap_tool_envelope(plan), approval.get("receipts") or [], dry_run=False)
+    if not applied.get("ok"):
+        return applied
+    visible = f"{row['display_name']} is Enabled for this project. {_client_reload_line(client_type)}"
+    return {"ok": True, "status": "enabled", "service": {**row, "status": "Enabled"}, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True, "apply_result": applied}
+
+
+def service_management_repair(
+    project_root: str,
+    service: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    root = project_state.validate_project_root(project_root, require_workspace=True)
+    row = _service_management_row(root, client_type, service)
+    if not confirm:
+        visible = f"Repair {row['display_name']}? This will recreate missing project configuration where possible and refresh the client service record. {_client_reload_line(client_type)} Reply approve to continue."
+        return {"ok": True, "status": "repair_preview", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    if row["status"] == "Enabled":
+        repaired = repair_pending_project_init_config(str(root), client_type=client_type, dry_run=dry_run)
+        if repaired.get("ok"):
+            visible = f"{row['display_name']} repair completed. {_client_reload_line(client_type)}"
+            repaired["assistant_visible_response"] = visible
+            repaired["message"] = visible
+            repaired["copy_as_complete_visible_response"] = True
+            repaired["do_not_summarize"] = True
+        return repaired
+    return service_management_enable(str(root), str(row["service_binding"]), client_type=client_type, confirm=True, dry_run=dry_run)
 
 
 def _layer_status(service: Mapping[str, Any], *names: str) -> str:
@@ -3296,6 +3603,93 @@ def cf_project_init_list_capabilities(
         client_type=client_type,
         contextforge_servers=contextforge_servers,
     )
+
+
+@server.tool()
+def cf_project_service_list(project_root: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
+    """List known ContextForge services with simple Available/Enabled/Disabled status."""
+    try:
+        return service_management_list(project_root=project_root, client_type=client_type)
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def cf_project_service_status(project_root: str, service: str = "", client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
+    """Show simple service status for all services or one known service."""
+    try:
+        return service_management_status(project_root=project_root, service=service, client_type=client_type)
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def cf_project_service_details(project_root: str, service: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
+    """Show details for one known ContextForge service."""
+    try:
+        return service_management_details(project_root=project_root, service=service, client_type=client_type)
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def cf_project_service_enable(
+    project_root: str,
+    service: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Enable a known ContextForge service for this project."""
+    try:
+        return service_management_enable(project_root=project_root, service=service, client_type=client_type, confirm=confirm, dry_run=dry_run)
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def cf_project_service_disable(
+    project_root: str,
+    service: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Disable a known ContextForge service for this project without deleting backing state."""
+    try:
+        return service_management_disable(project_root=project_root, service=service, client_type=client_type, confirm=confirm, dry_run=dry_run)
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def cf_project_service_remove(
+    project_root: str,
+    service: str,
+    confirmation: str = "",
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Remove a known ContextForge service from this project with typed confirmation."""
+    try:
+        return service_management_remove(project_root=project_root, service=service, client_type=client_type, confirmation=confirmation, dry_run=dry_run)
+    except Exception as exc:
+        return _error(exc)
+
+
+@server.tool()
+def cf_project_service_repair(
+    project_root: str,
+    service: str,
+    client_type: str = DEFAULT_CLIENT_TYPE,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Repair known ContextForge service configuration for this project."""
+    try:
+        return service_management_repair(project_root=project_root, service=service, client_type=client_type, confirm=confirm, dry_run=dry_run)
+    except Exception as exc:
+        return _error(exc)
 
 
 def propose_project_init(

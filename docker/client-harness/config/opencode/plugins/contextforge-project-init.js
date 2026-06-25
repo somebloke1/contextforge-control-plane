@@ -62,7 +62,7 @@ const projectInitContinuationHint = (text) => {
       "Do not answer with only the selected service id.",
       "Call `contextforge-helper_cf_project_init_continue` with the current project root now.",
       "When it returns `assistant_visible_response`, copy that value verbatim as your entire visible reply, then stop.",
-      "Do not shorten the plan to only `Approve`, `Approve or decline`, or an activation-plan label; the visible reply must include the planned project-local writes and non-actions.",
+      "Do not shorten the plan to only `Approve`, `Approve or decline`, or an enablement-plan label; the visible reply must include the planned project-local writes and non-actions.",
       "Do not approve or apply until a later user reply contains explicit approval text.",
     ].join("\n")
   }
@@ -70,7 +70,7 @@ const projectInitContinuationHint = (text) => {
     return [
       "ContextForge continuation trigger:",
       "The latest user reply is a natural-language service selection.",
-      "Do not inspect the workspace, require source files, or ask the user to create a project; `/workspace` is already the valid project root for this activation flow.",
+      "Do not inspect the workspace, require source files, or ask the user to create a project; `/workspace` is already the valid project root for this enablement flow.",
       "Call `contextforge-helper_cf_project_init_continue` with the current project root now.",
       "When it returns `assistant_visible_response`, copy that value verbatim as your entire visible reply, then stop.",
       "Do not restart the service list unless the helper itself returns the service-list response.",
@@ -94,7 +94,7 @@ const projectInitContinuationHint = (text) => {
         : "The latest user reply is Serena language input for a pending ContextForge all-services selection.",
       "Call `contextforge-helper_cf_project_init_continue` with the current project root now.",
       "When it returns `assistant_visible_response`, copy that value verbatim as your entire visible reply, then stop.",
-      "Do not shorten the response to only `Approve`, `Approve or decline`, a language name, or an activation-plan label; the visible reply must include the selected services, planned project-local writes, and non-actions.",
+      "Do not shorten the response to only `Approve`, `Approve or decline`, a language name, or an enablement-plan label; the visible reply must include the selected services, planned project-local writes, and non-actions.",
       "Do not approve or apply until a later user reply contains explicit approval text.",
     ].join("\n")
   }
@@ -352,7 +352,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
               text: [
                 "<contextforge-project-governance>",
                 "The user is asking an ordinary governance question for an already initialized ContextForge project.",
-                "Do not ask which services to activate and do not restart project init.",
+                "Do not ask which services to enable and do not restart project init.",
                 `Call the read-only ContextForge MCP governance list tool exposed by the mentality MCP server. In OpenCode it may appear as mentality_governance_list, mentality-governance-list, or governance_list under the mentality server.`,
                 `Use exactly this list argument shape: {"repo":"${String(cwd)}","ledger":"${governanceLedger}"}.`,
                 wantsSpecificGovernanceEntry
@@ -553,7 +553,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
         if (typeof context === "string") {
           const freshInitialization = context.includes("Lifecycle: missing / fresh_initialization")
           const commonTrigger = [
-            "Use contextforge-helper project-init tools for activation writes; never use bash, write, or edit to create activation files.",
+            "Use contextforge-helper project-init tools for service enablement writes; never use bash, write, or edit to create service files.",
             "`/workspace` is a valid project root even when it is a virgin harness workspace containing no source files.",
             "Use the current OpenCode session transcript to decide whether this is the first project-init turn or a continuation.",
             "If the transcript already shows a service list, proposal, or approval request, continue from the latest user reply instead of restarting service selection.",
@@ -561,7 +561,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
             "Do not narrate helper/tool calls, context checks, skill lookups, helper/tool names, or internal retry strategies in user-visible text. Present only the service menu, installation package or approval request, and final installed/new-session-required message.",
             "For service selection, decline/defer, and approval continuation, call only `contextforge-helper_cf_project_init_continue`. Do not call direct propose, approve, or apply tools in OpenCode.",
             "A numeric service selection such as `1` is never approval. After selecting/proposing services, stop and wait for explicit approval or decline.",
-            "When continuation returns `assistant_visible_response`, copy that value verbatim as your entire visible reply before stopping. Do not reduce it to only `Approve`, `Approve or decline`, or an activation-plan label.",
+            "When continuation returns `assistant_visible_response`, copy that value verbatim as your entire visible reply before stopping. Do not reduce it to only `Approve`, `Approve or decline`, or an enablement-plan label.",
             "On a turn where the latest user reply is only a numeric service selection, do not call any tool with approve or apply in its name. A rejected early approval call is a failed interaction, not progress.",
             "There are no separate OpenCode approval or apply tools. After the latest user reply contains explicit approval text such as `approve`, call `contextforge-helper_cf_project_init_continue` once; it performs helper-owned approval and installation.",
             "After a plain `decline` or `defer` reply, call `contextforge-helper_cf_project_init_continue` once so the helper records the project-local decision and returns the complete visible response.",
@@ -576,7 +576,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
                   "The current project is not initialized for ContextForge.",
                   "The helper-discovered service choices are included below in this hidden context.",
                   "Before answering the user's ordinary message, ask exactly:",
-                  '"Which ContextForge services should I activate for this project?"',
+                  '"Which ContextForge services should I enable for this project?"',
                   "Immediately include the numbered helper-discovered service list from this context.",
                   "Then stop and wait for the user's selection.",
                   "Do not write project state or configuration yet.",
@@ -585,7 +585,7 @@ export const ContextForgeProjectInit = async ({ directory } = {}) => {
               : [
                   "ContextForge continuation trigger:",
                   "The current project already has ContextForge project-init state.",
-                  "Do not ask which services to activate.",
+                  "Do not ask which services to enable.",
                   "Do not restart service selection.",
 	                  "For ordinary available-tools questions, do not call list_available_capabilities or cf_project_init_continue. Those are first-run/init-continuation tools.",
 	                  "For ordinary refresh questions or questions that combine current ContextForge state with tools/capabilities, call only `contextforge-helper_cf_project_state_readback` for this project root. It already includes selected services, configured/imported tool policy, and the client/session boundary. Do not call availability or capability-summary tools afterward.",

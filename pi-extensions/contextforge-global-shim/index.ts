@@ -505,20 +505,18 @@ async function renderFirstPromptSelectionTurn(projectRoot: string): Promise<stri
     return renderNextTurn(nextTurn);
   } catch (error) {
     readback.errors.push(`project-init first-prompt capability listing skipped: ${errorMessage(error)}`);
-    return 'Ask exactly: "Which ContextForge services should I activate for this project?"';
+    return 'Ask exactly: "Which ContextForge services should I enable for this project?"';
   }
 }
 
 function renderNextTurn(nextTurn: JsonObject): string {
-  const prompt = String(nextTurn.prompt || "Which ContextForge services should I activate for this project?");
+  const prompt = String(nextTurn.prompt || "Which ContextForge services should I enable for this project?");
   const choices = Array.isArray(nextTurn.choices) ? nextTurn.choices.filter(isObject) : [];
   const renderedChoices = choices
     .map((choice, index) => {
       const number = choice.number ?? index + 1;
       const label = String(choice.label || choice.id || `Option ${number}`);
-      const id = choice.id ? ` (${choice.id})` : "";
-      const activationClass = choice.activation_class ? ` - ${choice.activation_class}` : "";
-      return `${number}. ${label}${id}${activationClass}`;
+      return `${number}. ${label}`;
     })
     .join("\n");
   const shape = String(nextTurn.allowed_response_shape || "selection number(s) are accepted");
@@ -557,7 +555,7 @@ async function firstPromptProjectInitMessage(projectRoot: string): Promise<JsonO
       "Use the current Pi session transcript to decide whether this is the first project-init turn or a continuation. Do not restart service selection if the transcript already shows a service list, proposal, or approval request.",
       "ContextForge service management is limited to known ContextForge service offerings returned by the helper. Do not guide arbitrary/new MCP service onboarding from a URL or source lead.",
       "Use simple service-management language: list, enable, disable, remove, repair, and details. Do not add validation rituals, low-level challenge echoes, or reload-state acknowledgement flows.",
-      `If no prior service list is visible in the current transcript, silently call cf_project_init_list_capabilities for project root "${projectRoot}".`,
+      `If no prior service list is visible in the current transcript, silently call cf_project_service_list for project root "${projectRoot}".`,
       "Use only the returned service ids and labels. Do not invent, rename, summarize, or substitute service names from memory.",
       "When calling a project setup tool, do not emit visible text before the call. The assistant message for that step must be only the tool call.",
       "For service-selection replies, Serena language replies such as `python`, decline/defer replies, and approval replies, call only `cf_project_init_continue` with the current project root exactly once.",
@@ -1039,7 +1037,7 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
     {
       name: "cf_project_capability_summary",
       operation: "get_project_capability_summary",
-      description: "Silently return a read-only summary of available, unavailable, and onboarding-needed ContextForge capabilities for an already initialized Pi project. Do not emit visible text before calling; after the call, copy its assistant_visible_response exactly as the complete visible answer. Do not end with an empty assistant message after this tool succeeds.",
+      description: "Silently return a read-only summary of available and unavailable ContextForge capabilities for an already initialized Pi project. Do not emit visible text before calling; after the call, copy its assistant_visible_response exactly as the complete visible answer. Do not end with an empty assistant message after this tool succeeds.",
       parameters: projectRootOnlySchema(),
     },
     {
@@ -1051,8 +1049,50 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
     {
       name: "cf_project_init_list_capabilities",
       operation: "list_available_capabilities",
-      description: "List ContextForge services available for Pi activation and return the service-selection next turn.",
+      description: "Legacy first-run route: list known ContextForge services available to enable and return the service-selection next turn.",
       parameters: helperSchema({ contextforgeServers: { type: "array", items: { type: "object" } } }),
+    },
+    {
+      name: "cf_project_service_list",
+      operation: "service_list",
+      description: "List known ContextForge services with Available, Enabled, or Disabled status. Copy assistant_visible_response exactly as the visible answer.",
+      parameters: projectRootOnlySchema(),
+    },
+    {
+      name: "cf_project_service_status",
+      operation: "service_status",
+      description: "Show simple status for all known ContextForge services or one named service. Copy assistant_visible_response exactly as the visible answer.",
+      parameters: helperSchema({ service: { type: "string" } }),
+    },
+    {
+      name: "cf_project_service_details",
+      operation: "service_details",
+      description: "Show details for one known ContextForge service on request. Copy assistant_visible_response exactly as the visible answer.",
+      parameters: helperSchema({ service: { type: "string" } }),
+    },
+    {
+      name: "cf_project_service_enable",
+      operation: "service_enable",
+      description: "Enable a known ContextForge service for this project after user confirmation. Preview first unless the user has clearly confirmed.",
+      parameters: helperSchema({ service: { type: "string" }, confirm: { type: "boolean" }, dryRun: { type: "boolean" }, dry_run: { type: "boolean" } }),
+    },
+    {
+      name: "cf_project_service_disable",
+      operation: "service_disable",
+      description: "Disable a known ContextForge service for this project without deleting backing state. Preview first unless the user has clearly confirmed.",
+      parameters: helperSchema({ service: { type: "string" }, confirm: { type: "boolean" }, dryRun: { type: "boolean" }, dry_run: { type: "boolean" } }),
+    },
+    {
+      name: "cf_project_service_remove",
+      operation: "service_remove",
+      description: "Remove a known ContextForge service from this project after typed service-name confirmation.",
+      parameters: helperSchema({ service: { type: "string" }, confirmation: { type: "string" }, dryRun: { type: "boolean" }, dry_run: { type: "boolean" } }),
+    },
+    {
+      name: "cf_project_service_repair",
+      operation: "service_repair",
+      description: "Repair known ContextForge service configuration for this project after user confirmation.",
+      parameters: helperSchema({ service: { type: "string" }, confirm: { type: "boolean" }, dryRun: { type: "boolean" }, dry_run: { type: "boolean" } }),
     },
     {
       name: "cf_project_init_continue",
@@ -1149,6 +1189,13 @@ function isUserFacingReadbackOperation(operation: string): boolean {
     "get_project_tool_availability",
     "get_project_capability_summary",
     "get_project_state_readback",
+    "service_list",
+    "service_status",
+    "service_details",
+    "service_enable",
+    "service_disable",
+    "service_remove",
+    "service_repair",
   ].includes(operation);
 }
 
@@ -1299,9 +1346,7 @@ function clientVisibleProjectInitListPayload(value: JsonObject): JsonObject {
     .map((service) => {
       const item = asObject(service);
       return pickKeys(item, [
-        "service_binding",
         "display_name",
-        "activation_class",
         "scope_label",
         "user_visible_effect",
       ]);

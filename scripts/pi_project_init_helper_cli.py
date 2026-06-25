@@ -130,6 +130,52 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
             )
         )
         return _mcp_helper().client_visible_project_init_payload(result)
+    if operation in {"service_list", "cf_project_service_list"}:
+        return _mcp_helper().service_management_list(project_root=project_root, client_type=client_type)
+    if operation in {"service_status", "cf_project_service_status"}:
+        return _mcp_helper().service_management_status(
+            project_root=project_root,
+            service=str(data.get("service") or ""),
+            client_type=client_type,
+        )
+    if operation in {"service_details", "cf_project_service_details"}:
+        return _mcp_helper().service_management_details(
+            project_root=project_root,
+            service=str(data.get("service") or ""),
+            client_type=client_type,
+        )
+    if operation in {"service_enable", "cf_project_service_enable"}:
+        return _mcp_helper().service_management_enable(
+            project_root=project_root,
+            service=str(data.get("service") or ""),
+            client_type=client_type,
+            confirm=bool(data.get("confirm")),
+            dry_run=bool(data.get("dry_run") or data.get("dryRun")),
+        )
+    if operation in {"service_disable", "cf_project_service_disable"}:
+        return _mcp_helper().service_management_disable(
+            project_root=project_root,
+            service=str(data.get("service") or ""),
+            client_type=client_type,
+            confirm=bool(data.get("confirm")),
+            dry_run=bool(data.get("dry_run") or data.get("dryRun")),
+        )
+    if operation in {"service_remove", "cf_project_service_remove"}:
+        return _mcp_helper().service_management_remove(
+            project_root=project_root,
+            service=str(data.get("service") or ""),
+            client_type=client_type,
+            confirmation=str(data.get("confirmation") or ""),
+            dry_run=bool(data.get("dry_run") or data.get("dryRun")),
+        )
+    if operation in {"service_repair", "cf_project_service_repair"}:
+        return _mcp_helper().service_management_repair(
+            project_root=project_root,
+            service=str(data.get("service") or ""),
+            client_type=client_type,
+            confirm=bool(data.get("confirm")),
+            dry_run=bool(data.get("dry_run") or data.get("dryRun")),
+        )
     if operation == "propose_project_init":
         return _mcp_helper().propose_project_init(
             project_root,

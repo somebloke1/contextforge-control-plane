@@ -1811,7 +1811,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("result.ok === false && isObject(result.error)", text)
         self.assertIn('status: `${operation}_failed`', text)
         self.assertIn("If no prior service list is visible in the current transcript", text)
-        self.assertIn("silently call cf_project_init_list_capabilities", text)
+        self.assertIn("silently call cf_project_service_list", text)
         self.assertIn("Use the current Pi session transcript to decide whether this is the first project-init turn or a continuation", text)
         self.assertIn("call only `cf_project_init_continue`", text)
         self.assertIn("Serena language replies such as `python`", text)
@@ -1839,7 +1839,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("toolDefinition.renderResult = renderNothing", text)
         self.assertIn('"get_project_tool_availability"', text)
         self.assertIn("return message || undefined", text)
-        self.assertIn("Which ContextForge services should I activate for this project?", text)
+        self.assertIn("Which ContextForge services should I enable for this project?", text)
+        self.assertIn('name: "cf_project_service_list"', text)
+        self.assertIn('operation: "service_list"', text)
+        self.assertIn('name: "cf_project_service_enable"', text)
+        self.assertIn('operation: "service_enable"', text)
         self.assertIn('items: { type: "string" }', text)
         self.assertIn("minItems: 1", text)
         self.assertIn("next_turn.choices[].id", text)
@@ -4512,7 +4516,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("align-existing-project-services", offer["next_turn"]["question_id"])
         self.assertTrue(proposal["ok"], proposal)
         self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
-        self.assertIn("Plan ready for context7:canonical", proposal["assistant_visible_response"])
+        self.assertIn("Plan ready for context7.", proposal["assistant_visible_response"])
+        self.assertNotIn("Plan ready for context7:canonical", proposal["assistant_visible_response"])
         self.assertIn("opencode.json", proposal["assistant_visible_response"])
         self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
         self.assertIs(proposal["copy_as_complete_visible_response"], True)
@@ -4885,7 +4890,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertTrue(proposal["ok"], proposal)
             self.assertEqual(str(root), proposal["project_root"])
             self.assertIn("assistant_visible_response", proposal)
-            self.assertIn("context7:canonical", proposal["assistant_visible_response"])
+            self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
+            self.assertIn("Plan ready for context7.", proposal["assistant_visible_response"])
+            self.assertNotIn("context7:canonical", proposal["assistant_visible_response"])
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
 
     def test_opencode_continue_accepts_natural_service_selection(self) -> None:
@@ -5040,7 +5047,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             include_next_turn=False,
         )
 
-        self.assertIn("Plan ready for context7:canonical", public["assistant_visible_response"])
+        self.assertIn("Plan ready for context7.", public["assistant_visible_response"])
+        self.assertNotIn("context7:canonical", public["assistant_visible_response"])
         self.assertIn("serena:abc123 language=python", public["assistant_visible_response"])
         self.assertNotIn("next_turn", public)
 
@@ -6340,10 +6348,113 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("context7_server", summary["bindings"][0]["virtual_server"])
         self.assertEqual("append", summary["bindings"][0]["config_operation"])
 
+    def test_service_management_list_uses_simple_status_surface(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            return_value=[service_descriptor("context7")],
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.service_management_list(str(root), client_type="pi")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("service_management_list", result["status"])
+        self.assertEqual("Available", result["services"][0]["status"])
+        self.assertEqual("context7", result["services"][0]["display_name"])
+        self.assertIn("context7 - Available", result["assistant_visible_response"])
+        self.assertNotIn("activation_class", result["assistant_visible_response"])
+        self.assertNotIn("virtual server", result["assistant_visible_response"].lower())
+
+    def test_service_management_remove_requires_typed_service_name(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            return_value=[service_descriptor("context7")],
+        ) as _catalog:
+            root = Path(tmp).resolve()
+            state = project_state.default_state(root, status="initialized")
+            state["services"]["context7:canonical"] = service_descriptor("context7")
+            with mock.patch.object(contextforge_helper_mcp.project_state, "read_or_default", return_value=state):
+                preview = contextforge_helper_mcp.service_management_remove(str(root), "context7", client_type="pi")
+                removed = contextforge_helper_mcp.service_management_remove(
+                    str(root),
+                    "context7",
+                    client_type="pi",
+                    confirmation="context7",
+                    dry_run=True,
+                )
+
+        self.assertTrue(preview["ok"])
+        self.assertEqual("remove_confirmation_required", preview["status"])
+        self.assertIn('Type "context7" to confirm', preview["assistant_visible_response"])
+        self.assertTrue(removed["ok"])
+        self.assertEqual("removed_from_project", removed["status"])
+        self.assertTrue(removed["dry_run"])
+
+    def test_service_management_remove_rejects_available_service(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            return_value=[service_descriptor("context7")],
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.service_management_remove(
+                str(root),
+                "context7",
+                client_type="pi",
+                confirmation="context7",
+                dry_run=True,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("not_enabled", result["status"])
+
+    def test_public_plan_message_uses_display_names_not_service_bindings(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+            root = Path(tmp).resolve()
+            proposal = contextforge_helper_mcp.propose_project_init(
+                str(root),
+                ["context7:canonical"],
+                client_type="opencode",
+            )
+            public = contextforge_helper_mcp.client_visible_project_init_plan_payload(proposal)
+
+        self.assertIn("Plan ready for context7.", public["message"])
+        self.assertNotIn("context7:canonical", public["message"])
+
+    def test_contextforge_helper_registers_known_service_management_tools(self) -> None:
+        source = (REPO_ROOT / "scripts/contextforge_helper_mcp.py").read_text(encoding="utf-8")
+
+        for name in [
+            "cf_project_service_list",
+            "cf_project_service_status",
+            "cf_project_service_details",
+            "cf_project_service_enable",
+            "cf_project_service_disable",
+            "cf_project_service_remove",
+            "cf_project_service_repair",
+        ]:
+            self.assertIn(f"def {name}", source)
+        self.assertNotIn("@server.tool()\ndef cf_project_service_onboarding", source)
+
+    def test_pi_cli_exposes_known_service_management_operations(self) -> None:
+        source = (REPO_ROOT / "scripts/pi_project_init_helper_cli.py").read_text(encoding="utf-8")
+
+        for operation in [
+            "service_list",
+            "service_status",
+            "service_details",
+            "service_enable",
+            "service_disable",
+            "service_remove",
+            "service_repair",
+        ]:
+            self.assertIn(operation, source)
+
     def test_project_init_prompt_is_not_serena_only_and_preserves_approval_boundaries(self) -> None:
         text = prompt_registration.PROJECT_INIT_TEXT
 
-        self.assertIn("Which ContextForge services should I activate for this project?", text)
+        self.assertIn("Which ContextForge services should I enable for this project?", text)
         self.assertIn("discovered shared canonical services and project-scoped options", text)
         self.assertIn("Serena is one project-scoped option in this menu, not the whole flow", text)
         self.assertIn("After approved apply, report success clearly and succinctly", text)

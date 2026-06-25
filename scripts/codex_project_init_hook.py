@@ -136,7 +136,7 @@ def governance_context_for_prompt(project_root: Path, prompt: str, *, target_cli
         [
             "<contextforge-project-governance>",
             "The user is asking an ordinary governance question for an already initialized ContextForge project.",
-            "Do not ask which services to activate and do not restart project init.",
+            "Do not ask which services to enable and do not restart project init.",
             "Call the read-only ContextForge MCP governance list tool exposed by the `mentality` MCP server before answering.",
             "The tool may appear under the `mentality` server as `mentality-governance-list`, `governance_list`, or a Codex MCP tool name derived from those names.",
             f"Use this tool argument shape: {{\"repo\":\"{project_root}\",\"ledger\":\"{ledger}\"}}.",
@@ -164,7 +164,7 @@ def state_readback_context_for_prompt(project_root: Path, prompt: str, *, target
         [
             "<contextforge-project-state-readback>",
             "The user is asking an ordinary read-only question about current ContextForge project state.",
-            "Do not ask which services to activate and do not restart project init.",
+            "Do not ask which services to enable and do not restart project init.",
             "Your first action for this turn must be the MCP tool call, not a text reply.",
             "Call the contextforge-helper `get_project_state_readback` tool.",
             f"Use arguments: {{\"project_root\":\"{project_root}\",\"client_type\":\"{target_client}\"}}.",
@@ -295,7 +295,7 @@ def context7_normal_use_context_for_prompt(project_root: Path, prompt: str, *, t
         [
             "<contextforge-context7-normal-use>",
             "The user is asking an ordinary docs, library, package, API, or configuration lookup question for an initialized ContextForge project.",
-            "Do not ask which services to activate and do not restart project init.",
+            "Do not ask which services to enable and do not restart project init.",
             "Use the project-installed ContextForge Context7 MCP service tools directly.",
             "Your first action for this turn must be a Context7 MCP tool call, not a text reply, shell command, web search, OpenAI-docs/manual lookup, local file read, or project-state readback.",
             "Resolve or select the relevant docs/library entry with the Context7 resolve-library-id tool when needed, then call the Context7 query-docs tool for the concrete docs question.",
@@ -627,7 +627,7 @@ def prompt_text_is_fresh(text: str) -> bool:
         "Prefer the contextforge-helper workflow tools when visible",
         "Do not invoke project-init helper scripts or Python modules through shell as a substitute for visible helper tools",
         "For every contextforge-helper project-init call, pass client_type=",
-        "Which ContextForge services should I activate for this project?",
+        "Which ContextForge services should I enable for this project?",
         ".project/context_forge_state.json is the project initialization authority",
         "Project init may write only target-client project-local activation state",
         "for Codex this is project-local .codex/config.toml",
@@ -702,20 +702,16 @@ def render_helper_service_menu(project_root: Path, *, target_client: str) -> str
     label = "OpenCode" if target_client == "opencode" else "Codex" if target_client == "codex" else target_client
     lines = [
         f"{label} first-prompt service menu:",
-        'Ask exactly: "Which ContextForge services should I activate for this project?"',
+        'Ask exactly: "Which ContextForge services should I enable for this project?"',
         "Then show this numbered list of helper-discovered choices and stop for the user's reply:",
     ]
     for index, choice in enumerate(choices, start=1):
         if not isinstance(choice, dict):
             continue
         label = str(choice.get("label") or choice.get("id") or f"Choice {index}")
-        identifier = str(choice.get("id") or "").strip()
         effect = str(choice.get("effect") or choice.get("description") or "").strip()
         suffix = f" - {effect}" if effect else ""
-        if identifier and identifier.lower() != label.lower():
-            lines.append(f"{index}. {identifier} - {label}{suffix}")
-        else:
-            lines.append(f"{index}. {label}{suffix}")
+        lines.append(f"{index}. {label}{suffix}")
     lines.extend(
         [
             "",
