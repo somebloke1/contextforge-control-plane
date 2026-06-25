@@ -28,6 +28,32 @@
           }
         }
       ]
+    },
+    "local-llama-qwen": {
+      "baseUrl": "$LOCAL_LLAMA_BASE_URL",
+      "api": "openai-completions",
+      "apiKey": "$LOCAL_LLAMA_KEY",
+      "authHeader": true,
+      "compat": {
+        "supportsDeveloperRole": true,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {
+          "id": "qwen3.6-a3b",
+          "name": "Local llama.cpp Qwen 3.6 A3B",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 131072,
+          "maxTokens": 16384,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        }
+      ]
     }
   }
 }

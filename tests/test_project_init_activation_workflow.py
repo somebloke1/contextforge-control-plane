@@ -1793,21 +1793,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("contextforge-project-init-first-prompt", text)
         self.assertIn("firstPromptInitOffered", text)
         self.assertIn("display: false", text)
-        self.assertIn("helperServiceOnboardingHowTo", text)
-        self.assertIn('"get_service_onboarding_how_to"', text)
-        self.assertIn("cf_project_service_onboarding_research_source", text)
-        self.assertIn("use source_files[] as anchors", text)
-        self.assertIn("npmPackageConfirmed", text)
-        self.assertIn("environmentVariables", text)
+        self.assertNotIn("helperServiceOnboardingHowTo", text)
+        self.assertNotIn('"get_service_onboarding_how_to"', text)
+        self.assertNotIn("cf_project_service_onboarding_research_source", text)
+        self.assertNotIn("use source_files[] as anchors", text)
+        self.assertNotIn("npmPackageConfirmed", text)
+        self.assertNotIn("environmentVariables", text)
         self.assertNotIn("MEMORY_FILE_PATH", text)
-        self.assertIn("Do not put prose explanations in value", text)
-        self.assertIn("runtimeApplyPackageId", text)
-        self.assertIn("do not reconstruct the full package payload from memory", text)
-        self.assertIn("normalized.runtime_apply_package_id = normalized.runtimeApplyPackageId", text)
-        self.assertIn("runtime_apply_package_ref", text)
-        self.assertIn("install_artifact_contract: result.install_artifact_contract", text)
-        self.assertIn("agent_hidden_onboarding_how_to", text)
-        self.assertIn("serviceOnboardingHowTo,", text)
+        self.assertNotIn("Do not put prose explanations in value", text)
+        self.assertNotIn("runtimeApplyPackageId", text)
+        self.assertNotIn("do not reconstruct the full package payload from memory", text)
+        self.assertNotIn("normalized.runtime_apply_package_id = normalized.runtimeApplyPackageId", text)
+        self.assertNotIn("runtime_apply_package_ref", text)
+        self.assertNotIn("install_artifact_contract: result.install_artifact_contract", text)
+        self.assertNotIn("agent_hidden_onboarding_how_to", text)
+        self.assertNotIn("serviceOnboardingHowTo,", text)
         self.assertIn("result.ok === false && isObject(result.error)", text)
         self.assertIn('status: `${operation}_failed`', text)
         self.assertIn("If no prior service list is visible in the current transcript", text)
@@ -1921,20 +1921,16 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("cf_project_init_apply", text)
         self.assertIn("ContextForge tools are installed", text)
 
-    def test_opencode_service_onboarding_route_is_latest_synthetic_message(self) -> None:
+    def test_opencode_service_onboarding_route_is_removed(self) -> None:
         text = (REPO_ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").read_text(encoding="utf-8")
 
-        self.assertIn("const route = serviceOnboardingRuntimeApplyRoute || serviceOnboardingContinuationRoute || serviceOnboardingActiveRoute || serviceOnboardingPlanRoute", text)
-        self.assertIn("output.messages.push({", text)
-        self.assertIn("<contextforge-service-onboarding>", text)
-        self.assertIn("serviceOnboardingHowTo(cwd)", text)
-        self.assertIn("asksForDirectClientMcpConfig", text)
-        self.assertIn("serviceOnboardingLocalConfigRefusalResponse", text)
-        self.assertIn("I cannot create or plan direct client-local MCP configuration", text)
-        self.assertIn("install_artifact_contract", text)
-        self.assertIn("non-mutating runtime/apply package", text)
-        self.assertIn("do not invent `.contextforge/services` paths", text)
-        self.assertIn("copy_as_complete_visible_response", text)
+        self.assertNotIn("serviceOnboardingRuntimeApplyRoute", text)
+        self.assertNotIn("serviceOnboardingContinuationRoute", text)
+        self.assertNotIn("<contextforge-service-onboarding>", text)
+        self.assertNotIn("serviceOnboardingHowTo", text)
+        self.assertNotIn("asksForDirectClientMcpConfig", text)
+        self.assertNotIn("install_artifact_contract", text)
+        self.assertNotIn("non-mutating runtime/apply package", text)
 
     def test_pi_helper_cli_stdout_is_clean_json(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -1960,7 +1956,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(parsed["ok"])
         self.assertEqual("pi", parsed["client_type"])
 
-    def test_pi_helper_cli_service_onboarding_plan_rejects_synthetic_source_summary(self) -> None:
+    def test_pi_helper_cli_rejects_service_onboarding_operations(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             result = subprocess.run(
@@ -1990,45 +1986,32 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 cwd=REPO_ROOT,
             )
 
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotEqual(0, result.returncode, result.stderr)
         parsed = json.loads(result.stdout)
-        self.assertTrue(parsed["ok"])
-        self.assertEqual("source_only_onboarding_plan", parsed["status"])
-        self.assertFalse(parsed["mutation_allowed"])
-        self.assertEqual("needs_user_input", parsed["record"]["status"])
-        self.assertEqual([], parsed["record"]["source_evidence"])
-        self.assertIn("Please provide the source reference or local path", parsed["assistant_visible_response"])
-        self.assertIn("No service has been installed, registered, started, exposed, imported, validated, probed, or made available", parsed["assistant_visible_response"])
+        self.assertFalse(parsed["ok"])
+        self.assertIn("unsupported operation", parsed["error"]["message"])
 
-    def test_contextforge_helper_mcp_exposes_uncataloged_service_onboarding_plan(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
-            root = Path(tmp).resolve()
-            result = contextforge_helper_mcp.cf_project_service_onboarding_plan(
-                project_root=str(root),
-                candidate_service="time",
-                operator_goal="Add the Time MCP service.",
-                source_path="https://github.com/modelcontextprotocol/servers/tree/main/src/time",
-                transport_type="stdio",
-                localization_type="shared_canonical",
-                functional_type="time_timezone",
-                state_type="stateless",
-                credential_boundary="no credentials required",
-                credential_required=False,
-                approval_type="source_only",
-                expected_tools=["get_current_time", "convert_time"],
-                issue="356",
-                client_type="opencode",
-                **npm_stdio_required_kwargs(),
-            )
+    def test_contextforge_helper_mcp_does_not_register_service_onboarding_tools(self) -> None:
+        text = (REPO_ROOT / "scripts/contextforge_helper_mcp.py").read_text(encoding="utf-8")
+        retired_tool_names = [
+            "cf_project_service_onboarding_plan",
+            "build_service_onboarding_plan",
+            "cf_project_service_onboarding_research_source",
+            "research_service_onboarding_source",
+            "cf_project_service_onboarding_continue",
+            "build_service_onboarding_continuation",
+            "build_service_onboarding_continue",
+            "cf_project_service_onboarding_runtime_draft",
+            "cf_project_service_onboarding_runtime_apply",
+            "cf_project_service_onboarding_runtime_execute",
+            "build_service_onboarding_runtime_apply_package",
+            "build_service_onboarding_runtime_apply",
+            "build_service_onboarding_runtime_execute",
+        ]
 
-        self.assertTrue(result["ok"])
-        self.assertEqual("source_only_onboarding_plan", result["status"])
-        self.assertFalse(result["mutation_allowed"])
-        self.assertNotIn("agent_hidden_onboarding_how_to", result)
-        self.assertNotIn("agent_hidden_onboarding_how_to_source", result)
-        self.assertNotIn("record", result)
-        self.assertIn("source-only onboarding plan", result["assistant_visible_response"])
-        self.assertIn("No service has been installed, registered, started, exposed, imported, or made available", result["assistant_visible_response"])
+        for tool_name in retired_tool_names:
+            with self.subTest(tool_name=tool_name):
+                self.assertNotRegex(text, rf"@server\.tool\(\)\s*\ndef {tool_name}\(")
 
     def test_service_onboarding_runtime_apply_accepts_json_encoded_npm_structured_fields(self) -> None:
         payload = npm_stdio_required_payload()
@@ -2384,7 +2367,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(result["assistant_response_policy"]["do_not_write_direct_client_local_mcp_config"])
         self.assertNotIn("record", result)
 
-    def test_pi_helper_cli_service_onboarding_how_to_fetches_default_url(self) -> None:
+    def test_pi_helper_cli_service_onboarding_how_to_operation_is_retired(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             result = subprocess.run(
@@ -2402,21 +2385,12 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 text=True,
             )
 
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotEqual(0, result.returncode, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertIn("agent_hidden_onboarding_how_to", payload)
-        self.assertIn("The workflow is:", payload["agent_hidden_onboarding_how_to"])
-        self.assertIn("executable strings such as `uvx mcp-server-time` belong in backend command", payload["agent_hidden_onboarding_how_to"])
-        self.assertIn("source-research helper again", payload["agent_hidden_onboarding_how_to"])
-        self.assertIn("Do not use local", payload["agent_hidden_onboarding_how_to"])
-        self.assertIn("`read`, `ls`, `find`, `grep`, or shell commands", payload["agent_hidden_onboarding_how_to"])
-        self.assertTrue(payload["agent_hidden_onboarding_how_to_source"]["loaded"])
-        self.assertEqual(
-            common.SERVICE_ONBOARDING_HOW_TO_DEFAULT_URL,
-            payload["agent_hidden_onboarding_how_to_source"]["url"],
-        )
+        self.assertFalse(payload["ok"])
+        self.assertIn("unsupported operation", payload["error"]["message"])
 
-    def test_pi_helper_cli_service_onboarding_continuation_builds_service_management_plan(self) -> None:
+    def test_pi_helper_cli_service_onboarding_continuation_operation_is_retired(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             result = subprocess.run(
@@ -2451,22 +2425,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 cwd=REPO_ROOT,
             )
 
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotEqual(0, result.returncode, result.stderr)
         parsed = json.loads(result.stdout)
-        self.assertTrue(parsed["ok"])
-        self.assertEqual("service_onboarding_continuation_plan", parsed["status"])
-        self.assertFalse(parsed["mutation_allowed"])
-        self.assertEqual("plan_only", parsed["service_management_result"]["status"])
-        self.assertFalse(parsed["service_management_result"]["x_completion_record_consumable"])
-        catalog_plan = parsed["service_management_result"]["x_catalog_plan"]
-        self.assertEqual("package_bridge_stdio_to_http_sse", catalog_plan["transport_decision"]["decision"])
-        self.assertIn("POST /gateways", {operation["api"] for operation in catalog_plan["contextforge_api_operations"]})
-        self.assertIn("This is not a project-init service activation menu", parsed["assistant_visible_response"])
-        self.assertIn("No service has been installed, registered, started, exposed, imported, or made available", parsed["assistant_visible_response"])
-        self.assertIn("separate explicit approval is required before any ContextForge registry or catalog mutation", parsed["assistant_visible_response"])
-        self.assertIn("next safe step", parsed["assistant_visible_response"])
-        self.assertIn("non-mutating runtime package preview", parsed["assistant_visible_response"])
-        self.assertIn("Do not use project-init activation", parsed["assistant_visible_response"])
+        self.assertFalse(parsed["ok"])
+        self.assertIn("unsupported operation", parsed["error"]["message"])
 
     def test_contextforge_helper_mcp_exposes_uncataloged_service_onboarding_continuation(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -2530,7 +2492,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("not a project-init service activation menu", result["assistant_visible_response"])
         self.assertNotIn("must not have additional properties", json.dumps(result, sort_keys=True))
 
-    def test_pi_helper_cli_service_onboarding_runtime_apply_package_builds_provision_plan(self) -> None:
+    def test_pi_helper_cli_service_onboarding_runtime_apply_package_operation_is_retired(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             result = subprocess.run(
@@ -2566,51 +2528,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 cwd=REPO_ROOT,
             )
 
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotEqual(0, result.returncode, result.stderr)
         parsed = json.loads(result.stdout)
-        self.assertTrue(parsed["ok"])
-        self.assertEqual("service_onboarding_runtime_apply_package", parsed["status"])
-        self.assertFalse(parsed["mutation_allowed"])
-        self.assertEqual("time:canonical", parsed["service_provision_plan"]["service_binding"])
-        self.assertIn("server-instances/time-canonical", parsed["service_provision_plan"]["x_backend_home"])
-        self.assertEqual(
-            ["uvx", "mcp-server-time", "--local-timezone", "UTC"],
-            parsed["service_provision_plan"]["x_desired_artifacts"]["backend_manifest"]["content"]["backend_command"],
-        )
-        contract = parsed["install_artifact_contract"]
-        self.assertEqual("time:canonical", contract["service_binding"])
-        self.assertEqual("npm-stdio-host", contract["runtime_substrate"]["id"])
-        self.assertIn("npm-stdio-service.json", contract["artifacts"]["npm_stdio_service_record"]["path"])
-        npm_record = contract["artifacts"]["npm_stdio_service_record"]["content"]
-        self.assertEqual("mcp-server-time", npm_record["package"])
-        self.assertEqual({"command": "uvx", "args": ["mcp-server-time", "--local-timezone", "UTC"]}, npm_record["stdio"])
-        self.assertEqual(onboarding_surfaces.npm_stdio_endpoint("time:canonical"), npm_record["endpoint"])
-        self.assertEqual("rollback_partial_state_before_error_response", npm_record["idempotency"]["failure_policy"])
-        self.assertIn("rollback_actions_attempted", npm_record["idempotency"]["failure_report_must_include"])
-        self.assertTrue(npm_record["prompt_library"]["publication_required"])
-        self.assertIn("usage", npm_record["prompt_library"]["detail_prompts"])
-        self.assertIn("contextforge-service.json", contract["artifacts"]["contextforge_api_json"]["path"])
-        self.assertEqual("/gateways", contract["artifacts"]["contextforge_api_json"]["content"]["gateway"]["path"])
-        self.assertEqual(
-            ["get_current_time", "convert_time"],
-            contract["artifacts"]["contextforge_api_json"]["content"]["expected_tools"],
-        )
-        self.assertEqual(
-            "package_bridge_stdio_to_http_sse",
-            parsed["contextforge_registration_plan"]["transport_decision"]["decision"],
-        )
-        self.assertIn("runtime-apply package", parsed["assistant_visible_response"])
-        self.assertIn("managed npm-stdio service record", parsed["assistant_visible_response"])
-        self.assertIn("Managed npm-stdio service record target", parsed["assistant_visible_response"])
-        self.assertIn("ContextForge API JSON target", parsed["assistant_visible_response"])
-        self.assertIn("explicit approval for this exact recorded apply surface", parsed["assistant_visible_response"])
-        self.assertIn("Recorded executor surface: `docker/contextforge-harness/scripts/apply_onboarding_runtime_package.py`", parsed["assistant_visible_response"])
-        self.assertIn("Exact approval phrase to proceed:", parsed["assistant_visible_response"])
-        self.assertIn("Approve runtime/apply for time:canonical using executor surface docker/contextforge-harness/scripts/apply_onboarding_runtime_package.py", parsed["assistant_visible_response"])
-        self.assertIn(parsed["runtime_apply_package_id"], parsed["assistant_visible_response"])
-        self.assertIn("Recorded ContextForge gateway: `time-gateway`", parsed["assistant_visible_response"])
-        self.assertIn("No runtime, registry, client config, or project activation mutation", parsed["assistant_visible_response"])
-        self.assertIn("target-client-visible list-tools", parsed["assistant_visible_response"])
+        self.assertFalse(parsed["ok"])
+        self.assertIn("unsupported operation", parsed["error"]["message"])
 
     def test_contextforge_helper_mcp_exposes_public_runtime_apply_package_without_internal_artifacts(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -3361,7 +3282,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Required before continuing", result["assistant_visible_response"])
         self.assertIn("No runtime, registry, Docker", result["assistant_visible_response"])
 
-    def test_pi_helper_cli_runtime_execute_reuses_mcp_approval_gate(self) -> None:
+    def test_pi_helper_cli_runtime_execute_operation_is_retired(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
             root = Path(tmp).resolve()
             approval_source = root / "latest-user.json"
@@ -3403,8 +3324,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         payload = json.loads(result.stdout)
         self.assertFalse(payload["ok"])
-        self.assertEqual("PermissionError", payload["error"]["type"])
-        self.assertIn("explicit runtime/apply approval intent", payload["error"]["message"])
+        self.assertEqual("ValueError", payload["error"]["type"])
+        self.assertIn("unsupported operation", payload["error"]["message"])
 
     def test_contextforge_helper_mcp_accepts_natural_onboarding_aliases(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -4768,11 +4689,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("Configured in current project state for opencode\n- none reported", visible)
         self.assertIn("Project services\n- context7:canonical", visible)
         self.assertIn("Known but unavailable\n- web-search:credential_scoped", visible)
-        self.assertIn("Could be onboarded with approval\n- exa-search", visible)
+        self.assertIn("Available to enable or repair\n- exa-search", visible)
         self.assertIn("Client/session boundary\n- After approved OpenCode project-local MCP config changes", visible)
         self.assertIn("context7:canonical", visible)
         self.assertIn("web-search:credential_scoped", visible)
-        self.assertIn("no service onboarding", result["non_actions"])
+        self.assertIn("no arbitrary service onboarding", result["non_actions"])
 
     def test_contextforge_helper_mcp_reports_project_state_readback_read_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:

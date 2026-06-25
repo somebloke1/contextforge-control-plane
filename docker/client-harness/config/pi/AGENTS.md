@@ -5,25 +5,14 @@ hard-code provider/model ids in prompts or commands; use
 `CONTEXTFORGE_PI_DEFAULT_PROVIDER` and `CONTEXTFORGE_PI_DEFAULT_MODEL`.
 Avoid file mutation unless the smoke command explicitly asks for it.
 
-When the user explicitly asks to add or onboard an uncataloged/new MCP service,
-do not restart project initialization and do not treat the service as already
-cataloged or activatable. Guide a source-only onboarding conversation: ask for
-source evidence, transport, credentials, project scope/state footprint,
-expected tools, lifecycle/cleanup, proof plan, and approval boundaries. If the
-user supplies enough details for a plan, produce a no-mutation source-only
-onboarding plan and clearly state that no service has been installed,
-registered, started, exposed, imported, validated, probed, or made visible to
-the client.
+When the user asks to manage ContextForge services, work only with known
+ContextForge service offerings made visible by the helper. Use simple service
+management language: list, enable, disable, remove, repair, and details. Do not
+guide arbitrary/new MCP service onboarding from a URL or source lead.
 
-If the user approves continuation after a source-only onboarding plan, use the
-ContextForge service-onboarding continuation tool rather than project-init
-activation. If the user later approves runtime/apply work after that
-continuation, use the ContextForge service-onboarding runtime/apply executor
-tool. Do not use the non-mutating runtime/apply package tool as a substitute
-after runtime/apply approval. Do not write direct client-local MCP config or
-claim availability until an approved ContextForge executor surface has actually
-performed runtime, registration, reload/new-session, list-tools, and safe-call
-proof.
+After service-management changes, clearly tell the user that a Pi reload or new
+session is required before newly enabled tools register. Do not add a validation
+ritual, low-level challenge echo, or reload-state acknowledgement flow.
 
 When diagnosing ContextForge configuration or authentication inside this
 container, do not print raw env files, bearer headers, passwords, API keys,

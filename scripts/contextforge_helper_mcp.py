@@ -1154,7 +1154,7 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
                 "service_binding": binding,
                 "capability": str(candidate.get("display_name") or candidate.get("canonical_service") or binding.split(":", 1)[0]),
                 "scope": str(candidate.get("scope_label") or candidate.get("activation_class") or candidate.get("instantiation_class") or "known catalog service"),
-                "provenance": "ContextForge activation catalog; not approved in this project state",
+                "provenance": "ContextForge catalog; available to enable or repair for this project state",
             }
         )
     revision = project_state.state_revision(state)
@@ -1289,7 +1289,7 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
                     ),
                 ),
                 _visible_section(
-                    "Could be onboarded with approval",
+                    "Available to enable or repair",
                     _visible_item_list([item["capability"] for item in onboarding_needed], empty=onboarding_text),
                 ),
             ],
@@ -1299,7 +1299,7 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
             "no service selection",
             "no project-init proposal, approval, or apply",
             "no tool probe or backend mutation",
-            "no service onboarding",
+            "no arbitrary service onboarding",
         ],
     }
 
@@ -2129,7 +2129,6 @@ def cf_project_state_readback(project_root: str, client_type: str = DEFAULT_CLIE
     return get_project_state_readback(project_root=project_root, client_type=client_type)
 
 
-@server.tool()
 def cf_project_service_onboarding_plan(
     project_root: str,
     candidate_service: str = "",
@@ -2205,7 +2204,6 @@ def cf_project_service_onboarding_plan(
         return _error(exc)
 
 
-@server.tool()
 def build_service_onboarding_plan(
     project_root: str,
     candidate_service: str = "",
@@ -2275,7 +2273,6 @@ def build_service_onboarding_plan(
     )
 
 
-@server.tool()
 def cf_project_service_onboarding_research_source(
     project_root: str,
     source_path: str = "",
@@ -2296,7 +2293,6 @@ def cf_project_service_onboarding_research_source(
         return _error(exc)
 
 
-@server.tool()
 def research_service_onboarding_source(
     project_root: str,
     source_path: str = "",
@@ -2310,7 +2306,6 @@ def research_service_onboarding_source(
     )
 
 
-@server.tool()
 def cf_project_service_onboarding_continue(
     project_root: str = "",
     projectRoot: str = "",
@@ -2441,7 +2436,6 @@ def cf_project_service_onboarding_continue(
         return _error(exc)
 
 
-@server.tool()
 def build_service_onboarding_continuation(
     project_root: str,
     candidate_service: str = "",
@@ -2505,7 +2499,6 @@ def build_service_onboarding_continuation(
     )
 
 
-@server.tool()
 def build_service_onboarding_continue(
     project_root: str,
     candidate_service: str = "",
@@ -2569,7 +2562,6 @@ def build_service_onboarding_continue(
     )
 
 
-@server.tool()
 def cf_project_service_onboarding_runtime_draft(
     project_root: str = "",
     projectRoot: str = "",
@@ -2682,7 +2674,6 @@ def cf_project_service_onboarding_runtime_draft(
         return _error(exc)
 
 
-@server.tool()
 def cf_project_service_onboarding_runtime_apply(
     project_root: str = "",
     projectRoot: str = "",
@@ -2821,7 +2812,6 @@ def cf_project_service_onboarding_runtime_apply(
         return _error(exc)
 
 
-@server.tool()
 def cf_project_service_onboarding_runtime_execute(
     project_root: str = "",
     projectRoot: str = "",
@@ -3014,7 +3004,6 @@ def cf_project_service_onboarding_runtime_execute(
         return _error(exc)
 
 
-@server.tool()
 def build_service_onboarding_runtime_apply_package(
     project_root: str,
     candidate_service: str = "",
@@ -3084,7 +3073,6 @@ def build_service_onboarding_runtime_apply_package(
     )
 
 
-@server.tool()
 def build_service_onboarding_runtime_apply(
     project_root: str,
     candidate_service: str = "",
@@ -3154,7 +3142,6 @@ def build_service_onboarding_runtime_apply(
     )
 
 
-@server.tool()
 def build_service_onboarding_runtime_execute(
     project_root: str,
     runtime_apply_package_id: str = "",

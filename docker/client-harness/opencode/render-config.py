@@ -33,6 +33,12 @@ def opencode_model_id(raw_value: str | None, model_id: str) -> str:
     return text
 
 
+def local_llama_enabled() -> bool:
+    return os.environ.get("CONTEXTFORGE_TEST_PROVIDER_KIND") == "openai_compatible" or bool(
+        os.environ.get("LOCAL_LLAMA_BASE_URL")
+    )
+
+
 def effective_sticky_key() -> str:
     base = os.environ.get("OPENROUTER_STICKY_KEY", "contextforge-semantic-test")
     epoch_seconds = int(os.environ.get("OPENROUTER_STICKY_EPOCH_SECONDS", "7200"))
@@ -55,6 +61,28 @@ def render_config() -> None:
         shutil.copy2(source, target)
 
     data = json.loads(target.read_text(encoding="utf-8"))
+    if local_llama_enabled():
+        model_id = os.environ.get("LOCAL_LLAMA_MODEL", "qwen3.6-a3b")
+        data["model"] = os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL", f"llama.cpp/{model_id}")
+        data["small_model"] = os.environ.get("CONTEXTFORGE_OPENCODE_SMALL_MODEL", f"llama.cpp/{model_id}")
+        provider = data.setdefault("provider", {}).setdefault("llama.cpp", {})
+        provider_options = provider.setdefault("options", {})
+        if os.environ.get("LOCAL_LLAMA_BASE_URL"):
+            provider_options["baseURL"] = os.environ["LOCAL_LLAMA_BASE_URL"].rstrip("/")
+        if os.environ.get("LOCAL_LLAMA_KEY"):
+            provider_options["apiKey"] = os.environ["LOCAL_LLAMA_KEY"]
+        provider["models"] = {
+            model_id: {
+                "name": os.environ.get("CONTEXTFORGE_TEST_MODEL_NAME", "Local llama.cpp Qwen 3.6 A3B"),
+                "limit": {
+                    "context": int(os.environ.get("CONTEXTFORGE_TEST_CONTEXT_WINDOW", "131072")),
+                    "output": int(os.environ.get("CONTEXTFORGE_TEST_MAX_TOKENS", "16384")),
+                },
+            }
+        }
+        target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return
+
     model_id = openrouter_model_component(os.environ.get("OPENROUTER_OPENCODE_MODEL", "google/gemma-4-26b-a4b-it"))
     routes = [item.strip() for item in os.environ.get("OPENROUTER_PROVIDER_ROUTES", "").split(",") if item.strip()]
     if not routes and os.environ.get("OPENROUTER_PROVIDER_ROUTE"):

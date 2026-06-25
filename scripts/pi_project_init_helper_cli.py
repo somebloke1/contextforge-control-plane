@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import control_plane_project_init_helper as helper
-import control_plane_service_onboarding_surfaces as service_onboarding_surfaces
 from project_init_common import project_identity, read_project_env
 
 
@@ -94,26 +93,6 @@ def _mcp_helper():
     return contextforge_helper_mcp
 
 
-def _build_service_onboarding_plan(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
-    return service_onboarding_surfaces.build_service_onboarding_plan(project_root, data)
-
-
-def _build_service_onboarding_continuation(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
-    return service_onboarding_surfaces.build_service_onboarding_continuation(project_root, data)
-
-
-def _build_service_onboarding_runtime_apply_package(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
-    return service_onboarding_surfaces.build_service_onboarding_runtime_apply_package(project_root, data)
-
-
-def _build_service_onboarding_runtime_draft(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
-    return service_onboarding_surfaces.runtime_apply_draft_status(project_root, data)
-
-
-def _research_service_onboarding_source(project_root: str, data: Mapping[str, Any]) -> dict[str, Any]:
-    return service_onboarding_surfaces.research_service_onboarding_source(project_root, data)
-
-
 def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
     project_root = _project_root(
         data,
@@ -142,57 +121,6 @@ def dispatch(operation: str, data: Mapping[str, Any]) -> dict[str, Any]:
         return _mcp_helper().client_visible_project_state_readback_payload(
             _mcp_helper().project_state_readback(project_root=project_root, client_type=client_type)
         )
-    if operation == "build_service_onboarding_plan":
-        return _ok(_build_service_onboarding_plan(project_root, data))
-    if operation in {"research_service_onboarding_source", "cf_project_service_onboarding_research_source"}:
-        return _ok(_research_service_onboarding_source(project_root, data))
-    if operation in {"build_service_onboarding_continuation", "build_service_onboarding_continue", "cf_project_service_onboarding_continue"}:
-        return _ok(_build_service_onboarding_continuation(project_root, data))
-    if operation in {
-        "build_service_onboarding_runtime_draft",
-        "update_service_onboarding_runtime_draft",
-        "cf_project_service_onboarding_runtime_draft",
-    }:
-        return _ok(_build_service_onboarding_runtime_draft(project_root, data))
-    if operation in {"build_service_onboarding_runtime_apply_package", "build_service_onboarding_runtime_apply", "cf_project_service_onboarding_runtime_apply"}:
-        return _ok(_build_service_onboarding_runtime_apply_package(project_root, data))
-    if operation in {"apply_service_onboarding_runtime_package", "execute_service_onboarding_runtime_apply", "cf_project_service_onboarding_runtime_execute"}:
-        return _mcp_helper().cf_project_service_onboarding_runtime_execute(
-            project_root=project_root,
-            runtime_apply_package_id=str(data.get("runtime_apply_package_id") or data.get("runtimeApplyPackageId") or ""),
-            candidate_service=str(data.get("candidate_service") or data.get("candidateService") or ""),
-            operator_goal=str(data.get("operator_goal") or data.get("operatorGoal") or ""),
-            source_path=str(data.get("source_path") or data.get("sourcePath") or ""),
-            service_binding=str(data.get("service_binding") or data.get("serviceBinding") or ""),
-            backend_package=str(data.get("backend_package") or data.get("backendPackage") or ""),
-            backend_command=str(data.get("backend_command") or data.get("backendCommand") or ""),
-            backend_args=data.get("backend_args") or data.get("backendArgs") or [],
-            transport_type=str(data.get("transport_type") or data.get("transportType") or ""),
-            localization_type=str(data.get("localization_type") or data.get("localizationType") or ""),
-            functional_type=str(data.get("functional_type") or data.get("functionalType") or ""),
-            state_type=str(data.get("state_type") or data.get("stateType") or ""),
-            credential_boundary=str(data.get("credential_boundary") or data.get("credentialBoundary") or ""),
-            approval_type=str(data.get("approval_type") or data.get("approvalType") or ""),
-            expected_tools=data.get("expected_tools") or data.get("expectedTools") or [],
-            package_registry_type=str(data.get("package_registry_type") or data.get("packageRegistryType") or ""),
-            package_version=str(data.get("package_version") or data.get("packageVersion") or ""),
-            runtime_hint=str(data.get("runtime_hint") or data.get("runtimeHint") or ""),
-            npm_package_confirmed=bool(data.get("npm_package_confirmed") or data.get("npmPackageConfirmed") or False),
-            environment_variables_reviewed=bool(data.get("environment_variables_reviewed") or data.get("environmentVariablesReviewed") or False),
-            package_arguments_reviewed=bool(data.get("package_arguments_reviewed") or data.get("packageArgumentsReviewed") or False),
-            environment_variables=data.get("environment_variables") or data.get("environmentVariables") or [],
-            package_arguments=data.get("package_arguments") or data.get("packageArguments") or [],
-            required_secret_names=data.get("required_secret_names") or data.get("requiredSecretNames") or [],
-            tool_schemas=data.get("tool_schemas") or data.get("toolSchemas") or {},
-            tool_schema_records=data.get("tool_schema_records") or data.get("toolSchemaRecords") or [],
-            tool_schema_summaries=data.get("tool_schema_summaries") or data.get("toolSchemaSummaries") or [],
-            prompt_library=data.get("prompt_library") or data.get("promptLibrary") or {},
-            structured_payload_path=str(data.get("structured_payload_path") or data.get("structuredPayloadPath") or ""),
-            issue=str(data.get("issue") or data.get("issue_number") or data.get("issueNumber") or ""),
-            client_type=client_type,
-        )
-    if operation == "get_service_onboarding_how_to":
-        return _ok(service_onboarding_surfaces.hidden_onboarding_guidance(data))
     if operation == "list_available_capabilities":
         result = _ok(
             helper.list_available_capabilities(
