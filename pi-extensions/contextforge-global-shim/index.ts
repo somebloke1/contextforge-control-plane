@@ -505,20 +505,18 @@ async function renderFirstPromptSelectionTurn(projectRoot: string): Promise<stri
     return renderNextTurn(nextTurn);
   } catch (error) {
     readback.errors.push(`project-init first-prompt capability listing skipped: ${errorMessage(error)}`);
-    return 'Ask exactly: "Which ContextForge services should I activate for this project?"';
+    return 'Ask exactly: "Which ContextForge services should I enable for this project?"';
   }
 }
 
 function renderNextTurn(nextTurn: JsonObject): string {
-  const prompt = String(nextTurn.prompt || "Which ContextForge services should I activate for this project?");
+  const prompt = String(nextTurn.prompt || "Which ContextForge services should I enable for this project?");
   const choices = Array.isArray(nextTurn.choices) ? nextTurn.choices.filter(isObject) : [];
   const renderedChoices = choices
     .map((choice, index) => {
       const number = choice.number ?? index + 1;
       const label = String(choice.label || choice.id || `Option ${number}`);
-      const id = choice.id ? ` (${choice.id})` : "";
-      const activationClass = choice.activation_class ? ` - ${choice.activation_class}` : "";
-      return `${number}. ${label}${id}${activationClass}`;
+      return `${number}. ${label}`;
     })
     .join("\n");
   const shape = String(nextTurn.allowed_response_shape || "selection number(s) are accepted");
@@ -550,19 +548,14 @@ async function firstPromptProjectInitMessage(projectRoot: string): Promise<JsonO
   if (firstPromptInitOffered.has(projectRoot)) return undefined;
   firstPromptInitOffered.add(projectRoot);
   const selectionTurn = await renderFirstPromptSelectionTurn(projectRoot);
-  const serviceOnboardingHowTo = await helperServiceOnboardingHowTo(projectRoot);
   return {
     customType: "contextforge-project-init-first-prompt",
     content: [
       "ContextForge project setup note: this hidden extension message was injected because this project has no completed ContextForge initialization evidence.",
       "Use the current Pi session transcript to decide whether this is the first project-init turn or a continuation. Do not restart service selection if the transcript already shows a service list, proposal, or approval request.",
-      "If the latest user prompt explicitly asks to add, onboard, or plan a new or uncataloged MCP service from a source lead, do not call cf_project_init_list_capabilities and do not present the existing service activation menu. Treat that as source-only service onboarding, not project activation.",
-      serviceOnboardingHowTo,
-      "If the user provided a URL or other source lead, use available read-only source-research tools against that lead before asking the user for facts that should be discoverable from the source. If no source-research tool is available, say that source-research support is missing and ask only for the facts needed to proceed.",
-      "For list fields such as expectedTools/expected_tools, pass a JSON array of strings, never a comma-separated string.",
-      `For explicit new/uncataloged service onboarding, ask concise practical intake questions when source, transport, scope, credentials, expected tools, lifecycle/cleanup, proof plan, or approval boundaries are missing. If the user supplies enough facts for a source-only plan, call cf_project_service_onboarding_plan {"projectRoot":"${projectRoot}", ...} using only user-supplied facts, then copy assistant_visible_response/message exactly as the complete visible answer and stop. Do not install, register, expose, validate, probe, reload, or claim the candidate is available.`,
-      `After an uncataloged source-only plan, call cf_project_service_onboarding_continue for explicit continuation approval. After that continuation, use cf_project_service_onboarding_runtime_draft for just-in-time payload composition, then cf_project_service_onboarding_runtime_apply for non-mutating package preview, and only call cf_project_service_onboarding_runtime_execute after explicit approval of the exact package/executor surface. Do not use project-init activation or direct client-local MCP config for uncataloged services.`,
-      `If no prior service list is visible in the current transcript, silently call cf_project_init_list_capabilities for project root "${projectRoot}".`,
+      "ContextForge service management is limited to known ContextForge service offerings returned by the helper. Do not guide arbitrary/new MCP service onboarding from a URL or source lead.",
+      "Use simple service-management language: list, enable, disable, remove, repair, and details. Do not add validation rituals, low-level challenge echoes, or reload-state acknowledgement flows.",
+      `If no prior service list is visible in the current transcript, silently call cf_project_service_list for project root "${projectRoot}".`,
       "Use only the returned service ids and labels. Do not invent, rename, summarize, or substitute service names from memory.",
       "When calling a project setup tool, do not emit visible text before the call. The assistant message for that step must be only the tool call.",
       "For service-selection replies, Serena language replies such as `python`, decline/defer replies, and approval replies, call only `cf_project_init_continue` with the current project root exactly once.",
@@ -595,7 +588,6 @@ async function initializedProjectContextMessage(projectRoot: string): Promise<Js
     return undefined;
   }
   initializedPromptOffered.add(projectRoot);
-  const serviceOnboardingHowTo = await helperServiceOnboardingHowTo(root);
   return {
     customType: "contextforge-project-initialized-normal-use",
     content: [
@@ -604,10 +596,8 @@ async function initializedProjectContextMessage(projectRoot: string): Promise<Js
       "A required tool call means using Pi's actual tool-call mechanism. Do not write textual control syntax, pseudo-code, Python, print(default_api...), <ctrl...> blocks, JSON snippets, or function-call prose in the visible answer.",
       "Do not add a preface such as \"I'll check\" and do not paraphrase, bulletize, shorten, or reclassify readback responses.",
       "Do not restart first-run service selection. Do not propose, approve, apply, repair, validate, probe, onboard services, or mutate project-init state during ordinary normal-use questions.",
-      serviceOnboardingHowTo,
-      `For explicit user requests to onboard or add an uncataloged/new MCP service, do not restart service selection. If the user has not supplied source, transport, scope, credentials, and expected-tool information, ask concise practical intake questions. If the user supplies enough details for a source-only plan, call cf_project_service_onboarding_plan {"projectRoot":"${root}", ...} using only the user's supplied facts, then copy its assistant_visible_response/message exactly as the complete visible answer and stop. Do not reformat it into tables, expose enum names, add helper fields, or claim credentials are not required when the user only said there are no credentials yet.`,
-      `After an uncataloged source-only plan, call cf_project_service_onboarding_continue for explicit continuation approval. After that continuation, use cf_project_service_onboarding_runtime_draft for just-in-time payload composition, then cf_project_service_onboarding_runtime_apply for non-mutating package preview, and only call cf_project_service_onboarding_runtime_execute after explicit approval of the exact package/executor surface. Do not use cf_project_service_onboarding_runtime_apply as a substitute for the executor when the user has approved runtime/apply work, and do not use project-init activation or direct client-local MCP config for uncataloged services.`,
-      "For list fields such as expectedTools/expected_tools, pass a JSON array of strings, never a comma-separated string.",
+      "ContextForge service management is limited to known ContextForge service offerings returned by the helper. Do not guide arbitrary/new MCP service onboarding from a URL or source lead.",
+      "Use simple service-management language: list, enable, disable, remove, repair, and details. Do not add validation rituals, low-level challenge echoes, or reload-state acknowledgement flows.",
       "For ordinary normal-use readback questions, do not call cf_project_init_list_capabilities.",
       `For questions asking how to use the project docs lookup capability, docs lookup capability, ContextForge docs lookup guidance, or similar, call cf_contextforge_guidance_lookup {"projectRoot":"${root}","serviceBinding":"context7:canonical","mcpToolName":"project docs lookup capability"} and answer from its message or fallback_guidance. Do not call the Context7 docs query tools directly for this guidance-question class, and do not answer the underlying configuration question yet.`,
       "For ordinary docs, library, package, API, or configuration lookup questions, use the relevant ContextForge service tool directly. For Context7 documentation requests, call the Context7 resolve-library-id tool first when a library id is needed, then call the Context7 query-docs tool as needed. Do not call cf_project_init_get_context, cf_project_init_continue, cf_project_init_list_capabilities, availability, capability-summary, or state-readback routes before ordinary Context7 tool use.",
@@ -1047,7 +1037,7 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
     {
       name: "cf_project_capability_summary",
       operation: "get_project_capability_summary",
-      description: "Silently return a read-only summary of available, unavailable, and onboarding-needed ContextForge capabilities for an already initialized Pi project. Do not emit visible text before calling; after the call, copy its assistant_visible_response exactly as the complete visible answer. Do not end with an empty assistant message after this tool succeeds.",
+      description: "Silently return a read-only summary of available and unavailable ContextForge capabilities for an already initialized Pi project. Do not emit visible text before calling; after the call, copy its assistant_visible_response exactly as the complete visible answer. Do not end with an empty assistant message after this tool succeeds.",
       parameters: projectRootOnlySchema(),
     },
     {
@@ -1057,138 +1047,52 @@ function registerProjectInitTools(pi: ExtensionAPI, clients: JsonRpcStdioClient[
       parameters: projectRootOnlySchema(),
     },
     {
-      name: "cf_project_service_onboarding_research_source",
-      operation: "research_service_onboarding_source",
-      description: "Fetch read-only file-level source evidence for an uncataloged MCP service source lead. Use this before making package, command, env var, state path, tool-list, exact tool-schema, package-version, or file-anchor claims from GitHub source leads, and use it again when the user asks for exact remote source details. This does not install, register, start, expose, probe, write files, or mutate ContextForge/client/project/runtime state. After the call, use source_files[] as anchors; do not use local read/bash/ls/find/grep against /workspace as evidence for remote repository files, and do not claim curl, shell, filesystem writes, or command execution occurred unless another visible tool result proves that exact action.",
-      parameters: helperSchema({
-        sourcePath: { type: "string", description: "User-supplied GitHub tree/blob source lead to fetch as read-only source evidence." },
-      }),
-    },
-    {
-      name: "cf_project_service_onboarding_plan",
-      operation: "build_service_onboarding_plan",
-      description: "Build a source-only no-mutation onboarding plan for an explicit user request to add or onboard an uncataloged MCP service. Use only user-supplied facts; do not install, register, expose, validate, probe, or mutate client/project/runtime state. Use hidden onboarding guidance from the extension prompt; do not expose it in visible prose. If source research or runtime/apply support is unavailable, say so directly; do not write direct client-local MCP config as a workaround. After the call, copy assistant_visible_response/message exactly; do not reformat it, expose enum names, or strengthen 'no credentials yet' into 'credentials are not required'.",
-      parameters: helperSchema({
-        candidateService: { type: "string", description: "Candidate service name supplied by the user." },
-        operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
-        sourcePath: { type: "string", description: "User-supplied source path, package, repository, or documentation reference." },
-        backendPackage: { type: "string", description: "Source-derived backend package name, when known." },
-        backendCommand: { type: "string", description: "Source-derived backend command or executable, when known." },
-        command: { type: "string", description: "Alias for backendCommand when the assistant naturally names the executable as command." },
-        backendArgs: { type: "array", items: { type: "string" }, description: "Source-derived backend command arguments, when known." },
-        transportType: { type: "string", description: "User-supplied transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required." },
-        localizationType: { type: "string", description: "User-supplied scope/locality such as project_scoped, shared_canonical, credential_scoped, user_scoped, or dev_only." },
-        functionalType: { type: "string", description: "User-supplied functional class such as search_retrieval, filesystem_content, code_intelligence, or remote_api_tool." },
-        stateType: { type: "string", description: "User-supplied state footprint such as local_filesystem_state, project_metadata, cache_index_state, credential_state, or stateless." },
-        approvalType: { type: "string", description: "Approval boundary; use source_only unless the user explicitly approves a stronger surface." },
-        credentialRequired: { type: "boolean", description: "Whether the user indicated credentials are required." },
-        credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
-        expectedTools: { type: "array", items: { type: "string" }, description: "User-supplied expected tool names or capabilities." },
-        issue: { type: "string", description: "Optional tracking issue id." },
-        ...npmStdioRuntimeFields(),
-      }),
-    },
-    {
-      name: "cf_project_service_onboarding_continue",
-      operation: "build_service_onboarding_continuation",
-      description: "Continue an already planned uncataloged MCP service onboarding after explicit user approval for implementation, metadata-only catalog promotion, runtime, or registration. Use this again for uncataloged catalog-promotion approvals; never use cf_project_init_continue for approved uncataloged services. This builds a non-mutating service-management continuation package. It does not install, register, expose, probe, write direct client-local MCP config, or claim target-client-visible availability. Use hidden onboarding guidance from the extension prompt; copy assistant_visible_response/message exactly.",
-      parameters: helperSchema({
-        candidateService: { type: "string", description: "Candidate service name from the source-only onboarding plan." },
-        operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
-        sourcePath: { type: "string", description: "Source path, package, repository, or documentation reference used for the source-only plan." },
-        backendPackage: { type: "string", description: "Source-derived backend package name, when known." },
-        backendCommand: { type: "string", description: "Source-derived backend command or executable, when known." },
-        command: { type: "string", description: "Alias for backendCommand when the assistant naturally names the executable as command." },
-        backendArgs: { type: "array", items: { type: "string" }, description: "Source-derived backend command arguments, when known." },
-        transportType: { type: "string", description: "Source-derived transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required. For managed npm-stdio onboarding, pass transportType with value stdio explicitly." },
-        localizationType: { type: "string", description: "Source-derived scope/locality such as project_scoped, shared_canonical, credential_scoped, user_scoped, or dev_only." },
-        functionalType: { type: "string", description: "Source-derived functional class such as time_timezone, search_retrieval, filesystem_content, code_intelligence, or remote_api_tool." },
-        stateType: { type: "string", description: "Source-derived state footprint such as stateless, local_filesystem_state, project_metadata, cache_index_state, credential_state, or runtime_evidence_state." },
-        credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
-        expectedTools: { type: "array", items: { type: "string" }, description: "Source-derived expected tool names or capabilities." },
-        issue: { type: "string", description: "Optional tracking issue id." },
-        ...npmStdioRuntimeFields(),
-      }),
-    },
-    {
-      name: "cf_project_service_onboarding_runtime_draft",
-      operation: "build_service_onboarding_runtime_draft",
-      description: "Create or update a non-mutating runtime/apply draft one bounded slice at a time. Use this before runtime/apply package preview when source-derived fields are incomplete or complex. It persists a project-local draft payload, returns accepted fields, missing fields, and the next required slice. This is just-in-time prompting for package composition: do not install, register, expose, probe, write direct client-local MCP config, or claim target-client-visible availability. Copy assistant_visible_response/message exactly.",
-      parameters: helperSchema({
-        runtimeApplyDraftId: { type: "string", description: "Optional stable draft id returned by an earlier draft call, e.g. rad_<service>. Reuse it to continue composing the same package." },
-        runtime_apply_draft_id: { type: "string", description: "Alias for runtimeApplyDraftId." },
-        draftId: { type: "string", description: "Alias for runtimeApplyDraftId." },
-        candidateService: { type: "string", description: "Candidate service name from the source-only onboarding plan." },
-        operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
-        sourcePath: { type: "string", description: "Source path, package, repository, or documentation reference used for the source-only plan." },
-        serviceBinding: { type: "string", description: "Optional source-derived service binding, when explicitly known." },
-        backendPackage: { type: "string", description: "Source-derived backend package name, when known." },
-        backendCommand: { type: "string", description: "Source-derived backend command or executable, when known." },
-        command: { type: "string", description: "Alias for backendCommand when the assistant naturally names the executable as command." },
-        backendArgs: { type: "array", items: { type: "string" }, description: "Source-derived backend command arguments, when known." },
-        transportType: { type: "string", description: "Source-derived transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required. For managed npm-stdio onboarding, pass transportType with value stdio explicitly." },
-        localizationType: { type: "string", description: "Source-derived scope/locality such as project_scoped, shared_canonical, credential_scoped, user_scoped, or dev_only." },
-        functionalType: { type: "string", description: "Source-derived functional class such as time_timezone, search_retrieval, filesystem_content, code_intelligence, or remote_api_tool." },
-        stateType: { type: "string", description: "Source-derived state footprint such as stateless, local_filesystem_state, project_metadata, cache_index_state, credential_state, or runtime_evidence_state." },
-        credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
-        expectedTools: { type: "array", items: { type: "string" }, description: "Source-derived expected tool names or capabilities." },
-        issue: { type: "string", description: "Optional tracking issue id." },
-        ...npmStdioRuntimeFields(),
-      }),
-    },
-    {
-      name: "cf_project_service_onboarding_runtime_apply",
-      operation: "build_service_onboarding_runtime_apply_package",
-      description: "Build a non-mutating runtime/apply package preview for an uncataloged MCP service after the draft has the required source-derived fields. Prefer structuredPayloadPath from cf_project_service_onboarding_runtime_draft for complex services. This names the service binding, backend home, provision plan, and ContextForge registration plan, but does not install, register, expose, probe, write direct client-local MCP config, or claim target-client-visible availability. Copy assistant_visible_response/message exactly.",
-      parameters: helperSchema({
-        candidateService: { type: "string", description: "Candidate service name from the source-only onboarding plan." },
-        operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
-        sourcePath: { type: "string", description: "Source path, package, repository, or documentation reference used for the source-only plan." },
-        serviceBinding: { type: "string", description: "Optional source-derived service binding, when explicitly known." },
-        backendPackage: { type: "string", description: "Source-derived backend package name, when known." },
-        backendCommand: { type: "string", description: "Source-derived backend command or executable, when known." },
-        command: { type: "string", description: "Alias for backendCommand when the assistant naturally names the executable as command." },
-        backendArgs: { type: "array", items: { type: "string" }, description: "Source-derived backend command arguments, when known." },
-        transportType: { type: "string", description: "Source-derived transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required. For managed npm-stdio onboarding, pass transportType with value stdio explicitly." },
-        localizationType: { type: "string", description: "Source-derived scope/locality such as project_scoped, shared_canonical, credential_scoped, user_scoped, or dev_only." },
-        functionalType: { type: "string", description: "Source-derived functional class such as time_timezone, search_retrieval, filesystem_content, code_intelligence, or remote_api_tool." },
-        stateType: { type: "string", description: "Source-derived state footprint such as stateless, local_filesystem_state, project_metadata, cache_index_state, credential_state, or runtime_evidence_state." },
-        credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
-        expectedTools: { type: "array", items: { type: "string" }, description: "Source-derived expected tool names or capabilities." },
-        issue: { type: "string", description: "Optional tracking issue id." },
-        ...npmStdioRuntimeFields(),
-      }),
-    },
-    {
-      name: "cf_project_service_onboarding_runtime_execute",
-      operation: "apply_service_onboarding_runtime_package",
-      description: "Apply an explicitly approved uncataloged MCP service runtime package through the recorded ContextForge development executor surface. Prefer runtimeApplyPackageId from cf_project_service_onboarding_runtime_apply after the user approves that exact package; do not reconstruct the full package payload from memory. This may register the service on the development ContextForge surface when an approved dev runtime target exists; it must not write direct client-local MCP config, secrets, systemd units, or project activation state. Copy assistant_visible_response/message exactly.",
-      parameters: helperSchema({
-        runtimeApplyPackageId: { type: "string", description: "Recorded runtime/apply package id returned by cf_project_service_onboarding_runtime_apply, e.g. rap_<digest>. Prefer this after approval instead of resubmitting the full field set." },
-        runtime_apply_package_id: { type: "string", description: "Alias for runtimeApplyPackageId." },
-        candidateService: { type: "string", description: "Candidate service name from the source-only onboarding plan." },
-        operatorGoal: { type: "string", description: "User's desired outcome for the candidate service." },
-        sourcePath: { type: "string", description: "Source path, package, repository, or documentation reference used for the source-only plan." },
-        serviceBinding: { type: "string", description: "Optional source-derived service binding, when explicitly known." },
-        backendPackage: { type: "string", description: "Source-derived backend package name, when known." },
-        backendCommand: { type: "string", description: "Source-derived backend command or executable, when known." },
-        command: { type: "string", description: "Alias for backendCommand when the assistant naturally names the executable as command." },
-        backendArgs: { type: "array", items: { type: "string" }, description: "Source-derived backend command arguments, when known." },
-        transportType: { type: "string", description: "Source-derived transport type such as stdio, sse, streamable_http, rest_openapi, or bridge_required. For managed npm-stdio onboarding, pass transportType with value stdio explicitly." },
-        localizationType: { type: "string", description: "Source-derived scope/locality such as project_scoped, shared_canonical, credential_scoped, user_scoped, or dev_only." },
-        functionalType: { type: "string", description: "Source-derived functional class such as time_timezone, search_retrieval, filesystem_content, code_intelligence, or remote_api_tool." },
-        stateType: { type: "string", description: "Source-derived state footprint such as stateless, local_filesystem_state, project_metadata, cache_index_state, credential_state, or runtime_evidence_state." },
-        credentialBoundary: { type: "string", description: "Credential/account/tenant boundary description; do not include secret values." },
-        expectedTools: { type: "array", items: { type: "string" }, description: "Source-derived expected tool names or capabilities." },
-        issue: { type: "string", description: "Optional tracking issue id." },
-        ...npmStdioRuntimeFields(),
-      }),
-    },
-    {
       name: "cf_project_init_list_capabilities",
       operation: "list_available_capabilities",
-      description: "List ContextForge services available for Pi activation and return the service-selection next turn.",
+      description: "Legacy first-run route: list known ContextForge services available to enable and return the service-selection next turn.",
       parameters: helperSchema({ contextforgeServers: { type: "array", items: { type: "object" } } }),
+    },
+    {
+      name: "cf_project_service_list",
+      operation: "service_list",
+      description: "List known ContextForge services with Available, Enabled, or Disabled status. Copy assistant_visible_response exactly as the visible answer.",
+      parameters: projectRootOnlySchema(),
+    },
+    {
+      name: "cf_project_service_status",
+      operation: "service_status",
+      description: "Show simple status for all known ContextForge services or one named service. Copy assistant_visible_response exactly as the visible answer.",
+      parameters: helperSchema({ service: { type: "string" } }),
+    },
+    {
+      name: "cf_project_service_details",
+      operation: "service_details",
+      description: "Show details for one known ContextForge service on request. Copy assistant_visible_response exactly as the visible answer.",
+      parameters: helperSchema({ service: { type: "string" } }),
+    },
+    {
+      name: "cf_project_service_enable",
+      operation: "service_enable",
+      description: "Enable a known ContextForge service for this project after user confirmation. Preview first unless the user has clearly confirmed.",
+      parameters: helperSchema({ service: { type: "string" }, confirm: { type: "boolean" }, dryRun: { type: "boolean" }, dry_run: { type: "boolean" } }),
+    },
+    {
+      name: "cf_project_service_disable",
+      operation: "service_disable",
+      description: "Disable a known ContextForge service for this project without deleting backing state. Preview first unless the user has clearly confirmed.",
+      parameters: helperSchema({ service: { type: "string" }, confirm: { type: "boolean" }, dryRun: { type: "boolean" }, dry_run: { type: "boolean" } }),
+    },
+    {
+      name: "cf_project_service_remove",
+      operation: "service_remove",
+      description: "Remove a known ContextForge service from this project after typed service-name confirmation.",
+      parameters: helperSchema({ service: { type: "string" }, confirmation: { type: "string" }, dryRun: { type: "boolean" }, dry_run: { type: "boolean" } }),
+    },
+    {
+      name: "cf_project_service_repair",
+      operation: "service_repair",
+      description: "Repair known ContextForge service configuration for this project after user confirmation.",
+      parameters: helperSchema({ service: { type: "string" }, confirm: { type: "boolean" }, dryRun: { type: "boolean" }, dry_run: { type: "boolean" } }),
     },
     {
       name: "cf_project_init_continue",
@@ -1285,6 +1189,13 @@ function isUserFacingReadbackOperation(operation: string): boolean {
     "get_project_tool_availability",
     "get_project_capability_summary",
     "get_project_state_readback",
+    "service_list",
+    "service_status",
+    "service_details",
+    "service_enable",
+    "service_disable",
+    "service_remove",
+    "service_repair",
   ].includes(operation);
 }
 
@@ -1301,12 +1212,6 @@ function normalizeProjectInitPayload(payload: JsonObject): JsonObject {
   }
   if (normalized.dry_run !== undefined && normalized.dryRun === undefined) {
     normalized.dryRun = normalized.dry_run;
-  }
-  if (normalized.runtimeApplyPackageId && !normalized.runtime_apply_package_id) {
-    normalized.runtime_apply_package_id = normalized.runtimeApplyPackageId;
-  }
-  if (normalized.runtime_apply_package_id && !normalized.runtimeApplyPackageId) {
-    normalized.runtimeApplyPackageId = normalized.runtime_apply_package_id;
   }
   if (normalized.projectRoot && !normalized.project_root) {
     normalized.project_root = normalized.projectRoot;
@@ -1366,24 +1271,18 @@ async function runProjectInitHelperOperation(operation: string, projectRoot: str
   return textResult(JSON.stringify(visible, null, 2), result.ok === false);
 }
 
-async function helperServiceOnboardingHowTo(projectRoot: string): Promise<string> {
-  try {
-    const result = await runProjectInitHelperOperationJson(
-      "get_service_onboarding_how_to",
-      projectRoot,
-      { projectRoot, project_root: projectRoot, client_type: "pi" },
-    );
-    return String(result.agent_hidden_onboarding_how_to || "");
-  } catch {
-    return "";
-  }
-}
-
 function plainUserFacingRouteResult(operation: string, visible: JsonObject): string | undefined {
   if (![
     "get_project_tool_availability",
     "get_project_capability_summary",
     "get_project_state_readback",
+    "service_list",
+    "service_status",
+    "service_details",
+    "service_enable",
+    "service_disable",
+    "service_remove",
+    "service_repair",
   ].includes(operation)) {
     return undefined;
   }
@@ -1404,101 +1303,6 @@ function clientVisibleProjectInitResult(operation: string, result: JsonObject): 
       assistant_visible_response: message,
       message,
       error,
-      non_actions: result.non_actions || [],
-    };
-  }
-  if (operation === "build_service_onboarding_plan") {
-    const visible = String(result.assistant_visible_response || result.message || "").trim();
-    return {
-      ok: result.ok ?? true,
-      status: result.status || "source_only_onboarding_plan",
-      project_root: result.project_root,
-      mutation_allowed: false,
-      assistant_visible_response: visible,
-      message: visible,
-      runtime_apply_package_id: result.runtime_apply_package_id,
-      runtime_apply_package_ref: result.runtime_apply_package_ref,
-      install_artifact_contract: result.install_artifact_contract,
-      non_actions: result.non_actions || [],
-    };
-  }
-  if (operation === "build_service_onboarding_continuation") {
-    const visible = String(result.assistant_visible_response || result.message || "").trim();
-    return {
-      ok: result.ok ?? true,
-      status: result.status || "service_onboarding_continuation_plan",
-      project_root: result.project_root,
-      mutation_allowed: false,
-      assistant_visible_response: visible,
-      message: visible,
-      non_actions: result.non_actions || [],
-    };
-  }
-  if (operation === "build_service_onboarding_runtime_draft") {
-    const visible = String(result.assistant_visible_response || result.message || "").trim();
-    const publicResult: JsonObject = {
-      ok: result.ok ?? true,
-      status: result.status || "service_onboarding_runtime_apply_draft_incomplete",
-      project_root: result.project_root,
-      mutation_allowed: false,
-      assistant_visible_response: visible,
-      message: visible,
-      copy_as_complete_visible_response: Boolean(visible),
-      do_not_summarize: Boolean(visible),
-      assistant_response_policy: result.assistant_response_policy || {
-        copy_assistant_visible_response_exactly: Boolean(visible),
-        stop_after_visible_response: Boolean(visible),
-        do_not_write_direct_client_local_mcp_config: true,
-        direct_client_config_is_not_contextforge_onboarding: true,
-      },
-      runtime_apply_draft_id: result.runtime_apply_draft_id,
-      structured_payload_path: result.structured_payload_path,
-      ready_to_build_runtime_apply_package: result.ready_to_build_runtime_apply_package,
-      accepted_fields: result.accepted_fields,
-      required_inputs: result.required_inputs,
-      next_required_slice: result.next_required_slice,
-      non_actions: result.non_actions || [],
-    };
-    return Object.fromEntries(Object.entries(publicResult).filter(([, value]) => value !== undefined && value !== ""));
-  }
-  if (operation === "build_service_onboarding_runtime_apply_package") {
-    const visible = String(result.assistant_visible_response || result.message || "").trim();
-    const publicResult: JsonObject = {
-      ok: result.ok ?? true,
-      status: result.status || "service_onboarding_runtime_apply_package",
-      project_root: result.project_root,
-      mutation_allowed: false,
-      assistant_visible_response: visible,
-      message: visible,
-      copy_as_complete_visible_response: Boolean(visible),
-      do_not_summarize: Boolean(visible),
-      assistant_response_policy: result.assistant_response_policy || {
-        copy_assistant_visible_response_exactly: Boolean(visible),
-        stop_after_visible_response: Boolean(visible),
-        do_not_write_direct_client_local_mcp_config: true,
-        direct_client_config_is_not_contextforge_onboarding: true,
-      },
-      required_inputs: result.required_inputs,
-      install_artifact_contract: result.install_artifact_contract,
-      runtime_apply_package_id: result.runtime_apply_package_id,
-      runtime_apply_package_ref: result.runtime_apply_package_ref,
-      non_actions: result.non_actions || [],
-    };
-    return Object.fromEntries(Object.entries(publicResult).filter(([, value]) => value !== undefined && value !== ""));
-  }
-  if (operation === "apply_service_onboarding_runtime_package") {
-    const visible = String(result.assistant_visible_response || result.message || "").trim();
-    return {
-      ok: result.ok ?? true,
-      status: result.status || "service_onboarding_runtime_applied",
-      project_root: result.project_root,
-      mutation_allowed: true,
-      mutation_performed: Boolean(result.mutation_performed),
-      assistant_visible_response: visible,
-      message: visible,
-      runtime_apply_package_id: result.runtime_apply_package_id,
-      tool_names: result.tool_names || result.executor_result?.tool_names || [],
-      runtime_target: result.runtime_target || {},
       non_actions: result.non_actions || [],
     };
   }
@@ -1549,9 +1353,7 @@ function clientVisibleProjectInitListPayload(value: JsonObject): JsonObject {
     .map((service) => {
       const item = asObject(service);
       return pickKeys(item, [
-        "service_binding",
         "display_name",
-        "activation_class",
         "scope_label",
         "user_visible_effect",
       ]);
@@ -1754,18 +1556,33 @@ function shouldRefreshAfterHelperOperation(operation: string, payload: JsonObjec
   return [
     "apply_approved_project_init",
     "repair_pending_project_init_config",
+    "service_enable",
+    "service_disable",
+    "service_remove",
+    "service_repair",
   ].includes(operation);
 }
 
 function approvedPiServices(state: JsonObject): ProjectService[] {
   const rawServices = asObject(state.services);
+  const disabledServices = new Set<string>();
+  const decisions = asObject(state.decisions);
+  for (const [decisionKey, rawDecision] of Object.entries(decisions)) {
+    const decision = asObject(rawDecision);
+    if (!["declined", "deferred", "disabled"].includes(String(decision.state || ""))) continue;
+    const serviceBinding = String(decision.service_binding || decisionKey);
+    if (serviceBinding) disabledServices.add(serviceBinding);
+  }
   const services: ProjectService[] = [];
   for (const [serviceBinding, rawService] of Object.entries(rawServices)) {
+    if (disabledServices.has(serviceBinding)) continue;
     const service = asObject(rawService);
+    const effectiveBinding = String(service.service_binding || serviceBinding);
+    if (disabledServices.has(effectiveBinding)) continue;
     const pi = asObject(asObject(service.target_clients).pi);
     if (!pi.status || String(pi.status) === "blocked") continue;
     services.push({
-      serviceBinding: String(service.service_binding || serviceBinding),
+      serviceBinding: effectiveBinding,
       serviceFamily: String(service.service_family || serviceBinding),
       serviceIdentityId: String(asObject(service.x_service_identity).id || service.x_service_identity_id || ""),
       contextforgeServerId: String(service.x_contextforge_server_id || ""),
@@ -1994,50 +1811,6 @@ function helperSchema(properties: JsonObject, required: string[] = []): JsonObje
     },
     required,
     additionalProperties: false,
-  };
-}
-
-function npmStdioRuntimeFields(): JsonObject {
-  return {
-    packageRegistryType: { type: "string", description: "Source-derived package registry type, e.g. npm. Required for managed npm-stdio onboarding." },
-    packageVersion: { type: "string", description: "Source-derived package version or pinned version, when known." },
-    runtimeHint: { type: "string", description: "Runtime family such as node." },
-    npmPackageConfirmed: { type: "boolean", description: "True only after the exact npm package identity has been source-confirmed." },
-    environmentVariablesReviewed: { type: "boolean", description: "True only after source-derived environment variables have been reviewed, even when the result is none." },
-    packageArgumentsReviewed: { type: "boolean", description: "True only after source-derived package/runtime arguments have been reviewed, even when the result is none." },
-    environmentVariables: {
-      type: "array",
-      items: { type: "object", additionalProperties: true },
-      description: "Source-derived environment variable definitions. Use {name, value} only for a concrete non-secret runtime value. Use {name, description} for optional or documented variables without a chosen value. Do not put prose explanations in value.",
-    },
-    packageArguments: {
-      type: "array",
-      items: {},
-      description: "Source-derived package/runtime arguments. Prefer strings such as '-y' and '@package/name'; shallow objects with an arg/value field are also accepted.",
-    },
-    requiredSecretNames: { type: "array", items: { type: "string" }, description: "Names of required secrets only; never include secret values." },
-    toolSchemaSummaries: {
-      type: "array",
-      items: { type: "string" },
-      description: "Optional source-derived review notes only. These do not satisfy the required toolSchemas field.",
-    },
-    toolSchemaRecords: {
-      type: "array",
-      items: { type: "object", additionalProperties: true },
-      description: "Accepted compact equivalent to toolSchemas for large tool sets. Prefer this when a service has more than three tools: one object per tool with name, description, inputSchema/input_schema, and optional sourceAnchor/source_anchor. This satisfies the structured schema requirement when each record is source-derived.",
-    },
-    toolSchemas: {
-      type: "object",
-      additionalProperties: true,
-      description: "Required structured source-derived tool schemas as an object mapping exact tool name to a JSON-schema-like object with description, input_schema/inputSchema, and source_anchor when known. Do not JSON-encode this field as a string, and do not send an array of strings or summaries.",
-    },
-    promptLibrary: {
-      type: "object",
-      additionalProperties: true,
-      description: "Mandatory prompt-library content with concise abstract_prompt and detail_prompts object. Do not JSON-encode this field as a string. Keep values plain strings or shallow objects.",
-    },
-    structuredPayloadPath: { type: "string", description: "Project-local JSON payload path authored by the assistant. Prefer the draft path returned by cf_project_service_onboarding_runtime_draft for complex services." },
-    structured_payload_path: { type: "string", description: "Alias for structuredPayloadPath." },
   };
 }
 

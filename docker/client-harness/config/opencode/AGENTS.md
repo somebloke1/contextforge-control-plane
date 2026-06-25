@@ -9,7 +9,7 @@ visible final answer, preserve these facts from the helper response:
 - skipped or unavailable ContextForge service status;
 - available ContextForge tool names.
 
-Do not restart service selection, propose activation, apply project-init state,
+Do not restart service selection, propose enablement, apply project-init state,
 validate or probe tools, mutate configuration, or mention hidden helper
 mechanics in the visible answer.
 
@@ -20,20 +20,13 @@ response:
 
 - available now;
 - known but unavailable;
-- could be onboarded with approval;
+- available to enable or repair;
 - concise current-project provenance.
 
-Do not present onboarding-needed capabilities as already usable.
-
-When the user explicitly asks to add or onboard an uncataloged/new MCP service,
-do not restart project initialization and do not treat the service as already
-cataloged or activatable. Guide a source-only onboarding conversation: ask for
-source evidence, transport, credentials, project scope/state footprint,
-expected tools, lifecycle/cleanup, proof plan, and approval boundaries. If the
-user supplies enough details for a plan, produce a no-mutation source-only
-onboarding plan and clearly state that no service has been installed,
-registered, started, exposed, imported, validated, probed, or made visible to
-the client.
+Do not present unavailable services as already usable, and do not guide
+arbitrary/new MCP service onboarding from a URL or source lead. ContextForge
+service management is limited to known ContextForge service offerings surfaced
+by the helper.
 
 When the user asks to use this project's mentality capability, asks about
 recorded project tasks, decisions, open questions, abeyant intentions,
@@ -49,7 +42,7 @@ evidence and include concise source signal such as ledger names, entry ids, or
 entry titles when available.
 
 Do not read or rewrite local ledger files directly, mutate governance entries,
-restart service selection, propose activation, substitute helper availability
+restart service selection, propose enablement, substitute helper availability
 or capability-summary readback for a requested governance/mentality task, or
 expose helper mechanics in the visible answer.
 

@@ -1899,7 +1899,7 @@ class SerenaManagerTests(unittest.TestCase):
         self.assertIn("On the first user prompt in a session with lifecycle missing / fresh_initialization", text)
         self.assertIn("before answering unrelated work or ordinary tool-list questions", text)
         self.assertIn("Ask exactly one question, then stop and wait", text)
-        self.assertIn("Which ContextForge services should I activate for this project?", text)
+        self.assertIn("Which ContextForge services should I enable for this project?", text)
         self.assertIn("No user-global config/trust/extension changes", text)
         self.assertIn("for Pi this is .project/context_forge_state.json records", text)
         self.assertIn("for OpenCode this is project-local opencode.json plus .project/context_forge_state.json", text)
@@ -2194,12 +2194,12 @@ class SerenaManagerTests(unittest.TestCase):
                 self.assertIn("Lifecycle: missing / fresh_initialization", text)
                 self.assertIn("On the first user prompt in a session with lifecycle missing / fresh_initialization", text)
                 self.assertIn("before answering unrelated work or ordinary tool-list questions", text)
-                self.assertIn('asking exactly: "Which ContextForge services should I activate for this project?"', text)
+                self.assertIn('asking exactly: "Which ContextForge services should I enable for this project?"', text)
                 self.assertIn("explain in practical terms", text)
                 self.assertIn("planned project-local writes and non-actions", text)
                 self.assertIn("require scoped approval before apply", text)
                 self.assertIn("avoid writing project state, client config, trust state, registry entries, service state, secrets, or backend state", text)
-                self.assertIn("Which ContextForge services should I activate for this project?", text)
+                self.assertIn("Which ContextForge services should I enable for this project?", text)
 
     def test_fresh_project_hook_uses_local_prompt_without_gateway_catalog_mutation(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
@@ -2234,7 +2234,7 @@ class SerenaManagerTests(unittest.TestCase):
             context = emitted["hookSpecificOutput"]["additionalContext"]
             self.assertIn("On the first user prompt in a session with lifecycle missing / fresh_initialization", context)
             self.assertIn("before answering unrelated work or ordinary tool-list questions", context)
-            self.assertIn('asking exactly: "Which ContextForge services should I activate for this project?"', context)
+            self.assertIn('asking exactly: "Which ContextForge services should I enable for this project?"', context)
             self.assertIn("Target client: opencode", context)
             self.assertIn("State: uninitialized", context)
             self.assertIn("Lifecycle: missing / fresh_initialization", context)
@@ -2257,8 +2257,8 @@ class SerenaManagerTests(unittest.TestCase):
             stdout = io.StringIO()
             menu = (
                 "Codex first-prompt service menu:\n"
-                'Ask exactly: "Which ContextForge services should I activate for this project?"\n'
-                "1. context7:canonical - context7"
+                'Ask exactly: "Which ContextForge services should I enable for this project?"\n'
+                "1. context7"
             )
             with (
                 mock.patch.object(init_hook, "RUN_ROOT", run_root),
@@ -2275,9 +2275,34 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertEqual(0, code)
             context = json.loads(stdout.getvalue())["hookSpecificOutput"]["additionalContext"]
             self.assertIn("Codex first-prompt service menu:", context)
-            self.assertIn("1. context7:canonical - context7", context)
+            self.assertIn("1. context7", context)
             self.assertIn("Target client: codex", context)
             self.assertFalse(project_state.project_state_path(root).exists())
+
+    def test_helper_service_menu_hides_low_level_service_ids(self) -> None:
+        import control_plane_project_init_helper as project_init_helper
+
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            project_init_helper,
+            "list_available_capabilities",
+            return_value={
+                "next_turn": {
+                    "choices": [
+                        {
+                            "number": 1,
+                            "id": "context7:canonical",
+                            "label": "context7",
+                            "effect": "Enable this existing ContextForge service for this project.",
+                        }
+                    ]
+                }
+            },
+        ):
+            root = Path(tmp).resolve()
+            menu = init_hook.render_helper_service_menu(root, target_client="opencode")
+
+        self.assertIn("1. context7 - Enable this existing ContextForge service for this project.", menu)
+        self.assertNotIn("context7:canonical", menu)
 
     def test_codex_user_prompt_submit_records_latest_user_message_and_emits_continuation_context(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
@@ -2563,7 +2588,7 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertEqual("tools_registered_observed", client_state["reload_status"])
             self.assertEqual("installed", client_state["validation_status"])
 
-    def test_codex_uncataloged_service_onboarding_prompt_uses_source_only_guidance(self) -> None:
+    def test_codex_uncataloged_service_onboarding_prompt_redirects_to_known_services_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
             root = Path(tmp).resolve()
             service = service_descriptor("context7")
@@ -2608,18 +2633,17 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertEqual(0, code)
             emitted = json.loads(stdout.getvalue())
             context = emitted["hookSpecificOutput"]["additionalContext"]
-            self.assertIn("<contextforge-uncataloged-service-onboarding>", context)
-            self.assertIn("source-only intake and planning conversation", context)
-            self.assertIn("Do not implement code", context)
-            self.assertIn("edit `.codex/config.toml`", context)
-            self.assertIn("run an MCP handshake", context)
-            self.assertIn("no service has been installed, exposed, registered, started, imported", context)
-            self.assertIn("candidate is outside the project service graph", context)
+            self.assertIn("<contextforge-known-service-management-only>", context)
+            self.assertIn("known ContextForge registry/catalog service offerings", context)
+            self.assertIn("Do not guide arbitrary MCP service onboarding", context)
+            self.assertIn("Do not produce a source-only onboarding handoff plan", context)
+            self.assertIn("list known services or show details", context)
+            self.assertIn("separate development process outside ordinary project helper flow", context)
             self.assertIn("Do not call contextforge-helper project-init activation", context)
             self.assertNotIn("<contextforge-context7-normal-use>", context)
             self.assertNotIn("cf_project_init_continue", context)
 
-    def test_codex_uncataloged_service_plan_prompt_stays_source_only(self) -> None:
+    def test_codex_uncataloged_service_plan_prompt_stays_known_services_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
             root = Path(tmp).resolve()
             service = service_descriptor("context7")
@@ -2661,11 +2685,11 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertEqual(0, code)
             emitted = json.loads(stdout.getvalue())
             context = emitted["hookSpecificOutput"]["additionalContext"]
-            self.assertIn("<contextforge-uncataloged-service-onboarding>", context)
-            self.assertIn("If the user says the service is local stdio", context)
-            self.assertIn("produce a source-only handoff plan", context)
-            self.assertIn("Do not implement code", context)
-            self.assertIn("Do not use shell commands or local file writes", context)
+            self.assertIn("<contextforge-known-service-management-only>", context)
+            self.assertIn("known ContextForge registry/catalog service offerings", context)
+            self.assertIn("Do not guide arbitrary MCP service onboarding", context)
+            self.assertIn("Do not produce a source-only onboarding handoff plan", context)
+            self.assertIn("separate development process outside ordinary project helper flow", context)
             self.assertNotIn("<contextforge-context7-normal-use>", context)
             self.assertNotIn("cf_project_init_continue", context)
 
@@ -2830,7 +2854,7 @@ class SerenaManagerTests(unittest.TestCase):
             self.assertIn("<contextforge-project-governance>", context)
             self.assertIn("mentality", context)
             self.assertIn('"ledger":"decisions"', context)
-            self.assertIn("Do not ask which services to activate", context)
+            self.assertIn("Do not ask which services to enable", context)
             self.assertIn("Do not use shell commands", context)
 
     def test_codex_hook_reminds_reload_before_governance_guidance_when_tools_are_not_observed(self) -> None:

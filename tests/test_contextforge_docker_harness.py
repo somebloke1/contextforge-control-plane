@@ -437,96 +437,28 @@ class ContextForgeDockerHarnessTests(unittest.TestCase):
             opencode_source,
         )
 
-    def test_client_guidance_routes_explicit_uncataloged_service_onboarding_without_activation(self) -> None:
+    def test_client_guidance_does_not_route_uncataloged_service_onboarding(self) -> None:
         pi_source = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
         opencode_source = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").read_text(encoding="utf-8")
         pi_rules = (ROOT / "docker/client-harness/config/pi/AGENTS.md").read_text(encoding="utf-8")
         opencode_rules = (ROOT / "docker/client-harness/config/opencode/AGENTS.md").read_text(encoding="utf-8")
 
-        self.assertIn("explicit user requests to onboard or add an uncataloged/new MCP service", pi_source)
-        self.assertIn("do not call cf_project_init_list_capabilities", pi_source)
-        self.assertIn("do not present the existing service activation menu", pi_source)
-        self.assertIn("cf_project_service_onboarding_research_source", pi_source)
-        self.assertIn("cf_project_service_onboarding_plan", pi_source)
-        self.assertIn("cf_project_service_onboarding_continue", pi_source)
-        self.assertIn("cf_project_service_onboarding_runtime_draft", pi_source)
-        self.assertIn("cf_project_service_onboarding_runtime_apply", pi_source)
-        self.assertIn("cf_project_service_onboarding_runtime_execute", pi_source)
-        plan_start = pi_source.index('name: "cf_project_service_onboarding_plan"')
-        plan_end = pi_source.index('name: "cf_project_service_onboarding_continue"', plan_start)
-        plan_block = pi_source[plan_start:plan_end]
-        self.assertIn("backendPackage", plan_block)
-        self.assertIn("backendCommand", plan_block)
-        self.assertIn("backendArgs", plan_block)
-        self.assertIn("...npmStdioRuntimeFields()", plan_block)
-        continue_start = pi_source.index('name: "cf_project_service_onboarding_continue"')
-        continue_end = pi_source.index('name: "cf_project_service_onboarding_runtime_draft"', continue_start)
-        continue_block = pi_source[continue_start:continue_end]
-        self.assertIn("backendArgs", continue_block)
-        self.assertIn("command", continue_block)
-        runtime_draft_start = pi_source.index('name: "cf_project_service_onboarding_runtime_draft"')
-        runtime_draft_end = pi_source.index('name: "cf_project_service_onboarding_runtime_apply"', runtime_draft_start)
-        runtime_draft_block = pi_source[runtime_draft_start:runtime_draft_end]
-        self.assertIn("runtimeApplyDraftId", runtime_draft_block)
-        self.assertIn("just-in-time prompting", runtime_draft_block)
-        self.assertIn("next required slice", runtime_draft_block)
-        runtime_execute_start = pi_source.index('name: "cf_project_service_onboarding_runtime_execute"')
-        runtime_execute_end = pi_source.index('name: "cf_project_init_list_capabilities"', runtime_execute_start)
-        runtime_execute_block = pi_source[runtime_execute_start:runtime_execute_end]
-        self.assertIn("command", runtime_execute_block)
-        self.assertIn("...npmStdioRuntimeFields()", runtime_execute_block)
-        self.assertIn("do not claim curl, shell, filesystem writes, or command execution occurred", pi_source)
-        self.assertIn("do not use local read/bash/ls/find/grep against /workspace", pi_source)
-        self.assertIn("toolSchemaSummaries", pi_source)
-        self.assertIn("toolSchemaRecords", pi_source)
-        self.assertIn("Accepted compact equivalent to toolSchemas", pi_source)
-        self.assertIn("Prefer this when a service has more than three tools", pi_source)
-        self.assertIn("do not send an array of strings or summaries", pi_source)
-        self.assertIn("Do not JSON-encode this field as a string", pi_source)
-        self.assertIn("structuredPayloadPath", pi_source)
-        self.assertIn("pass transportType with value stdio explicitly", pi_source)
-        self.assertIn("required_inputs: result.required_inputs", pi_source)
-        self.assertIn("copy_as_complete_visible_response: Boolean(visible)", pi_source)
-        self.assertNotIn("JSON-encoded object string", pi_source)
-        self.assertIn("Prefer strings such as '-y' and '@package/name'", pi_source)
-        self.assertIn("get_service_onboarding_how_to", pi_source)
-        self.assertIn("copy assistant_visible_response/message exactly", pi_source)
-        self.assertIn("Do not reformat it into tables, expose enum names, add helper fields", pi_source)
-        self.assertIn("asksForUncatalogedServiceOnboarding", opencode_source)
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", opencode_source)
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_research_source", opencode_source)
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_continue", opencode_source)
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_runtime_draft", opencode_source)
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_runtime_execute", opencode_source)
-        self.assertIn("do not claim curl, shell, filesystem writes, or command execution occurred", opencode_source)
-        self.assertIn("serviceOnboardingIntakeResponse", opencode_source)
-        self.assertIn("serviceOnboardingPlanInstruction", opencode_source)
-        self.assertIn("serviceOnboardingRuntimeApplyInstruction", opencode_source)
-        self.assertIn("serviceOnboardingHowTo(cwd)", opencode_source)
-        self.assertIn("toolSchemaRecords", opencode_source)
-        self.assertIn("include the explicit transport value `stdio`", opencode_source)
-        self.assertIn('"get_service_onboarding_how_to"', opencode_source)
-        self.assertIn("serviceOnboardingPlannedSessions.has(String(sessionID))", opencode_source)
-        self.assertIn("serviceOnboardingPlannedSessions.add(String(sessionID))", opencode_source)
-        self.assertIn("serviceOnboardingContinuedSessions.has(String(sessionID))", opencode_source)
-        self.assertIn("agent_hidden_onboarding_how_to", opencode_source)
-        self.assertIn("use available read-only source-research tools against that lead", opencode_source)
-        self.assertIn("only source-derived or user-visible facts", opencode_source)
-        self.assertIn("just-in-time prompting", opencode_source)
-        self.assertIn("Do not use canned service content", opencode_source)
-        self.assertNotIn("calendar-notes", opencode_source)
-        self.assertIn("produce a no-mutation source-only", pi_rules)
-        self.assertIn("do not restart project initialization", pi_rules)
-        self.assertIn("runtime/apply executor", pi_rules)
-        self.assertIn("Do not use the non-mutating runtime/apply package tool as a substitute", pi_rules)
-        self.assertIn("produce a no-mutation source-only", opencode_rules)
-        self.assertIn("do not restart project initialization", opencode_rules)
-        self.assertNotIn("asksForApprovedUncatalogedServiceContinuation", opencode_source)
-        self.assertNotIn("uncataloged catalog promotion", pi_rules)
-        self.assertNotIn("uncataloged catalog promotion", opencode_rules)
-        self.assertNotIn("service-onboarding continuation tool instead", opencode_source)
+        for source in (opencode_source, pi_rules, opencode_rules):
+            self.assertNotIn("cf_project_service_onboarding", source)
+            self.assertNotIn("get_service_onboarding_how_to", source)
+            self.assertNotIn("source-only onboarding", source)
+            self.assertNotIn("managed npm-stdio", source)
+            self.assertNotIn("runtime/apply", source)
+            self.assertNotIn("uncataloged MCP service", source)
+        self.assertIn("known\nContextForge service offerings", pi_rules)
+        self.assertIn("known ContextForge service offerings", opencode_rules)
+        self.assertIn("list, enable, disable, remove, repair, and details", pi_rules)
+        self.assertNotIn("serviceOnboardingPlannedSessions", opencode_source)
+        self.assertNotIn("serviceOnboardingPlanInstruction", opencode_source)
+        self.assertNotIn("asksForUncatalogedServiceOnboarding", opencode_source)
+        self.assertIn("For questions asking how to use the project docs lookup capability", pi_source)
 
-    def test_opencode_uncataloged_onboarding_transform_preserves_user_source_facts(self) -> None:
+    def test_opencode_transform_does_not_intercept_uncataloged_onboarding_requests(self) -> None:
         plugin_uri = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").as_uri()
         user_text = (
             "I want to add this MCP service to the project: "
@@ -548,48 +480,6 @@ const first = {{
   ],
 }};
 await hook({{}}, first);
-const second = {{
-  messages: [
-    ...first.messages,
-    {{
-      info: {{ id: "msg-2", role: "assistant", sessionID: "session-1" }},
-      parts: [{{ type: "text", text: "I have a source-only onboarding plan." }}],
-    }},
-    {{
-      info: {{ id: "msg-3", role: "user", sessionID: "session-1" }},
-      parts: [{{ type: "text", text: "approve" }}],
-    }},
-  ],
-}};
-await hook({{}}, second);
-const third = {{
-  messages: [
-    ...first.messages,
-    {{
-      info: {{ id: "msg-4", role: "assistant", sessionID: "session-1" }},
-      parts: [{{ type: "text", text: "I have a source-only onboarding plan." }}],
-    }},
-    {{
-      info: {{ id: "msg-5", role: "user", sessionID: "session-1" }},
-      parts: [{{ type: "text", text: "Use the source as truth and tell me the next step." }}],
-    }},
-  ],
-}};
-await hook({{}}, third);
-const fourth = {{
-  messages: [
-    ...second.messages,
-    {{
-      info: {{ id: "msg-6", role: "assistant", sessionID: "session-1" }},
-      parts: [{{ type: "text", text: "I prepared the service-management continuation package." }}],
-    }},
-    {{
-      info: {{ id: "msg-7", role: "user", sessionID: "session-1" }},
-      parts: [{{ type: "text", text: "approve runtime apply and registration" }}],
-    }},
-  ],
-}};
-await hook({{}}, fourth);
 const flatten = (messages) => messages
   .flatMap((message) => message.parts || [])
   .map((part) => part.text || "")
@@ -597,20 +487,7 @@ const flatten = (messages) => messages
 console.log(JSON.stringify({{
   firstCount: first.messages.length,
   firstRoute: first.messages[0].parts[0].text,
-  firstInjectedRoute: first.messages[first.messages.length - 1].parts[0].text,
   firstVisibleContext: flatten(first.messages),
-  secondCount: second.messages.length,
-  secondRoute: second.messages[0].parts[0].text,
-  secondInjectedRoute: second.messages[second.messages.length - 1].parts[0].text,
-  secondVisibleContext: flatten(second.messages),
-  thirdCount: third.messages.length,
-  thirdRoute: third.messages[0].parts[0].text,
-  thirdInjectedRoute: third.messages[third.messages.length - 1].parts[0].text,
-  thirdVisibleContext: flatten(third.messages),
-  fourthCount: fourth.messages.length,
-  fourthRoute: fourth.messages[0].parts[0].text,
-  fourthInjectedRoute: fourth.messages[fourth.messages.length - 1].parts[0].text,
-  fourthVisibleContext: flatten(fourth.messages),
 }}));
 """
         result = subprocess.run(
@@ -628,28 +505,12 @@ console.log(JSON.stringify({{
 
         self.assertEqual(0, result.returncode, result.stderr)
         parsed = json.loads(result.stdout)
-        self.assertEqual(2, parsed["firstCount"])
+        self.assertEqual(1, parsed["firstCount"])
         self.assertEqual(user_text, parsed["firstRoute"])
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", parsed["firstInjectedRoute"])
         self.assertIn("https://github.com/modelcontextprotocol/servers/tree/main/src/time", parsed["firstVisibleContext"])
         self.assertIn("get_current_time", parsed["firstVisibleContext"])
-        self.assertNotIn("Reply with exactly the following text", parsed["firstInjectedRoute"])
-        self.assertGreaterEqual(parsed["secondCount"], 4)
-        self.assertEqual(user_text, parsed["secondRoute"])
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_continue", parsed["secondInjectedRoute"])
-        self.assertIn("https://github.com/modelcontextprotocol/servers/tree/main/src/time", parsed["secondVisibleContext"])
-        self.assertIn("approve", parsed["secondVisibleContext"])
-        self.assertGreaterEqual(parsed["thirdCount"], 4)
-        self.assertEqual(user_text, parsed["thirdRoute"])
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_plan", parsed["thirdInjectedRoute"])
-        self.assertIn("ContextForge Service Onboarding How-To", parsed["thirdInjectedRoute"])
-        self.assertIn("use available read-only source-research tools", parsed["thirdInjectedRoute"])
-        self.assertNotIn("guidance_resource_uri", parsed["thirdInjectedRoute"])
-        self.assertGreaterEqual(parsed["fourthCount"], 6)
-        self.assertEqual(user_text, parsed["fourthRoute"])
-        self.assertIn("contextforge-helper_cf_project_service_onboarding_runtime_execute", parsed["fourthInjectedRoute"])
-        self.assertIn("approve runtime apply and registration", parsed["fourthVisibleContext"])
-        self.assertIn("ContextForge Service Onboarding How-To", parsed["fourthInjectedRoute"])
+        self.assertNotIn("contextforge-helper_cf_project_service_onboarding", parsed["firstVisibleContext"])
+        self.assertNotIn("<contextforge-service-onboarding>", parsed["firstVisibleContext"])
 
     def test_onboarding_semantic_process_gate_uses_real_clients_and_composite_persona(self) -> None:
         gate = (ROOT / "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md").read_text(encoding="utf-8")
@@ -810,12 +671,12 @@ console.log(JSON.stringify({{
         self.assertIn("persona's ignorance boundary", onboarding_skill)
         self.assertIn("alternate non-ContextForge routes", dialogue_runner)
         pi_shim = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
-        self.assertIn("Do not put prose explanations in value", pi_shim)
-        self.assertIn("runtimeApplyPackageId", pi_shim)
-        self.assertIn("do not reconstruct the full package payload from memory", pi_shim)
+        self.assertNotIn("Do not put prose explanations in value", pi_shim)
+        self.assertNotIn("runtimeApplyPackageId", pi_shim)
+        self.assertNotIn("do not reconstruct the full package payload from memory", pi_shim)
         opencode_plugin = (ROOT / "docker/client-harness/config/opencode/plugins/contextforge-project-init.js").read_text(encoding="utf-8")
-        self.assertIn("runtime_apply_package_id", opencode_plugin)
-        self.assertIn("Prefer that id over reconstructing the full package payload from memory", opencode_plugin)
+        self.assertNotIn("runtime_apply_package_id", opencode_plugin)
+        self.assertNotIn("Prefer that id over reconstructing the full package payload from memory", opencode_plugin)
         self.assertIn("continue_conversation", dialogue_runner)
         self.assertIn("simulated_human_declared_complete", dialogue_runner)
         interaction_style = next(
@@ -1833,6 +1694,10 @@ print(json.dumps(outputs))
         self.assertNotIn("cacheControlFormat", pi_provider["compat"])
         self.assertNotIn("openRouterRouting", pi_provider["compat"])
         self.assertEqual("google/gemma-4-26b-a4b-it", pi_provider["models"][0]["id"])
+        local_pi_provider = pi_models["providers"]["local-llama-qwen"]
+        self.assertEqual("$LOCAL_LLAMA_BASE_URL", local_pi_provider["baseUrl"])
+        self.assertEqual("$LOCAL_LLAMA_KEY", local_pi_provider["apiKey"])
+        self.assertEqual("qwen3.6-a3b", local_pi_provider["models"][0]["id"])
 
         self.assertEqual("{env:CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}", opencode_config["model"])
         openrouter_provider = opencode_config["provider"]["openrouter"]
@@ -1857,6 +1722,10 @@ print(json.dumps(outputs))
         self.assertIn('data["small_model"] = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_SMALL_MODEL"), model_id)', opencode_renderer)
         self.assertIn('provider_options["baseURL"] = base_url.rstrip("/")', opencode_renderer)
         self.assertIn('provider_options["apiKey"] = os.environ["OPENROUTER_API_KEY"]', opencode_renderer)
+        self.assertIn('provider = data.setdefault("provider", {}).setdefault("llama.cpp", {})', opencode_renderer)
+        self.assertIn('provider_options["baseURL"] = os.environ["LOCAL_LLAMA_BASE_URL"].rstrip("/")', opencode_renderer)
+        self.assertIn('provider_options["apiKey"] = os.environ["LOCAL_LLAMA_KEY"]', opencode_renderer)
+        self.assertIn('data["model"] = os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL", f"llama.cpp/{model_id}")', opencode_renderer)
         self.assertNotIn("setCacheKey", opencode_renderer)
         self.assertIn('"only": routes', opencode_renderer)
         self.assertIn('"order": routes', opencode_renderer)
@@ -2960,7 +2829,8 @@ print(json.dumps(outputs))
         self.assertIn("opencode-latest-user-message.json", plugin)
         self.assertIn("call only `contextforge-helper_cf_project_init_continue`", plugin)
         self.assertIn("const sameRecordedSession = previousSessionID && previousSessionID === String(sessionID)", plugin)
-        self.assertIn('const continuationHint = sameRecordedSession ? projectInitContinuationHint(latestText) : ""', plugin)
+        self.assertIn("transcriptShowsProjectInitContinuation", plugin)
+        self.assertIn("sameRecordedSession || transcriptShowsProjectInitContinuation(output.messages)", plugin)
         self.assertIn("looksLikeServiceSelection", plugin)
         self.assertIn("The latest user reply is a natural-language service selection.", plugin)
         self.assertIn("The latest user reply is Serena language input", plugin)
