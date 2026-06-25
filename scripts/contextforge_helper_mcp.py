@@ -441,7 +441,7 @@ def client_visible_project_init_plan_payload(value: dict[str, Any], *, include_n
             f"Plan ready for {service_names}. It will write {writes_text}; "
             "it will not mutate user-global config, secrets, backend services, or the ContextForge registry."
             f"{input_text} "
-            "Approve or decline?"
+            "\n\nApprove or decline?"
         )
     if "message" not in public and isinstance(cleaned.get("next_turn"), dict):
         next_turn_value = cleaned["next_turn"]
