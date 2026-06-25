@@ -1,0 +1,7 @@
+contact_links:
+  - name: Open question
+    url: https://github.com/somebloke1/contextforge-control-plane/blob/dev-root/OPEN_QUESTIONS.md
+    about: Questions kept visible without forcing an immediate answer live in OPEN_QUESTIONS.md.
+  - name: Project decisions
+    url: https://github.com/somebloke1/contextforge-control-plane/blob/dev-root/DECISIONS.md
+    about: Accepted and superseded decisions are recorded in DECISIONS.md.

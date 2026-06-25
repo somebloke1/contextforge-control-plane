@@ -1,0 +1,62 @@
+name: Bug report
+description: Report something that is not working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report for the ContextForge
+        control plane. Please describe the actual versus expected behavior with
+        concrete evidence (commands, output, endpoint probes).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: The behavior you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Exact commands, inputs, or endpoint probes. Avoid including secrets/tokens.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Client / surface
+      description: Which client or surface is affected, if any.
+      multiple: true
+      options:
+        - ContextForge gateway / Admin UI / API
+        - Pi
+        - OpenCode
+        - Codex
+        - Claude Code / Claude Desktop
+        - Gemini CLI
+        - Other / not applicable
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Redacted logs, readback, or probe output. Never paste real secrets or tokens.
+    validations:
+      required: false
+  - type: checkboxes
+    id: no-secrets
+    attributes:
+      label: Secret hygiene
+      options:
+        - label: I have not included real API keys, bearer tokens, passwords, or generated JWTs in this report.
+          required: true
