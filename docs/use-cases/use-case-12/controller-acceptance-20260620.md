@@ -2,6 +2,11 @@
 
 Issue: #254.
 
+Historical/superseded: this acceptance record belongs to the now-abandoned
+source-only onboarding ambition. It remains evidence, not current roadmap
+guidance. Current helper work manages known service offerings represented in
+the ContextForge registry/catalog with helper metadata.
+
 Status: accepted by controller on 2026-06-20 after fresh Pi and OpenCode client
 dialogue runs, structural verifier passes, source checks, and non-Spark
 semantic evaluator review. Codex parity extension accepted later the same day

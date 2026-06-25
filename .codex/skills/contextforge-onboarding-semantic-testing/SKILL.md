@@ -1,9 +1,19 @@
 ---
 name: contextforge-onboarding-semantic-testing
-description: Run ContextForge MCP service-onboarding semantic process gates through real Pi and OpenCode target-client sessions. Use when Codex needs to design, run, evaluate, or refine source-lead-only onboarding proofs where a tested assistant starts from an upstream URL or lead, a simulated human responder answers questions, model-profile quorum evidence is required, and Codex subagents must not substitute for target-client behavior.
+description: Legacy/quarantined ContextForge MCP source-lead onboarding semantic process gate. Do not use for current service-management work unless a later explicit governance decision revives arbitrary/new MCP onboarding.
 ---
 
 # ContextForge Onboarding Semantic Testing
+
+## Rollback Quarantine
+
+This skill documents the abandoned source-lead/new-MCP onboarding ambition. It
+is retained as historical method evidence only. Current product direction is
+CF-registry/catalog known-service management: list, enable, disable, remove,
+repair, details, and target-client proof for services already represented in
+ContextForge with helper metadata. Do not dispatch runs from this skill, create
+foil ladders, or instruct assistants to generate new MCP Docker/API packages
+unless a later explicit governance decision reopens that roadmap.
 
 ## Overview
 

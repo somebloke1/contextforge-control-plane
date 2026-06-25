@@ -1,5 +1,12 @@
 # ContextForge Service Onboarding Helper
 
+> Status: legacy/quarantined. The source-led/new-MCP onboarding ambition
+> described here has been abandoned for the current product direction. Current
+> helper work is limited to managing known service offerings represented in the
+> ContextForge registry/catalog with helper metadata. This document is retained
+> as historical method evidence and should not be used as active implementation
+> guidance unless a later explicit governance decision revives the roadmap.
+
 Issue #52 requests a stateful helper process for onboarding new MCP services
 into the cf-controlplane service offering. This document records the source-only
 contract and current deterministic record/resume CLI for that helper. It is not

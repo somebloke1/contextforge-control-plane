@@ -19,7 +19,8 @@ Short of direct user testing, usability evidence comes from a broad and diverse
 set of semantic test bundles with runners dispatched by sub-agents. The bundle
 set must deliberately explore plausible user behaviors and map each behavior to
 the actual Pi/OpenCode client surface under test. Do not substitute one large
-happy-path transcript for coverage. Because tested assistant context is finite
+happy-path transcript for coverage. Do not treat a Codex subagent as a
+tested-client substitute. Because tested assistant context is finite
 even when the configured semantic-test model changes, split coverage into
 small, focused tests with compact prompts and isolated evidence packages.
 Package semantic-test evidence manifest-first: provide compact metadata, stepwise
@@ -27,11 +28,10 @@ generation reports, targeted excerpts, and raw transcript paths instead of
 pasting large transcripts or multi-service histories into one prompt.
 
 This skill is for service-use testing/proof after a service is already
-registered or deliberately targeted. For source-lead-only MCP onboarding
-process proof, use `contextforge-onboarding-semantic-testing`; that distinct
-gate tests real Pi or OpenCode target-client assistants, not Codex subagents,
-with a random composite simulated-human persona, at least three eligible
-semantic-test model profiles per client, and semantic evaluator review.
+registered or deliberately targeted. Source-lead-only MCP onboarding process
+proof is legacy/quarantined in the current product direction; do not route work
+to `contextforge-onboarding-semantic-testing` unless a later explicit
+governance decision revives arbitrary/new MCP onboarding.
 
 ## Operating Loop
 

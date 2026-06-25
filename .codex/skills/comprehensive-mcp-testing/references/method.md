@@ -56,6 +56,8 @@ for semantic evidence that the assistant actually used the tool.
 
 ## Semantic Usability Bundle Design
 
+When persona sampling applies, vary domain knowledge, goal specificity, risk posture, technical fluency, and interaction style across the bundle set.
+
 Short of direct user involvement, the only acceptable usability approximation
 is a broad, diverse set of small semantic bundles executed through actual
 target clients by dispatched runner agents. Each bundle should explore one
@@ -134,20 +136,17 @@ The runner may help create, execute, package, and index these bundles. It must
 not score the meaning of prose. Semantic evaluation belongs to the SO or a
 gpt-5.5/non-Spark evaluator.
 
-## Service-Onboarding Process Bundles
+## Legacy Service-Onboarding Process Bundles
 
 Onboarding process bundles are out of scope for ordinary comprehensive
-service-use testing. When the work starts from a source lead and must prove
-that generic ContextForge onboarding can produce target-client-visible service
-use, switch to `contextforge-onboarding-semantic-testing`.
+service-use testing and are currently a legacy/quarantined ambition. Do not
+switch to `contextforge-onboarding-semantic-testing` for current roadmap work
+unless a later explicit governance decision revives arbitrary/new MCP
+onboarding.
 
-Do not use a Codex subagent as the tested assistant for that gate. Codex may
-compose the runner, maintain GitHub, or evaluate evidence, but the system under
-test is the real Pi or OpenCode client session. The onboarding-process gate
-uses a random composite simulated-human persona with the dimensions domain
-knowledge, goal specificity, risk posture, technical fluency, and interaction
-style, and requires at least three eligible semantic-test model profiles per
-target client.
+The historical onboarding-process gate did not allow a Codex subagent as the
+tested assistant; it required real Pi or OpenCode client sessions. That historical
+method remains evidence only, not active product scope.
 
 Use `docker/client-harness/scripts/run-comprehensive-mcp-model-quorum.py` for
 acceptance-oriented execution. It selects or accepts at least three distinct

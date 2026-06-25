@@ -23,18 +23,15 @@ translator fleets, or service identities named after clients.
 4. Preserve native HTTP/SSE services. Bridge only missing transports with
    package-provided `mcpgateway.translate`.
 5. Keep every exposed service grounded in `server-instances/<service-slug>/` or
-   an explicitly documented equivalent.
-6. Every onboarded service needs a compact abstract service spec published as a
-   ContextForge resource and associated with the service before runtime/client
-   readiness. Clients should load these abstract specs proactively and load
-   detailed tool prompts/resources lazily.
-7. New-service onboarding may begin from a minimal source lead. Prefer an
-   upstream documentation URL or GitHub repository URL, but package names, local
-   paths, issue references, documentation phrases, or other concrete leads are
-   acceptable. Use a read-only research pass to turn leads into source evidence,
-   transport facts, credential/state boundaries, likely tools, and a draft
-   abstract spec, then feed that descriptor into the no-mutation onboarding
-   helper. Do not treat the deterministic helper itself as the research agent.
+   an explicitly documented equivalent for backend operation only.
+6. ContextForge registry/catalog records and associated helper metadata own the
+   assistant-facing service offering truth. `server-instances` manifests may
+   support launch/provisioning, but they must not be treated as the product
+   service menu.
+7. Arbitrary/source-lead MCP service onboarding is abandoned for the current
+   product direction. Do not revive source-led onboarding, foil ladders, or
+   npm/Docker service generation from this skill unless a later explicit
+   decision reopens that roadmap.
 8. Change ContextForge-owned state through ContextForge APIs or Admin UI
    behavior only. Direct database writes are diagnostic-only and prohibited for
    mutation.

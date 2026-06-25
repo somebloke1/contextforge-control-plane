@@ -4,6 +4,11 @@ Issue: #254.
 
 ## Status
 
+Historical/superseded: UC12 records a now-abandoned source-only onboarding
+ambition. Keep it as evidence of past work, not as current roadmap guidance.
+Current helper work manages known service offerings represented in the
+ContextForge registry/catalog with helper metadata.
+
 Queue state: selected after accepted UC11 and the cross-client projection
 substrate (#286/#285/#287) because UC12 depends on service addition, guidance
 behavior, and honest project-service/client-projection boundaries.

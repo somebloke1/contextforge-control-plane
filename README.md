@@ -1,8 +1,10 @@
 # ContextForge Installation Workspace
 
-This repository is the local source of truth for installing and operating a
+This repository is the local operator workspace for installing and operating a
 clean, stock IBM ContextForge MCP Gateway as a ContextForge-style,
-systemd-managed MCP gateway.
+systemd-managed MCP gateway. ContextForge registry/catalog records own the
+assistant-facing service offering truth; repository manifests and scripts
+support backend runtime and provisioning.
 
 Branch policy:
 
@@ -37,11 +39,15 @@ Current local ContextForge install:
 Current operating direction:
 
 - Keep the governance CRUD ledgers and `mentality` MCP service.
+- Follow `dec-20260625-0001`: ContextForge registry/catalog records plus helper
+  metadata own the known-service offering menu; `server-instances` remains
+  backend runtime/provisioning support.
 - Use stock ContextForge/package mechanisms for gateway operation, registration,
   and bridge/translation behavior.
 - Keep one backend home for each exposed service under
-  `server-instances/<service-slug>/`, containing the sanitized manifest, backend
-  launch/probe assets, and any REST/OpenAPI definition ContextForge registers.
+  `server-instances/<service-slug>/`, containing sanitized backend launch/probe
+  assets and any REST/OpenAPI definition ContextForge registers. These files
+  are operational support, not the product service menu.
 - Treat external MCP client configs as discovery sources only. Do not name or
   duplicate services after Codex, Claude, Gemini, or OpenCode unless runtime
   behavior is materially different.

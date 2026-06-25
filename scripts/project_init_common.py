@@ -10,7 +10,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 
 HOME = Path.home().resolve()
@@ -23,10 +23,63 @@ RUN_ROOT = Path(os.environ.get("CONTEXTFORGE_PROJECT_INIT_RUN_ROOT", REPO_ROOT /
 SERVER_INSTANCES_ROOT = REPO_ROOT / "server-instances"
 WRAPPER_PATH = REPO_ROOT / "scripts" / "contextforge_mcp_wrapper.py"
 PYTHON_PATH = REPO_ROOT / ".venv" / "bin" / "python"
+SERVICE_OFFERING_TAGS = frozenset({"service-offering", "contextforge-service-offering"})
+SERVICE_OFFERING_SCHEMA_URI = "contextforge://schemas/service-offering/v1"
+GENERIC_CONTEXTFORGE_TAGS = frozenset(
+    {
+        "contextforge",
+        "local-backend",
+        "remote-backend",
+        "project-instance",
+        "service-offering",
+        "contextforge-service-offering",
+    }
+)
 
 PROMPT_VERSION = "v16"
 PROJECT_INIT_PROMPT_NAME = "project_init_prompt"
 PROJECT_INIT_RESOURCE_NAME = f"project_init_resource_{PROMPT_VERSION}"
+
+CONTEXTFORGE_ENV_CANDIDATES: tuple[str, ...] = (
+    "CONTEXTFORGE_CONFIG_ENV",
+    "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV",
+    "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV",
+    "CONTEXTFORGE_PI_WRAPPER_CONFIG_ENV",
+    "CONTEXTFORGE_ENV",
+    "CONTEXTFORGE_CLIENT_SCOPED_ENV",
+)
+CONTEXTFORGE_BASE_URL_CANDIDATES: tuple[str, ...] = (
+    "CONTEXTFORGE_BASE_URL",
+    "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL",
+    "CONTEXTFORGE_CODEX_WRAPPER_BASE_URL",
+    "CONTEXTFORGE_PI_WRAPPER_BASE_URL",
+)
+
+
+def contextforge_env_path() -> Path | None:
+    """Return the first existing ContextForge client-scoped env file, or None."""
+    for key in CONTEXTFORGE_ENV_CANDIDATES:
+        value = os.environ.get(key)
+        if value:
+            path = Path(value).expanduser()
+            if path.exists():
+                return path
+    default = Path("/run/contextforge-client-scoped/contextforge.env")
+    if default.exists():
+        return default
+    fallback = REPO_ROOT / "config" / "contextforge.env"
+    return fallback if fallback.exists() else None
+
+
+def contextforge_base_url() -> str:
+    """Return the ContextForge base URL from environment or default."""
+    for key in CONTEXTFORGE_BASE_URL_CANDIDATES:
+        value = os.environ.get(key)
+        if value:
+            return value.rstrip("/")
+    return "http://127.0.0.1:4444"
+
+
 PROJECT_INIT_RESOURCE_URI = f"contextforge://cf-controlplane/project-init/{PROMPT_VERSION}"
 SERENA_GUIDANCE_PROMPT_NAME = "serena_project_instance_guidance"
 SERENA_GUIDANCE_RESOURCE_NAME = f"serena_project_instance_guidance_resource_{PROMPT_VERSION}"
@@ -319,6 +372,309 @@ def discover_contextforge_hosted_services(
     if canonical_project is not None and safe_workspace_project_root(canonical_project) and not _has_project_serena_service(services):
         services.append(_synthetic_serena_project_service(canonical_project))
     return services
+
+
+def tag_values(record: dict[str, Any] | Any) -> list[str]:
+    tags = record.get("tags") if isinstance(record, dict) else None
+    if not isinstance(tags, list):
+        return []
+    values: list[str] = []
+    for tag in tags:
+        if isinstance(tag, dict):
+            value = tag.get("label") or tag.get("name") or tag.get("id")
+        else:
+            value = tag
+        if value is not None and str(value):
+            values.append(str(value))
+    return values
+
+
+def _entity_ids(record: dict[str, Any], *names: str) -> set[str]:
+    ids: set[str] = set()
+    for name in names:
+        values = record.get(name)
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            if isinstance(item, dict):
+                value = item.get("id") or item.get("name")
+            else:
+                value = item
+            if value is not None and str(value):
+                ids.add(str(value))
+    return ids
+
+
+def _metadata_resource_rows(resources: Iterable[dict[str, Any]], associated_ids: set[str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for resource in resources:
+        if not isinstance(resource, dict):
+            continue
+        resource_id = str(resource.get("id") or "")
+        if associated_ids and resource_id and resource_id not in associated_ids:
+            continue
+        tags = {value.lower() for value in tag_values(resource)}
+        if not tags.intersection(SERVICE_OFFERING_TAGS):
+            continue
+        rows.append(resource)
+    return rows
+
+
+def _metadata_resource_content(resource: dict[str, Any]) -> dict[str, Any]:
+    content = resource.get("content") or resource.get("text") or resource.get("contents")
+    if isinstance(content, dict):
+        return dict(content)
+    if isinstance(content, str) and content.strip():
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+def _service_offering_metadata_errors(content: Mapping[str, Any]) -> list[str]:
+    errors: list[str] = []
+    required_strings = (
+        "schema_uri",
+        "offering_id",
+        "service_family",
+        "display_name",
+        "description",
+        "scope_model",
+        "instantiation_class",
+        "lifecycle",
+    )
+    for key in required_strings:
+        if not str(content.get(key) or "").strip():
+            errors.append(f"missing {key}")
+    if content.get("schema_uri") != SERVICE_OFFERING_SCHEMA_URI:
+        errors.append("unsupported schema_uri")
+    if str(content.get("lifecycle") or "") != "active":
+        errors.append("lifecycle is not active")
+    if str(content.get("scope_model") or "") not in {"global", "per_project", "per_user"}:
+        errors.append("invalid scope_model")
+    runtime = content.get("runtime")
+    if not isinstance(runtime, Mapping):
+        errors.append("missing runtime object")
+    elif not str(runtime.get("server_id") or "").strip():
+        errors.append("missing runtime.server_id")
+    binding = content.get("binding")
+    if str(content.get("service_binding") or "").strip():
+        return errors
+    if not isinstance(binding, Mapping):
+        errors.append("missing binding object")
+        return errors
+    mode = str(binding.get("mode") or "").strip()
+    if mode == "literal":
+        if not str(binding.get("value") or "").strip():
+            errors.append("missing binding.value")
+    elif mode == "project_hash_template":
+        template = str(binding.get("template") or "").strip()
+        if "{project_hash_12}" not in template:
+            errors.append("project_hash_template binding must include {project_hash_12}")
+    else:
+        errors.append("invalid binding.mode")
+    return errors
+
+
+def _metadata_resource(resources: Iterable[dict[str, Any]], associated_ids: set[str]) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    rows = _metadata_resource_rows(resources, associated_ids)
+    diagnostics: list[str] = []
+    valid: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for row in rows:
+        content = _metadata_resource_content(row)
+        if not content:
+            diagnostics.append(f"metadata resource {row.get('id') or row.get('uri') or '<unknown>'} has no JSON content")
+            continue
+        errors = _service_offering_metadata_errors(content)
+        if errors:
+            diagnostics.append(f"metadata resource {row.get('id') or row.get('uri') or '<unknown>'} invalid: {', '.join(errors)}")
+            continue
+        valid.append((row, content))
+    if len(valid) > 1:
+        diagnostics.append("multiple service-offering metadata resources are associated to one server")
+        return {}, {}, diagnostics
+    if not valid:
+        return {}, {}, diagnostics
+    row, content = valid[0]
+    return row, content, diagnostics
+
+
+def _registry_name_slug(value: str) -> str:
+    slug = normalize_slug(value.replace("_", "-"))
+    for suffix in ("-server",):
+        if slug.endswith(suffix):
+            slug = slug[: -len(suffix)]
+    return slug
+
+
+def _matching_gateway(server: dict[str, Any], gateways: Iterable[dict[str, Any]]) -> dict[str, Any] | None:
+    server_name = str(server.get("name") or "")
+    server_slug = _registry_name_slug(server_name)
+    candidates = {server_slug}
+    if server_slug.endswith("-local"):
+        candidates.add(server_slug.removesuffix("-local"))
+    for gateway in gateways:
+        if not isinstance(gateway, dict):
+            continue
+        gateway_slug = _registry_name_slug(str(gateway.get("name") or ""))
+        if gateway_slug in candidates or server_slug == gateway_slug or server_slug.startswith(f"{gateway_slug}-"):
+            return gateway
+    return None
+
+
+def _service_family_from_registry(server: dict[str, Any], gateway: dict[str, Any] | None, metadata: Mapping[str, Any]) -> str:
+    del server, gateway
+    return normalize_slug(str(metadata["service_family"]))
+
+
+def _registry_scope_model(server: dict[str, Any], metadata: Mapping[str, Any]) -> str:
+    del server
+    return str(metadata["scope_model"]).strip().lower()
+
+
+def _registry_instantiation_class(scope_model: str, metadata: Mapping[str, Any]) -> str:
+    del scope_model
+    return str(metadata["instantiation_class"]).strip()
+
+
+def _registry_service_binding(
+    service_family: str,
+    scope_model: str,
+    server: dict[str, Any],
+    metadata: Mapping[str, Any],
+    *,
+    project_root: str | Path | None,
+) -> str:
+    value = str(metadata.get("service_binding") or "").strip()
+    if value:
+        return value
+    binding = metadata.get("binding")
+    if isinstance(binding, Mapping):
+        mode = str(binding.get("mode") or "").strip()
+        if mode == "literal":
+            literal = str(binding.get("value") or "").strip()
+            if literal:
+                return literal
+        if mode == "project_hash_template":
+            template = str(binding.get("template") or "").strip()
+            if template and project_root is not None:
+                root = Path(project_root).expanduser().resolve(strict=False)
+                return template.replace("{project_hash_12}", project_root_hash(root)[:12])
+    raise ValueError(f"service-offering metadata for {service_family} has no resolvable binding")
+
+
+def discover_contextforge_registry_service_offerings(
+    *,
+    project_root: str | Path | None = None,
+    contextforge_servers: Iterable[dict[str, Any]] | None = None,
+    contextforge_gateways: Iterable[dict[str, Any]] | None = None,
+    contextforge_resources: Iterable[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Return helper-manageable service offerings from ContextForge records.
+
+    This is intentionally separate from `discover_contextforge_hosted_services`.
+    Registry/catalog records own the ordinary product menu; local
+    `server-instances` manifests remain implementation/provisioning support.
+    """
+
+    servers = [server for server in (contextforge_servers or []) if isinstance(server, dict)]
+    gateways = [gateway for gateway in (contextforge_gateways or []) if isinstance(gateway, dict)]
+    resources = [resource for resource in (contextforge_resources or []) if isinstance(resource, dict)]
+    offerings: list[dict[str, Any]] = []
+    for server in servers:
+        if server.get("enabled") is False:
+            continue
+        server_name = str(server.get("name") or "")
+        if not server_name:
+            continue
+        associated_resource_ids = _entity_ids(server, "associatedResources", "associated_resources", "associatedResourceIds", "associated_resource_ids")
+        associated_tool_ids = _entity_ids(server, "associatedTools", "associated_tools", "associatedToolIds", "associated_tool_ids")
+        associated_prompt_ids = _entity_ids(server, "associatedPrompts", "associated_prompts", "associatedPromptIds", "associated_prompt_ids")
+        metadata_row, metadata, metadata_diagnostics = _metadata_resource(resources, associated_resource_ids)
+        if not metadata:
+            continue
+        runtime = metadata.get("runtime") if isinstance(metadata.get("runtime"), Mapping) else {}
+        runtime_server_id = str(runtime.get("server_id") or "").strip()
+        if not runtime_server_id or runtime_server_id != str(server.get("id") or ""):
+            continue
+        gateway = _matching_gateway(server, gateways)
+        runtime_gateway_id = str(runtime.get("gateway_id") or "").strip()
+        if runtime_gateway_id and gateway and runtime_gateway_id != str(gateway.get("id") or ""):
+            continue
+        if runtime_gateway_id and not gateway:
+            continue
+        if gateway and gateway.get("enabled") is False:
+            continue
+        service_family = _service_family_from_registry(server, gateway, metadata)
+        scope_model = _registry_scope_model(server, metadata)
+        instantiation_class = _registry_instantiation_class(scope_model, metadata)
+        try:
+            service_binding = _registry_service_binding(service_family, scope_model, server, metadata, project_root=project_root)
+        except ValueError:
+            continue
+        offering_id = str(metadata.get("offering_id") or "").strip()
+        if not offering_id:
+            continue
+        display_name = str(metadata.get("display_name") or metadata.get("title") or service_family)
+        descriptor_source = {
+            "server": {key: server.get(key) for key in ("id", "name", "description", "enabled", "tags")},
+            "gateway": {key: (gateway or {}).get(key) for key in ("id", "name", "description", "enabled", "tags", "transport")},
+            "metadata": metadata,
+            "metadata_resource": {key: metadata_row.get(key) for key in ("id", "uri", "name", "tags")},
+            "service_binding": service_binding,
+            "scope_model": scope_model,
+            "instantiation_class": instantiation_class,
+        }
+        offerings.append(
+            {
+                "offering_id": offering_id,
+                "service_family": service_family,
+                "canonical_service": str(metadata.get("canonical_service") or metadata.get("service_id") or service_family),
+                "service_binding": service_binding,
+                "display_name": display_name,
+                "description": str(metadata.get("description") or server.get("description") or (gateway or {}).get("description") or display_name),
+                "codex_alias": normalize_codex_alias(str(metadata.get("codex_alias") or metadata.get("client_alias") or service_family)),
+                "instantiation_class": instantiation_class,
+                "scope_model": scope_model,
+                "scope_label": str(metadata.get("scope_label") or scope_model.replace("_", " ")),
+                "required_context": metadata.get("required_context") if isinstance(metadata.get("required_context"), dict) else {},
+                "client_support": metadata.get("client_support") if isinstance(metadata.get("client_support"), dict) else {},
+                "reload_required": metadata.get("reload_required") if metadata.get("reload_required") is not None else True,
+                "virtual_server": server_name,
+                "gateway": str((gateway or {}).get("name") or ""),
+                "contextforge_readback_status": "matched",
+                "contextforge_server_id": str(server.get("id") or ""),
+                "contextforge_gateway_id": str((gateway or {}).get("id") or ""),
+                "registered_tools": sorted(associated_tool_ids),
+                "associated_resources": sorted(associated_resource_ids),
+                "associated_prompts": sorted(associated_prompt_ids),
+                "helper_metadata_status": "complete",
+                "helper_metadata_resource_id": str(metadata_row.get("id") or ""),
+                "helper_metadata_resource_uri": str(metadata_row.get("uri") or metadata.get("resource_uri") or ""),
+                "helper_metadata_diagnostics": metadata_diagnostics,
+                "catalog_source": "contextforge_registry",
+                "non_actions": _activation_non_actions(instantiation_class),
+                "validation_policy": safe_validation_policy(service_family),
+                "descriptor_digest": stable_digest(descriptor_source),
+            }
+        )
+    offering_counts: dict[str, int] = {}
+    binding_counts: dict[str, int] = {}
+    for item in offerings:
+        offering_id = str(item.get("offering_id") or "")
+        binding = str(item.get("service_binding") or "")
+        offering_counts[offering_id] = offering_counts.get(offering_id, 0) + 1
+        binding_counts[binding] = binding_counts.get(binding, 0) + 1
+    unambiguous = [
+        item
+        for item in offerings
+        if offering_counts.get(str(item.get("offering_id") or ""), 0) == 1
+        and binding_counts.get(str(item.get("service_binding") or ""), 0) == 1
+    ]
+    return sorted(unambiguous, key=lambda item: (str(item.get("display_name") or "").lower(), str(item.get("service_binding") or "")))
 
 
 def _has_project_serena_service(services: Iterable[dict[str, Any]]) -> bool:
