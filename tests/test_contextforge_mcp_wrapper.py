@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+import urllib.error
 from unittest import mock
 from pathlib import Path
 
@@ -109,6 +110,34 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
         self.assertIn("servers.use", body["scope"]["permissions"])
         self.assertEqual("DELETE", calls[1]["method"])
         self.assertEqual("/tokens/tok-123", calls[1]["path"])
+
+    def test_bootstrap_error_includes_non_secret_contextforge_diagnostics(self) -> None:
+        exc = urllib.error.HTTPError(
+            url="http://127.0.0.1:4445/resources",
+            code=401,
+            msg="Unauthorized",
+            hdrs={},
+            fp=None,
+        )
+        with mock.patch("sys.stderr") as stderr:
+            wrapper._log_bootstrap_error(
+                "context7_local_server",
+                "wrapper_bootstrap_contextforge_api",
+                exc,
+            )
+
+        written = "".join(str(call.args[0]) for call in stderr.write.call_args_list if call.args)
+        payload = json.loads(written.strip())
+        self.assertEqual("contextforge_wrapper_bootstrap_error", payload["event"])
+        self.assertEqual("wrapper_bootstrap_contextforge_api", payload["stage"])
+        self.assertEqual(401, payload["http_status"])
+        self.assertEqual(wrapper.GATEWAY_BASE, payload["contextforge_base_url"])
+        self.assertEqual(str(wrapper.CONFIG_ENV), payload["contextforge_config_env"])
+        self.assertEqual(wrapper.CONFIG_ENV.exists(), payload["contextforge_config_env_exists"])
+        self.assertEqual(str(wrapper.TOKEN_CACHE), payload["contextforge_token_cache"])
+        self.assertNotIn("CONTEXTFORGE_BEARER_TOKEN", written)
+        self.assertNotIn("Authorization", written)
+        self.assertNotIn("Bearer", written)
 
     def test_scoped_token_creation_event_does_not_log_access_token(self) -> None:
         with mock.patch("sys.stderr") as stderr:

@@ -57,8 +57,17 @@ def service_descriptor(name: str = "context7") -> dict[str, Any]:
     }
 
 
-def registry_service_descriptor(name: str = "context7") -> dict[str, Any]:
+def registry_service_descriptor(
+    name: str = "context7",
+    *,
+    binding: str | None = None,
+    instantiation_class: str | None = None,
+) -> dict[str, Any]:
     descriptor = service_descriptor(name)
+    if binding is not None:
+        descriptor["service_binding"] = binding
+    if instantiation_class is not None:
+        descriptor["instantiation_class"] = instantiation_class
     descriptor.update(
         {
             "catalog_source": "contextforge_registry",
@@ -739,6 +748,100 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(
             "/tmp/contextforge-wrapper-token.local.json.lock",
             entry["environment"]["CONTEXTFORGE_TOKEN_LOCK"],
+        )
+
+    def test_opencode_config_plan_falls_back_to_client_scoped_wrapper_env(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4445",
+                "CONTEXTFORGE_ENV": "/some/client-scoped/contextforge-4445.env",
+                "CONTEXTFORGE_CLIENT_SCOPED_ENV": "/some/client-scoped/contextforge-4445.env",
+                "CONTEXTFORGE_TOKEN_CACHE": "/some/client-scoped/contextforge-wrapper-token-4445.local.json",
+            },
+            clear=True,
+        ):
+            plan = binding.plan_project_init_opencode_config_write(
+                "/home/dgk/workspace/legacy-controlplane-archive",
+                [service_descriptor("context7")],
+                existing_text='{"$schema":"https://opencode.ai/config.json"}\n',
+                plugin_existing_text="",
+            )
+
+        entry = json.loads(plan["next_text"])["mcp"]["context7"]
+        environment = entry["environment"]
+        self.assertEqual("http://127.0.0.1:4445", environment["CONTEXTFORGE_BASE_URL"])
+        self.assertEqual("/some/client-scoped/contextforge-4445.env", environment["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual(
+            "/some/client-scoped/contextforge-wrapper-token-4445.local.json",
+            environment["CONTEXTFORGE_TOKEN_CACHE"],
+        )
+        self.assertEqual(
+            "/some/client-scoped/contextforge-wrapper-token-4445.local.json.lock",
+            environment["CONTEXTFORGE_TOKEN_LOCK"],
+        )
+
+    def test_opencode_wrapper_specific_env_overrides_generic_contextforge_env(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/override/contextforge.env",
+                "CONTEXTFORGE_CLIENT_SCOPED_ENV": "/client-scoped/contextforge.env",
+                "CONTEXTFORGE_ENV": "/generic/contextforge.env",
+                "CONTEXTFORGE_CONFIG_ENV": "/wrong/default/contextforge.env",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://127.0.0.1:4445",
+                "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4444",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/override/token-cache.local.json",
+                "CONTEXTFORGE_TOKEN_CACHE": "/generic/token-cache.local.json",
+            },
+            clear=True,
+        ):
+            entry = binding.build_project_init_opencode_binding_entry(service_descriptor("context7"))
+
+        environment = entry["environment"]
+        self.assertEqual("/override/contextforge.env", environment["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual("http://127.0.0.1:4445", environment["CONTEXTFORGE_BASE_URL"])
+        self.assertEqual("/override/token-cache.local.json", environment["CONTEXTFORGE_TOKEN_CACHE"])
+        self.assertEqual("/override/token-cache.local.json.lock", environment["CONTEXTFORGE_TOKEN_LOCK"])
+
+    def test_opencode_project_init_apply_writes_matching_wrapper_env(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.dict(
+            os.environ,
+            {
+                "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4445",
+                "CONTEXTFORGE_ENV": "/some/client-scoped/contextforge-4445.env",
+                "CONTEXTFORGE_CLIENT_SCOPED_ENV": "/some/client-scoped/contextforge-4445.env",
+                "CONTEXTFORGE_TOKEN_CACHE": "/some/client-scoped/contextforge-wrapper-token-4445.local.json",
+            },
+            clear=True,
+        ):
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            self.assertTrue(proposal["ok"], proposal)
+            challenge = proposal["approval_challenge"]
+            approved = contextforge_helper_mcp.cf_project_init_approve(
+                str(root),
+                challenge["challenge_id"],
+                challenge["plan_digest"],
+            )
+            self.assertTrue(approved["ok"], approved)
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root))
+            self.assertTrue(applied["ok"], applied)
+            opencode_config = json.loads((root / "opencode.json").read_text(encoding="utf-8"))
+
+        environment = opencode_config["mcp"]["context7"]["environment"]
+        self.assertEqual("http://127.0.0.1:4445", environment["CONTEXTFORGE_BASE_URL"])
+        self.assertEqual("/some/client-scoped/contextforge-4445.env", environment["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual(
+            "/some/client-scoped/contextforge-wrapper-token-4445.local.json",
+            environment["CONTEXTFORGE_TOKEN_CACHE"],
         )
 
     def test_project_init_bindings_do_not_embed_contextforge_bearer_token_material(self) -> None:
@@ -4787,7 +4890,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("align-existing-project-services", offer["next_turn"]["question_id"])
         self.assertTrue(proposal["ok"], proposal)
         self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
-        self.assertIn("Plan ready for context7.", proposal["assistant_visible_response"])
+        self.assertIn("plan ready for context7.", proposal["assistant_visible_response"].lower())
         self.assertNotIn("Plan ready for context7:canonical", proposal["assistant_visible_response"])
         self.assertIn("opencode.json", proposal["assistant_visible_response"])
         self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
@@ -5141,7 +5244,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("new session", applied["next_turn"]["prompt"].lower())
 
     def test_opencode_continue_recovers_recorded_cwd_when_model_supplies_root_slash(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -5162,12 +5269,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertEqual(str(root), proposal["project_root"])
             self.assertIn("assistant_visible_response", proposal)
             self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
-            self.assertIn("Plan ready for context7.", proposal["assistant_visible_response"])
+            self.assertIn("plan ready for context7.", proposal["assistant_visible_response"].lower())
             self.assertNotIn("context7:canonical", proposal["assistant_visible_response"])
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
 
     def test_opencode_continue_accepts_natural_service_selection(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        registry_offerings = [
+            registry_service_descriptor("context7"),
+            registry_service_descriptor("mentality", binding="mentality:static_repo_local", instantiation_class="static_repo_local"),
+            registry_service_descriptor("ssh-tmux", binding="ssh-tmux:session_scoped", instantiation_class="session_scoped"),
+        ]
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=registry_offerings,
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -5233,7 +5349,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
 
     def test_pi_continue_maps_pending_serena_numeric_defer_to_non_serena_plan(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7"), registry_service_descriptor("serena")],
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "pi-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -5263,7 +5383,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIsNone(pending_input)
 
     def test_opencode_continue_preserves_all_services_selection_through_language_input(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        registry_offerings = [
+            registry_service_descriptor("context7"),
+            registry_service_descriptor("exa-search", binding="exa-search:credential_scoped", instantiation_class="credential_scoped"),
+            registry_service_descriptor("github", binding="github:credential_scoped", instantiation_class="credential_scoped"),
+            registry_service_descriptor("mentality", binding="mentality:static_repo_local", instantiation_class="static_repo_local"),
+            registry_service_descriptor("playwright"),
+            registry_service_descriptor("ssh-tmux", binding="ssh-tmux:session_scoped", instantiation_class="session_scoped"),
+            registry_service_descriptor("web-search", binding="web-search:credential_scoped", instantiation_class="credential_scoped"),
+            registry_service_descriptor("serena"),
+        ]
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=registry_offerings,
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -5281,8 +5415,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("Which language", language_turn["assistant_visible_response"])
             self.assertTrue(proposal["ok"], proposal)
             self.assertEqual("project_init", proposal["workflow"])
-            self.assertEqual(10, len(proposal["selected_service_bindings"]))
-            self.assertIn("time:canonical", proposal["selected_service_bindings"])
+            self.assertEqual(8, len(proposal["selected_service_bindings"]))
+            self.assertNotIn("time:canonical", proposal["selected_service_bindings"])
             self.assertIn("serena:", " ".join(proposal["selected_service_bindings"]))
             self.assertIn("language=python", proposal["assistant_visible_response"])
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
@@ -6669,6 +6803,47 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertTrue(result["ok"], result)
         self.assertEqual("context7:canonical", result["available_services"][0]["service_binding"])
         self.assertIn("1. context7 - Available", result["assistant_visible_response"])
+
+    def test_opencode_continue_initial_menu_uses_registry_offerings_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ), mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            side_effect=AssertionError("project-init continuation menu must not read manifest-backed discovery"),
+        ):
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": ""}) + "\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                result = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="opencode")
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(["context7:canonical"], [item["service_binding"] for item in result["available_services"]])
+        self.assertIn("1. context7 - Available", result["assistant_visible_response"])
+        self.assertNotIn("time", result["assistant_visible_response"].lower())
+
+    def test_opencode_continue_all_services_omits_manifest_only_services(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7"), registry_service_descriptor("github")],
+        ), mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            side_effect=AssertionError("project-init continuation selection must not read manifest-backed discovery"),
+        ):
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": "all services"}) + "\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                result = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="opencode")
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(["context7:canonical", "github:canonical"], result["selected_service_bindings"])
+        self.assertNotIn("time:canonical", result["selected_service_bindings"])
 
     def test_service_management_list_numbers_visible_service_choices(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(

@@ -4046,6 +4046,7 @@ def propose_project_init(
     client_type: str = DEFAULT_CLIENT_TYPE,
     inputs: dict[str, Any] | None = None,
     contextforge_servers: list[dict[str, Any]] | None = None,
+    contextforge_service_offerings: list[dict[str, Any]] | None = None,
     server_instances_root: str | None = None,
 ) -> dict[str, Any]:
     """Build a non-mutating activation plan or the next required input turn."""
@@ -4058,6 +4059,7 @@ def propose_project_init(
                 client_type=client_type,
                 inputs=inputs,
                 contextforge_servers=contextforge_servers,
+                contextforge_service_offerings=contextforge_service_offerings,
                 server_instances_root=server_instances_root,
             ),
         }
@@ -4149,6 +4151,15 @@ def cf_project_init_continue(
         latest = _read_latest_user_message_text(project_root)
         pending_input = _pending_project_init_input(project_root)
         language = _language_input_from_text(latest, pending_input)
+        service_offerings_cache: list[dict[str, Any]] | None = None
+
+        def service_offerings_for_continue() -> list[dict[str, Any]]:
+            nonlocal service_offerings_cache
+            if service_offerings_cache is None:
+                root = project_state.validate_project_root(project_root, require_workspace=True)
+                service_offerings_cache = _contextforge_registry_service_offerings(root)
+            return service_offerings_cache
+
         if pending_input and language:
             pending_services = _pending_service_refs(pending_input)
             if language == "defer":
@@ -4162,6 +4173,7 @@ def cf_project_init_continue(
                         project_root=project_root,
                         selected_services=non_serena_services,
                         client_type=client_type,
+                        contextforge_service_offerings=service_offerings_for_continue(),
                     )
                     if result.get("status") != "needs_input":
                         _clear_pending_project_init_input(project_root)
@@ -4184,6 +4196,7 @@ def cf_project_init_continue(
                     selected_services=pending_services,
                     client_type=client_type,
                     inputs={"language": language},
+                    contextforge_service_offerings=service_offerings_for_continue(),
                 )
                 if result.get("status") != "needs_input":
                     _clear_pending_project_init_input(project_root)
@@ -4218,9 +4231,11 @@ def cf_project_init_continue(
                 dry_run=dry_run,
             )
             return client_visible_project_init_apply_payload(result)
+        service_offerings = service_offerings_for_continue()
         capabilities = helper.list_available_capabilities(
             project_root=project_root,
             client_type=client_type,
+            contextforge_service_offerings=service_offerings,
         )
         selected = _selected_service_ids_from_text(latest, capabilities)
         if selected:
@@ -4228,6 +4243,7 @@ def cf_project_init_continue(
                 project_root=project_root,
                 selected_services=selected,
                 client_type=client_type,
+                contextforge_service_offerings=service_offerings,
             )
             if result.get("status") == "needs_input":
                 _remember_pending_project_init_input(project_root, selected)

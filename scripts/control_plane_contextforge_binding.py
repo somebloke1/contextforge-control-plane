@@ -87,6 +87,13 @@ OPENCODE_WRAPPER_SCRIPT_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_SCRIPT"
 OPENCODE_WRAPPER_CONFIG_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV"
 OPENCODE_WRAPPER_BASE_URL_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL"
 OPENCODE_WRAPPER_TOKEN_CACHE_ENV = "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE"
+OPENCODE_WRAPPER_CONFIG_ENV_FALLBACKS = (
+    "CONTEXTFORGE_CLIENT_SCOPED_ENV",
+    "CONTEXTFORGE_ENV",
+    "CONTEXTFORGE_CONFIG_ENV",
+)
+OPENCODE_WRAPPER_BASE_URL_ENV_FALLBACKS = ("CONTEXTFORGE_BASE_URL",)
+OPENCODE_WRAPPER_TOKEN_CACHE_ENV_FALLBACKS = ("CONTEXTFORGE_TOKEN_CACHE",)
 CODEX_WRAPPER_PYTHON_ENV = "CONTEXTFORGE_CODEX_WRAPPER_PYTHON"
 CODEX_WRAPPER_SCRIPT_ENV = "CONTEXTFORGE_CODEX_WRAPPER_SCRIPT"
 CODEX_WRAPPER_CONFIG_ENV = "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV"
@@ -206,6 +213,14 @@ def now_timestamp() -> str:
 def stable_digest(value: Any) -> str:
     encoded = json.dumps(_json_copy(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _first_env_value(*keys: str) -> str | None:
+    for key in keys:
+        value = os.environ.get(key)
+        if value:
+            return value
+    return None
 
 
 def build_project_init_codex_binding_block(service: Mapping[str, Any]) -> str:
@@ -678,16 +693,16 @@ def build_project_init_opencode_binding_entry(service: Mapping[str, Any]) -> dic
         "CONTEXTFORGE_WRAPPER_IDLE_TIMEOUT_SECONDS": "300",
         "MCP_WRAPPER_LOG_LEVEL": "INFO",
     }
-    config_env = os.environ.get(OPENCODE_WRAPPER_CONFIG_ENV)
+    config_env = _first_env_value(OPENCODE_WRAPPER_CONFIG_ENV, *OPENCODE_WRAPPER_CONFIG_ENV_FALLBACKS)
     if config_env:
         environment["CONTEXTFORGE_CONFIG_ENV"] = config_env
-    base_url = os.environ.get(OPENCODE_WRAPPER_BASE_URL_ENV)
+    base_url = _first_env_value(OPENCODE_WRAPPER_BASE_URL_ENV, *OPENCODE_WRAPPER_BASE_URL_ENV_FALLBACKS)
     if base_url:
         environment["CONTEXTFORGE_BASE_URL"] = base_url
-    token_cache = os.environ.get(OPENCODE_WRAPPER_TOKEN_CACHE_ENV)
+    token_cache = _first_env_value(OPENCODE_WRAPPER_TOKEN_CACHE_ENV, *OPENCODE_WRAPPER_TOKEN_CACHE_ENV_FALLBACKS)
     if token_cache:
         environment["CONTEXTFORGE_TOKEN_CACHE"] = token_cache
-        environment["CONTEXTFORGE_TOKEN_LOCK"] = f"{token_cache}.lock"
+        environment["CONTEXTFORGE_TOKEN_LOCK"] = os.environ.get("CONTEXTFORGE_TOKEN_LOCK") or f"{token_cache}.lock"
     return {
         "type": "local",
         "command": [wrapper_python, wrapper_script, virtual_server],
