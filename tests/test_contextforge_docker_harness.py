@@ -1610,6 +1610,7 @@ print(json.dumps(outputs))
         self.assertIn("mcp-contextforge-gateway==${MCP_CONTEXTFORGE_GATEWAY_VERSION}", dockerfile)
         self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON", dockerfile)
         self.assertIn("/opt/contextforge-wrapper-venv/bin/python", dockerfile)
+        self.assertIn("ARG PI_CODING_AGENT_VERSION=0.81.1", dockerfile)
         self.assertIn("contextforge-pi-bootstrap.sh", dockerfile)
         self.assertIn("pi-wrapper.sh", dockerfile)
         self.assertIn("CONTEXTFORGE_PI_REAL_BIN=/usr/bin/pi", dockerfile)
@@ -1617,8 +1618,9 @@ print(json.dumps(outputs))
         self.assertIn("test -x /usr/bin/pi", dockerfile)
         self.assertIn("! test /usr/bin/pi -ef /usr/local/bin/pi", dockerfile)
         self.assertIn('MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"', compose)
+        self.assertEqual(2, compose.count('PI_CODING_AGENT_VERSION: "${PI_CODING_AGENT_VERSION:-0.81.1}"'))
 
-    def test_pi_image_wraps_bare_pi_for_interactive_harness_sessions(self) -> None:
+    def test_pi_image_wraps_bare_pi_for_harness_sessions(self) -> None:
         dockerfile = (ROOT / "docker/client-harness/pi/Dockerfile").read_text(encoding="utf-8")
         wrapper = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
         bootstrap = (ROOT / "docker/client-harness/pi/contextforge-pi-bootstrap.sh").read_text(encoding="utf-8")
@@ -1660,6 +1662,7 @@ print(json.dumps(outputs))
     def test_pi_alpine_preserves_real_npm_executable_before_installing_wrapper(self) -> None:
         dockerfile = (ROOT / "docker/client-harness/pi-alpine/Dockerfile").read_text(encoding="utf-8")
 
+        self.assertIn("ARG PI_CODING_AGENT_VERSION=0.81.1", dockerfile)
         self.assertIn("CONTEXTFORGE_PI_REAL_BIN=/usr/local/bin/contextforge-pi-real", dockerfile)
         self.assertIn('installed_pi="$(command -v pi)"', dockerfile)
         self.assertIn('[ "${installed_pi}" = /usr/local/bin/pi ]', dockerfile)
@@ -1704,6 +1707,11 @@ print(json.dumps(outputs))
                 "repeated --model",
             ),
             (["--thinking", "medium", "--thinking", "medium"], {}, "repeated --thinking"),
+            (["--mode", "rpc"], {}, "unsupported Pi sandbox control mode: rpc"),
+            (["--mode=rpc"], {}, "unsupported Pi sandbox control mode: rpc"),
+            (["--mode", "socket"], {}, "unsupported Pi sandbox output mode: socket"),
+            (["--mode=json"], {}, "requires '--mode MODE' syntax"),
+            (["--mode", "json", "--mode", "text"], {}, "repeated --mode"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openai"}, "unsupported Pi sandbox provider"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_MODEL": "gpt-5.5"}, "unsupported Pi sandbox model"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_THINKING": "high"}, "thinking level"),
@@ -1720,6 +1728,43 @@ print(json.dumps(outputs))
                 )
                 self.assertEqual(2, completed.returncode)
                 self.assertIn(expected_error, completed.stderr)
+
+    def test_pi_wrapper_rejects_tty_interactive_model_sessions_before_bootstrap(self) -> None:
+        wrapper = ROOT / "docker/client-harness/pi/pi-wrapper.sh"
+        master_fd, slave_fd = os.openpty()
+        try:
+            process = subprocess.Popen(
+                ["/bin/bash", "-p", str(wrapper)],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "CONTEXTFORGE_PI_REAL_BIN": "/bin/true",
+                    "PI_CODING_AGENT_DIR": "/proc/contextforge-policy-probe",
+                },
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                close_fds=True,
+            )
+            os.close(slave_fd)
+            slave_fd = -1
+            output = b""
+            while True:
+                try:
+                    chunk = os.read(master_fd, 4096)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                output += chunk
+            returncode = process.wait(timeout=10)
+        finally:
+            os.close(master_fd)
+            if slave_fd >= 0:
+                os.close(slave_fd)
+
+        self.assertEqual(2, returncode)
+        self.assertIn("interactive mode is disabled", output.decode(errors="replace"))
 
     def test_pi_wrapper_rejects_invalid_real_executables_without_bootstrap_side_effects(self) -> None:
         source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
@@ -1952,6 +1997,16 @@ print(json.dumps(outputs))
         self.assertIn('exec /usr/local/bin/pi "$@"', baseline)
         self.assertIn("pi pi --no-session", smoke)
         self.assertIn("pi-alpine pi --version", alpine_smoke)
+
+        policy_probe = (harness_root / "scripts/probe-pi-model-policy.sh").read_text(encoding="utf-8")
+        self.assertIn('build pi pi-alpine', policy_probe)
+        self.assertIn('project_name="contextforge-pi-policy-$$"', policy_probe)
+        self.assertIn('down -v --remove-orphans', policy_probe)
+        self.assertIn('"${service}" pi --mode rpc', policy_probe)
+        self.assertIn("PI_CODING_AGENT_DIR=/proc/contextforge-policy-probe", policy_probe)
+        self.assertIn("unsupported Pi sandbox control mode: rpc", policy_probe)
+        self.assertIn('"${service}" pi --version', policy_probe)
+        self.assertNotIn("curl", policy_probe)
 
     def test_pi_wrapper_injects_approved_model_scope_and_role_thinking(self) -> None:
         source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")

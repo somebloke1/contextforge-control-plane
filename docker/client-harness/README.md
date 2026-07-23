@@ -52,8 +52,11 @@ through `umask 077`.
 The sandbox model policy governs the tracked image and Compose launch paths:
 the image `CMD`, harness scripts, and interactive container shells invoke `pi`
 or `/usr/local/bin/pi`, which is the harness wrapper. A tracked semantic test
-must stay on that route. `docker compose run pi bash` followed by a bare `pi`
-remains supported because command lookup reaches the same wrapper.
+must stay on that route. Model-bearing Pi runs are limited to non-interactive
+text/print execution or `--mode json`. The wrapper rejects RPC mode and a TTY
+interactive session before bootstrap because those upstream modes expose
+post-start model or thinking-level controls that cannot be governed by argv.
+Version, help, and LiteLLM-scoped model-list metadata commands remain supported.
 
 Operator-selected interpreters such as `bash /usr/local/bin/pi`, direct calls
 to `/usr/bin/pi` or `/usr/local/bin/contextforge-pi-real`, bind-mounting over
@@ -64,6 +67,10 @@ Do not use those routes as model-routing evidence, and do not describe their
 behavior as the effective sandbox configuration. This boundary does not weaken
 the fail-closed checks on tracked launchers; it prevents an operator-controlled
 replacement process from being confused with ordinary Pi behavior.
+
+Run `scripts/probe-pi-model-policy.sh` to rebuild both Pi variants and prove
+that standard and Alpine reject RPC before bootstrap while retaining their
+pinned, network-free version paths. The probe uses no live model/API call.
 
 Do not print raw ContextForge env files, bearer headers, passwords, API keys,
 tokens, JWTs, private keys, or credential values into terminal transcripts or

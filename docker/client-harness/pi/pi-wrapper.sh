@@ -40,10 +40,13 @@ fi
 has_provider=false
 has_model=false
 has_thinking=false
+has_mode=false
+has_print=false
 skip_defaults=false
 latest_prompt=""
 selected_model="${CONTEXTFORGE_PI_DEFAULT_MODEL}"
 selected_thinking=""
+selected_mode="text"
 args=("$@")
 
 for ((index = 0; index < ${#args[@]}; index += 1)); do
@@ -83,10 +86,33 @@ for ((index = 0; index < ${#args[@]}; index += 1)); do
     --thinking=*)
       fail_model_policy "Pi sandbox requires '--thinking LEVEL' syntax"
       ;;
+    --mode)
+      ((index + 1 < ${#args[@]})) || fail_model_policy "--mode requires a value"
+      [[ "${has_mode}" == false ]] || fail_model_policy "repeated --mode is forbidden"
+      index=$((index + 1))
+      selected_mode="${args[index]}"
+      case "${selected_mode}" in
+        text|json) ;;
+        rpc) fail_model_policy "unsupported Pi sandbox control mode: rpc" ;;
+        *) fail_model_policy "unsupported Pi sandbox output mode: ${selected_mode}" ;;
+      esac
+      has_mode=true
+      ;;
+    --mode=*)
+      selected_mode="${arg#--mode=}"
+      [[ "${selected_mode}" != rpc ]] || fail_model_policy "unsupported Pi sandbox control mode: rpc"
+      fail_model_policy "Pi sandbox requires '--mode MODE' syntax"
+      ;;
     --api-key|--api-key=*)
       fail_model_policy "--api-key is forbidden; the Pi sandbox uses only LITELLM_API_KEY from its env file"
       ;;
-    -p|--prompt)
+    -p|--print)
+      ((index + 1 < ${#args[@]})) || fail_model_policy "${arg} requires a value"
+      has_print=true
+      index=$((index + 1))
+      latest_prompt="${args[index]}"
+      ;;
+    --prompt)
       ((index + 1 < ${#args[@]})) || fail_model_policy "${arg} requires a value"
       index=$((index + 1))
       latest_prompt="${args[index]}"
@@ -112,6 +138,10 @@ for ((index = 0; index < ${#args[@]}; index += 1)); do
       ;;
   esac
 done
+
+if [[ "${skip_defaults}" == false && "${has_print}" == false && "${selected_mode}" != json && -t 0 && -t 1 ]]; then
+  fail_model_policy "Pi sandbox interactive mode is disabled because it permits post-start model/reasoning changes; use --print or --mode json"
+fi
 
 selected_expected_thinking="$(expected_thinking "${selected_model}")"
 if [[ "${has_thinking}" == true && "${selected_thinking}" != "${selected_expected_thinking}" ]]; then

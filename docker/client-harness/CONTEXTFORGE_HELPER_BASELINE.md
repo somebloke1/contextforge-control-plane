@@ -96,6 +96,12 @@ entrypoint, or altering/mounting over image executables is arbitrary operator
 code control rather than a supported baseline route. Such replacement paths
 must not be used as helper or model-routing acceptance evidence.
 
+Within the supported wrapper route, model-bearing runs must resolve to Pi's
+non-interactive print/text path or `--mode json`. RPC and TTY-interactive modes
+are fail-closed before bootstrap because they expose session-lifetime
+`set_model`, model-cycle, and thinking-level mutation after startup validation.
+Use `-p`/`--print` for ordinary text proof and select each role on a new process.
+
 The existing smoke script may keep its explicit `--extension` proof. The
 baseline session launcher now materializes the shim into Pi's normal
 auto-discovered extension directory so a developer does not have to remember the
