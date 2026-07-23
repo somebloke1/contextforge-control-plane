@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a qwen-only known-service management state story in Pi or OpenCode."""
+"""Run a Luna/medium known-service management state story in Pi or OpenCode."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from harness_redaction import redact_text, redact_value
 
-LOCAL_QWEN_ENV = Path("env/local-llama.env")
+SEMANTIC_MODEL_ENV = Path("env/semantic-model.env")
 DEFAULT_CONTEXTFORGE_GATEWAY_CONTAINER = "contextforge-harness-contextforge-gateway-1"
 DEFAULT_CONTEXTFORGE_HOST_BASE_URL = "http://127.0.0.1:4445"
 DEFAULT_CONTEXTFORGE_CONTAINER_BASE_URL = "http://host.docker.internal:4445"
@@ -293,42 +293,47 @@ def default_session_id(client: str, timestamp: str) -> str:
     return f"service-state-{client}-{timestamp}"
 
 
-def qwen_launch_env(harness_root: Path) -> tuple[dict[str, str], dict[str, Any]]:
-    env_path = harness_root / LOCAL_QWEN_ENV
+def luna_launch_env(harness_root: Path) -> tuple[dict[str, str], dict[str, Any], Path]:
+    env_path = harness_root / SEMANTIC_MODEL_ENV
     env = read_env(env_path)
-    required = ["LOCAL_LLAMA_BASE_URL", "LOCAL_LLAMA_MODEL", "LOCAL_LLAMA_KEY"]
+    required = ["LITELLM_BASE_URL", "LITELLM_API_KEY"]
     missing = [key for key in required if not env.get(key)]
     if missing:
         raise RuntimeError(f"{env_path} missing required keys: {', '.join(missing)}")
-    model = env["LOCAL_LLAMA_MODEL"]
+    if env["LITELLM_BASE_URL"].rstrip("/") != "http://host.docker.internal:3333/v1":
+        raise RuntimeError(f"{env_path} must use sandbox LiteLLM on host.docker.internal:3333")
+    expected = {
+        "CONTEXTFORGE_PI_DEFAULT_PROVIDER": "litellm",
+        "CONTEXTFORGE_PI_DEFAULT_MODEL": "codex/gpt-5.6-luna",
+        "CONTEXTFORGE_PI_DEFAULT_THINKING": "medium",
+        "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL": "litellm/codex/gpt-5.6-luna",
+        "CONTEXTFORGE_OPENCODE_SMALL_MODEL": "litellm/codex/gpt-5.6-luna",
+        "CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT": "medium",
+    }
+    drift = {key: env.get(key) for key, value in expected.items() if env.get(key) != value}
+    if drift:
+        raise RuntimeError(f"{env_path} does not provide the Luna/medium sandbox contract: {drift!r}")
     launch_env = {
-        "CONTEXTFORGE_TEST_PROVIDER": "local llama.cpp",
-        "CONTEXTFORGE_TEST_PROVIDER_KIND": "openai_compatible",
-        "CONTEXTFORGE_TEST_MODEL": model,
-        "CONTEXTFORGE_TEST_MODEL_NAME": "Local llama.cpp Qwen 3.6 A3B",
-        "CONTEXTFORGE_TEST_CONTEXT_WINDOW": "131072",
-        "CONTEXTFORGE_PI_DEFAULT_PROVIDER": "local-llama-qwen",
-        "CONTEXTFORGE_PI_DEFAULT_MODEL": model,
-        "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL": f"llama.cpp/{model}",
-        "CONTEXTFORGE_OPENCODE_SMALL_MODEL": f"llama.cpp/{model}",
-        "LOCAL_LLAMA_BASE_URL": env["LOCAL_LLAMA_BASE_URL"],
-        "LOCAL_LLAMA_MODEL": model,
-        "LOCAL_LLAMA_KEY": env["LOCAL_LLAMA_KEY"],
-        "CONTEXTFORGE_REDACT_VALUES": env["LOCAL_LLAMA_KEY"],
+        "CONTEXTFORGE_TEST_PROVIDER": "LiteLLM",
+        "CONTEXTFORGE_TEST_PROVIDER_KIND": "litellm",
+        "CONTEXTFORGE_TEST_MODEL": "codex/gpt-5.6-luna",
+        "CONTEXTFORGE_TEST_MODEL_NAME": "GPT-5.6 Luna via LiteLLM",
+        "CONTEXTFORGE_TEST_CONTEXT_WINDOW": "1050000",
+        **expected,
     }
     summary = {
-        "provider_kind": "openai_compatible",
-        "provider_label": "local llama.cpp",
-        "model": model,
-        "display_name": "Local llama.cpp Qwen 3.6 A3B",
-        "base_url": env["LOCAL_LLAMA_BASE_URL"],
+        "provider_kind": "litellm",
+        "provider_label": "LiteLLM",
+        "model": "codex/gpt-5.6-luna",
+        "display_name": "GPT-5.6 Luna via LiteLLM",
+        "semantic_role": "blind",
+        "reasoning_effort": "medium",
+        "base_url": env["LITELLM_BASE_URL"],
         "api_key_present": True,
         "api_key_delivered_to_container": True,
-        "api_key_delivery_reason": "local llama.cpp requires an API key; no hosted provider key is passed",
+        "api_key_delivery_reason": "the ignored semantic model env file is passed directly to the container",
     }
-    os.environ["LOCAL_LLAMA_KEY"] = env["LOCAL_LLAMA_KEY"]
-    os.environ["CONTEXTFORGE_REDACT_VALUES"] = env["LOCAL_LLAMA_KEY"]
-    return launch_env, summary
+    return launch_env, summary, env_path
 
 
 def write_client_scoped_env(
@@ -744,7 +749,8 @@ def main(argv: list[str] | None = None) -> int:
         extra={"status": "initializing", "output_root": str(output_root)},
     )
     try:
-        qwen_env, qwen_summary = qwen_launch_env(harness_root)
+        uc1.ensure_semantic_model_env(harness_root, client=args.client, commands=commands, runner=uc1.run)
+        semantic_env, semantic_summary, semantic_env_path = luna_launch_env(harness_root)
         client_scoped_dir, client_scoped_summary, scoped_token_revoke = write_client_scoped_env(
             output_root,
             gateway_container=args.contextforge_gateway_container,
@@ -791,13 +797,15 @@ def main(argv: list[str] | None = None) -> int:
             "compose",
             "-f",
             str(harness_root / "compose.yml"),
+            "--env-file",
+            str(semantic_env_path),
             "run",
             "--name",
             container,
             "--no-deps",
             "-d",
         ]
-        for key, value in sorted(qwen_env.items()):
+        for key, value in sorted(semantic_env.items()):
             launch_command.extend(["-e", f"{key}={value}"])
         launch_command.extend([uc1.compose_service_name(args.client), "sleep", "infinity"])
         launch = uc1.run(launch_command, cwd=repo_root, timeout=120, commands=commands, env=compose_env)
@@ -840,8 +848,8 @@ def main(argv: list[str] | None = None) -> int:
             "semantic_acceptance": "requires_manual_or_non_spark_evaluator_review",
             "deterministic_semantic_oracles_allowed": False,
             "client": args.client,
-            "model_requirement": "qwen_only",
-            "semantic_model": redact_value(qwen_summary),
+            "model_requirement": "luna_medium_via_litellm",
+            "semantic_model": redact_value(semantic_summary),
             "timestamp": timestamp,
             "run_id": run_id,
             "container": container,
@@ -857,7 +865,7 @@ def main(argv: list[str] | None = None) -> int:
             "structural_checks": structural_checks,
             "acceptance_matrix": {
                 "target_client": args.client,
-                "model": "local llama.cpp qwen3.6-a3b",
+                "model": "codex/gpt-5.6-luna via LiteLLM with medium reasoning",
                 "operation_types": ["list", "details", "enable", "disable", "remove", "repair", "status"],
                 "enable_set_sizes": ["1 service", "3 services", "all services"],
                 "long_state_story": [
@@ -870,7 +878,7 @@ def main(argv: list[str] | None = None) -> int:
                 ],
             },
             "manual_review_required": [
-                "confirm qwen used the helper-visible ContextForge service management tools rather than shell/file substitutes",
+                "confirm Luna used the helper-visible ContextForge service management tools rather than shell/file substitutes",
                 "confirm each requested operation was semantically understood and completed or transparently blocked",
                 "confirm state emerged, persisted, and mutated coherently across the single session",
                 "inspect configuration/state files after the run, especially final .project/context_forge_state.json and client config",

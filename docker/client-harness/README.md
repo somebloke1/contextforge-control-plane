@@ -162,43 +162,17 @@ the source-lead-only onboarding process begins.
 
 ## Pi Human-Simulator Baseline
 
-Onboarding semantic-process acceptance runs use a separate Pi gpt-5.5
-simulated-human responder. Do not create the responder auth container through
-the compose `pi` service, because target-client Pi resets own and remove the
-`contextforge-client-harness_pi-home` volume. Use a raw Docker container with
-its own writable layer, authenticate it once, then commit it as the responder
-baseline image:
+Onboarding acceptance uses Terra (`codex/gpt-5.6-terra`) through LiteLLM with
+`high` thinking. The runner launches a separate standard Pi container with the
+canonical `/config/pi` mount and `env/semantic-model.env`; it does not use a
+direct-provider OAuth image. Verify the same role binding with:
 
 ```sh
-docker rm -f cf-pi-human-sim-auth 2>/dev/null || true
-docker run \
-  --name cf-pi-human-sim-auth \
-  --env OPENAI_API_KEY= \
-  --env CODEX_API_KEY= \
-  --env ANTHROPIC_API_KEY= \
-  --env OPENROUTER_API_KEY= \
-  --env GOOGLE_API_KEY= \
-  --env GEMINI_API_KEY= \
-  --env PERPLEXITY_API_KEY= \
-  --env EXA_API_KEY= \
-  --env CONTEXT7_API_KEY= \
-  -d \
-  contextforge-client-pi:latest \
-  sleep infinity
-docker exec -it cf-pi-human-sim-auth bash
-```
-
-Inside the container, authenticate Pi for the OpenAI Codex provider using the
-ChatGPT Plus/Pro subscription-backed OAuth flow, then verify:
-
-```sh
-pi --provider openai-codex --model gpt-5.5 --thinking low --no-tools --no-context-files -p "Reply exactly: human-sim-ok"
-```
-
-After authentication succeeds, exit and capture the baseline:
-
-```sh
-docker commit cf-pi-human-sim-auth contextforge-client-pi:human-sim-authenticated
+docker compose -f compose.yml --env-file env/semantic-model.env run --rm \
+  -e CONTEXTFORGE_PI_DEFAULT_MODEL=codex/gpt-5.6-terra \
+  -e CONTEXTFORGE_PI_DEFAULT_THINKING=high \
+  pi pi --provider litellm --model codex/gpt-5.6-terra --thinking high \
+  --no-session --no-tools --no-context-files -p "Reply exactly: human-sim-ok"
 ```
 
 The remaining launch-only clients do not consume this semantic-test model
@@ -206,24 +180,22 @@ profile yet. They are installed and version-checked only.
 
 ## Semantic Evaluator Baseline
 
-Use Codex CLI for semantic evaluator runs by default. The evaluator should run
-`gpt-5.5` with high reasoning and a schema-constrained final artifact when a
-schema is available:
+Use Sol (`codex/gpt-5.6-sol`) through the sandbox OpenCode LiteLLM provider with
+the `high` variant for semantic evaluator runs:
 
 ```sh
-codex exec \
-  -m gpt-5.5 \
-  -c 'model_reasoning_effort="high"' \
-  --output-schema path/to/evaluator-schema.json \
-  --json \
-  --output-last-message path/to/evaluator-final.json \
+docker compose -f compose.yml --env-file env/semantic-model.env run --rm \
+  -e CONTEXTFORGE_OPENCODE_DEFAULT_MODEL=litellm/codex/gpt-5.6-sol \
+  -e CONTEXTFORGE_OPENCODE_SMALL_MODEL=litellm/codex/gpt-5.6-sol \
+  -e CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT=high \
+  opencode opencode run --model litellm/codex/gpt-5.6-sol --agent build --format json \
   "Evaluate the supplied ContextForge dialogue evidence."
 ```
 
-The JSONL event stream is internal evidence. Shared/user-facing reports should
-publish the evaluator verdict, cited evidence, score, and concise rationale,
-not raw thinking tokens, unless the controller explicitly records a
-surface-labeled reason to render those tokens.
+When an evaluator schema is available, include it in the evaluator instructions
+and validate the final artifact separately. Schema validation constrains shape;
+it does not replace Sol's semantic judgment. Shared reports publish the verdict,
+cited evidence, score, and concise rationale rather than raw reasoning tokens.
 
 ## ContextForge Helper Baseline
 

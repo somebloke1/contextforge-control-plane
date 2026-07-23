@@ -28,8 +28,11 @@ RUN apk add --no-cache \
     && npm install -g "opencode-ai@${OPENCODE_VERSION}" \
     && npm cache clean --force
 
+COPY --chown=agent:agent entrypoint.sh /usr/local/bin/contextforge-opencode-alpine-entrypoint
+RUN chmod 0755 /usr/local/bin/contextforge-opencode-alpine-entrypoint
+
 USER ${USERNAME}
 WORKDIR /workspace
 
-ENTRYPOINT ["/sbin/tini", "--"]
+ENTRYPOINT ["/usr/local/bin/contextforge-opencode-alpine-entrypoint"]
 CMD ["opencode", "--version"]

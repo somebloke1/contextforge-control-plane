@@ -9,6 +9,7 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 ENV NPM_CONFIG_FUND=false
 ENV NPM_CONFIG_AUDIT=false
 ENV PI_CODING_AGENT_DIR=/home/agent/.pi/agent
+ENV CONTEXTFORGE_PI_REAL_BIN=/usr/bin/pi
 
 RUN apk add --no-cache \
       bash \
@@ -27,6 +28,11 @@ RUN apk add --no-cache \
     && chown -R "${USERNAME}:${USERNAME}" /workspace /evidence \
     && npm install -g "@earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION}" \
     && npm cache clean --force
+
+COPY --chown=agent:agent pi/contextforge-pi-bootstrap.sh /usr/local/bin/contextforge-pi-bootstrap
+COPY --chown=agent:agent pi/pi-wrapper.sh /usr/local/bin/pi
+COPY --chown=agent:agent pi/render-config.py /usr/local/lib/contextforge-pi-render-config.py
+RUN chmod 0755 /usr/local/bin/contextforge-pi-bootstrap /usr/local/bin/pi
 
 USER ${USERNAME}
 WORKDIR /workspace

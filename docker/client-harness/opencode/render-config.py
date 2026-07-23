@@ -59,15 +59,28 @@ def render_config() -> None:
     if not isinstance(source_models, dict) or set(source_models) != set(MODEL_VARIANTS):
         raise ValueError("canonical OpenCode config must contain exactly the approved LiteLLM models")
     for model, expected in MODEL_VARIANTS.items():
-        variants = source_models[model].get("variants")
+        model_config = source_models[model]
+        if not isinstance(model_config, dict) or model_config.get("reasoning") is not True:
+            raise ValueError(f"canonical OpenCode reasoning must be enabled for {model!r}")
+        variants = model_config.get("variants")
         if not isinstance(variants, dict) or set(variants) != {expected}:
-            raise ValueError(f"canonical OpenCode variant mismatch for {model!r}")
+            raise ValueError(f"canonical OpenCode reasoning variant mismatch for {model!r}")
+        variant_config = variants[expected]
+        if (
+            not isinstance(variant_config, dict)
+            or set(variant_config) != {"reasoningEffort"}
+            or variant_config.get("reasoningEffort") != expected
+        ):
+            raise ValueError(f"canonical OpenCode reasoning effort mismatch for {model!r}")
 
     provider = dict(source_provider)
     provider["models"] = {model: source_models[model] for model in MODEL_VARIANTS}
     provider["whitelist"] = list(MODEL_VARIANTS)
     options = dict(provider.get("options") or {})
-    options["baseURL"] = os.environ.get("LITELLM_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+    base_url = os.environ.get("LITELLM_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+    if base_url != DEFAULT_BASE_URL:
+        raise ValueError(f"OpenCode sandbox LiteLLM endpoint must be {DEFAULT_BASE_URL!r}")
+    options["baseURL"] = base_url
     if os.environ.get("LITELLM_API_KEY"):
         options["apiKey"] = os.environ["LITELLM_API_KEY"]
     provider["options"] = options

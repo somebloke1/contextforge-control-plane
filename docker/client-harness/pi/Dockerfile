@@ -16,6 +16,7 @@ RUN apt-get update \
     && npm cache clean --force
 COPY --chown=agent:agent contextforge-pi-bootstrap.sh /usr/local/bin/contextforge-pi-bootstrap
 COPY --chown=agent:agent pi-wrapper.sh /usr/local/bin/pi
+COPY --chown=agent:agent render-config.py /usr/local/lib/contextforge-pi-render-config.py
 RUN chmod 0755 /usr/local/bin/contextforge-pi-bootstrap /usr/local/bin/pi
 USER agent
 

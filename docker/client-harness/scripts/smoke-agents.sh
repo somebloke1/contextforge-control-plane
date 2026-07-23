@@ -7,6 +7,15 @@ cd "${ROOT}"
 mkdir -p evidence
 scripts/make-semantic-model-env.sh
 
+require_exact_response() {
+  local expected="$1"
+  local actual="$2"
+  if [[ "${actual}" != "${expected}" ]]; then
+    printf 'response mismatch: expected exactly %q\n' "${expected}" >&2
+    return 1
+  fi
+}
+
 run_pi_cell() {
   local slug="$1"
   local model="$2"
@@ -20,7 +29,7 @@ run_pi_cell() {
       --provider litellm --model "${model}" --thinking "${thinking}" \
       -p "Reply with exactly: ${marker}")"
   printf '%s\n' "${output}" | tee "evidence/pi-${slug}-agent-smoke.txt"
-  grep -Fxq "${marker}" <<<"${output}"
+  require_exact_response "${marker}" "${output}"
 }
 
 run_opencode_cell() {
@@ -37,7 +46,7 @@ run_opencode_cell() {
     opencode opencode run --model "${opencode_model}" --agent build --format default \
       "Reply with exactly: ${marker}")"
   printf '%s\n' "${output}" | tee "evidence/opencode-${slug}-agent-smoke.txt"
-  grep -Fxq "${marker}" <<<"${output}"
+  require_exact_response "${marker}" "${output}"
 }
 
 run_pi_cell terra codex/gpt-5.6-terra high

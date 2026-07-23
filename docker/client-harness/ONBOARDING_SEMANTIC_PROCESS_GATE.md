@@ -35,16 +35,15 @@ use.
 - Tested assistant: a real Pi or OpenCode client session launched through the
   Docker client harness.
 - Simulated human responder: a separate model/persona that answers only the
-  tested assistant's user-facing questions. Acceptance-matrix runs use a Pi
-  gpt-5.5 authenticated simulator with `low` thinking unless the controller
-  records a specific equivalent substitute; seeded or direct-provider
-  responders are debug scaffolding.
+  tested assistant's user-facing questions. Acceptance-matrix runs use Terra
+  (`codex/gpt-5.6-terra`) through Pi's LiteLLM provider with `high` thinking;
+  seeded responders are debug scaffolding and direct providers are rejected.
 - Deterministic runner: resets state, launches containers, records commands,
   captures transcripts, enforces role separation, and packages evidence.
 - Semantic evaluator: a non-Spark evaluator that reviews evidence and decides
-  process adequacy. Prefer Codex CLI `exec` with `gpt-5.5`,
-  `-c model_reasoning_effort="high"`, and `--output-schema <FILE>` for
-  evaluator runs. The runner does not decide semantic pass/fail.
+  process adequacy. Use Sol (`litellm/codex/gpt-5.6-sol`) through sandbox
+  OpenCode with the `high` variant. The runner does not decide semantic
+  pass/fail.
 
 Codex subagents may review or evaluate evidence, but they are not the tested
 assistant for this gate. A Codex-only onboarding run proves nothing about Pi or
@@ -291,18 +290,14 @@ regex matching.
 
 ## Evaluator Criteria
 
-Use Codex CLI `exec` with `gpt-5.5`,
-`-c model_reasoning_effort="high"`, and `--output-schema <FILE>` for semantic
-evaluator judgment by default. Use a lower thinking level or a different
-surface only when the controller records an explicit evidence-backed reason.
-The semantic evaluator performs high-dimensional judgment over meaning, route
-adequacy, claim boundaries, leakage, recovery, and efficiency; it is not a
-deterministic transcript scorer. Structured output constrains the evaluator
-artifact shape, not the semantic judgment. Capture raw evaluator events as
-internal evidence when useful, but suppress raw thinking tokens in shared or
-user-facing evidence by default and report conclusions plus concise rationale
-instead. Rendering raw thinking tokens is an explicit design decision that must
-be surface-labeled and justified.
+Use Sol (`litellm/codex/gpt-5.6-sol`) through sandbox OpenCode with the `high`
+variant for semantic evaluator judgment. A different role binding requires an
+explicit evidence-backed reason. The semantic evaluator performs
+high-dimensional judgment over meaning, route adequacy, claim boundaries,
+leakage, recovery, and efficiency; it is not a deterministic transcript scorer.
+Structured validation constrains the evaluator artifact shape, not the semantic
+judgment. Capture raw evaluator events as internal evidence when useful, but
+suppress raw reasoning tokens in shared or user-facing evidence by default.
 
 The evaluator must judge:
 

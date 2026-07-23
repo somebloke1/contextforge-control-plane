@@ -194,15 +194,15 @@ def main(argv: list[str] | None = None) -> int:
         "--responder-mode",
         choices=["pi", "model", "seeded"],
         default="pi",
-        help="Use Pi gpt-5.5 simulated human responders by default; seeded mode is debug scaffolding.",
+        help="Use Pi LiteLLM Terra/high simulated human responders by default; seeded mode is debug scaffolding.",
     )
-    parser.add_argument("--responder-pi-image", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_IMAGE", "contextforge-client-pi:human-sim-authenticated"))
-    parser.add_argument("--responder-pi-provider", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_PROVIDER", "openai-codex"))
-    parser.add_argument("--responder-pi-model", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_MODEL", "gpt-5.5"))
+    parser.add_argument("--responder-pi-image", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_IMAGE", "contextforge-client-pi:latest"))
+    parser.add_argument("--responder-pi-provider", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_PROVIDER", "litellm"))
+    parser.add_argument("--responder-pi-model", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_MODEL", "codex/gpt-5.6-terra"))
     parser.add_argument(
         "--responder-pi-thinking",
         choices=["off", "minimal", "low", "medium", "high", "xhigh"],
-        default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_THINKING", "low"),
+        default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_THINKING", "high"),
     )
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

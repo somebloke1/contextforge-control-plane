@@ -23,7 +23,6 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from semantic_model_host_proxy import API_KEY_ENV_NAMES, start_openrouter_proxy
 from runtime_apply_host_proxy import start_runtime_apply_host_proxy
 from harness_redaction import redact_value
 
@@ -38,10 +37,10 @@ TURN_BUDGET_POLICY = (
     "whole session from the completed evidence package"
 )
 RESPONDER_CONTEXT_CHAR_LIMIT = 16000
-DEFAULT_PI_RESPONDER_IMAGE = "contextforge-client-pi:human-sim-authenticated"
-DEFAULT_PI_RESPONDER_PROVIDER = "openai-codex"
-DEFAULT_PI_RESPONDER_MODEL = "gpt-5.5"
-DEFAULT_PI_RESPONDER_THINKING = "low"
+DEFAULT_PI_RESPONDER_IMAGE = "contextforge-client-pi:latest"
+DEFAULT_PI_RESPONDER_PROVIDER = "litellm"
+DEFAULT_PI_RESPONDER_MODEL = "codex/gpt-5.6-terra"
+DEFAULT_PI_RESPONDER_THINKING = "high"
 PI_RESPONDER_FORBIDDEN_API_KEY_ENVS = (
     "OPENAI_API_KEY",
     "CODEX_API_KEY",
@@ -254,8 +253,8 @@ def acceptance_matrix_eligibility(
     disqualifiers: list[str] = []
     if dry_run:
         disqualifiers.append("dry_run")
-    if responder_mode != "pi_gpt_5_5_simulated_human_responder":
-        disqualifiers.append("simulated_human_responder_not_pi_gpt_5_5")
+    if responder_mode != "pi_litellm_terra_simulated_human_responder":
+        disqualifiers.append("simulated_human_responder_not_pi_litellm_terra")
     if manual_prompting:
         disqualifiers.append("manual_or_seeded_prompt_sequence")
     if allow_preexisting_foil_artifacts:
@@ -265,7 +264,7 @@ def acceptance_matrix_eligibility(
     return {
         "eligible": not disqualifiers,
         "disqualifiers": disqualifiers,
-        "required_responder_mode": "pi_gpt_5_5_simulated_human_responder",
+        "required_responder_mode": "pi_litellm_terra_simulated_human_responder",
         "seeded_or_direct_provider_responders": "debug_scaffolding_only",
         "manual_prompt_sequences": "debug_scaffolding_only",
     }
@@ -302,13 +301,15 @@ def responder_model_config(
         os.environ.get("CONTEXTFORGE_LITELLM_HOST_BASE_URL")
         or available_env.get("CONTEXTFORGE_LITELLM_HOST_BASE_URL")
         or "http://127.0.0.1:3333/v1"
-    )
+    ).rstrip("/")
+    if base_url != "http://127.0.0.1:3333/v1":
+        raise RuntimeError("model-backed simulated human responder requires host LiteLLM on 127.0.0.1:3333")
     return {
         "provider_kind": provider_kind,
         "model": model,
         "api_key_env": key_env,
         "api_key": api_key,
-        "base_url": base_url.rstrip("/"),
+        "base_url": base_url,
         "route_preferences": [],
         "reasoning_effort": "high",
     }
@@ -371,13 +372,22 @@ def responder_system_prompt(*, help_determination: int = DEFAULT_HUMAN_HELP_DETE
 
 
 def pi_responder_config(args: argparse.Namespace) -> dict[str, str]:
-    return {
+    config = {
         "provider_kind": "pi",
         "image": str(args.responder_pi_image),
         "provider": str(args.responder_pi_provider),
         "model": str(args.responder_pi_model),
         "thinking": str(args.responder_pi_thinking),
     }
+    expected = {
+        "image": DEFAULT_PI_RESPONDER_IMAGE,
+        "provider": DEFAULT_PI_RESPONDER_PROVIDER,
+        "model": DEFAULT_PI_RESPONDER_MODEL,
+        "thinking": DEFAULT_PI_RESPONDER_THINKING,
+    }
+    if any(config[key] != value for key, value in expected.items()):
+        raise RuntimeError(f"Pi simulated-human responder must use LiteLLM Terra/high: {expected!r}")
+    return config
 
 
 def pi_responder_session_id(*, foil: str, client: str, run_id: str) -> str:
@@ -573,7 +583,7 @@ def litellm_chat_completion(config: dict[str, Any], messages: list[dict[str, str
     return content.strip()
 
 
-def profile_summary(service_runner: Any, profile: dict[str, Any] | None, env: dict[str, str], secret_keys: list[str], selector: str, available_env: dict[str, str]) -> dict[str, Any]:
+def profile_summary(service_runner: Any, profile: dict[str, Any], env: dict[str, str], secret_keys: list[str], selector: str, available_env: dict[str, str]) -> dict[str, Any]:
     return service_runner.redacted_profile_summary(profile, env, secret_keys, selector, available_env)
 
 
@@ -1180,7 +1190,7 @@ def main(argv: list[str] | None = None) -> int:
         "--responder-mode",
         choices=["pi", "model", "seeded"],
         default="pi",
-        help="Use a Pi gpt-5.5 simulated-human responder by default; seeded mode is debug scaffolding.",
+        help="Use the Pi LiteLLM Terra/high simulated-human responder by default; seeded mode is debug scaffolding.",
     )
     parser.add_argument(
         "--responder-pi-image",
@@ -1233,11 +1243,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.responder_mode == "model" and args.dry_run and not manual_prompting:
             responder_mode = "model_backed_simulated_human_responder_dry_run_seed_preview"
         if args.responder_mode == "pi" and args.dry_run and not manual_prompting:
-            responder_mode = "pi_gpt_5_5_simulated_human_responder_dry_run_seed_preview"
+            responder_mode = "pi_litellm_terra_simulated_human_responder_dry_run_seed_preview"
     else:
         prompts = [persona_initial_prompt(foil, persona)]
         responder_mode = (
-            "pi_gpt_5_5_simulated_human_responder"
+            "pi_litellm_terra_simulated_human_responder"
             if args.responder_mode == "pi"
             else "model_backed_simulated_human_responder"
         )
@@ -1254,12 +1264,9 @@ def main(argv: list[str] | None = None) -> int:
     isolated_reset: dict[str, Any] | None = None
     reset_json: Any = None
     lock_file = None
-    semantic_host_proxy = None
     runtime_apply_host_proxy = None
 
     def stop_host_proxies() -> None:
-        if semantic_host_proxy is not None:
-            semantic_host_proxy.stop()
         if runtime_apply_host_proxy is not None:
             runtime_apply_host_proxy.stop()
 
@@ -1302,32 +1309,12 @@ def main(argv: list[str] | None = None) -> int:
         args.semantic_model_profile,
         available_model_env,
     )
-    if selected_profile is None:
-        semantic_overrides = service_runner.semantic_model_env_overrides()
-        selected_secret_env_keys: list[str] = []
-    else:
-        semantic_overrides, selected_secret_env_keys = service_runner.selected_profile_env(
-            selected_profile,
-            args.client,
-            available_model_env,
-        )
+    semantic_overrides, selected_secret_env_keys = service_runner.selected_profile_env(
+        selected_profile,
+        args.client,
+        available_model_env,
+    )
     secret_env_keys = sorted(set(selected_secret_env_keys))
-    if selected_profile is not None and str(selected_profile.get("provider_kind") or "") == "openrouter":
-        api_key_env = str(selected_profile.get("api_key_env") or "OPENROUTER_API_KEY")
-        upstream_base_url = (
-            os.environ.get(str(selected_profile.get("base_url_env") or ""))
-            or available_model_env.get(str(selected_profile.get("base_url_env") or ""))
-            or str(selected_profile.get("default_base_url") or "https://openrouter.ai/api/v1")
-        )
-        if not args.dry_run:
-            semantic_host_proxy = start_openrouter_proxy(
-                script_path=harness_root / "scripts" / "semantic_model_host_proxy.py",
-                api_key_env=api_key_env,
-                upstream_base_url=upstream_base_url,
-                host_env=available_model_env,
-            )
-            semantic_overrides["OPENROUTER_BASE_URL"] = semantic_host_proxy.container_base_url
-            semantic_overrides[api_key_env] = semantic_host_proxy.container_api_key
     if not args.dry_run:
         runtime_apply_host_proxy = start_runtime_apply_host_proxy(
             script_path=harness_root / "scripts" / "runtime_apply_host_proxy.py",
@@ -1339,7 +1326,7 @@ def main(argv: list[str] | None = None) -> int:
         semantic_overrides["CONTEXTFORGE_RUNTIME_APPLY_PROXY_ENV_FILE"] = str(
             repo_root / "docker" / "contextforge-harness" / "env" / "contextforge.env"
         )
-    docker_run_env = {**compose_env, **{key: "" for key in API_KEY_ENV_NAMES}}
+    docker_run_env = service_runner.semantic_model_compose_process_env(compose_env, secret_env_keys)
     semantic_profile = profile_summary(
         service_runner,
         selected_profile,
@@ -1360,14 +1347,16 @@ def main(argv: list[str] | None = None) -> int:
             "base_url": responder_config["base_url"],
             "route_preferences": responder_config["route_preferences"],
         }
-    elif responder_mode == "pi_gpt_5_5_simulated_human_responder":
+    elif responder_mode == "pi_litellm_terra_simulated_human_responder":
         responder_config = pi_responder_config(args)
         responder_profile_summary = {
-            "provider_kind": "pi",
+            "provider_kind": "litellm_via_pi",
             "image": responder_config["image"],
             "provider": responder_config["provider"],
             "model": responder_config["model"],
             "thinking": responder_config["thinking"],
+            "api_key_env": "LITELLM_API_KEY",
+            "container_receives_real_api_key": bool(available_model_env.get("LITELLM_API_KEY")),
             "tools_enabled": False,
             "context_files_enabled": False,
         }
@@ -1417,9 +1406,12 @@ def main(argv: list[str] | None = None) -> int:
         "prompt_count_scope": "initial_or_dry_run_preview_until_final_summary_overrides",
         "prompts": prompts,
         "semantic_model_profile": semantic_profile,
-        "semantic_model_host_proxy": None if semantic_host_proxy is None else semantic_host_proxy.summary(),
+        "semantic_model_host_proxy": None,
         "runtime_apply_host_proxy": None if runtime_apply_host_proxy is None else runtime_apply_host_proxy.summary(),
-        "container_receives_real_semantic_model_api_key": False,
+        "container_receives_real_semantic_model_api_key": service_runner.container_receives_real_semantic_model_api_key(
+            secret_env_keys,
+            available_model_env,
+        ),
         "reset": reset_json,
         "isolation": isolated_reset,
         "gate_reference": "docker/client-harness/ONBOARDING_SEMANTIC_PROCESS_GATE.md",
@@ -1493,7 +1485,7 @@ def main(argv: list[str] | None = None) -> int:
             lock_file.close()
         return 1
 
-    if responder_mode == "pi_gpt_5_5_simulated_human_responder" and responder_config is not None:
+    if responder_mode == "pi_litellm_terra_simulated_human_responder" and responder_config is not None:
         image_check = uc1.run(
             ["docker", "image", "inspect", responder_config["image"]],
             cwd=repo_root,
@@ -1512,7 +1504,7 @@ def main(argv: list[str] | None = None) -> int:
                     "image_check_timeout": image_check["timeout"],
                     "error": (
                         f"Pi simulated-human responder image {responder_config['image']!r} is unavailable; "
-                        "create/authenticate the baseline image before model-backed acceptance runs."
+                        "build the standard Pi image before model-backed acceptance runs."
                     ),
                 },
                 "turns": [],
@@ -1566,7 +1558,7 @@ def main(argv: list[str] | None = None) -> int:
 
     responder_container = None
     responder_runtime: dict[str, Any] | None = None
-    if responder_mode == "pi_gpt_5_5_simulated_human_responder" and responder_config is not None:
+    if responder_mode == "pi_litellm_terra_simulated_human_responder" and responder_config is not None:
         responder_container = f"cf-human-sim-pi-{container_run_id}"
         responder_launch = uc1.run(
             [
@@ -1575,6 +1567,12 @@ def main(argv: list[str] | None = None) -> int:
                 "--name",
                 responder_container,
                 "-d",
+                "--add-host",
+                "host.docker.internal:host-gateway",
+                "--env-file",
+                str(semantic_env_file),
+                "--volume",
+                f"{harness_root / 'config'}:/config:ro",
             ]
             + [item for key in PI_RESPONDER_FORBIDDEN_API_KEY_ENVS for item in ("--env", f"{key}=")]
             + [
@@ -1605,7 +1603,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             responder_runtime["error"] = (
                 f"Pi simulated-human responder image {responder_config['image']!r} is unavailable or failed to launch; "
-                "create/authenticate the baseline image before model-backed acceptance runs."
+                "build the standard Pi image before model-backed acceptance runs."
             )
 
     session_id = f"onboarding-{args.foil}-{args.client}-{run_id}"
@@ -1699,7 +1697,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 dialogue_stop_reason = "simulated_human_responder_failed"
                 break
-        elif responder_mode == "pi_gpt_5_5_simulated_human_responder" and responder_config is not None and responder_runtime is not None:
+        elif responder_mode == "pi_litellm_terra_simulated_human_responder" and responder_config is not None and responder_runtime is not None:
             if responder_runtime.get("launch_returncode") != 0 or responder_runtime.get("version_returncode") not in {0, None}:
                 responder_turns.append(
                     {
@@ -1883,7 +1881,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
     if (
-        responder_mode == "pi_gpt_5_5_simulated_human_responder"
+        responder_mode == "pi_litellm_terra_simulated_human_responder"
         and responder_runtime is not None
         and isinstance(responder_runtime.get("container"), str)
         and isinstance(responder_runtime.get("session_id"), str)

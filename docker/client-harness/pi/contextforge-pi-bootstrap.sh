@@ -35,49 +35,13 @@ if [[ -f "${CONTEXTFORGE_PI_SHIM_EXTENSION}" ]]; then
   printf '{"portalRoot":"%s"}\n' "${CONTEXTFORGE_PI_SHIM_PORTAL_ROOT}" > "${CONTEXTFORGE_PI_SHIM_INSTALL_DIR}/contextforge-root.json"
 fi
 
-if [[ -f /config/pi/models.json ]]; then
-  export PI_CODING_AGENT_DIR
-  python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-
-source = Path("/config/pi/models.json")
-target = Path(os.environ["PI_CODING_AGENT_DIR"]) / "models.json"
-data = json.loads(source.read_text(encoding="utf-8"))
-if set(data.get("providers", {})) != {"litellm"}:
-    raise SystemExit("Pi sandbox models must contain only the litellm provider")
-provider = data["providers"]["litellm"]
-expected_models = {
-    "codex/gpt-5.6-terra",
-    "codex/gpt-5.6-luna",
-    "codex/gpt-5.6-sol",
-}
-if {model["id"] for model in provider.get("models", [])} != expected_models:
-    raise SystemExit("Pi sandbox models do not match the approved LiteLLM set")
-if provider.get("api") != "openai-responses" or provider.get("compat", {}).get("supportsReasoningEffort") is not True:
-    raise SystemExit("Pi sandbox models must use reasoning-enabled OpenAI Responses")
-if any(model.get("reasoning") is not True or not model.get("thinkingLevelMap") for model in provider["models"]):
-    raise SystemExit("Pi sandbox models must define reasoning and thinking maps")
-provider["baseUrl"] = os.environ.get("LITELLM_BASE_URL", "http://host.docker.internal:3333/v1").rstrip("/")
-if os.environ.get("LITELLM_API_KEY"):
-    provider["apiKey"] = os.environ["LITELLM_API_KEY"]
-target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-settings_source = Path("/config/pi/settings.json")
-if settings_source.exists():
-    settings = json.loads(settings_source.read_text(encoding="utf-8"))
-    model = os.environ.get("CONTEXTFORGE_PI_DEFAULT_MODEL", "codex/gpt-5.6-luna")
-    if model not in expected_models:
-        raise SystemExit(f"unsupported Pi sandbox model: {model!r}")
-    settings["defaultProvider"] = "litellm"
-    settings["defaultModel"] = model
-    settings["defaultThinkingLevel"] = os.environ.get("CONTEXTFORGE_PI_DEFAULT_THINKING", "medium")
-    settings["enabledModels"] = [f"litellm/{model}" for model in sorted(expected_models)]
-    settings_target = Path(os.environ["PI_CODING_AGENT_DIR"]) / "settings.json"
-    settings_target.write_text(json.dumps(settings, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-PY
+if [[ ! -f /config/pi/models.json || ! -f /config/pi/settings.json ]]; then
+  printf 'Pi sandbox requires /config/pi/models.json and /config/pi/settings.json\n' >&2
+  return 2 2>/dev/null || exit 2
 fi
+
+export PI_CODING_AGENT_DIR
+python3 /usr/local/lib/contextforge-pi-render-config.py
 
 export PI_CODING_AGENT_DIR
 export CONTEXTFORGE_PI_SHIM_PORTAL_ROOT

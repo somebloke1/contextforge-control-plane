@@ -279,6 +279,9 @@ services:
       CODEX_API_KEY: ""
       ANTHROPIC_API_KEY: ""
       OPENROUTER_API_KEY: ""
+      LITELLM_API_KEY: "${LITELLM_API_KEY:-}"
+      LITELLM_BASE_URL: "${LITELLM_BASE_URL:-http://host.docker.internal:3333/v1}"
+      CONTEXTFORGE_OPENCODE_DEFAULT_MODEL: "${CONTEXTFORGE_OPENCODE_DEFAULT_MODEL:-litellm/codex/gpt-5.6-luna}"
       GOOGLE_API_KEY: ""
       GEMINI_API_KEY: ""
       PERPLEXITY_API_KEY: ""
@@ -317,7 +320,8 @@ services:
     <<: *client-common
     image: contextforge-client-pi-alpine:${PI_CODING_AGENT_VERSION:-latest}
     build:
-      context: ./pi-alpine
+      context: .
+      dockerfile: pi-alpine/Dockerfile
       args:
         PI_CODING_AGENT_VERSION: "${PI_CODING_AGENT_VERSION:-latest}"
     environment:
@@ -326,6 +330,11 @@ services:
       CODEX_API_KEY: ""
       ANTHROPIC_API_KEY: ""
       OPENROUTER_API_KEY: ""
+      LITELLM_API_KEY: "${LITELLM_API_KEY:-}"
+      LITELLM_BASE_URL: "${LITELLM_BASE_URL:-http://host.docker.internal:3333/v1}"
+      CONTEXTFORGE_PI_DEFAULT_PROVIDER: "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:-litellm}"
+      CONTEXTFORGE_PI_DEFAULT_MODEL: "${CONTEXTFORGE_PI_DEFAULT_MODEL:-codex/gpt-5.6-luna}"
+      CONTEXTFORGE_PI_DEFAULT_THINKING: "${CONTEXTFORGE_PI_DEFAULT_THINKING:-medium}"
       GOOGLE_API_KEY: ""
       GEMINI_API_KEY: ""
       PERPLEXITY_API_KEY: ""

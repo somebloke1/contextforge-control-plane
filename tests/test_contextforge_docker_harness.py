@@ -655,13 +655,13 @@ console.log(JSON.stringify({{
         self.assertIn('"contextforge_servers": registry_parsed.get("contextforge_servers") or []', dialogue_runner)
         self.assertIn('choices=["pi", "model", "seeded"]', dialogue_runner)
         self.assertIn('default="pi"', dialogue_runner)
-        self.assertIn("pi_gpt_5_5_simulated_human_responder", dialogue_runner)
+        self.assertIn("pi_litellm_terra_simulated_human_responder", dialogue_runner)
         self.assertIn("acceptance_matrix_eligibility", dialogue_runner)
         self.assertIn("dialogue_summary_acceptance_eligible", quorum_runner)
-        self.assertIn("contextforge-client-pi:human-sim-authenticated", dialogue_runner)
+        self.assertIn("contextforge-client-pi:latest", dialogue_runner)
         evaluation_docs = gate + method + onboarding_skill + readme
-        self.assertIn("gpt-5.5", gate + onboarding_skill + dialogue_runner)
-        self.assertIn("gpt-5.5 authenticated simulator with `low` thinking", onboarding_skill)
+        self.assertIn("codex/gpt-5.6-terra", gate + onboarding_skill + dialogue_runner)
+        self.assertIn("Terra", onboarding_skill)
         self.assertIn("Demanding does not mean cantankerous", gate)
         self.assertIn("Demanding does not mean cantankerous", onboarding_skill)
         self.assertIn("not a hostile", dialogue_runner)
@@ -693,10 +693,10 @@ console.log(JSON.stringify({{
         self.assertIn("evaluate every user/assistant turn", method)
         self.assertIn("does not require one evaluator invocation per turn", " ".join(method.split()))
         self.assertIn("do not call an evaluator inside the live conversation loop", onboarding_skill)
-        self.assertIn("Codex CLI `exec`", evaluation_docs)
-        self.assertIn('model_reasoning_effort="high"', evaluation_docs)
-        self.assertIn("--output-schema <FILE>", evaluation_docs)
-        self.assertIn("suppress raw thinking tokens", evaluation_docs)
+        self.assertIn("litellm/codex/gpt-5.6-sol", evaluation_docs)
+        self.assertIn("Sol", evaluation_docs)
+        self.assertIn("high", evaluation_docs)
+        self.assertIn("suppress raw reasoning tokens", evaluation_docs)
         self.assertIn("dry_run", dialogue_runner)
         self.assertIn("if not args.dry_run", dialogue_runner)
         self.assertIn("MIN_MODEL_QUORUM = 3", quorum_runner)
@@ -716,6 +716,10 @@ console.log(JSON.stringify({{
         self.assertEqual(32, dialogue_module.DEFAULT_ONBOARDING_TURNS)
         self.assertEqual(600, dialogue_module.DEFAULT_DIALOGUE_SECONDS)
         self.assertEqual(15, dialogue_module.DEFAULT_HUMAN_HELP_DETERMINATION)
+        self.assertEqual("contextforge-client-pi:latest", dialogue_module.DEFAULT_PI_RESPONDER_IMAGE)
+        self.assertEqual("litellm", dialogue_module.DEFAULT_PI_RESPONDER_PROVIDER)
+        self.assertEqual("codex/gpt-5.6-terra", dialogue_module.DEFAULT_PI_RESPONDER_MODEL)
+        self.assertEqual("high", dialogue_module.DEFAULT_PI_RESPONDER_THINKING)
         self.assertEqual(32, quorum_module.DEFAULT_ONBOARDING_TURNS)
         self.assertEqual(600, quorum_module.DEFAULT_DIALOGUE_SECONDS)
         self.assertEqual(15, quorum_module.DEFAULT_HUMAN_HELP_DETERMINATION)
@@ -760,7 +764,7 @@ console.log(JSON.stringify({{
         self.assertTrue(
             dialogue_module.acceptance_matrix_eligibility(
                 dry_run=False,
-                responder_mode="pi_gpt_5_5_simulated_human_responder",
+                responder_mode="pi_litellm_terra_simulated_human_responder",
                 manual_prompting=False,
                 allow_preexisting_foil_artifacts=False,
                 preflight_status="passed",
@@ -774,10 +778,10 @@ console.log(JSON.stringify({{
             preflight_status="passed",
         )
         self.assertFalse(seeded_eligibility["eligible"])
-        self.assertIn("simulated_human_responder_not_pi_gpt_5_5", seeded_eligibility["disqualifiers"])
+        self.assertIn("simulated_human_responder_not_pi_litellm_terra", seeded_eligibility["disqualifiers"])
         manual_eligibility = dialogue_module.acceptance_matrix_eligibility(
             dry_run=False,
-            responder_mode="pi_gpt_5_5_simulated_human_responder",
+            responder_mode="pi_litellm_terra_simulated_human_responder",
             manual_prompting=True,
             allow_preexisting_foil_artifacts=False,
             preflight_status="passed",
@@ -1146,9 +1150,9 @@ console.log(JSON.stringify({{
         )
         command = dialogue.pi_responder_command(
             {
-                "provider": "openai-codex",
-                "model": "gpt-5.5",
-                "thinking": "low",
+                "provider": "litellm",
+                "model": "codex/gpt-5.6-terra",
+                "thinking": "high",
             },
             "human-sim-session",
             "Answer the tested assistant.",
@@ -1156,9 +1160,9 @@ console.log(JSON.stringify({{
         )
 
         self.assertEqual("pi", command[0])
-        self.assertEqual("openai-codex", command[command.index("--provider") + 1])
-        self.assertEqual("gpt-5.5", command[command.index("--model") + 1])
-        self.assertEqual("low", command[command.index("--thinking") + 1])
+        self.assertEqual("litellm", command[command.index("--provider") + 1])
+        self.assertEqual("codex/gpt-5.6-terra", command[command.index("--model") + 1])
+        self.assertEqual("high", command[command.index("--thinking") + 1])
         self.assertEqual("human-sim-session", command[command.index("--session-id") + 1])
         self.assertEqual("/home/agent/.pi/human-sim-sessions", command[command.index("--session-dir") + 1])
         self.assertIn("--system-prompt", command)
@@ -1432,8 +1436,8 @@ print(json.dumps(redact_value(payload), sort_keys=True))
         self.assertIn("report the visible terminal screen", runner)
         self.assertIn("TASKS.md", runner)
         self.assertTrue(all("service_binding" in service for service in services["services"]))
-        self.assertIn("SEMANTIC_MODEL_OVERRIDE_KEYS", runner)
-        self.assertIn("semantic_model_env_overrides", runner)
+        self.assertIn("SANDBOX_MODEL_ROLES", runner)
+        self.assertIn("selected_profile_env", runner)
         self.assertIn("-e", runner)
         self.assertIn('"semantic_model_env_overrides": semantic_overrides', runner)
         self.assertIn("activation_postcondition_command", runner)
@@ -1619,9 +1623,11 @@ print(json.dumps(outputs))
         dockerfile = (ROOT / "docker/client-harness/pi/Dockerfile").read_text(encoding="utf-8")
         wrapper = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
         bootstrap = (ROOT / "docker/client-harness/pi/contextforge-pi-bootstrap.sh").read_text(encoding="utf-8")
+        renderer = (ROOT / "docker/client-harness/pi/render-config.py").read_text(encoding="utf-8")
         baseline = (ROOT / "docker/client-harness/config/pi/start-contextforge-baseline.sh").read_text(encoding="utf-8")
 
         self.assertIn("COPY --chown=agent:agent pi-wrapper.sh /usr/local/bin/pi", dockerfile)
+        self.assertIn("COPY --chown=agent:agent render-config.py /usr/local/lib/contextforge-pi-render-config.py", dockerfile)
         self.assertIn(": \"${CONTEXTFORGE_PI_REAL_BIN:=/usr/bin/pi}\"", wrapper)
         self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=litellm}\"", wrapper)
         self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_MODEL:=codex/gpt-5.6-luna}\"", wrapper)
@@ -1629,18 +1635,124 @@ print(json.dumps(outputs))
         self.assertIn(". /usr/local/bin/contextforge-pi-bootstrap", wrapper)
         self.assertIn("default_args+=(--provider \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER}\")", wrapper)
         self.assertIn("default_args+=(--model \"${CONTEXTFORGE_PI_DEFAULT_MODEL}\")", wrapper)
-        self.assertIn("default_args+=(--thinking \"${CONTEXTFORGE_PI_DEFAULT_THINKING}\")", wrapper)
-        self.assertIn("has_thinking=false", baseline)
-        self.assertIn('thinking_args+=(--thinking "${CONTEXTFORGE_PI_DEFAULT_THINKING:-medium}")', baseline)
+        self.assertIn("default_args+=(--thinking \"${selected_expected_thinking}\")", wrapper)
+        self.assertIn('default_args+=(--models "${CONTEXTFORGE_PI_APPROVED_MODELS}")', wrapper)
+        self.assertIn('exec /usr/local/bin/pi "$@"', baseline)
+        self.assertNotIn("CONTEXTFORGE_PI_REAL_BIN", baseline)
         self.assertIn("exec \"${CONTEXTFORGE_PI_REAL_BIN}\"", wrapper)
         self.assertIn('cp /config/pi/AGENTS.md "${PI_CODING_AGENT_DIR}/AGENTS.md"', bootstrap)
-        self.assertIn('source = Path("/config/pi/models.json")', bootstrap)
-        self.assertIn('set(data.get("providers", {})) != {"litellm"}', bootstrap)
-        self.assertIn('provider["baseUrl"] = os.environ.get("LITELLM_BASE_URL"', bootstrap)
-        self.assertIn('provider["apiKey"] = os.environ["LITELLM_API_KEY"]', bootstrap)
-        self.assertIn('settings["defaultThinkingLevel"]', bootstrap)
+        self.assertIn("python3 /usr/local/lib/contextforge-pi-render-config.py", bootstrap)
+        self.assertIn('"codex/gpt-5.6-terra": "high"', renderer)
+        self.assertIn('"codex/gpt-5.6-luna": "medium"', renderer)
+        self.assertIn('"codex/gpt-5.6-sol": "high"', renderer)
+        self.assertIn('base_url = os.environ.get("LITELLM_BASE_URL"', renderer)
+        self.assertIn('provider["baseUrl"] = base_url', renderer)
+        self.assertIn('provider["apiKey"] = os.environ["LITELLM_API_KEY"]', renderer)
+        self.assertIn('settings["defaultThinkingLevel"]', renderer)
         self.assertIn("Refusing unsafe CONTEXTFORGE_PI_SHIM_INSTALL_DIR", bootstrap)
-        self.assertNotIn("/home/dgk/.pi", dockerfile + wrapper + bootstrap)
+        self.assertNotIn("/home/dgk/.pi", dockerfile + wrapper + bootstrap + renderer)
+
+    def test_pi_wrapper_rejects_non_litellm_arguments_before_bootstrap(self) -> None:
+        wrapper = ROOT / "docker/client-harness/pi/pi-wrapper.sh"
+        base_env = {
+            **os.environ,
+            "CONTEXTFORGE_PI_DEFAULT_PROVIDER": "litellm",
+            "CONTEXTFORGE_PI_DEFAULT_MODEL": "codex/gpt-5.6-luna",
+            "CONTEXTFORGE_PI_DEFAULT_THINKING": "medium",
+            "CONTEXTFORGE_PI_REAL_BIN": "/bin/true",
+        }
+        cases = [
+            (["--provider", "openai-codex"], {}, "unsupported Pi sandbox provider"),
+            (["--provider=openrouter"], {}, "unsupported Pi sandbox provider"),
+            (["--provider=litellm"], {}, "requires '--provider litellm' syntax"),
+            (["--model", "gpt-5.5"], {}, "unsupported Pi sandbox model"),
+            (["--model=openai/gpt-5.5"], {}, "unsupported Pi sandbox model"),
+            (["--model=codex/gpt-5.6-luna"], {}, "requires '--model MODEL' syntax"),
+            (
+                ["--model", "codex/gpt-5.6-terra", "--thinking", "medium"],
+                {},
+                "thinking level",
+            ),
+            (["--list-models", "openai"], {}, "unsupported Pi sandbox provider"),
+            (["--list-models=litellm"], {}, "requires '--list-models litellm' syntax"),
+            (["--thinking=medium"], {}, "requires '--thinking LEVEL' syntax"),
+            (["--models", "openai/gpt-4o"], {}, "--models is fixed"),
+            (["--models=openrouter/auto"], {}, "--models is fixed"),
+            ([], {"CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openai"}, "unsupported Pi sandbox provider"),
+            ([], {"CONTEXTFORGE_PI_DEFAULT_MODEL": "gpt-5.5"}, "unsupported Pi sandbox model"),
+            ([], {"CONTEXTFORGE_PI_DEFAULT_THINKING": "high"}, "thinking level"),
+        ]
+        for arguments, overrides, expected_error in cases:
+            with self.subTest(arguments=arguments, overrides=overrides):
+                completed = subprocess.run(
+                    ["bash", str(wrapper), *arguments],
+                    cwd=ROOT,
+                    env={**base_env, **overrides},
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(2, completed.returncode)
+                self.assertIn(expected_error, completed.stderr)
+
+    def test_pi_wrapper_injects_approved_model_scope_and_role_thinking(self) -> None:
+        source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wrapper = root / "pi"
+            wrapper.write_text(
+                source.replace(
+                    ". /usr/local/bin/contextforge-pi-bootstrap",
+                    '. "${CONTEXTFORGE_TEST_BOOTSTRAP}"',
+                ),
+                encoding="utf-8",
+            )
+            wrapper.chmod(0o755)
+            bootstrap = root / "bootstrap.sh"
+            bootstrap.write_text(":\n", encoding="utf-8")
+            real_pi = root / "real-pi"
+            real_pi.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n', encoding="utf-8")
+            real_pi.chmod(0o755)
+            completed = subprocess.run(
+                [
+                    str(wrapper),
+                    "--provider",
+                    "litellm",
+                    "--model",
+                    "codex/gpt-5.6-terra",
+                    "-p",
+                    "hello",
+                ],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "CONTEXTFORGE_PI_REAL_BIN": str(real_pi),
+                    "CONTEXTFORGE_PI_DEFAULT_PROVIDER": "litellm",
+                    "CONTEXTFORGE_PI_DEFAULT_MODEL": "codex/gpt-5.6-luna",
+                    "CONTEXTFORGE_PI_DEFAULT_THINKING": "medium",
+                    "CONTEXTFORGE_TEST_BOOTSTRAP": str(bootstrap),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(
+            [
+                "--thinking",
+                "high",
+                "--models",
+                "litellm/codex/gpt-5.6-terra,litellm/codex/gpt-5.6-luna,litellm/codex/gpt-5.6-sol",
+                "--provider",
+                "litellm",
+                "--model",
+                "codex/gpt-5.6-terra",
+                "-p",
+                "hello",
+            ],
+            completed.stdout.splitlines(),
+        )
 
     def test_pi_shim_clarifies_ssh_tmux_session_list_results(self) -> None:
         shim = (ROOT / "pi-extensions/contextforge-global-shim/index.ts").read_text(encoding="utf-8")
@@ -1752,16 +1864,13 @@ print(json.dumps(outputs))
         self.assertIn('"selection_scope": "per_test_run"', runner)
         self.assertIn('"minimum_context_window"', runner)
         self.assertIn('"api_key_present"', runner)
-        self.assertIn("semantic_model_host_proxy", runner)
-        self.assertIn("container_api_key", runner)
-        self.assertIn('container_receives_real_semantic_model_api_key": False', runner)
+        self.assertIn("container_receives_real_semantic_model_api_key(", runner)
         self.assertIn("API_KEY_ENV_NAMES", runner)
         self.assertNotIn('launch_command.extend(["-e", key])', runner)
         self.assertNotIn('launch_command.extend(["-e", f"{key}={os.environ[key]}"])', runner)
 
-    def test_semantic_model_host_proxy_keeps_provider_keys_out_of_docker(self) -> None:
+    def test_litellm_sandbox_runners_do_not_start_non_litellm_proxy(self) -> None:
         compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
-        proxy = (ROOT / "docker/client-harness/scripts/semantic_model_host_proxy.py").read_text(encoding="utf-8")
         comprehensive_runner = (
             ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py"
         ).read_text(encoding="utf-8")
@@ -1771,20 +1880,38 @@ print(json.dumps(outputs))
 
         self.assertNotIn("env_file:\n    - ./env/semantic-model.env", compose)
         self.assertIn('OPENROUTER_API_KEY: ""', compose)
-        self.assertIn("DUMMY_API_KEY_PREFIX", proxy)
-        self.assertIn("--expected-dummy-key", proxy)
-        self.assertIn("expected_authorization", proxy)
-        self.assertIn("0.0.0.0", proxy)
-        self.assertIn("host.docker.internal", proxy)
-        self.assertIn("headers[\"Authorization\"] = f\"Bearer {api_key}\"", proxy)
         for runner in [comprehensive_runner, onboarding_runner]:
-            self.assertIn("start_openrouter_proxy", runner)
-            self.assertIn("semantic_model_host_proxy", runner)
+            self.assertNotIn("start_openrouter_proxy", runner)
+            self.assertNotIn("OPENROUTER_BASE_URL", runner)
             self.assertIn("container_receives_real_semantic_model_api_key", runner)
-            self.assertIn("OPENROUTER_BASE_URL", runner)
-            self.assertIn("container_api_key", runner)
             self.assertIn("assistant_error_from_json_stream", runner)
             self.assertNotIn('for key in semantic_secret_env_keys_to_pass:\n            launch_command.extend(["-e", key])', runner)
+
+    def test_litellm_credential_delivery_evidence_matches_container_boundary(self) -> None:
+        runner = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",
+            "comprehensive_mcp_credential_delivery_test",
+        )
+
+        self.assertTrue(
+            runner.container_receives_real_semantic_model_api_key(
+                ["LITELLM_API_KEY"],
+                {"LITELLM_API_KEY": "present"},
+            )
+        )
+        self.assertFalse(
+            runner.container_receives_real_semantic_model_api_key(
+                ["LITELLM_API_KEY"],
+                {},
+            )
+        )
+        process_env = runner.semantic_model_compose_process_env(
+            {"HARNESS_SCOPE": "isolated", "LITELLM_API_KEY": "host-value-must-not-win"},
+            ["LITELLM_API_KEY"],
+        )
+        self.assertEqual("isolated", process_env["HARNESS_SCOPE"])
+        self.assertNotIn("LITELLM_API_KEY", process_env)
+        self.assertEqual("", process_env["OPENROUTER_API_KEY"])
 
     def test_semantic_runners_detect_structured_assistant_errors(self) -> None:
         for script_name, module_name in [
@@ -2279,6 +2406,15 @@ print(json.dumps(outputs))
         self.assertEqual("codex/gpt-5.6-terra", config["model"])
         self.assertEqual("high", config["reasoning_effort"])
         self.assertEqual("http://127.0.0.1:3333/v1", config["base_url"])
+        with self.assertRaisesRegex(RuntimeError, "host LiteLLM"):
+            module.responder_model_config(
+                {"provider_kind": "litellm"},
+                {
+                    "LITELLM_API_KEY": "dummy-test-key",
+                    "CONTEXTFORGE_LITELLM_HOST_BASE_URL": "https://api.openai.com/v1",
+                },
+                object(),
+            )
 
     def test_comprehensive_mcp_runner_supports_prompt_override_for_behavior_bundles(self) -> None:
         dialogue = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py").read_text(
@@ -2334,7 +2470,7 @@ print(json.dumps(outputs))
         ]:
             self.assertIn(phrase, quorum)
 
-    def test_pi_openrouter_profiles_without_route_still_use_harness_provider(self) -> None:
+    def test_sandbox_profile_selection_rejects_non_litellm_providers(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "comprehensive_mcp_service_dialogue",
             ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",
@@ -2343,41 +2479,61 @@ print(json.dumps(outputs))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
-        routed_env, _ = module.selected_profile_env(
-            {
-                "id": "routed",
-                "provider_kind": "openrouter",
-                "provider_label": "OpenRouter",
-                "model": "google/gemini-2.5-flash-lite",
-                "display_name": "Gemini routed",
-                "context_window": 1048576,
-                "api_key_env": "OPENROUTER_API_KEY",
-                "base_url_env": "OPENROUTER_BASE_URL",
-                "route_preferences": ["google-ai-studio"],
-            },
-            "pi",
-            {},
-        )
-        unrouted_env, _ = module.selected_profile_env(
-            {
-                "id": "unrouted",
-                "provider_kind": "openrouter",
-                "provider_label": "OpenRouter",
-                "model": "qwen/qwen3-coder-next",
-                "display_name": "Qwen via OpenRouter",
-                "context_window": 262144,
-                "api_key_env": "OPENROUTER_API_KEY",
-                "base_url_env": "OPENROUTER_BASE_URL",
-                "route_preferences": [],
-            },
-            "pi",
-            {"CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openrouter-semantic-test"},
-        )
+        for provider_kind in ["openrouter", "openai_compatible", "", "litellm-direct"]:
+            with self.subTest(provider_kind=provider_kind):
+                with self.assertRaisesRegex(RuntimeError, "only litellm semantic profiles"):
+                    module.selected_profile_env(
+                        {
+                            "id": "unsupported",
+                            "provider_kind": provider_kind,
+                            "provider_label": provider_kind,
+                            "model": "unapproved/model",
+                            "display_name": "Unsupported",
+                            "context_window": 1048576,
+                            "api_key_env": "OPENROUTER_API_KEY",
+                            "base_url_env": "OPENROUTER_BASE_URL",
+                        },
+                        "pi",
+                        {},
+                    )
 
-        self.assertEqual("openrouter-semantic-test", routed_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
-        self.assertEqual("openrouter-semantic-test", unrouted_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
-        self.assertEqual("", unrouted_env["OPENROUTER_PROVIDER_ROUTES"])
-        self.assertEqual("", unrouted_env["OPENROUTER_PROVIDER_ROUTE"])
+        canonical_profile = {
+            "id": "canonical",
+            "provider_kind": "litellm",
+            "provider_label": "LiteLLM",
+            "model": "codex/gpt-5.6-luna",
+            "semantic_role": "blind",
+            "display_name": "Luna",
+            "context_window": 1048576,
+            "reasoning_effort": "medium",
+            "api_key_env": "LITELLM_API_KEY",
+            "base_url_env": "LITELLM_BASE_URL",
+            "default_base_url": "http://host.docker.internal:3333/v1",
+            "pi_provider": "litellm",
+            "pi_thinking": "medium",
+            "opencode_model": "litellm/codex/gpt-5.6-luna",
+            "opencode_variant": "medium",
+        }
+        profile_mutations = [
+            ({"model": "codex/unapproved"}, "unsupported sandbox semantic model"),
+            ({"semantic_role": "human"}, "semantic role mismatch"),
+            ({"reasoning_effort": "high"}, "reasoning effort mismatch"),
+            ({"api_key_env": "OPENAI_API_KEY"}, "must use LITELLM_API_KEY"),
+            ({"base_url_env": "OPENAI_BASE_URL"}, "must use LITELLM_BASE_URL"),
+            ({"default_base_url": "https://api.openai.com/v1"}, "sandbox LiteLLM endpoint"),
+            ({"pi_provider": "openai"}, "Pi provider mismatch"),
+            ({"pi_thinking": "high"}, "Pi thinking mismatch"),
+            ({"opencode_model": "openai/gpt-5.6-luna"}, "OpenCode model mismatch"),
+            ({"opencode_variant": "high"}, "OpenCode variant mismatch"),
+        ]
+        for mutation, expected_error in profile_mutations:
+            with self.subTest(mutation=mutation):
+                with self.assertRaisesRegex(RuntimeError, expected_error):
+                    module.selected_profile_env(
+                        {**canonical_profile, **mutation},
+                        "pi",
+                        {"LITELLM_API_KEY": "present"},
+                    )
 
     def test_comprehensive_mcp_semantic_tests_require_three_model_quorum(self) -> None:
         skill = (ROOT / ".codex/skills/comprehensive-mcp-testing/SKILL.md").read_text(encoding="utf-8")
@@ -2450,6 +2606,152 @@ print(json.dumps(outputs))
             with unittest.mock.patch.dict(os.environ, env, clear=True):
                 with self.assertRaisesRegex(ValueError, "unsupported OpenCode sandbox model"):
                     module.render_config()
+            env.update(
+                {
+                    "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL": "litellm/codex/gpt-5.6-luna",
+                    "LITELLM_BASE_URL": "https://api.openai.com/v1",
+                }
+            )
+            with unittest.mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(ValueError, "OpenCode sandbox LiteLLM endpoint"):
+                    module.render_config()
+
+    def test_pi_renderer_rejects_reasoning_map_and_default_thinking_drift(self) -> None:
+        renderer = _load_script_module(
+            ROOT / "docker/client-harness/pi/render-config.py",
+            "contextforge_pi_render_config_test",
+        )
+        canonical_models = json.loads(
+            (ROOT / "docker/client-harness/config/pi/models.json").read_text(encoding="utf-8")
+        )
+        canonical_settings = (ROOT / "docker/client-harness/config/pi/settings.json").read_text(
+            encoding="utf-8"
+        )
+        mutations = [
+            (lambda data: data["providers"]["litellm"]["models"][0].update({"reasoning": False}), "reasoning"),
+            (
+                lambda data: data["providers"]["litellm"]["models"][0]["thinkingLevelMap"].update(
+                    {"high": "medium"}
+                ),
+                "thinking map",
+            ),
+            (
+                lambda data: data["providers"]["litellm"]["models"][1]["thinkingLevelMap"].update(
+                    {"unexpected": "high"}
+                ),
+                "thinking map",
+            ),
+        ]
+        for mutate, expected_error in mutations:
+            with self.subTest(expected_error=expected_error), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                models = json.loads(json.dumps(canonical_models))
+                mutate(models)
+                models_source = root / "models.json"
+                settings_source = root / "settings.json"
+                models_source.write_text(json.dumps(models), encoding="utf-8")
+                settings_source.write_text(canonical_settings, encoding="utf-8")
+                env = {
+                    "CONTEXTFORGE_PI_MODELS_SOURCE": str(models_source),
+                    "CONTEXTFORGE_PI_SETTINGS_SOURCE": str(settings_source),
+                    "PI_CODING_AGENT_DIR": str(root / "target"),
+                    "CONTEXTFORGE_PI_DEFAULT_PROVIDER": "litellm",
+                    "CONTEXTFORGE_PI_DEFAULT_MODEL": "codex/gpt-5.6-luna",
+                    "CONTEXTFORGE_PI_DEFAULT_THINKING": "medium",
+                }
+                with unittest.mock.patch.dict(os.environ, env, clear=True):
+                    with self.assertRaisesRegex(ValueError, expected_error):
+                        renderer.render_config()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            models_source = root / "models.json"
+            settings_source = root / "settings.json"
+            models_source.write_text(json.dumps(canonical_models), encoding="utf-8")
+            settings_source.write_text(canonical_settings, encoding="utf-8")
+            env = {
+                "CONTEXTFORGE_PI_MODELS_SOURCE": str(models_source),
+                "CONTEXTFORGE_PI_SETTINGS_SOURCE": str(settings_source),
+                "PI_CODING_AGENT_DIR": str(root / "target"),
+                "CONTEXTFORGE_PI_DEFAULT_PROVIDER": "litellm",
+                "CONTEXTFORGE_PI_DEFAULT_MODEL": "codex/gpt-5.6-luna",
+                "CONTEXTFORGE_PI_DEFAULT_THINKING": "high",
+            }
+            with unittest.mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(ValueError, "thinking level"):
+                    renderer.render_config()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            models_source = root / "models.json"
+            settings_source = root / "settings.json"
+            target = root / "target"
+            models_source.write_text(json.dumps(canonical_models), encoding="utf-8")
+            settings_source.write_text(canonical_settings, encoding="utf-8")
+            env = {
+                "CONTEXTFORGE_PI_MODELS_SOURCE": str(models_source),
+                "CONTEXTFORGE_PI_SETTINGS_SOURCE": str(settings_source),
+                "PI_CODING_AGENT_DIR": str(target),
+                "CONTEXTFORGE_PI_DEFAULT_PROVIDER": "litellm",
+                "CONTEXTFORGE_PI_DEFAULT_MODEL": "codex/gpt-5.6-terra",
+                "CONTEXTFORGE_PI_DEFAULT_THINKING": "high",
+                "LITELLM_BASE_URL": "http://host.docker.internal:3333/v1",
+                "LITELLM_API_KEY": "dummy-test-key",
+            }
+            with unittest.mock.patch.dict(os.environ, env, clear=True):
+                renderer.render_config()
+            rendered_models = json.loads((target / "models.json").read_text(encoding="utf-8"))
+            rendered_settings = json.loads((target / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual({"litellm"}, set(rendered_models["providers"]))
+            self.assertEqual(
+                "http://host.docker.internal:3333/v1",
+                rendered_models["providers"]["litellm"]["baseUrl"],
+            )
+            self.assertEqual("dummy-test-key", rendered_models["providers"]["litellm"]["apiKey"])
+            self.assertEqual("codex/gpt-5.6-terra", rendered_settings["defaultModel"])
+            self.assertEqual("high", rendered_settings["defaultThinkingLevel"])
+            with unittest.mock.patch.dict(
+                os.environ,
+                {**env, "LITELLM_BASE_URL": "https://api.openai.com/v1"},
+                clear=True,
+            ):
+                with self.assertRaisesRegex(ValueError, "Pi sandbox LiteLLM endpoint"):
+                    renderer.render_config()
+
+    def test_opencode_renderer_rejects_reasoning_variant_drift(self) -> None:
+        renderer = _load_script_module(
+            ROOT / "docker/client-harness/opencode/render-config.py",
+            "contextforge_opencode_reasoning_render_config_test",
+        )
+        canonical = json.loads(
+            (ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8")
+        )
+        mutations = [
+            lambda data: data["provider"]["litellm"]["models"]["codex/gpt-5.6-terra"].update(
+                {"reasoning": False}
+            ),
+            lambda data: data["provider"]["litellm"]["models"]["codex/gpt-5.6-terra"]["variants"][
+                "high"
+            ].update({"reasoningEffort": "medium"}),
+            lambda data: data["provider"]["litellm"]["models"]["codex/gpt-5.6-luna"]["variants"][
+                "medium"
+            ].update({"unexpected": True}),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutate=mutate), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source_data = json.loads(json.dumps(canonical))
+                mutate(source_data)
+                source = root / "opencode.source.json"
+                target = root / "opencode.json"
+                source.write_text(json.dumps(source_data), encoding="utf-8")
+                env = {
+                    "CONTEXTFORGE_OPENCODE_CONFIG_SOURCE": str(source),
+                    "CONTEXTFORGE_OPENCODE_CONFIG_TARGET": str(target),
+                }
+                with unittest.mock.patch.dict(os.environ, env, clear=True):
+                    with self.assertRaisesRegex(ValueError, "reasoning"):
+                        renderer.render_config()
 
     def test_opencode_image_provisions_container_local_contextforge_helper_runtime(self) -> None:
         dockerfile = (ROOT / "docker/client-harness/opencode/Dockerfile").read_text(encoding="utf-8")
@@ -2725,15 +3027,16 @@ print(json.dumps(outputs))
         compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
         combined = container_launcher + bootstrap + wrapper
 
-        self.assertIn(". /usr/local/bin/contextforge-pi-bootstrap", container_launcher)
+        self.assertIn('exec /usr/local/bin/pi "$@"', container_launcher)
+        self.assertIn(". /usr/local/bin/contextforge-pi-bootstrap", wrapper)
         self.assertIn("CONTEXTFORGE_PI_SHIM_INSTALL_DIR:=${PI_CODING_AGENT_DIR}/extensions/contextforge-global-shim", combined)
         self.assertIn("Refusing unsafe CONTEXTFORGE_PI_SHIM_INSTALL_DIR", combined)
         self.assertIn("rm -rf \"${CONTEXTFORGE_PI_SHIM_INSTALL_DIR}\"", combined)
         self.assertIn("cp -R \"$(dirname \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\")\" \"${CONTEXTFORGE_PI_SHIM_INSTALL_DIR}\"", combined)
         self.assertIn("contextforge-root.json", combined)
         self.assertNotIn("--extension \"${CONTEXTFORGE_PI_SHIM_EXTENSION}\"", combined)
-        self.assertIn('--provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER}"', container_launcher)
-        self.assertIn('--model "${CONTEXTFORGE_PI_DEFAULT_MODEL}"', container_launcher)
+        self.assertIn('--provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER}"', wrapper)
+        self.assertIn('--model "${CONTEXTFORGE_PI_DEFAULT_MODEL}"', wrapper)
         self.assertNotIn("openrouter-gemini-flash-lite", container_launcher)
         self.assertNotIn("google/gemini-2.5-flash-lite", container_launcher)
         self.assertIn("CONTEXTFORGE_PI_SHIM_PYTHON:=/opt/contextforge-wrapper-venv/bin/python", combined)
@@ -2986,8 +3289,184 @@ print(json.dumps(outputs))
         self.assertEqual(3, smoke.count("run_opencode_cell "))
         self.assertIn('--thinking "${thinking}"', smoke)
         self.assertIn('CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT="${variant}"', smoke)
-        self.assertIn('grep -Fxq "${marker}"', smoke)
+        self.assertEqual(2, smoke.count('require_exact_response "${marker}" "${output}"'))
+        self.assertNotIn('grep -Fxq "${marker}"', smoke)
         self.assertIn("--env-file env/semantic-model.env", smoke)
+
+    def test_six_cell_smoke_rejects_multiline_marker_output(self) -> None:
+        source = (ROOT / "docker/client-harness/scripts/smoke-agents.sh").read_text(encoding="utf-8")
+
+        def run_smoke(*, noisy: bool) -> subprocess.CompletedProcess[str]:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                scripts = root / "scripts"
+                fake_bin = root / "bin"
+                scripts.mkdir()
+                fake_bin.mkdir()
+                smoke = scripts / "smoke-agents.sh"
+                smoke.write_text(source, encoding="utf-8")
+                smoke.chmod(0o755)
+                generator = scripts / "make-semantic-model-env.sh"
+                generator.write_text(
+                    '#!/usr/bin/env bash\nset -euo pipefail\nmkdir -p "$(dirname "$0")/../env"\n: > "$(dirname "$0")/../env/semantic-model.env"\n',
+                    encoding="utf-8",
+                )
+                generator.chmod(0o755)
+                docker = fake_bin / "docker"
+                docker.write_text(
+                    "#!/usr/bin/env bash\n"
+                    "set -euo pipefail\n"
+                    'prompt="${!#}"\n'
+                    'marker="${prompt##*: }"\n'
+                    'if [[ "${FAKE_DOCKER_NOISY:-0}" == 1 ]]; then\n'
+                    '  printf "prefix\\n%s\\nsuffix\\n" "${marker}"\n'
+                    "else\n"
+                    '  printf "%s\\n" "${marker}"\n'
+                    "fi\n",
+                    encoding="utf-8",
+                )
+                docker.chmod(0o755)
+                env = {
+                    **os.environ,
+                    "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
+                    "FAKE_DOCKER_NOISY": "1" if noisy else "0",
+                }
+                return subprocess.run(
+                    [str(smoke)],
+                    cwd=root,
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+        self.assertEqual(0, run_smoke(noisy=False).returncode)
+        self.assertNotEqual(0, run_smoke(noisy=True).returncode)
+
+    def test_legacy_sandbox_smokes_use_litellm_config_without_removed_provider(self) -> None:
+        for script_name in [
+            "smoke-pi-contextforge-dev.sh",
+            "smoke-pi-context7-dev.sh",
+            "smoke-pi-alpine.sh",
+            "smoke-opencode-alpine.sh",
+        ]:
+            with self.subTest(script_name=script_name):
+                source = (ROOT / "docker/client-harness/scripts" / script_name).read_text(encoding="utf-8")
+                self.assertNotIn("openrouter-semantic-test", source)
+                self.assertNotIn('data["providers"]', source)
+                self.assertNotIn("OPENROUTER_API_KEY", source)
+                self.assertIn("--env-file env/semantic-model.env", source)
+
+        compose = (ROOT / "docker/client-harness/compose.yml").read_text(encoding="utf-8")
+        match = re.search(r"(?ms)^  opencode-alpine:\n.*?(?=^  [a-z0-9-]+:|\nvolumes:)", compose)
+        self.assertIsNotNone(match)
+        opencode_alpine = match.group(0)
+        self.assertIn('LITELLM_API_KEY: "${LITELLM_API_KEY:-}"', opencode_alpine)
+        self.assertIn('LITELLM_BASE_URL: "${LITELLM_BASE_URL:-http://host.docker.internal:3333/v1}"', opencode_alpine)
+        self.assertIn(
+            'CONTEXTFORGE_OPENCODE_DEFAULT_MODEL: "${CONTEXTFORGE_OPENCODE_DEFAULT_MODEL:-litellm/codex/gpt-5.6-luna}"',
+            opencode_alpine,
+        )
+
+    def test_known_service_state_story_uses_luna_without_command_line_secret(self) -> None:
+        module = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-known-service-management-state-story.py",
+            "known_service_state_story_litellm_test",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env_dir = root / "env"
+            env_dir.mkdir()
+            env_file = env_dir / "semantic-model.env"
+            values = {
+                "LITELLM_BASE_URL": "http://host.docker.internal:3333/v1",
+                "LITELLM_API_KEY": "dummy-test-key",
+                "CONTEXTFORGE_PI_DEFAULT_PROVIDER": "litellm",
+                "CONTEXTFORGE_PI_DEFAULT_MODEL": "codex/gpt-5.6-luna",
+                "CONTEXTFORGE_PI_DEFAULT_THINKING": "medium",
+                "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL": "litellm/codex/gpt-5.6-luna",
+                "CONTEXTFORGE_OPENCODE_SMALL_MODEL": "litellm/codex/gpt-5.6-luna",
+                "CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT": "medium",
+            }
+            env_file.write_text(
+                "".join(f"{key}={value}\n" for key, value in values.items()),
+                encoding="utf-8",
+            )
+            launch_env, summary, selected_env_file = module.luna_launch_env(root)
+            self.assertNotIn("LITELLM_API_KEY", launch_env)
+            self.assertEqual("litellm", launch_env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
+            self.assertEqual("codex/gpt-5.6-luna", launch_env["CONTEXTFORGE_PI_DEFAULT_MODEL"])
+            self.assertEqual("medium", launch_env["CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT"])
+            self.assertEqual("blind", summary["semantic_role"])
+            self.assertEqual(env_file, selected_env_file)
+
+            env_file.write_text(
+                "".join(
+                    f"{key}={'high' if key == 'CONTEXTFORGE_PI_DEFAULT_THINKING' else value}\n"
+                    for key, value in values.items()
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "Luna/medium sandbox contract"):
+                module.luna_launch_env(root)
+
+    def test_opencode_alpine_entrypoint_rejects_direct_or_misrouted_models(self) -> None:
+        source = (ROOT / "docker/client-harness/opencode-alpine/entrypoint.sh").read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker/client-harness/opencode-alpine/Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("contextforge-opencode-alpine-entrypoint", dockerfile)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            entrypoint = root / "entrypoint.sh"
+            entrypoint.write_text(
+                source.replace('exec /sbin/tini -- "$@"', "printf 'validated\\n'"),
+                encoding="utf-8",
+            )
+            config = root / "opencode.json"
+            canonical = (ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(
+                encoding="utf-8"
+            )
+            config.write_text(canonical, encoding="utf-8")
+            env = {
+                **os.environ,
+                "OPENCODE_CONFIG": str(config),
+                "LITELLM_BASE_URL": "http://host.docker.internal:3333/v1",
+                "LITELLM_API_KEY": "dummy-test-key",
+                "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL": "litellm/codex/gpt-5.6-luna",
+                "OPENAI_API_KEY": "",
+                "CODEX_API_KEY": "",
+                "ANTHROPIC_API_KEY": "",
+                "OPENROUTER_API_KEY": "",
+                "GOOGLE_API_KEY": "",
+                "GEMINI_API_KEY": "",
+            }
+            accepted = subprocess.run(
+                ["bash", str(entrypoint)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            misrouted = subprocess.run(
+                ["bash", str(entrypoint)],
+                env={**env, "LITELLM_BASE_URL": "https://api.openai.com/v1"},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            direct_key = subprocess.run(
+                ["bash", str(entrypoint)],
+                env={**env, "OPENAI_API_KEY": "direct-key"},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+        self.assertEqual("validated", accepted.stdout.strip())
+        self.assertEqual(2, misrouted.returncode)
+        self.assertIn("sandbox LiteLLM", misrouted.stderr)
+        self.assertEqual(2, direct_key.returncode)
+        self.assertIn("direct-provider credential", direct_key.stderr)
 
     def test_comprehensive_mcp_gpu_stewardship_is_local_profile_conditional(self) -> None:
         skill = (ROOT / ".codex/skills/comprehensive-mcp-testing/SKILL.md").read_text(encoding="utf-8")
