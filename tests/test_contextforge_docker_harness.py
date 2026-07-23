@@ -1409,6 +1409,7 @@ print(json.dumps(redact_value(payload), sort_keys=True))
             self.assertEqual("litellm/codex/gpt-5.6-terra", rendered["model"])
             self.assertEqual("litellm/codex/gpt-5.6-terra", rendered["small_model"])
             self.assertEqual("high", rendered["agent"]["build"]["variant"])
+            self.assertEqual({"contextforge-helper"}, set(rendered["mcp"]))
             self.assertEqual({"litellm"}, set(rendered["provider"]))
             provider = rendered["provider"]["litellm"]
             self.assertEqual("@ai-sdk/openai", provider["npm"])
@@ -1418,6 +1419,25 @@ print(json.dumps(redact_value(payload), sort_keys=True))
                 {"codex/gpt-5.6-terra", "codex/gpt-5.6-luna", "codex/gpt-5.6-sol"},
                 set(provider["models"]),
             )
+
+            smoke_target = tmp_path / "opencode-smoke.json"
+            env.update(
+                {
+                    "CONTEXTFORGE_OPENCODE_CONFIG_TARGET": str(smoke_target),
+                    "CONTEXTFORGE_OPENCODE_MODEL_SMOKE": "1",
+                }
+            )
+            with unittest.mock.patch.dict(os.environ, env, clear=True):
+                render_config.render_config()
+            smoke_rendered = json.loads(smoke_target.read_text(encoding="utf-8"))
+            self.assertEqual({}, smoke_rendered["mcp"])
+            self.assertEqual(rendered["provider"], smoke_rendered["provider"])
+            self.assertEqual(rendered["agent"], smoke_rendered["agent"])
+
+            env["CONTEXTFORGE_OPENCODE_MODEL_SMOKE"] = "yes"
+            with unittest.mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(ValueError, "must be 0 or 1"):
+                    render_config.render_config()
 
     def test_comprehensive_mcp_runner_uses_natural_prompt_and_separate_inventory(self) -> None:
         runner = (ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py").read_text(
@@ -3786,6 +3806,22 @@ print(json.dumps(outputs))
         self.assertEqual(2, smoke.count('require_exact_response "${marker}" "${output_file}"'))
         self.assertNotIn('grep -Fxq "${marker}"', smoke)
         self.assertIn("--env-file env/semantic-model.env", smoke)
+        self.assertIn('project_name="contextforge-model-smoke-$$"', smoke)
+        self.assertIn('mktemp -d "${TMPDIR:-/tmp}/contextforge-model-smoke.XXXXXX"', smoke)
+        self.assertIn('CONTEXTFORGE_CLIENT_HARNESS_EVIDENCE="${evidence_root}"', smoke)
+        self.assertIn('down -v --remove-orphans', smoke)
+        self.assertIn("--no-context-files --no-extensions", smoke)
+        self.assertIn("CONTEXTFORGE_OPENCODE_MODEL_SMOKE=1", smoke)
+        self.assertIn("OPENCODE_CONFIG_DIR=/home/agent/.config/opencode-model-smoke", smoke)
+        self.assertNotIn("mkdir -p evidence", smoke)
+
+        entrypoint = (ROOT / "docker/client-harness/opencode/entrypoint.sh").read_text(encoding="utf-8")
+        renderer = (ROOT / "docker/client-harness/opencode/render-config.py").read_text(encoding="utf-8")
+        self.assertIn("OpenCode model smoke requires its isolated config directory", entrypoint)
+        self.assertIn("OpenCode model smoke requires exact isolated config targets", entrypoint)
+        self.assertIn("OpenCode model smoke requires a fresh hook-free config directory", entrypoint)
+        self.assertIn('if [[ "${CONTEXTFORGE_OPENCODE_MODEL_SMOKE}" == 0 ]]', entrypoint)
+        self.assertIn('data["mcp"] = {}', renderer)
 
     def test_six_cell_smoke_rejects_multiline_marker_output(self) -> None:
         source = (ROOT / "docker/client-harness/scripts/smoke-agents.sh").read_text(encoding="utf-8")

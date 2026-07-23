@@ -19,6 +19,7 @@ set -euo pipefail
 : "${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT:=/home/agent/.local/state/contextforge-client-harness-runtime/project-init}"
 : "${CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH:=${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT}/opencode-latest-user-message.json}"
 : "${CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS:=/workspace}"
+: "${CONTEXTFORGE_OPENCODE_MODEL_SMOKE:=0}"
 : "${XDG_RUNTIME_DIR:=/home/agent/.local/state/contextforge-client-harness-runtime}"
 
 if [[ "${OPENCODE_DISABLE_PROJECT_CONFIG}" != "1" ]]; then
@@ -30,6 +31,25 @@ if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
   exit 2
 fi
 unset OPENCODE_CONFIG_CONTENT
+case "${CONTEXTFORGE_OPENCODE_MODEL_SMOKE}" in
+  0) ;;
+  1)
+    if [[ "${OPENCODE_CONFIG_DIR}" != "/home/agent/.config/opencode-model-smoke" ]]; then
+      printf 'OpenCode model smoke requires its isolated config directory\n' >&2
+      exit 2
+    fi
+    if [[ "${CONTEXTFORGE_OPENCODE_CONFIG_TARGET}" != "${OPENCODE_CONFIG_DIR}/opencode.json" ||
+          "${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}" != "${OPENCODE_CONFIG_DIR}/plugins/contextforge-project-init.js" ||
+          "${CONTEXTFORGE_OPENCODE_RULES_TARGET}" != "${OPENCODE_CONFIG_DIR}/AGENTS.md" ]]; then
+      printf 'OpenCode model smoke requires exact isolated config targets\n' >&2
+      exit 2
+    fi
+    ;;
+  *)
+    printf 'CONTEXTFORGE_OPENCODE_MODEL_SMOKE must be 0 or 1\n' >&2
+    exit 2
+    ;;
+esac
 for key in OPENAI_API_KEY CODEX_API_KEY ANTHROPIC_API_KEY OPENROUTER_API_KEY GOOGLE_API_KEY GEMINI_API_KEY PERPLEXITY_API_KEY EXA_API_KEY CONTEXT7_API_KEY; do
   if [[ -n "${!key:-}" ]]; then
     printf 'OpenCode sandbox rejects direct-provider credential %s\n' "${key}" >&2
@@ -54,11 +74,19 @@ case "${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}" in
 esac
 
 mkdir -p "${OPENCODE_CONFIG_DIR}" "$(dirname "${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}")" "${XDG_RUNTIME_DIR}" "${CONTEXTFORGE_PROJECT_INIT_RUN_ROOT}"
-cp "${CONTEXTFORGE_OPENCODE_CONFIG_SOURCE}" "${CONTEXTFORGE_OPENCODE_CONFIG_TARGET}"
-cp "${CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE}" "${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}"
-if [ -f "${CONTEXTFORGE_OPENCODE_RULES_SOURCE}" ]; then
-  cp "${CONTEXTFORGE_OPENCODE_RULES_SOURCE}" "${CONTEXTFORGE_OPENCODE_RULES_TARGET}"
+if [[ "${CONTEXTFORGE_OPENCODE_MODEL_SMOKE}" == 0 ]]; then
+  cp "${CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE}" "${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}"
+  if [ -f "${CONTEXTFORGE_OPENCODE_RULES_SOURCE}" ]; then
+    cp "${CONTEXTFORGE_OPENCODE_RULES_SOURCE}" "${CONTEXTFORGE_OPENCODE_RULES_TARGET}"
+  fi
+elif [[ -e "${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}" ||
+        -e "${CONTEXTFORGE_OPENCODE_RULES_TARGET}" ||
+        -e "/home/agent/.config/opencode/plugins/contextforge-project-init.js" ||
+        -e "/home/agent/.config/opencode/AGENTS.md" ]]; then
+  printf 'OpenCode model smoke requires a fresh hook-free config directory\n' >&2
+  exit 2
 fi
+cp "${CONTEXTFORGE_OPENCODE_CONFIG_SOURCE}" "${CONTEXTFORGE_OPENCODE_CONFIG_TARGET}"
 
 /usr/local/bin/contextforge-opencode-render-config
 
@@ -75,6 +103,7 @@ export CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE
 export CONTEXTFORGE_PROJECT_INIT_RUN_ROOT
 export CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH
 export CONTEXTFORGE_ADDITIONAL_SAFE_PROJECT_ROOTS
+export CONTEXTFORGE_OPENCODE_MODEL_SMOKE
 export XDG_RUNTIME_DIR
 
 exec "$@"

@@ -4,7 +4,22 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
-mkdir -p evidence
+runtime_root="$(mktemp -d "${TMPDIR:-/tmp}/contextforge-model-smoke.XXXXXX")"
+evidence_root="${runtime_root}/evidence"
+project_name="contextforge-model-smoke-$$"
+mkdir -p "${evidence_root}" "${runtime_root}/workspace" "${runtime_root}/server-instances" "${runtime_root}/client-scoped"
+export CONTEXTFORGE_CLIENT_HARNESS_EVIDENCE="${evidence_root}"
+export CONTEXTFORGE_CLIENT_HARNESS_WORKSPACE="${runtime_root}/workspace"
+export CONTEXTFORGE_CLIENT_HARNESS_SERVER_INSTANCES="${runtime_root}/server-instances"
+export CONTEXTFORGE_CLIENT_HARNESS_CLIENT_SCOPED="${runtime_root}/client-scoped"
+compose=(docker compose --project-name "${project_name}" -f compose.yml --env-file env/semantic-model.env)
+
+cleanup() {
+  "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf "${runtime_root}"
+}
+trap cleanup EXIT
+
 scripts/make-semantic-model-env.sh
 
 require_exact_response() {
@@ -28,17 +43,17 @@ run_pi_cell() {
   local marker="pi-${slug}-${thinking}-ok"
   local output_file
   output_file="$(mktemp)"
-  if ! docker compose -f compose.yml --env-file env/semantic-model.env run --rm \
+  if ! "${compose[@]}" run --rm --no-deps -T \
     -e CONTEXTFORGE_PI_DEFAULT_MODEL="${model}" \
     -e CONTEXTFORGE_PI_DEFAULT_THINKING="${thinking}" \
-    pi pi --no-session --no-tools --no-context-files \
+    pi pi --no-session --no-tools --no-context-files --no-extensions \
       --provider litellm --model "${model}" --thinking "${thinking}" \
       -p "Reply with exactly: ${marker}" > "${output_file}"; then
-    tee "evidence/pi-${slug}-agent-smoke.txt" < "${output_file}"
+    tee "${evidence_root}/pi-${slug}-agent-smoke.txt" < "${output_file}"
     rm -f "${output_file}"
     return 1
   fi
-  tee "evidence/pi-${slug}-agent-smoke.txt" < "${output_file}"
+  tee "${evidence_root}/pi-${slug}-agent-smoke.txt" < "${output_file}"
   if ! require_exact_response "${marker}" "${output_file}"; then
     rm -f "${output_file}"
     return 1
@@ -54,17 +69,22 @@ run_opencode_cell() {
   local opencode_model="litellm/${model}"
   local output_file
   output_file="$(mktemp)"
-  if ! docker compose -f compose.yml --env-file env/semantic-model.env run --rm \
+  if ! "${compose[@]}" run --rm --no-deps -T \
     -e CONTEXTFORGE_OPENCODE_DEFAULT_MODEL="${opencode_model}" \
     -e CONTEXTFORGE_OPENCODE_SMALL_MODEL="${opencode_model}" \
     -e CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT="${variant}" \
+    -e CONTEXTFORGE_OPENCODE_MODEL_SMOKE=1 \
+    -e OPENCODE_CONFIG_DIR=/home/agent/.config/opencode-model-smoke \
+    -e CONTEXTFORGE_OPENCODE_CONFIG_TARGET=/home/agent/.config/opencode-model-smoke/opencode.json \
+    -e CONTEXTFORGE_OPENCODE_PLUGIN_TARGET=/home/agent/.config/opencode-model-smoke/plugins/contextforge-project-init.js \
+    -e CONTEXTFORGE_OPENCODE_RULES_TARGET=/home/agent/.config/opencode-model-smoke/AGENTS.md \
     opencode opencode run --model "${opencode_model}" --agent build --format default \
       "Reply with exactly: ${marker}" > "${output_file}"; then
-    tee "evidence/opencode-${slug}-agent-smoke.txt" < "${output_file}"
+    tee "${evidence_root}/opencode-${slug}-agent-smoke.txt" < "${output_file}"
     rm -f "${output_file}"
     return 1
   fi
-  tee "evidence/opencode-${slug}-agent-smoke.txt" < "${output_file}"
+  tee "${evidence_root}/opencode-${slug}-agent-smoke.txt" < "${output_file}"
   if ! require_exact_response "${marker}" "${output_file}"; then
     rm -f "${output_file}"
     return 1

@@ -105,6 +105,9 @@ def render_config() -> None:
     )
     data = json.loads(source.read_text(encoding="utf-8"))
     source_provider, _source_build = validate_source(data)
+    model_smoke = os.environ.get("CONTEXTFORGE_OPENCODE_MODEL_SMOKE", "0")
+    if model_smoke not in {"0", "1"}:
+        raise ValueError("CONTEXTFORGE_OPENCODE_MODEL_SMOKE must be 0 or 1")
     default_model = opencode_model_id(os.environ.get("CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"))
     small_model = opencode_model_id(
         os.environ.get("CONTEXTFORGE_OPENCODE_SMALL_MODEL"),
@@ -153,6 +156,8 @@ def render_config() -> None:
     data["enabled_providers"] = ["litellm"]
     data["model"] = default_model
     data["small_model"] = small_model
+    if model_smoke == "1":
+        data["mcp"] = {}
     data["provider"] = {"litellm": provider}
     data["agent"] = {"build": {"model": default_model, "variant": variant}}
     target.parent.mkdir(parents=True, exist_ok=True)

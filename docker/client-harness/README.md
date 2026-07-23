@@ -168,7 +168,10 @@ id, endpoint-advertised model ids, exercised client surface, and a `current`,
 `stale`, or `unverified` status. A mismatch fails rather than accepting a nearby
 alias. `scripts/smoke-agents.sh` makes six response calls (three models through
 each client), selects Pi thinking/OpenCode variants explicitly, and requires a
-unique marker from every cell.
+unique marker from every cell. It uses a fresh Compose project and writable
+temporary mounts, disables Pi extensions, and gives OpenCode a fresh model-only
+config directory with no MCP or onboarding hooks. Normal helper-enabled client
+configuration is unchanged.
 
 The Pi config follows the public Pi custom model docs from:
 
