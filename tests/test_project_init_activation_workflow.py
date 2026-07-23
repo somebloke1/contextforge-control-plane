@@ -7537,6 +7537,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             "hostile_mapping": HostileDetail(),
             "non_native_list_id": {"id": "7", "content": "{}"},
             "whitespace_list_id": {"id": f" {resource_id} ", "content": "{}"},
+            "internal_whitespace_list_id": {"id": "resource context7", "content": "{}"},
+            "unicode_whitespace_list_id": {"id": "resource\u2003context7", "content": "{}"},
         }
         with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
             env_file.write("CONTEXTFORGE_BEARER_TOKEN=redacted-test-token\n")
@@ -7558,6 +7560,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                                 row_id = 7
                             elif label == "whitespace_list_id":
                                 row_id = f" {resource_id} "
+                            elif label == "internal_whitespace_list_id":
+                                row_id = "resource context7"
+                            elif label == "unicode_whitespace_list_id":
+                                row_id = "resource\u2003context7"
                             return {
                                 "items": [
                                     {

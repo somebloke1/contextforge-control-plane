@@ -154,13 +154,13 @@ def _resource_with_content(base_url: str, token: str, resource: dict[str, Any]) 
     if not _is_service_offering_resource(resource):
         return resource
     resource_id = resource.get("id")
-    if not isinstance(resource_id, str) or not resource_id.strip() or resource_id != resource_id.strip():
+    if not isinstance(resource_id, str) or not resource_id or any(char.isspace() for char in resource_id):
         raise TypeError("tagged service-offering Resource list rows require a native nonblank string id")
     full = _contextforge_request(base_url, f"/resources/{resource_id}", token)
     if type(full) is not dict:
         raise TypeError(f"/resources/{resource_id} returned {type(full).__name__}; expected an object")
     detail_id = full.get("id")
-    if not isinstance(detail_id, str) or not detail_id.strip() or detail_id != detail_id.strip():
+    if not isinstance(detail_id, str) or not detail_id or any(char.isspace() for char in detail_id):
         raise TypeError(f"/resources/{resource_id} returned an object without a string id")
     if detail_id != resource_id:
         raise ValueError(f"/resources/{resource_id} returned Resource id {detail_id!r}")
