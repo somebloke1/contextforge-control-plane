@@ -3,11 +3,16 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
 import re
+import ssl
 import tempfile
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -25,7 +30,15 @@ _CACHED_PLANS: dict[str, dict[str, Any]] = {}
 _CACHED_RECEIPTS: dict[str, list[dict[str, Any]]] = {}
 _CACHED_RECOVERY_PLANS: dict[str, dict[str, Any]] = {}
 _CACHED_RECOVERY_RECEIPTS: dict[str, list[dict[str, Any]]] = {}
+_CONTEXTFORGE_READBACK_CACHE: dict[str, tuple[float, dict[str, list[dict[str, Any]]]]] = {}
 DEFAULT_CLIENT_TYPE = os.environ.get("CONTEXTFORGE_HELPER_DEFAULT_CLIENT_TYPE", "codex").strip() or "codex"
+class ContextForgeCatalogUnavailable(RuntimeError):
+    """Raised when the helper cannot read ContextForge registry/catalog truth."""
+
+    def __init__(self, base_url: str, reason: str):
+        self.base_url = base_url.rstrip("/") if base_url else "unknown"
+        self.reason = reason
+        super().__init__(f"ContextForge catalog unavailable at {self.base_url}: {reason}")
 
 
 def _cache_dir() -> Path:
@@ -76,6 +89,176 @@ def _error(exc: Exception) -> dict[str, Any]:
             "message": str(exc),
         },
     }
+
+
+def _contextforge_target() -> tuple[Path | None, str]:
+    import contextforge_mcp_wrapper as gateway
+
+    if gateway.TARGET_CONFIGURATION_ERROR:
+        raise ContextForgeCatalogUnavailable(
+            gateway.GATEWAY_BASE,
+            gateway.TARGET_CONFIGURATION_ERROR,
+        )
+    env_path = gateway.CONFIG_ENV
+    return (env_path if env_path.exists() else None), gateway.GATEWAY_BASE
+
+
+def _contextforge_request(base_url: str, path: str, token: str) -> Any:
+    headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+    request = urllib.request.Request(f"{base_url}{path}", headers=headers, method="GET")
+    kwargs: dict[str, Any] = {"timeout": 10}
+    if base_url.startswith("https://"):
+        cert = common.REPO_ROOT / "config" / "tls" / "contextforge-local.crt"
+        kwargs["context"] = ssl.create_default_context(cafile=str(cert)) if cert.exists() else ssl.create_default_context()
+    with urllib.request.urlopen(request, **kwargs) as response:
+        payload = response.read()
+    return json.loads(payload) if payload else None
+
+
+def _api_items(data: Any, *, endpoint: str) -> list[dict[str, Any]]:
+    if isinstance(data, dict):
+        items = data.get("items")
+        if not isinstance(items, list):
+            raise TypeError(f"{endpoint} returned an object without an items array")
+    elif isinstance(data, list):
+        items = data
+    else:
+        raise TypeError(
+            f"{endpoint} returned {type(data).__name__}; expected an array or an object with an items array"
+        )
+    if any(not isinstance(item, dict) for item in items):
+        raise TypeError(f"{endpoint} items must all be objects")
+    return list(items)
+
+
+def _resource_tags(resource: Mapping[str, Any]) -> set[str]:
+    tags = resource.get("tags")
+    if not isinstance(tags, list):
+        return set()
+    values: set[str] = set()
+    for tag in tags:
+        if isinstance(tag, Mapping):
+            value = tag.get("label") or tag.get("name") or tag.get("id")
+        else:
+            value = tag
+        if value is not None and str(value):
+            values.add(str(value).lower())
+    return values
+
+
+def _is_service_offering_resource(resource: Mapping[str, Any]) -> bool:
+    return bool(_resource_tags(resource).intersection(common.SERVICE_OFFERING_TAGS))
+
+
+def _resource_with_content(base_url: str, token: str, resource: dict[str, Any]) -> dict[str, Any]:
+    if not _is_service_offering_resource(resource):
+        return resource
+    resource_id = resource.get("id")
+    if not isinstance(resource_id, str) or not resource_id or any(char.isspace() for char in resource_id):
+        raise TypeError("tagged service-offering Resource list rows require a native nonblank string id")
+    full = _contextforge_request(base_url, f"/resources/{resource_id}", token)
+    if type(full) is not dict:
+        raise TypeError(f"/resources/{resource_id} returned {type(full).__name__}; expected an object")
+    detail_id = full.get("id")
+    if not isinstance(detail_id, str) or not detail_id or any(char.isspace() for char in detail_id):
+        raise TypeError(f"/resources/{resource_id} returned an object without a string id")
+    if detail_id != resource_id:
+        raise ValueError(f"/resources/{resource_id} returned Resource id {detail_id!r}")
+    selected_key = ""
+    selected_content: Any = None
+    for key in ("content", "text", "contents"):
+        candidate = full.get(key)
+        if candidate:
+            selected_key = key
+            selected_content = candidate
+            break
+    if type(selected_content) not in (str, dict):
+        raise TypeError(f"/resources/{resource_id} returned an object without Resource content")
+    if isinstance(selected_content, dict):
+        try:
+            full[selected_key] = json.loads(json.dumps(selected_content, allow_nan=False))
+        except (TypeError, ValueError) as exc:
+            raise TypeError(f"/resources/{resource_id} returned non-JSON Resource content") from exc
+    merged = dict(resource)
+    for key in ("content", "text", "contents", "uri", "name", "title", "description", "mimeType", "mime_type", "tags", "enabled"):
+        if key in full:
+            merged[key] = full[key]
+    return merged
+
+
+def _contextforge_catalog_cache_seconds() -> float:
+    raw = os.environ.get("CONTEXTFORGE_HELPER_CATALOG_CACHE_SECONDS", "30").strip()
+    try:
+        value = float(raw)
+    except ValueError:
+        return 30.0
+    return max(0.0, min(value, 300.0))
+
+
+def _cached_readback_copy(value: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    return copy.deepcopy(value)
+
+
+def _live_contextforge_registry_readback() -> dict[str, list[dict[str, Any]]]:
+    env_path, base_url = _contextforge_target()
+    if env_path is None:
+        raise ContextForgeCatalogUnavailable(base_url, "no ContextForge client-scoped env file was found")
+    cache_key = ""
+    cached: tuple[float, dict[str, list[dict[str, Any]]]] | None = None
+    ttl = _contextforge_catalog_cache_seconds()
+    try:
+        import contextforge_mcp_wrapper as gateway
+
+        env = gateway._read_env(env_path)
+        token = gateway._token(
+            env.get("PLATFORM_ADMIN_EMAIL"),
+            env.get("PLATFORM_ADMIN_PASSWORD"),
+            bearer_token=env.get("CONTEXTFORGE_BEARER_TOKEN"),
+        )
+        token_digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+        cache_key = f"{base_url}|{env_path}|{token_digest}"
+        now = time.monotonic()
+        cached = _CONTEXTFORGE_READBACK_CACHE.get(cache_key)
+        if ttl > 0 and cached is not None and now - cached[0] <= ttl:
+            return _cached_readback_copy(cached[1])
+        resources_path = "/resources?include_inactive=true&limit=1000"
+        servers_path = "/servers?include_inactive=true&limit=1000"
+        gateways_path = "/gateways?include_inactive=true&limit=1000"
+        resources = _api_items(
+            _contextforge_request(base_url, resources_path, token),
+            endpoint=resources_path,
+        )
+        resources = [_resource_with_content(base_url, token, resource) for resource in resources]
+        readback = {
+            "servers": _api_items(
+                _contextforge_request(base_url, servers_path, token),
+                endpoint=servers_path,
+            ),
+            "gateways": _api_items(
+                _contextforge_request(base_url, gateways_path, token),
+                endpoint=gateways_path,
+            ),
+            "resources": resources,
+        }
+        if ttl > 0:
+            _CONTEXTFORGE_READBACK_CACHE[cache_key] = (now, _cached_readback_copy(readback))
+        return readback
+    except urllib.error.HTTPError as exc:
+        if exc.code == 429 and cached is not None and time.monotonic() - cached[0] <= max(ttl, 300.0):
+            return _cached_readback_copy(cached[1])
+        raise ContextForgeCatalogUnavailable(base_url, f"HTTP {exc.code} {exc.reason}") from exc
+    except Exception as exc:
+        raise ContextForgeCatalogUnavailable(base_url, f"{exc.__class__.__name__}: {exc}") from exc
+
+
+def _contextforge_registry_service_offerings(root: Path) -> list[dict[str, Any]]:
+    readback = _live_contextforge_registry_readback()
+    return common.discover_contextforge_registry_service_offerings(
+        project_root=root,
+        contextforge_servers=readback.get("servers") or [],
+        contextforge_gateways=readback.get("gateways") or [],
+        contextforge_resources=readback.get("resources") or [],
+    )
 
 
 def _visible_item_list(items: Sequence[str], *, empty: str = "none recorded") -> list[str]:
@@ -209,11 +392,13 @@ def client_visible_project_init_list_payload(value: dict[str, Any]) -> dict[str,
     if services:
         public["available_services"] = services
     if services and not is_alignment_import:
-        service_lines = [
-            f"{service.get('display_name')} - Available - {_capability_label(str(service.get('service_binding') or '').split(':', 1)[0])}."
-            for service in services
-            if service.get("display_name")
-        ]
+        service_lines = []
+        for index, service in enumerate(services, start=1):
+            binding = str(service.get("service_binding") or "")
+            service_name = binding.split(":", 1)[0] if binding else str(service.get("display_name") or "")
+            if not service_name:
+                continue
+            service_lines.append(f"{index}. {service_name} - Available - {_capability_label(service_name)}.")
         public["assistant_visible_response"] = _visible_helper_response(
             "ContextForge services",
             [
@@ -301,7 +486,7 @@ def client_visible_project_init_plan_payload(value: dict[str, Any], *, include_n
             f"Plan ready for {service_names}. It will write {writes_text}; "
             "it will not mutate user-global config, secrets, backend services, or the ContextForge registry."
             f"{input_text} "
-            "Approve or decline?"
+            "\n\nApprove or decline?"
         )
     if "message" not in public and isinstance(cleaned.get("next_turn"), dict):
         next_turn_value = cleaned["next_turn"]
@@ -1191,7 +1376,10 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         if isinstance(item, Mapping)
     ]
     onboarding_needed: list[dict[str, str]] = []
-    catalog_services = common.discover_contextforge_hosted_services(project_root=root)
+    try:
+        catalog_services = _contextforge_registry_service_offerings(root)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     for candidate in catalog_services:
         if not isinstance(candidate, Mapping):
             continue
@@ -1364,7 +1552,7 @@ def _service_management_catalog_rows(root: Path, client_type: str) -> list[dict[
     }
     rows_by_binding: dict[str, dict[str, Any]] = {}
 
-    for candidate in common.discover_contextforge_hosted_services(project_root=root):
+    for candidate in _contextforge_registry_service_offerings(root):
         if not isinstance(candidate, Mapping):
             continue
         binding = str(candidate.get("service_binding") or "")
@@ -1376,31 +1564,16 @@ def _service_management_catalog_rows(root: Path, client_type: str) -> list[dict[
             "service_binding": binding,
             "display_name": str(candidate.get("display_name") or family),
             "status": status,
-            "description": _capability_label(family),
-            "scope": str(candidate.get("scope_label") or candidate.get("activation_class") or candidate.get("instantiation_class") or "global"),
+            "description": str(candidate.get("description") or _capability_label(family)).rstrip("."),
+            "scope": str(candidate.get("scope_label") or candidate.get("scope_model") or candidate.get("activation_class") or candidate.get("instantiation_class") or "global"),
             "client_type": client_type,
             "service_family": family,
             "codex_alias": str(candidate.get("codex_alias") or family),
             "virtual_server": str(candidate.get("virtual_server") or ""),
-        }
-
-    for binding, service in services.items():
-        if not isinstance(service, Mapping):
-            continue
-        service_binding = str(service.get("service_binding") or binding)
-        if service_binding in rows_by_binding:
-            continue
-        family = _service_family_from_state(service_binding, service)
-        rows_by_binding[service_binding] = {
-            "service_binding": service_binding,
-            "display_name": str(service.get("display_name") or family),
-            "status": "Disabled" if service_binding in disabled else "Enabled",
-            "description": _capability_label(family),
-            "scope": str(service.get("scope_label") or service.get("instantiation_class") or "known service"),
-            "client_type": client_type,
-            "service_family": family,
-            "codex_alias": str(service.get("codex_alias") or family),
-            "virtual_server": str(service.get("virtual_server") or ""),
+            "catalog_source": str(candidate.get("catalog_source") or "contextforge_registry"),
+            "helper_metadata_status": str(candidate.get("helper_metadata_status") or "unknown"),
+            "contextforge_server_id": str(candidate.get("contextforge_server_id") or ""),
+            "descriptor": dict(candidate),
         }
 
     order = {"Enabled": 0, "Available": 1, "Disabled": 2}
@@ -1423,12 +1596,55 @@ def _service_management_row(root: Path, client_type: str, service: str) -> dict[
     raise ValueError(f"unknown ContextForge service: {service}")
 
 
+def _public_service_management_row(row: Mapping[str, Any], *, status: str | None = None) -> dict[str, Any]:
+    public = {
+        key: row[key]
+        for key in (
+            "service_binding",
+            "display_name",
+            "status",
+            "description",
+            "scope",
+            "client_type",
+            "service_family",
+            "codex_alias",
+            "virtual_server",
+            "catalog_source",
+            "helper_metadata_status",
+            "contextforge_server_id",
+        )
+        if key in row
+    }
+    descriptor = row.get("descriptor") if isinstance(row.get("descriptor"), Mapping) else {}
+    digest = row.get("descriptor_digest") or descriptor.get("descriptor_digest")
+    if digest:
+        public["descriptor_digest"] = digest
+    if status is not None:
+        public["status"] = status
+    return public
+
+
+def _public_service_management_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [_public_service_management_row(row) for row in rows]
+
+
+def _service_menu_name(row: Mapping[str, Any]) -> str:
+    binding = str(row.get("service_binding") or "")
+    if binding:
+        return binding.split(":", 1)[0]
+    family = str(row.get("service_family") or "")
+    if family:
+        return family
+    return str(row.get("display_name") or "")
+
+
 def _simple_service_lines(rows: Sequence[Mapping[str, Any]]) -> list[str]:
-    return [
-        f"{row['display_name']} - {row['status']} - {row['description']}."
-        for row in rows
-        if row.get("display_name") and row.get("status") and row.get("description")
-    ]
+    lines: list[str] = []
+    for index, row in enumerate(rows, start=1):
+        service_name = _service_menu_name(row)
+        if service_name and row.get("status") and row.get("description"):
+            lines.append(f"{index}. {service_name} - {row['status']} - {row['description']}.")
+    return lines
 
 
 def _client_reload_line(client_type: str) -> str:
@@ -1439,14 +1655,45 @@ def _client_reload_line(client_type: str) -> str:
     return "Reload after changes if your client does not show the updated tools."
 
 
+def _catalog_unavailable_payload(root: Path, client_type: str, exc: ContextForgeCatalogUnavailable) -> dict[str, Any]:
+    visible = _visible_helper_response(
+        "ContextForge service catalog unavailable",
+        [
+            f"I could not read the ContextForge registry at {exc.base_url}.",
+            "Check ContextForge authentication/connectivity, then retry.",
+            "No project files or service configuration were changed.",
+        ],
+    )
+    return {
+        "ok": False,
+        "status": "contextforge_catalog_unavailable",
+        "client_type": client_type,
+        "project_root": str(root),
+        "services": [],
+        "catalog_error": {
+            "type": exc.__class__.__name__,
+            "base_url": exc.base_url,
+            "reason": exc.reason,
+        },
+        "assistant_visible_response": visible,
+        "message": visible,
+        "copy_as_complete_visible_response": True,
+        "do_not_summarize": True,
+        "non_actions": ["read-only catalog attempt", "no service mutation"],
+    }
+
+
 def service_management_list(project_root: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
     root = project_state.validate_project_root(project_root, require_workspace=True)
-    rows = _service_management_catalog_rows(root, client_type)
+    try:
+        rows = _service_management_catalog_rows(root, client_type)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     visible = _visible_helper_response(
         "ContextForge services",
         [
             "\n".join(_simple_service_lines(rows) or ["No ContextForge services are available."]),
-            _client_reload_line(client_type),
+            "Reply with service names or numbers to enable them, or choose none.",
         ],
     )
     return {
@@ -1454,7 +1701,7 @@ def service_management_list(project_root: str, client_type: str = DEFAULT_CLIENT
         "status": "service_management_list",
         "client_type": client_type,
         "project_root": str(root),
-        "services": rows,
+        "services": _public_service_management_rows(rows),
         "assistant_visible_response": visible,
         "message": visible,
         "copy_as_complete_visible_response": True,
@@ -1465,7 +1712,10 @@ def service_management_list(project_root: str, client_type: str = DEFAULT_CLIENT
 
 def service_management_details(project_root: str, service: str, client_type: str = DEFAULT_CLIENT_TYPE) -> dict[str, Any]:
     root = project_state.validate_project_root(project_root, require_workspace=True)
-    row = _service_management_row(root, client_type, service)
+    try:
+        row = _service_management_row(root, client_type, service)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     visible = _visible_helper_response(
         f"{row['display_name']} details",
         [
@@ -1481,7 +1731,7 @@ def service_management_details(project_root: str, service: str, client_type: str
         "status": "service_management_details",
         "client_type": client_type,
         "project_root": str(root),
-        "service": row,
+        "service": _public_service_management_row(row),
         "assistant_visible_response": visible,
         "message": visible,
         "copy_as_complete_visible_response": True,
@@ -1581,17 +1831,20 @@ def service_management_disable(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     root = project_state.validate_project_root(project_root, require_workspace=True)
-    row = _service_management_row(root, client_type, service)
+    try:
+        row = _service_management_row(root, client_type, service)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     if row["status"] != "Enabled":
         visible = f"{row['display_name']} is not enabled for this project."
         return {"ok": False, "status": "not_enabled", "assistant_visible_response": visible, "message": visible}
     if not confirm:
         visible = f"Disable {row['display_name']}? This will stop exposing it to this project and preserve backing state. Reply approve to continue."
-        return {"ok": True, "status": "disable_preview", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+        return {"ok": True, "status": "disable_preview", "service": _public_service_management_row(row), "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
     client_exposure = _remove_service_client_exposure(root, row, client_type=client_type, dry_run=dry_run)
     written = _write_disabled_decision(root, row, dry_run=dry_run, notes="disabled by known-service management helper")
     visible = f"{row['display_name']} is Disabled for this project. {_client_reload_line(client_type)}"
-    return {"ok": True, "status": "disabled", "service": {**row, "status": "Disabled"}, "state_revision": project_state.state_revision(written), "client_exposure": client_exposure, "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    return {"ok": True, "status": "disabled", "service": _public_service_management_row(row, status="Disabled"), "state_revision": project_state.state_revision(written), "client_exposure": client_exposure, "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
 
 
 def service_management_remove(
@@ -1602,18 +1855,21 @@ def service_management_remove(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     root = project_state.validate_project_root(project_root, require_workspace=True)
-    row = _service_management_row(root, client_type, service)
+    try:
+        row = _service_management_row(root, client_type, service)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     if row["status"] == "Available":
         visible = f"{row['display_name']} is not enabled for this project."
         return {"ok": False, "status": "not_enabled", "assistant_visible_response": visible, "message": visible}
     expected = str(row["display_name"])
     if confirmation != expected and confirmation != str(row["service_binding"]):
         visible = f'Remove {expected}? This may delete project-scoped service state. Type "{expected}" to confirm.'
-        return {"ok": True, "status": "remove_confirmation_required", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+        return {"ok": True, "status": "remove_confirmation_required", "service": _public_service_management_row(row), "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
     client_exposure = _remove_service_client_exposure(root, row, client_type=client_type, dry_run=dry_run)
     written = _write_removed_service_state(root, row, dry_run=dry_run)
     visible = f"{expected} was removed from this project. {_client_reload_line(client_type)}"
-    return {"ok": True, "status": "removed_from_project", "service": {**row, "status": "Available"}, "state_revision": project_state.state_revision(written), "client_exposure": client_exposure, "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    return {"ok": True, "status": "removed_from_project", "service": _public_service_management_row(row, status="Available"), "state_revision": project_state.state_revision(written), "client_exposure": client_exposure, "dry_run": dry_run, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
 
 
 def service_management_enable(
@@ -1622,22 +1878,50 @@ def service_management_enable(
     client_type: str = DEFAULT_CLIENT_TYPE,
     confirm: bool = False,
     dry_run: bool = False,
+    language: str = "",
 ) -> dict[str, Any]:
     root = project_state.validate_project_root(project_root, require_workspace=True)
-    row = _service_management_row(root, client_type, service)
+    try:
+        row = _service_management_row(root, client_type, service)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     if row["status"] == "Enabled":
         visible = f"{row['display_name']} is already Enabled for this project."
-        return {"ok": True, "status": "already_enabled", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+        return {"ok": True, "status": "already_enabled", "service": _public_service_management_row(row), "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
     if not confirm:
         visible = f"Enable {row['display_name']}? This will update project configuration for this client. {_client_reload_line(client_type)} Reply approve to continue."
-        return {"ok": True, "status": "enable_preview", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+        return {"ok": True, "status": "enable_preview", "service": _public_service_management_row(row), "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
     if dry_run:
         visible = f"Enable {row['display_name']}? Dry run only; no project files were changed. {_client_reload_line(client_type)}"
-        return {"ok": True, "status": "enable_preview", "service": row, "dry_run": True, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
-    plan = propose_project_init(str(root), [str(row["service_binding"])], client_type=client_type)
-    if not plan.get("ok", True) or plan.get("status") == "needs_input":
-        return client_visible_project_init_payload(plan)
-    clean_plan = _unwrap_tool_envelope(plan)
+        return {"ok": True, "status": "enable_preview", "service": _public_service_management_row(row), "dry_run": True, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
+    descriptor = row.get("descriptor") if isinstance(row.get("descriptor"), Mapping) else row
+    proposal_inputs: dict[str, Any] = {"restart_project_init": True}
+    if str(row.get("service_family") or "") == "serena":
+        language_choice = language.strip().lower()
+        if not language_choice:
+            try:
+                latest = _read_latest_user_message_text(str(root))
+            except Exception:
+                latest = ""
+            language_choice = _language_input_from_text(
+                latest,
+                {"selected_services": [descriptor], "input_name": "language"},
+            ) or ""
+        if language_choice and language_choice != "defer":
+            proposal_inputs["language"] = language_choice
+    try:
+        clean_plan = helper.propose_project_init(
+            project_root=str(root),
+            selected_services=[descriptor],
+            client_type=client_type,
+            inputs=proposal_inputs,
+            contextforge_service_offerings=[descriptor],
+        )
+    except Exception as exc:
+        return _error(exc)
+    if clean_plan.get("status") == "needs_input":
+        _remember_pending_project_init_input(str(root), [descriptor])
+        return client_visible_project_init_payload({"ok": True, **clean_plan})
     challenge = clean_plan.get("approval_challenge") if isinstance(clean_plan.get("approval_challenge"), Mapping) else {}
     helper.restore_process_local_approval_session(project_root=str(root), plan=clean_plan)
     local_event = helper.record_local_approval_event(
@@ -1672,7 +1956,16 @@ def service_management_enable(
     if not applied.get("ok"):
         return applied
     visible = f"{row['display_name']} is Enabled for this project. {_client_reload_line(client_type)}"
-    return {"ok": True, "status": "enabled", "service": {**row, "status": "Enabled"}, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True, "apply_result": applied}
+    return {
+        "ok": True,
+        "status": "enabled",
+        "service": _public_service_management_row(row, status="Enabled"),
+        "assistant_visible_response": visible,
+        "message": visible,
+        "copy_as_complete_visible_response": True,
+        "do_not_summarize": True,
+        "apply_result": client_visible_project_init_apply_payload(applied),
+    }
 
 
 def service_management_repair(
@@ -1683,7 +1976,10 @@ def service_management_repair(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     root = project_state.validate_project_root(project_root, require_workspace=True)
-    row = _service_management_row(root, client_type, service)
+    try:
+        row = _service_management_row(root, client_type, service)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     if not confirm:
         visible = f"Repair {row['display_name']}? This will recreate missing project configuration where possible and refresh the client service record. {_client_reload_line(client_type)} Reply approve to continue."
         return {"ok": True, "status": "repair_preview", "service": row, "assistant_visible_response": visible, "message": visible, "copy_as_complete_visible_response": True, "do_not_summarize": True}
@@ -3666,15 +3962,28 @@ def list_available_capabilities(
 ) -> dict[str, Any]:
     """List activation candidates and one service-selection next_turn."""
     try:
+        root = project_state.validate_project_root(project_root, require_workspace=True)
+        if contextforge_servers is None:
+            service_offerings = _contextforge_registry_service_offerings(root)
+        else:
+            service_offerings = common.discover_contextforge_registry_service_offerings(
+                project_root=root,
+                contextforge_servers=contextforge_servers,
+                contextforge_gateways=[],
+                contextforge_resources=[],
+            )
         result = {
             "ok": True,
             **helper.list_available_capabilities(
-                project_root=project_root,
+                project_root=root,
                 client_type=client_type,
                 contextforge_servers=contextforge_servers,
+                contextforge_service_offerings=service_offerings,
             ),
         }
         return client_visible_project_init_list_payload(result)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     except Exception as exc:
         return _error(exc)
 
@@ -3727,10 +4036,11 @@ def cf_project_service_enable(
     client_type: str = DEFAULT_CLIENT_TYPE,
     confirm: bool = False,
     dry_run: bool = False,
+    language: str = "",
 ) -> dict[str, Any]:
-    """Enable a known ContextForge service for this project."""
+    """Enable a known ContextForge service for this project. For Serena, set language or reply with a language such as python."""
     try:
-        return service_management_enable(project_root=project_root, service=service, client_type=client_type, confirm=confirm, dry_run=dry_run)
+        return service_management_enable(project_root=project_root, service=service, client_type=client_type, confirm=confirm, dry_run=dry_run, language=language)
     except Exception as exc:
         return _error(exc)
 
@@ -3786,6 +4096,7 @@ def propose_project_init(
     client_type: str = DEFAULT_CLIENT_TYPE,
     inputs: dict[str, Any] | None = None,
     contextforge_servers: list[dict[str, Any]] | None = None,
+    contextforge_service_offerings: list[dict[str, Any]] | None = None,
     server_instances_root: str | None = None,
 ) -> dict[str, Any]:
     """Build a non-mutating activation plan or the next required input turn."""
@@ -3798,6 +4109,7 @@ def propose_project_init(
                 client_type=client_type,
                 inputs=inputs,
                 contextforge_servers=contextforge_servers,
+                contextforge_service_offerings=contextforge_service_offerings,
                 server_instances_root=server_instances_root,
             ),
         }
@@ -3889,6 +4201,15 @@ def cf_project_init_continue(
         latest = _read_latest_user_message_text(project_root)
         pending_input = _pending_project_init_input(project_root)
         language = _language_input_from_text(latest, pending_input)
+        service_offerings_cache: list[dict[str, Any]] | None = None
+
+        def service_offerings_for_continue() -> list[dict[str, Any]]:
+            nonlocal service_offerings_cache
+            if service_offerings_cache is None:
+                root = project_state.validate_project_root(project_root, require_workspace=True)
+                service_offerings_cache = _contextforge_registry_service_offerings(root)
+            return service_offerings_cache
+
         if pending_input and language:
             pending_services = _pending_service_refs(pending_input)
             if language == "defer":
@@ -3902,6 +4223,7 @@ def cf_project_init_continue(
                         project_root=project_root,
                         selected_services=non_serena_services,
                         client_type=client_type,
+                        contextforge_service_offerings=service_offerings_for_continue(),
                     )
                     if result.get("status") != "needs_input":
                         _clear_pending_project_init_input(project_root)
@@ -3924,6 +4246,7 @@ def cf_project_init_continue(
                     selected_services=pending_services,
                     client_type=client_type,
                     inputs={"language": language},
+                    contextforge_service_offerings=service_offerings_for_continue(),
                 )
                 if result.get("status") != "needs_input":
                     _clear_pending_project_init_input(project_root)
@@ -3958,9 +4281,11 @@ def cf_project_init_continue(
                 dry_run=dry_run,
             )
             return client_visible_project_init_apply_payload(result)
+        service_offerings = service_offerings_for_continue()
         capabilities = helper.list_available_capabilities(
             project_root=project_root,
             client_type=client_type,
+            contextforge_service_offerings=service_offerings,
         )
         selected = _selected_service_ids_from_text(latest, capabilities)
         if selected:
@@ -3968,11 +4293,15 @@ def cf_project_init_continue(
                 project_root=project_root,
                 selected_services=selected,
                 client_type=client_type,
+                contextforge_service_offerings=service_offerings,
             )
             if result.get("status") == "needs_input":
                 _remember_pending_project_init_input(project_root, selected)
             return client_visible_project_init_plan_payload(result, include_next_turn=client_type != "codex")
         return client_visible_project_init_list_payload({"ok": True, **capabilities})
+    except ContextForgeCatalogUnavailable as exc:
+        root = project_state.validate_project_root(project_root, require_workspace=True)
+        return _catalog_unavailable_payload(root, client_type, exc)
     except Exception as exc:
         return _error(exc)
 

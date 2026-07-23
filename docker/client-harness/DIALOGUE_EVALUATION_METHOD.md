@@ -13,6 +13,9 @@ The method layer is case-independent:
   capture, verifier invocation, and package assembly;
 - run the tested client as a real assistant in a stable command-line session or
   explicit continuation chain;
+- use Luna (`codex/gpt-5.6-luna`) through LiteLLM with medium reasoning for every
+  tested-assistant run; reserve Terra/high for simulated humans and Sol/high for
+  semantic evaluation;
 - send only minimal natural prompts that a human would plausibly send;
 - preserve installer equivalence: the tested assistant may receive only the
   same product surfaces a random installer would receive, plus simulated-human
@@ -39,12 +42,11 @@ The method layer is case-independent:
   interaction completes; the evaluator assesses every turn and the whole
   dialogue from the completed evidence package, not during the live
   conversation;
-- prefer Codex CLI `exec` for semantic evaluator runs, using `gpt-5.5`,
-  `-c model_reasoning_effort="high"`, and `--output-schema <FILE>` when a
-  schema is available. The currently installed Pi CLI exposes JSON output mode
-  but no documented schema argument, so Pi is a fallback evaluator surface, not
-  the default. Structured output constrains the evaluator artifact shape, but
-  it does not replace semantic judgment.
+- use Sol (`litellm/codex/gpt-5.6-sol`) through the sandbox OpenCode provider
+  with the `high` variant for semantic evaluator runs. When a schema is
+  available, include it in the evaluator instructions and validate the final
+  artifact separately. Structured validation constrains artifact shape; it does
+  not replace semantic judgment.
 - require the evaluator narrative to identify visible dialogue quality risks
   that do not necessarily fail the use case, including placeholder-only visible
   prefaces before substantive answers, excessive internal terminology, or
@@ -175,10 +177,10 @@ artifacts, if the assistant substitutes them for ContextForge
 continuation/runtime-apply, or if the dialogue ends at local documentation
 while claiming service availability.
 
-Acceptance requires Pi and OpenCode coverage across at least three distinct
-eligible semantic-test model profiles per target client. Deterministic runner
-checks may package setup, commands, JSON, files, endpoints, and transcripts,
-but semantic adequacy belongs to the evaluator.
+Acceptance requires Pi and OpenCode coverage across at least three independent
+Luna/medium tested-assistant runs per target client. Deterministic runner checks
+may package setup, commands, JSON, files, endpoints, and transcripts, but
+semantic adequacy belongs to Sol/high or the responsible human evaluator.
 
 ## Deterministic Boundary
 
@@ -207,14 +209,12 @@ not require one evaluator invocation per turn.
 - interaction efficiency after accounting for the sampled or specified human
   persona's natural overhead.
 
-Use Codex CLI `exec` with `gpt-5.5`,
-`-c model_reasoning_effort="high"`, and `--output-schema <FILE>` for semantic
-evaluator judgment by default. Use a lower thinking level or different surface
-only with an explicit evidence-backed reason. Capture raw evaluator events as
-internal evidence when useful, but suppress raw thinking tokens in shared or
-user-facing evidence by default; publish evaluator conclusions, cited evidence,
-score, and concise rationale instead. Rendering raw thinking tokens is an
-explicit design decision and must be justified.
+Use Sol (`litellm/codex/gpt-5.6-sol`) through sandbox OpenCode with the `high`
+variant for semantic evaluator judgment. A different role binding requires an
+explicit evidence-backed reason. Capture raw evaluator events as internal
+evidence when useful, but suppress raw reasoning tokens in shared or user-facing
+evidence by default; publish evaluator conclusions, cited evidence, score, and
+concise rationale instead.
 
 Quality risks such as placeholder-only visible prefaces are semantic evaluator
 judgments. Scripts may preserve and segment the visible assistant text for

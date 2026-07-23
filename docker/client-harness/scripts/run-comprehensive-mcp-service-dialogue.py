@@ -21,13 +21,29 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from semantic_model_host_proxy import API_KEY_ENV_NAMES, start_openrouter_proxy
-
-
 DEFAULT_SERENA_LANGUAGE = "python"
 DEFAULT_CONTEXTFORGE_HOST_BASE_URL = "http://127.0.0.1:4445"
 DEFAULT_CONTEXTFORGE_CONTAINER_BASE_URL = "http://host.docker.internal:4445"
 MIN_SEMANTIC_CONTEXT_WINDOW = 262144
+SANDBOX_LITELLM_BASE_URL = "http://host.docker.internal:3333/v1"
+SANDBOX_MODEL_ROLES = {
+    "codex/gpt-5.6-terra": ("human", "high"),
+    "codex/gpt-5.6-luna": ("blind", "medium"),
+    "codex/gpt-5.6-sol": ("evaluator", "high"),
+}
+TESTED_ASSISTANT_MODEL = "codex/gpt-5.6-luna"
+API_KEY_ENV_NAMES = (
+    "LITELLM_API_KEY",
+    "OPENAI_API_KEY",
+    "CODEX_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENROUTER_API_KEY",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "PERPLEXITY_API_KEY",
+    "EXA_API_KEY",
+    "CONTEXT7_API_KEY",
+)
 SSH_TMUX_LIVE_TARGET_ALIAS = "contextforge-live-target"
 SSH_TMUX_LIVE_PROBE_COMMAND = "printf contextforge-ssh-tmux-ok"
 SCOPED_TOKEN_PERMISSIONS = [
@@ -38,20 +54,6 @@ SCOPED_TOKEN_PERMISSIONS = [
     "prompts.read",
 ]
 MENTALITY_FIXTURE_TASK_ID = "task-cf-harness-001"
-SEMANTIC_MODEL_OVERRIDE_KEYS = [
-    "CONTEXTFORGE_TEST_MODEL",
-    "CONTEXTFORGE_TEST_MODEL_NAME",
-    "CONTEXTFORGE_TEST_PROVIDER",
-    "CONTEXTFORGE_TEST_PROVIDER_KIND",
-    "CONTEXTFORGE_TEST_PROVIDER_ROUTE",
-    "OPENROUTER_MODEL",
-    "OPENROUTER_OPENCODE_MODEL",
-    "OPENROUTER_PROVIDER_ROUTE",
-    "OPENROUTER_PROVIDER_ROUTES",
-    "CONTEXTFORGE_PI_DEFAULT_MODEL",
-    "CONTEXTFORGE_PI_DEFAULT_PROVIDER",
-    "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL",
-]
 
 
 def load_uc1_module() -> Any:
@@ -74,7 +76,35 @@ def load_semantic_model_profiles(harness_root: Path) -> list[dict[str, Any]]:
     profiles = data.get("profiles")
     if not isinstance(profiles, list):
         raise RuntimeError("semantic-model-profiles.json must contain a profiles list")
-    return [profile for profile in profiles if isinstance(profile, dict)]
+    result = [profile for profile in profiles if isinstance(profile, dict)]
+    approved_models = {
+        "codex/gpt-5.6-terra",
+        "codex/gpt-5.6-luna",
+        "codex/gpt-5.6-sol",
+    }
+    if {str(profile.get("provider_kind") or "") for profile in result} != {"litellm"}:
+        raise RuntimeError("semantic model profiles must use only the litellm provider")
+    if {str(profile.get("model") or "") for profile in result} != approved_models:
+        raise RuntimeError("semantic model profiles do not match the approved LiteLLM model set")
+    contract = {
+        "codex/gpt-5.6-terra": ("human", "high", False, False),
+        "codex/gpt-5.6-luna": ("blind", "medium", True, True),
+        "codex/gpt-5.6-sol": ("evaluator", "high", False, False),
+    }
+    if len(result) != len(contract):
+        raise RuntimeError("semantic model profiles must contain exactly three entries")
+    for profile in result:
+        role, reasoning, is_default, quorum_eligible = contract[str(profile["model"])]
+        if (
+            profile.get("semantic_role") != role
+            or profile.get("reasoning_effort") != reasoning
+            or profile.get("pi_thinking") != reasoning
+            or profile.get("opencode_variant") != reasoning
+            or profile.get("default") is not is_default
+            or profile.get("multi_step_quorum_eligible") is not quorum_eligible
+        ):
+            raise RuntimeError(f"semantic role/reasoning contract mismatch for {profile['model']!r}")
+    return result
 
 
 def default_session_id(client: str, service: str, phase: str, timestamp: str) -> str:
@@ -226,10 +256,6 @@ raise SystemExit(0 if result["ok"] else 1)
     return "python3 - <<'PY'\n" + script.strip() + "\nPY"
 
 
-def semantic_model_env_overrides() -> dict[str, str]:
-    return {key: os.environ[key] for key in SEMANTIC_MODEL_OVERRIDE_KEYS if os.environ.get(key)}
-
-
 def profile_supports_client(profile: dict[str, Any], client: str) -> bool:
     supported = profile.get("supported_clients")
     return not isinstance(supported, list) or client in {str(item) for item in supported}
@@ -251,6 +277,16 @@ def profile_weight(profile: dict[str, Any]) -> int:
 
 def profile_multi_step_quorum_eligible(profile: dict[str, Any]) -> bool:
     return profile.get("multi_step_quorum_eligible") is not False
+
+
+def profile_tested_assistant_eligible(profile: dict[str, Any]) -> bool:
+    return bool(
+        profile.get("provider_kind") == "litellm"
+        and profile.get("model") == TESTED_ASSISTANT_MODEL
+        and profile.get("semantic_role") == "blind"
+        and profile.get("reasoning_effort") == "medium"
+        and profile_multi_step_quorum_eligible(profile)
+    )
 
 
 def profile_context_window(profile: dict[str, Any]) -> int:
@@ -279,36 +315,42 @@ def env_semantic_model_profile(available_env: dict[str, str]) -> dict[str, Any]:
                 return candidate
         return default
 
-    provider_kind = value("CONTEXTFORGE_TEST_PROVIDER_KIND", "CONTEXTFORGE_TEST_PROVIDER", default="openrouter")
-    model = value("CONTEXTFORGE_TEST_MODEL", "OPENROUTER_MODEL")
+    provider_kind = value("CONTEXTFORGE_TEST_PROVIDER_KIND", "CONTEXTFORGE_TEST_PROVIDER", default="litellm")
+    if provider_kind != "litellm":
+        raise RuntimeError(f"unsupported sandbox semantic provider_kind {provider_kind!r}")
+    model = value("CONTEXTFORGE_TEST_MODEL", default="codex/gpt-5.6-luna")
     if not model:
-        raise RuntimeError("semantic model env selector requires CONTEXTFORGE_TEST_MODEL or OPENROUTER_MODEL")
+        raise RuntimeError("semantic model env selector requires CONTEXTFORGE_TEST_MODEL")
     context_window = value("CONTEXTFORGE_TEST_CONTEXT_WINDOW", default=str(MIN_SEMANTIC_CONTEXT_WINDOW))
-    routes = [
-        item.strip()
-        for item in value("OPENROUTER_PROVIDER_ROUTES", "OPENROUTER_PROVIDER_ROUTE", "CONTEXTFORGE_TEST_PROVIDER_ROUTE").split(",")
-        if item.strip()
-    ]
+    if model not in SANDBOX_MODEL_ROLES:
+        raise RuntimeError(f"unsupported sandbox semantic model {model!r}")
+    if model != TESTED_ASSISTANT_MODEL:
+        raise RuntimeError(f"semantic model {model!r} is not available for tested-assistant role")
+    semantic_role, reasoning = SANDBOX_MODEL_ROLES[model]
     profile: dict[str, Any] = {
         "id": "env",
         "display_name": value("CONTEXTFORGE_TEST_MODEL_NAME", default=model),
         "provider_kind": provider_kind,
         "provider_label": value("CONTEXTFORGE_TEST_PROVIDER", default=provider_kind),
         "model": model,
+        "semantic_role": semantic_role,
         "context_window": int(context_window),
-        "route_preferences": routes,
+        "route_preferences": [],
+        "reasoning_effort": reasoning,
         "multi_step_quorum_eligible": True,
         "weight": 1,
     }
-    if provider_kind == "openrouter":
-        profile.update(
-            {
-                "api_key_env": "OPENROUTER_API_KEY",
-                "base_url_env": "OPENROUTER_BASE_URL",
-                "default_base_url": value("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1"),
-                "pi_provider": value("CONTEXTFORGE_PI_DEFAULT_PROVIDER", default="openrouter-semantic-test"),
-            }
-        )
+    profile.update(
+        {
+            "api_key_env": "LITELLM_API_KEY",
+            "base_url_env": "LITELLM_BASE_URL",
+            "default_base_url": value("LITELLM_BASE_URL", default=SANDBOX_LITELLM_BASE_URL),
+            "pi_provider": "litellm",
+            "pi_thinking": reasoning,
+            "opencode_model": f"litellm/{model}",
+            "opencode_variant": reasoning,
+        }
+    )
     return profile
 
 
@@ -317,13 +359,13 @@ def choose_semantic_model_profile(
     client: str,
     selector: str,
     available_env: dict[str, str],
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     if selector == "env":
         profile = env_semantic_model_profile(available_env)
         if not profile_supports_client(profile, client):
             raise RuntimeError(f"semantic model env profile does not support client {client!r}")
         return profile
-    available_profiles = [
+    role_agnostic_profiles = [
         profile
         for profile in load_semantic_model_profiles(harness_root)
         if profile_supports_client(profile, client)
@@ -331,6 +373,12 @@ def choose_semantic_model_profile(
         and profile_context_window(profile) >= MIN_SEMANTIC_CONTEXT_WINDOW
         and profile_weight(profile) > 0
     ]
+    if selector not in {"random", "default"} and any(
+        str(profile.get("id") or "") == selector and not profile_tested_assistant_eligible(profile)
+        for profile in role_agnostic_profiles
+    ):
+        raise RuntimeError(f"semantic model profile {selector!r} is not available for tested-assistant role")
+    available_profiles = [profile for profile in role_agnostic_profiles if profile_tested_assistant_eligible(profile)]
     if not available_profiles:
         raise RuntimeError(f"no semantic model profiles are available for client {client!r}")
     if selector == "random":
@@ -338,6 +386,11 @@ def choose_semantic_model_profile(
         if not profiles:
             raise RuntimeError(f"no multi-step semantic model profiles are available for client {client!r}")
         return random.choices(profiles, weights=[profile_weight(profile) for profile in profiles], k=1)[0]
+    if selector == "default":
+        defaults = [profile for profile in available_profiles if profile.get("default") is True]
+        if len(defaults) != 1:
+            raise RuntimeError(f"expected exactly one default semantic model profile for client {client!r}")
+        return defaults[0]
     matches = [profile for profile in available_profiles if str(profile.get("id") or "") == selector]
     if len(matches) != 1:
         raise RuntimeError(f"semantic model profile {selector!r} is not available for client {client!r}")
@@ -345,16 +398,21 @@ def choose_semantic_model_profile(
 
 
 def selected_profile_env(
-    profile: dict[str, Any] | None,
+    profile: dict[str, Any],
     client: str,
     available_env: dict[str, str],
 ) -> tuple[dict[str, str], list[str]]:
-    if profile is None:
-        return {}, []
     provider_kind = str(profile.get("provider_kind") or "").strip()
     model = str(profile.get("model") or "").strip()
-    if not provider_kind or not model:
-        raise RuntimeError("selected semantic profile must include provider_kind and model")
+    if provider_kind != "litellm":
+        raise RuntimeError(f"sandbox accepts only litellm semantic profiles, not {provider_kind!r}")
+    if model not in SANDBOX_MODEL_ROLES:
+        raise RuntimeError(f"unsupported sandbox semantic model {model!r}")
+    expected_role, expected_reasoning = SANDBOX_MODEL_ROLES[model]
+    if profile.get("semantic_role") != expected_role:
+        raise RuntimeError(f"sandbox semantic role mismatch for {model!r}")
+    if model != TESTED_ASSISTANT_MODEL:
+        raise RuntimeError(f"semantic model {model!r} is not available for tested-assistant role")
     display_name = str(profile.get("display_name") or model)
     env: dict[str, str] = {
         "CONTEXTFORGE_TEST_PROVIDER": str(profile.get("provider_label") or provider_kind),
@@ -365,60 +423,70 @@ def selected_profile_env(
     }
     secret_env_keys: list[str] = []
     key_env = str(profile.get("api_key_env") or "").strip()
-    if key_env:
-        secret_env_keys.append(key_env)
+    if key_env != "LITELLM_API_KEY":
+        raise RuntimeError("LiteLLM sandbox profiles must use LITELLM_API_KEY")
+    secret_env_keys.append(key_env)
     base_url_env = str(profile.get("base_url_env") or "").strip()
+    if base_url_env != "LITELLM_BASE_URL":
+        raise RuntimeError("LiteLLM sandbox profiles must use LITELLM_BASE_URL")
     base_url = (os.environ.get(base_url_env) or available_env.get(base_url_env)) if base_url_env else None
     base_url = base_url or str(profile.get("default_base_url") or "")
+    if base_url.rstrip("/") != SANDBOX_LITELLM_BASE_URL:
+        raise RuntimeError(f"sandbox LiteLLM endpoint must be {SANDBOX_LITELLM_BASE_URL!r}")
+    base_url = SANDBOX_LITELLM_BASE_URL
     if base_url_env and base_url:
         env[base_url_env] = base_url
-    if provider_kind == "openrouter":
-        routes = route_preferences(profile)
-        env["OPENROUTER_MODEL"] = model
-        env["OPENROUTER_OPENCODE_MODEL"] = model
-        if base_url:
-            env["OPENROUTER_BASE_URL"] = base_url
-        env["OPENROUTER_PROVIDER_ROUTES"] = ",".join(routes)
-        if routes:
-            env["OPENROUTER_PROVIDER_ROUTE"] = routes[0]
-            env["CONTEXTFORGE_TEST_PROVIDER_ROUTE"] = routes[0]
-        else:
-            env["OPENROUTER_PROVIDER_ROUTE"] = ""
-            env["CONTEXTFORGE_TEST_PROVIDER_ROUTE"] = ""
-        env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"] = (
-            str(profile.get("pi_provider") or "").strip()
-            or os.environ.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
-            or available_env.get("CONTEXTFORGE_PI_DEFAULT_PROVIDER")
-            or "openrouter-semantic-test"
-        )
-        env["CONTEXTFORGE_PI_DEFAULT_MODEL"] = model
-        env["CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"] = f"openrouter/{model}"
-    elif provider_kind == "openai_compatible":
-        env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"] = str(profile.get("pi_provider") or "local-llama-qwen")
-        env["CONTEXTFORGE_PI_DEFAULT_MODEL"] = model
-        if client == "opencode":
-            raise RuntimeError("openai_compatible semantic profiles are not yet wired for OpenCode")
-    else:
-        raise RuntimeError(f"unsupported semantic provider_kind {provider_kind!r}")
+    reasoning = str(profile.get("reasoning_effort") or "").strip()
+    if reasoning != expected_reasoning:
+        raise RuntimeError(f"LiteLLM reasoning effort mismatch for {model!r}")
+    if str(profile.get("pi_provider") or "") != "litellm":
+        raise RuntimeError(f"Pi provider mismatch for {model!r}")
+    if str(profile.get("pi_thinking") or "") != expected_reasoning:
+        raise RuntimeError(f"Pi thinking mismatch for {model!r}")
+    if str(profile.get("opencode_model") or "") != f"litellm/{model}":
+        raise RuntimeError(f"OpenCode model mismatch for {model!r}")
+    if str(profile.get("opencode_variant") or "") != expected_reasoning:
+        raise RuntimeError(f"OpenCode variant mismatch for {model!r}")
+    if base_url:
+        env["LITELLM_BASE_URL"] = base_url
+    env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"] = "litellm"
+    env["CONTEXTFORGE_PI_DEFAULT_MODEL"] = model
+    env["CONTEXTFORGE_PI_DEFAULT_THINKING"] = str(profile.get("pi_thinking") or reasoning)
+    env["CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"] = str(profile.get("opencode_model") or f"litellm/{model}")
+    env["CONTEXTFORGE_OPENCODE_SMALL_MODEL"] = env["CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"]
+    env["CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT"] = str(profile.get("opencode_variant") or reasoning)
     return env, secret_env_keys
 
 
+def container_receives_real_semantic_model_api_key(
+    secret_env_keys: list[str],
+    available_env: dict[str, str],
+) -> bool:
+    return any(bool(str(available_env.get(key) or "").strip()) for key in secret_env_keys)
+
+
+def semantic_model_compose_process_env(
+    compose_env: dict[str, str],
+    secret_env_keys: list[str],
+) -> dict[str, str]:
+    """Let Compose's env file supply selected secrets while blanking every other API key."""
+    process_env = dict(compose_env)
+    selected = set(secret_env_keys)
+    for key in API_KEY_ENV_NAMES:
+        if key in selected:
+            process_env.pop(key, None)
+        else:
+            process_env[key] = ""
+    return process_env
+
+
 def redacted_profile_summary(
-    profile: dict[str, Any] | None,
+    profile: dict[str, Any],
     env: dict[str, str],
     secret_env_keys: list[str],
     selector: str,
     available_env: dict[str, str],
 ) -> dict[str, Any]:
-    if profile is None:
-        return {
-            "selection_scope": "per_test_run",
-            "selection_mode": selector,
-            "profile_id": None,
-            "source": "explicit environment",
-            "env_keys": sorted(env),
-            "secret_env_keys": sorted(secret_env_keys),
-        }
     key_env = str(profile.get("api_key_env") or "").strip()
     return {
         "selection_scope": "per_test_run",
@@ -428,6 +496,8 @@ def redacted_profile_summary(
         "provider_label": profile.get("provider_label"),
         "model": profile.get("model"),
         "display_name": profile.get("display_name"),
+        "semantic_role": profile.get("semantic_role"),
+        "reasoning_effort": profile.get("reasoning_effort"),
         "context_window": profile_context_window(profile),
         "minimum_context_window": MIN_SEMANTIC_CONTEXT_WINDOW,
         "api_key_env": key_env or None,
@@ -649,8 +719,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument(
         "--semantic-model-profile",
-        default=os.environ.get("CONTEXTFORGE_SEMANTIC_MODEL_PROFILE", "random"),
-        help="Semantic model profile id, 'random' for per-test-run random choice, or 'env' to use explicit environment values.",
+        default=os.environ.get("CONTEXTFORGE_SEMANTIC_MODEL_PROFILE", "default"),
+        help="Semantic model profile id, 'default' for Luna, 'random' for a per-run choice, or 'env' for explicit values.",
     )
     parser.add_argument(
         "--service-test-prompt",
@@ -714,7 +784,6 @@ def main(argv: list[str] | None = None) -> int:
     semantic_overrides: dict[str, str] = {}
     semantic_secret_env_keys: list[str] = []
     semantic_profile_summary: dict[str, Any] = {}
-    semantic_host_proxy = None
 
     try:
         virtual_server_name = str(service.get("virtual_server") or "")
@@ -783,31 +852,12 @@ def main(argv: list[str] | None = None) -> int:
             args.semantic_model_profile,
             available_model_env,
         )
-        if selected_profile is None:
-            semantic_overrides = semantic_model_env_overrides()
-            selected_secret_env_keys = []
-        else:
-            semantic_overrides, selected_secret_env_keys = selected_profile_env(
-                selected_profile,
-                args.client,
-                available_model_env,
-            )
+        semantic_overrides, selected_secret_env_keys = selected_profile_env(
+            selected_profile,
+            args.client,
+            available_model_env,
+        )
         semantic_secret_env_keys = sorted(set(selected_secret_env_keys))
-        if selected_profile is not None and str(selected_profile.get("provider_kind") or "") == "openrouter":
-            api_key_env = str(selected_profile.get("api_key_env") or "OPENROUTER_API_KEY")
-            upstream_base_url = (
-                os.environ.get(str(selected_profile.get("base_url_env") or ""))
-                or available_model_env.get(str(selected_profile.get("base_url_env") or ""))
-                or str(selected_profile.get("default_base_url") or "https://openrouter.ai/api/v1")
-            )
-            semantic_host_proxy = start_openrouter_proxy(
-                script_path=harness_root / "scripts" / "semantic_model_host_proxy.py",
-                api_key_env=api_key_env,
-                upstream_base_url=upstream_base_url,
-                host_env=available_model_env,
-            )
-            semantic_overrides["OPENROUTER_BASE_URL"] = semantic_host_proxy.container_base_url
-            semantic_overrides[api_key_env] = semantic_host_proxy.container_api_key
         semantic_profile_summary = redacted_profile_summary(
             selected_profile,
             semantic_overrides,
@@ -831,6 +881,8 @@ def main(argv: list[str] | None = None) -> int:
             "compose",
             "-f",
             str(harness_root / "compose.yml"),
+            "--env-file",
+            str(semantic_env_file),
             "run",
             "--name",
             container,
@@ -845,7 +897,7 @@ def main(argv: list[str] | None = None) -> int:
             cwd=repo_root,
             timeout=120,
             commands=commands,
-            env={**compose_env, **{key: "" for key in API_KEY_ENV_NAMES}} or None,
+            env=semantic_model_compose_process_env(compose_env, semantic_secret_env_keys),
         )
         runtime = uc1.run(
             ["docker", "exec", container, "bash", "-lc", uc1.runtime_readback_command(args.client)],
@@ -1002,7 +1054,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = {
             "schema_uri": "contextforge://client-harness/comprehensive-mcp-service-dialogue-run/v1",
             "ok_scope": "runner completed; semantic acceptance requires evaluator review",
-            "semantic_acceptance": "requires_non_spark_evaluator",
+            "semantic_acceptance": "requires_sol_evaluator",
             "client": args.client,
             "service": args.service,
             "service_binding": service_binding,
@@ -1019,8 +1071,11 @@ def main(argv: list[str] | None = None) -> int:
             "output_root": str(output_root),
             "semantic_model_env_overrides": semantic_overrides,
             "semantic_model_profile": semantic_profile_summary,
-            "semantic_model_host_proxy": None if semantic_host_proxy is None else semantic_host_proxy.summary(),
-            "container_receives_real_semantic_model_api_key": False,
+            "semantic_model_host_proxy": None,
+            "container_receives_real_semantic_model_api_key": container_receives_real_semantic_model_api_key(
+                semantic_secret_env_keys,
+                available_model_env,
+            ),
             "contextforge": {
                 "host_base_url": args.contextforge_host_base_url,
                 "container_base_url": args.contextforge_container_base_url,
@@ -1119,8 +1174,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"warning: failed to revoke probe token {scoped_token_id}: {exc}", file=sys.stderr)
         if lock_file is not None:
             lock_file.close()
-        if semantic_host_proxy is not None:
-            semantic_host_proxy.stop()
 
 
 if __name__ == "__main__":

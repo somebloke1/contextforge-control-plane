@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run onboarding semantic-process dialogue across model/persona quorum."""
+"""Run onboarding semantic-process dialogue across Luna/persona run quorum."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 
-MIN_MODEL_QUORUM = 3
+MIN_RUN_QUORUM = 3
 DEFAULT_ONBOARDING_TURNS = 32
 DEFAULT_DIALOGUE_SECONDS = 600
 DEFAULT_HUMAN_HELP_DETERMINATION = 15
@@ -61,8 +61,9 @@ def select_profiles(
     client: str,
     requested: list[str],
     count: int,
-    seed: int | None,
+    seed: int | None = None,
 ) -> list[dict[str, Any]]:
+    del seed
     semantic_env_file = harness_root / "env" / "semantic-model.env"
     if not semantic_env_file.exists():
         raise RuntimeError(f"{semantic_env_file} is missing; run make-semantic-model-env.sh")
@@ -74,26 +75,22 @@ def select_profiles(
         and service_runner.profile_available(profile, available_env)
         and service_runner.profile_context_window(profile) >= service_runner.MIN_SEMANTIC_CONTEXT_WINDOW
         and service_runner.profile_multi_step_quorum_eligible(profile)
+        and service_runner.profile_tested_assistant_eligible(profile)
         and service_runner.profile_weight(profile) > 0
     ]
     by_id = {str(profile.get("id") or ""): profile for profile in profiles}
     if requested:
         missing = [profile_id for profile_id in requested if profile_id not in by_id]
         if missing:
-            raise RuntimeError(f"requested profiles are not eligible for {client}: {', '.join(missing)}")
-        selected = [by_id[profile_id] for profile_id in requested]
-    else:
-        import random
-
-        if len(profiles) < count:
-            raise RuntimeError(f"need {count} eligible profiles for {client}; found {len(profiles)}")
-        selected = random.Random(seed).sample(profiles, count)
-    ids = [str(profile.get("id") or "") for profile in selected]
-    if len(set(ids)) != len(ids):
-        raise RuntimeError("onboarding semantic model quorum requires distinct profile ids")
-    if len(selected) < MIN_MODEL_QUORUM:
-        raise RuntimeError(f"onboarding semantic model quorum requires at least {MIN_MODEL_QUORUM} profiles")
-    return selected
+            raise RuntimeError(
+                "onboarding tested-assistant run quorum requires blind-agent Luna/medium; "
+                f"rejected: {', '.join(missing)}"
+            )
+    if len(profiles) != 1:
+        raise RuntimeError(f"expected exactly one blind-agent Luna/medium profile for {client}; found {len(profiles)}")
+    if count < MIN_RUN_QUORUM:
+        raise RuntimeError(f"onboarding run quorum requires at least {MIN_RUN_QUORUM} independent Luna runs")
+    return [profiles[0] for _ in range(count)]
 
 
 def persona_coverage(personas: list[dict[str, str]]) -> dict[str, Any]:
@@ -173,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--client", choices=["pi", "opencode"], required=True)
     parser.add_argument("--foil", default="time")
     parser.add_argument("--timeout", type=int, default=420)
-    parser.add_argument("--count", type=int, default=MIN_MODEL_QUORUM)
+    parser.add_argument("--count", type=int, default=MIN_RUN_QUORUM)
     parser.add_argument("--profile", action="append", default=[])
     parser.add_argument("--seed", type=int)
     parser.add_argument("--jobs", type=int, default=0)
@@ -188,30 +185,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--disable-adaptive-human-help-determination",
         action="store_true",
-        help="Disable next-batch n adjustment from the prior three-model quorum outcome.",
+        help="Disable next-batch n adjustment from the prior three-run Luna quorum outcome.",
     )
     parser.add_argument(
         "--responder-mode",
         choices=["pi", "model", "seeded"],
         default="pi",
-        help="Use Pi gpt-5.5 simulated human responders by default; seeded mode is debug scaffolding.",
+        help="Use Pi LiteLLM Terra/high simulated human responders by default; seeded mode is debug scaffolding.",
     )
-    parser.add_argument("--responder-pi-image", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_IMAGE", "contextforge-client-pi:human-sim-authenticated"))
-    parser.add_argument("--responder-pi-provider", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_PROVIDER", "openai-codex"))
-    parser.add_argument("--responder-pi-model", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_MODEL", "gpt-5.5"))
+    parser.add_argument("--responder-pi-image", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_IMAGE", "contextforge-client-pi:latest"))
+    parser.add_argument("--responder-pi-provider", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_PROVIDER", "litellm"))
+    parser.add_argument("--responder-pi-model", default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_MODEL", "codex/gpt-5.6-terra"))
     parser.add_argument(
         "--responder-pi-thinking",
         choices=["off", "minimal", "low", "medium", "high", "xhigh"],
-        default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_THINKING", "low"),
+        default=os.environ.get("CONTEXTFORGE_PI_HUMAN_SIM_THINKING", "high"),
     )
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
-    if args.count < MIN_MODEL_QUORUM:
-        raise SystemExit(f"--count must be at least {MIN_MODEL_QUORUM}")
-    if args.profile and len(args.profile) < MIN_MODEL_QUORUM:
-        raise SystemExit(f"provide at least {MIN_MODEL_QUORUM} --profile values")
+    if args.count < MIN_RUN_QUORUM:
+        raise SystemExit(f"--count must be at least {MIN_RUN_QUORUM}")
     args.human_help_determination_start = bounded_help_determination(args.human_help_determination_start)
 
     repo_root = Path(__file__).resolve().parents[3]
@@ -252,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
             summary = {
                 "schema_uri": "contextforge://client-harness/onboarding-semantic-process-quorum/v1",
                 "ok_scope": "structural onboarding process quorum package only",
-                "semantic_acceptance": "requires_non_spark_evaluator_per_model_and_quorum",
+                "semantic_acceptance": "requires_sol_evaluator_per_run_and_quorum",
                 "quorum_status": "prebuild_failed",
                 "client": args.client,
                 "foil": args.foil,
@@ -354,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
         runs = [runs_by_index[index] for index in sorted(runs_by_index)]
 
     structurally_successful_runs = [run for run in runs if run.get("structural_onboarding_successful")]
-    structural_failure_count = max(0, MIN_MODEL_QUORUM - min(len(structurally_successful_runs), MIN_MODEL_QUORUM))
+    structural_failure_count = max(0, MIN_RUN_QUORUM - min(len(structurally_successful_runs), MIN_RUN_QUORUM))
     next_batch_help = (
         batch_help
         if args.dry_run or not adaptive_help
@@ -365,17 +360,17 @@ def main(argv: list[str] | None = None) -> int:
     coverage = persona_coverage([run["persona"] for run in runs])
     if args.dry_run:
         quorum_status = "dry_run_structural_package_only"
-    elif len(completed) >= MIN_MODEL_QUORUM and coverage["ready_for_acceptance_matrix"]:
-        quorum_status = "ready_for_evaluator"
+    elif len(completed) >= MIN_RUN_QUORUM and coverage["ready_for_acceptance_matrix"]:
+        quorum_status = "ready_for_sol_evaluator"
     else:
         quorum_status = "quorum_run_incomplete"
     summary = {
         "schema_uri": "contextforge://client-harness/onboarding-semantic-process-quorum/v1",
         "ok_scope": "structural onboarding process quorum package only",
-        "semantic_acceptance": "requires_non_spark_evaluator_per_model_and_quorum",
+        "semantic_acceptance": "requires_sol_evaluator_per_run_and_quorum",
         "deterministic_semantic_oracles_allowed": False,
         "quorum_status": quorum_status,
-        "minimum_model_quorum_per_client": MIN_MODEL_QUORUM,
+        "minimum_luna_run_quorum_per_client": MIN_RUN_QUORUM,
         "client": args.client,
         "foil": args.foil,
         "source_lead": foil["source_lead"],
@@ -411,21 +406,21 @@ def main(argv: list[str] | None = None) -> int:
         "structural_onboarding_successful_count": len(structurally_successful_runs),
         "responder_mode": args.responder_mode,
         "turn_budget_policy": TURN_BUDGET_POLICY,
-        "successful_profile_count": len(successful),
-        "eligible_completed_profile_count": len(completed),
-        "completed_profile_count": len(completed),
-        "real_dialogue_completed_profile_count": 0 if args.dry_run else len(completed),
+        "successful_run_count": len(successful),
+        "eligible_completed_run_count": len(completed),
+        "completed_run_count": len(completed),
+        "real_dialogue_completed_run_count": 0 if args.dry_run else len(completed),
         "runs": runs,
         "deterministic_non_actions": [
             "quorum runner does not score free-form assistant prose",
             "quorum runner does not use Codex as tested assistant",
-            "quorum runner does not hide failed model-profile or persona runs",
-            "quorum runner varies model profile and persona across isolated runs",
+            "quorum runner does not hide failed Luna/medium or persona runs",
+            "quorum runner keeps Luna/medium fixed while varying personas across isolated runs",
         ],
         "evaluator_required_narrative": [
             "after each live dialogue ends or hits a safety bound, evaluate every user/assistant turn and the whole session in one after-action review",
-            "judge each client/model/persona run behind the source-lead-only veil",
-            "accept quorum only if at least three distinct eligible profiles pass semantically",
+            "use Sol/high to judge each client/Luna/persona run behind the source-lead-only veil",
+            "accept quorum only if at least three independent Luna/medium runs pass semantically",
             "judge interaction efficiency relative to each sampled persona overhead and required outcome",
             "classify every failed run before replacement or acceptance",
             "aggregate persona coverage and route/claim-boundary findings",
@@ -433,7 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     write_json(output_root / "quorum-summary.json", summary)
     print(json.dumps(summary, indent=2, sort_keys=True))
-    return 0 if len(completed) >= MIN_MODEL_QUORUM and coverage["ready_for_acceptance_matrix"] else 1
+    return 0 if len(completed) >= MIN_RUN_QUORUM and coverage["ready_for_acceptance_matrix"] else 1
 
 
 if __name__ == "__main__":

@@ -9,9 +9,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,7 @@ import pi_contextforge_shim_dry_run
 import pi_project_init_helper_cli
 import project_init_common as common
 import register_project_init_prompt as prompt_registration
+import register_service_offerings as service_offering_registration
 
 
 CONSENT_REFS = [
@@ -53,6 +55,68 @@ def service_descriptor(name: str = "context7") -> dict[str, Any]:
             "do not create a per-project backend",
             "do not mutate user-global Codex config or trust",
         ],
+    }
+
+
+def registry_service_descriptor(
+    name: str = "context7",
+    *,
+    binding: str | None = None,
+    instantiation_class: str | None = None,
+) -> dict[str, Any]:
+    descriptor = service_descriptor(name)
+    if binding is not None:
+        descriptor["service_binding"] = binding
+    if instantiation_class is not None:
+        descriptor["instantiation_class"] = instantiation_class
+    descriptor.update(
+        {
+            "catalog_source": "contextforge_registry",
+            "helper_metadata_status": "derived_from_contextforge_registry",
+            "description": f"{name} documentation lookup",
+            "scope_model": "global",
+        }
+    )
+    return descriptor
+
+
+def service_offering_metadata(
+    name: str = "context7",
+    *,
+    server_id: str = "vs-context7",
+    gateway_id: str = "gw-context7",
+    binding: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "schema_uri": common.SERVICE_OFFERING_SCHEMA_URI,
+        "metadata_version": 1,
+        "resource_uri": f"contextforge://control-plane/service-offerings/{name}/v1",
+        "offering_id": name,
+        "service_family": name,
+        "canonical_service": name,
+        "display_name": name,
+        "description": f"{name} documentation lookup",
+        "aliases": [name],
+        "scope_model": "global",
+        "scope_type": "global",
+        "instance_model": "shared_canonical",
+        "instantiation_class": "shared_canonical",
+        "binding": {"mode": "literal", "value": binding or f"{name}:canonical"},
+        "runtime": {
+            "server_id": server_id,
+            "server_name": f"{common.normalize_codex_alias(name)}_server",
+            "gateway_id": gateway_id,
+            "gateway_name": name,
+            "reload_required": True,
+        },
+        "helper": {
+            "actions_supported": ["list", "enable", "disable", "remove", "repair", "details"],
+            "required_context": {},
+            "client_support": {},
+        },
+        "guidance": {},
+        "lifecycle": "active",
+        "provenance": {"source": "test"},
     }
 
 
@@ -205,6 +269,625 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("server-instances/context7", by_alias["context7"]["backend_instance"])
         self.assertNotIn("client", by_alias["context7"])
         self.assertIn("do not create a per-project backend", by_alias["context7"]["non_actions"])
+
+    def test_contextforge_registry_service_offerings_require_server_metadata_not_local_manifests(self) -> None:
+        servers = [
+            {
+                "id": "vs-context7",
+                "name": "context7_local_server",
+                "description": "Virtual server exposing context7-local.",
+                "enabled": True,
+                "tags": [{"label": "contextforge"}, {"label": "context7"}, {"label": "local-backend"}],
+                "associatedTools": ["context7-local-resolve-library-id", "context7-local-query-docs"],
+                "associatedResources": ["resource-context7-offering"],
+            }
+        ]
+        gateways = [
+            {
+                "id": "gw-context7",
+                "name": "context7-local",
+                "description": "Canonical ContextForge gateway for context7.",
+                "enabled": True,
+                "tags": [{"label": "contextforge"}, {"label": "context7"}, {"label": "local-backend"}],
+            }
+        ]
+        resources = [
+            {
+                "id": "resource-context7-offering",
+                "uri": "contextforge://control-plane/service-offerings/context7/v1",
+                "tags": ["contextforge-service-offering", "service-offering", "context7"],
+                "content": json.dumps(service_offering_metadata()),
+            }
+        ]
+
+        offerings = common.discover_contextforge_registry_service_offerings(
+            project_root="/home/dgk/workspace/cf-controlplane",
+            contextforge_servers=servers,
+            contextforge_gateways=gateways,
+            contextforge_resources=resources,
+        )
+
+        self.assertEqual(1, len(offerings))
+        offering = offerings[0]
+        self.assertEqual("contextforge_registry", offering["catalog_source"])
+        self.assertEqual("context7:canonical", offering["service_binding"])
+        self.assertEqual("context7", offering["service_family"])
+        self.assertEqual("context7", offering["codex_alias"])
+        self.assertEqual("context7_local_server", offering["virtual_server"])
+        self.assertEqual("vs-context7", offering["contextforge_server_id"])
+        self.assertEqual("resource-context7-offering", offering["helper_metadata_resource_id"])
+        self.assertNotIn("backend_instance", offering)
+
+    def test_contextforge_registry_service_offerings_omit_servers_without_service_metadata(self) -> None:
+        servers = [
+            {
+                "id": "vs-context7",
+                "name": "context7_local_server",
+                "description": "Virtual server exposing context7-local.",
+                "enabled": True,
+                "tags": [{"label": "contextforge"}, {"label": "context7"}, {"label": "local-backend"}],
+                "associatedTools": ["context7-local-resolve-library-id", "context7-local-query-docs"],
+            }
+        ]
+        gateways = [
+            {
+                "id": "gw-context7",
+                "name": "context7-local",
+                "description": "Canonical ContextForge gateway for context7.",
+                "enabled": True,
+                "tags": [{"label": "contextforge"}, {"label": "context7"}, {"label": "local-backend"}],
+            }
+        ]
+
+        offerings = common.discover_contextforge_registry_service_offerings(
+            project_root="/home/dgk/workspace/cf-controlplane",
+            contextforge_servers=servers,
+            contextforge_gateways=gateways,
+            contextforge_resources=[],
+        )
+
+        self.assertEqual([], offerings)
+
+    def test_contextforge_registry_service_offerings_omit_invalid_metadata_content(self) -> None:
+        servers = [
+            {"id": "vs-bad-json", "name": "bad_json_server", "enabled": True, "associatedResources": ["resource-bad-json"]},
+            {"id": "vs-wrong-schema", "name": "wrong_schema_server", "enabled": True, "associatedResources": ["resource-wrong-schema"]},
+            {"id": "vs-missing-field", "name": "missing_field_server", "enabled": True, "associatedResources": ["resource-missing-field"]},
+            {"id": "vs-inactive", "name": "inactive_server", "enabled": True, "associatedResources": ["resource-inactive"]},
+            {"id": "vs-bad-binding", "name": "bad_binding_server", "enabled": True, "associatedResources": ["resource-bad-binding"]},
+        ]
+        wrong_schema = service_offering_metadata("wrong-schema", server_id="vs-wrong-schema")
+        wrong_schema["schema_uri"] = "contextforge://schemas/service-offering/v0"
+        missing_field = service_offering_metadata("missing-field", server_id="vs-missing-field")
+        del missing_field["display_name"]
+        inactive = service_offering_metadata("inactive", server_id="vs-inactive")
+        inactive["lifecycle"] = "retired"
+        bad_binding = service_offering_metadata("bad-binding", server_id="vs-bad-binding")
+        bad_binding["binding"] = {"mode": "made_up"}
+        resources = [
+            {"id": "resource-bad-json", "tags": ["contextforge-service-offering"], "content": "{not json"},
+            {"id": "resource-wrong-schema", "tags": ["contextforge-service-offering"], "content": json.dumps(wrong_schema)},
+            {"id": "resource-missing-field", "tags": ["contextforge-service-offering"], "content": json.dumps(missing_field)},
+            {"id": "resource-inactive", "tags": ["contextforge-service-offering"], "content": json.dumps(inactive)},
+            {"id": "resource-bad-binding", "tags": ["contextforge-service-offering"], "content": json.dumps(bad_binding)},
+        ]
+
+        offerings = common.discover_contextforge_registry_service_offerings(
+            project_root="/home/dgk/workspace/cf-controlplane",
+            contextforge_servers=servers,
+            contextforge_gateways=[],
+            contextforge_resources=resources,
+        )
+
+        self.assertEqual([], offerings)
+
+    def test_contextforge_registry_service_offerings_omit_runtime_server_mismatch(self) -> None:
+        metadata = service_offering_metadata("context7", server_id="other-server")
+        offerings = common.discover_contextforge_registry_service_offerings(
+            project_root="/home/dgk/workspace/cf-controlplane",
+            contextforge_servers=[{"id": "vs-context7", "name": "context7_server", "enabled": True, "associatedResources": ["resource-context7"]}],
+            contextforge_gateways=[],
+            contextforge_resources=[{"id": "resource-context7", "tags": ["contextforge-service-offering"], "content": json.dumps(metadata)}],
+        )
+
+        self.assertEqual([], offerings)
+
+    def test_contextforge_registry_service_offerings_omit_duplicate_offering_or_binding_conflicts(self) -> None:
+        duplicate_a = service_offering_metadata("context7", server_id="vs-a", binding="context7:a")
+        duplicate_b = service_offering_metadata("context7", server_id="vs-b", binding="context7:b")
+        binding_a = service_offering_metadata("alpha", server_id="vs-c", binding="shared:binding")
+        binding_b = service_offering_metadata("beta", server_id="vs-d", binding="shared:binding")
+        servers = [
+            {"id": "vs-a", "name": "a_server", "enabled": True, "associatedResources": ["resource-a"]},
+            {"id": "vs-b", "name": "b_server", "enabled": True, "associatedResources": ["resource-b"]},
+            {"id": "vs-c", "name": "c_server", "enabled": True, "associatedResources": ["resource-c"]},
+            {"id": "vs-d", "name": "d_server", "enabled": True, "associatedResources": ["resource-d"]},
+        ]
+        resources = [
+            {"id": "resource-a", "tags": ["contextforge-service-offering"], "content": json.dumps(duplicate_a)},
+            {"id": "resource-b", "tags": ["contextforge-service-offering"], "content": json.dumps(duplicate_b)},
+            {"id": "resource-c", "tags": ["contextforge-service-offering"], "content": json.dumps(binding_a)},
+            {"id": "resource-d", "tags": ["contextforge-service-offering"], "content": json.dumps(binding_b)},
+        ]
+
+        offerings = common.discover_contextforge_registry_service_offerings(
+            project_root="/home/dgk/workspace/cf-controlplane",
+            contextforge_servers=servers,
+            contextforge_gateways=[],
+            contextforge_resources=resources,
+        )
+
+        self.assertEqual([], offerings)
+
+    def test_contextforge_registry_service_offerings_expand_project_hash_template_binding(self) -> None:
+        metadata = service_offering_metadata("serena", server_id="vs-serena", binding="unused")
+        metadata["scope_model"] = "per_project"
+        metadata["instantiation_class"] = "instance_per_project"
+        metadata["binding"] = {"mode": "project_hash_template", "template": "serena:{project_hash_12}"}
+        metadata["runtime"]["gateway_id"] = ""
+
+        offerings = common.discover_contextforge_registry_service_offerings(
+            project_root="/home/dgk/workspace/cf-controlplane",
+            contextforge_servers=[{"id": "vs-serena", "name": "serena_server", "enabled": True, "associatedResources": ["resource-serena"]}],
+            contextforge_gateways=[],
+            contextforge_resources=[{"id": "resource-serena", "tags": ["contextforge-service-offering"], "content": json.dumps(metadata)}],
+        )
+
+        self.assertEqual(1, len(offerings))
+        self.assertEqual("serena:d46fe58a2a20", offerings[0]["service_binding"])
+
+    def test_service_offering_metadata_exposes_nested_helper_runtime_and_guidance_fields(self) -> None:
+        metadata = service_offering_metadata("web-search", server_id="vs-web", binding="web-search:credential_scoped")
+        metadata["scope_model"] = "per_user"
+        metadata["instantiation_class"] = "credential_scoped"
+        metadata["scope_type"] = "provider_credential_and_request_scope"
+        metadata["instance_model"] = "credential_scoped"
+        metadata["runtime"]["gateway_id"] = ""
+        metadata["runtime"]["reload_required"] = False
+        metadata["helper"]["required_context"] = {"credential_scope": "required"}
+        metadata["helper"]["client_support"] = {"pi": True, "opencode": True}
+        metadata["helper"]["actions_supported"] = ["list", "enable", "details"]
+        metadata["guidance"] = {"abstract_resource_uri": "contextforge://guidance/web-search/abstract"}
+
+        offerings = common.discover_contextforge_registry_service_offerings(
+            project_root="/home/dgk/workspace/cf-controlplane",
+            contextforge_servers=[{"id": "vs-web", "name": "web_search_server", "enabled": True, "associatedResources": ["resource-web"]}],
+            contextforge_gateways=[],
+            contextforge_resources=[{"id": "resource-web", "tags": ["contextforge-service-offering"], "content": json.dumps(metadata)}],
+        )
+
+        self.assertEqual(1, len(offerings))
+        offering = offerings[0]
+        self.assertEqual("per_user", offering["scope_model"])
+        self.assertEqual("provider_credential_and_request_scope", offering["scope_type"])
+        self.assertEqual("credential_scoped", offering["instance_model"])
+        self.assertEqual({"credential_scope": "required"}, offering["required_context"])
+        self.assertEqual({"pi": True, "opencode": True}, offering["client_support"])
+        self.assertEqual(["list", "enable", "details"], offering["actions_supported"])
+        self.assertFalse(offering["reload_required"])
+        self.assertEqual(metadata["guidance"], offering["guidance"])
+
+    def test_service_offering_registrar_covers_current_service_families_and_scope_classes(self) -> None:
+        self.assertTrue(
+            {"chrome-devtools", "time", "serena", "mentality", "web-search"}
+            <= service_offering_registration.CANONICAL_SEED_SERVICES
+        )
+        self.assertEqual("per_project", service_offering_registration._scope_model({}, "instance_per_project"))
+        self.assertEqual("per_user", service_offering_registration._scope_model({}, "credential_scoped"))
+        self.assertEqual("global", service_offering_registration._scope_model({}, "session_scoped"))
+        self.assertEqual(
+            {"project_root": "request_context_required"},
+            service_offering_registration._required_context(
+                {"scope": {"scope_type": "caller_supplied_local_repo"}},
+                "global",
+                "static_repo_local",
+            ),
+        )
+
+    def test_service_offering_dry_run_reads_live_state_without_mutation(self) -> None:
+        metadata = service_offering_metadata("context7", server_id="stale-server")
+        metadata["runtime"]["server_name"] = "context7_server"
+        offering = service_offering_registration.PlannedOffering(
+            offering_id="context7",
+            service_family="context7",
+            instance_dir="context7",
+            instance_path="server-instances/context7/instance.json",
+            server_id="stale-server",
+            resource_uri=metadata["resource_uri"],
+            resource_body={"uri": metadata["resource_uri"], "content": json.dumps(metadata)},
+            metadata=metadata,
+        )
+        resource = {
+            "id": "22222222222222222222222222222222",
+            "uri": metadata["resource_uri"],
+            "content": json.dumps(metadata),
+        }
+        server = {
+            "id": "live-server",
+            "name": "context7_server",
+            "associatedResourceIds": [resource["id"]],
+        }
+
+        def fake_items(path: str) -> list[dict[str, Any]]:
+            if path.startswith("/resources"):
+                return [resource]
+            if path.startswith("/servers"):
+                return [server]
+            if path.startswith("/gateways"):
+                return []
+            raise AssertionError(path)
+
+        with mock.patch.object(service_offering_registration, "_planned_offerings", return_value=([offering], [])), mock.patch.object(
+            service_offering_registration, "_api_items", side_effect=fake_items
+        ), mock.patch.object(
+            service_offering_registration,
+            "_hydrate_service_offering_resources",
+            side_effect=lambda resources: resources,
+        ), mock.patch.object(
+            service_offering_registration,
+            "_target_owner_email",
+            return_value=service_offering_registration.OWNER,
+        ), mock.patch.object(service_offering_registration, "_upsert_resource") as upsert, mock.patch.object(
+            service_offering_registration, "_associate_resource"
+        ) as associate:
+            report = service_offering_registration.migrate(dry_run=True, services=["context7"])
+
+        upsert.assert_not_called()
+        associate.assert_not_called()
+        self.assertEqual(["context7"], report.updated)
+        self.assertEqual([], report.created)
+        self.assertEqual([], report.associated)
+        self.assertEqual("live-server", report.planned[0]["runtime_server_id"])
+        self.assertEqual("update", report.planned[0]["resource_action"])
+        self.assertEqual("preserve", report.planned[0]["association_action"])
+
+    def test_service_offering_apply_blocks_before_mutation_when_any_live_target_is_missing(self) -> None:
+        good_metadata = service_offering_metadata("context7", server_id="server-good")
+        good_metadata["runtime"]["server_name"] = "context7_server"
+        bad_metadata = service_offering_metadata("time", server_id="server-missing")
+        bad_metadata["runtime"]["server_name"] = "time_server"
+
+        def offering(metadata: dict[str, Any]) -> service_offering_registration.PlannedOffering:
+            name = str(metadata["offering_id"])
+            return service_offering_registration.PlannedOffering(
+                offering_id=name,
+                service_family=name,
+                instance_dir=name,
+                instance_path=f"server-instances/{name}/instance.json",
+                server_id=str(metadata["runtime"]["server_id"]),
+                resource_uri=str(metadata["resource_uri"]),
+                resource_body=service_offering_registration._resource_body(metadata),
+                metadata=metadata,
+            )
+
+        def fake_items(path: str) -> list[dict[str, Any]]:
+            if path.startswith("/servers"):
+                return [{"id": "server-good", "name": "context7_server"}]
+            if path.startswith("/resources") or path.startswith("/gateways"):
+                return []
+            raise AssertionError(path)
+
+        with mock.patch.object(
+            service_offering_registration,
+            "_planned_offerings",
+            return_value=([offering(good_metadata), offering(bad_metadata)], []),
+        ), mock.patch.object(service_offering_registration, "_api_items", side_effect=fake_items), mock.patch.object(
+            service_offering_registration,
+            "_target_owner_email",
+            return_value=service_offering_registration.OWNER,
+        ), mock.patch.object(
+            service_offering_registration, "_upsert_resource"
+        ) as upsert, mock.patch.object(service_offering_registration, "_associate_resource") as associate:
+            report = service_offering_registration.migrate(
+                dry_run=False,
+                services=["context7", "time"],
+            )
+
+        upsert.assert_not_called()
+        associate.assert_not_called()
+        self.assertEqual([], report.created)
+        self.assertEqual([], report.updated)
+        self.assertEqual([], report.associated)
+        self.assertEqual("time", report.errors[0]["service"])
+        self.assertIn("apply blocked", report.skipped[-1])
+
+    def test_service_offering_resource_upsert_is_idempotent_when_metadata_matches(self) -> None:
+        instance = {
+            "name": "context7",
+            "scope": {"scope_type": "global_documentation_lookup"},
+            "contextforge": {
+                "virtual_server": {"id": "server-id", "name": "context7_server"},
+                "gateway": {"id": "gateway-id", "name": "context7-local"},
+            },
+        }
+        metadata = service_offering_registration._metadata_from_instance(instance, instance_dir="context7")
+        offering = service_offering_registration.PlannedOffering(
+            offering_id="context7",
+            service_family="context7",
+            instance_dir="context7",
+            instance_path="server-instances/context7/instance.json",
+            server_id="server-id",
+            resource_uri=metadata["resource_uri"],
+            resource_body=service_offering_registration._resource_body(metadata),
+            metadata=metadata,
+        )
+        expected = offering.resource_body
+        content_shapes = {
+            "content": expected["content"],
+            "text": expected["content"],
+            "contents": [{"text": expected["content"]}],
+        }
+        for content_key, content_value in content_shapes.items():
+            with self.subTest(content_key=content_key):
+                existing = {
+                    "id": "resource-id",
+                    "uri": expected["uri"],
+                    "name": expected["name"],
+                    "title": expected["title"],
+                    "description": expected["description"],
+                    "mime_type": expected["mimeType"],
+                    content_key: content_value,
+                    "tags": [{"label": tag} for tag in expected["tags"]],
+                    "visibility": expected["visibility"],
+                    "ownerEmail": expected["owner_email"],
+                }
+
+                with mock.patch.object(service_offering_registration, "_request") as request:
+                    action, resource_id = service_offering_registration._upsert_resource(offering, [existing])
+
+                request.assert_not_called()
+                self.assertEqual("unchanged", action)
+                self.assertEqual("resource-id", resource_id)
+        self.assertEqual(
+            metadata,
+            service_offering_registration._metadata_from_instance(instance, instance_dir="context7"),
+        )
+
+    def test_service_offering_resource_upsert_updates_any_drifted_managed_field(self) -> None:
+        metadata = service_offering_metadata("context7", server_id="server-id")
+        offering = service_offering_registration.PlannedOffering(
+            offering_id="context7",
+            service_family="context7",
+            instance_dir="context7",
+            instance_path="server-instances/context7/instance.json",
+            server_id="server-id",
+            resource_uri=metadata["resource_uri"],
+            resource_body=service_offering_registration._resource_body(metadata),
+            metadata=metadata,
+        )
+        expected = offering.resource_body
+        existing = {
+            "id": "resource-id",
+            "uri": expected["uri"],
+            "name": expected["name"],
+            "title": expected["title"],
+            "description": "stale description",
+            "mimeType": expected["mimeType"],
+            "text": expected["content"],
+            "tags": [*expected["tags"], "stale-tag"],
+            "visibility": expected["visibility"],
+            "ownerEmail": expected["owner_email"],
+        }
+
+        with mock.patch.object(service_offering_registration, "_request", return_value={}) as request:
+            action, resource_id = service_offering_registration._upsert_resource(offering, [existing])
+
+        self.assertEqual("updated", action)
+        self.assertEqual("resource-id", resource_id)
+        request.assert_called_once_with("PUT", "/resources/resource-id", body=expected)
+        self.assertEqual(
+            ["description", "tags"],
+            service_offering_registration._resource_contract_differences(existing, offering),
+        )
+
+    def test_service_offering_resource_upsert_updates_named_managed_resource_on_uri_drift(self) -> None:
+        metadata = service_offering_metadata("context7", server_id="server-id")
+        offering = service_offering_registration.PlannedOffering(
+            offering_id="context7",
+            service_family="context7",
+            instance_dir="context7",
+            instance_path="server-instances/context7/instance.json",
+            server_id="server-id",
+            resource_uri=metadata["resource_uri"],
+            resource_body=service_offering_registration._resource_body(metadata),
+            metadata=metadata,
+        )
+        expected = offering.resource_body
+        existing = {
+            "id": "managed-resource-id",
+            "uri": "contextforge://control-plane/service-offerings/context7/v0",
+            "name": expected["name"],
+            "title": expected["title"],
+            "description": expected["description"],
+            "mimeType": expected["mimeType"],
+            "text": expected["content"],
+            "tags": ["stale-tag"],
+            "visibility": expected["visibility"],
+            "ownerEmail": expected["owner_email"],
+        }
+
+        with mock.patch.object(service_offering_registration, "_request", return_value={}) as request:
+            action, resource_id = service_offering_registration._upsert_resource(
+                offering,
+                [existing],
+            )
+
+        self.assertEqual("updated", action)
+        self.assertEqual("managed-resource-id", resource_id)
+        request.assert_called_once_with(
+            "PUT",
+            "/resources/managed-resource-id",
+            body=expected,
+        )
+
+    def test_service_offering_resource_lookup_rejects_conflicting_managed_identities(self) -> None:
+        metadata = service_offering_metadata("context7", server_id="server-id")
+        offering = service_offering_registration.PlannedOffering(
+            offering_id="context7",
+            service_family="context7",
+            instance_dir="context7",
+            instance_path="server-instances/context7/instance.json",
+            server_id="server-id",
+            resource_uri=metadata["resource_uri"],
+            resource_body=service_offering_registration._resource_body(metadata),
+            metadata=metadata,
+        )
+        resources = [
+            {"id": "exact-uri", "uri": offering.resource_uri, "name": "other"},
+            {
+                "id": "managed-name",
+                "uri": "contextforge://control-plane/service-offerings/context7/v0",
+                "name": offering.resource_body["name"],
+                "tags": offering.resource_body["tags"],
+            },
+        ]
+
+        with mock.patch.object(service_offering_registration, "_request") as request, self.assertRaisesRegex(
+            RuntimeError,
+            "multiple Resources match managed offering identity",
+        ):
+            service_offering_registration._upsert_resource(offering, resources)
+
+        request.assert_not_called()
+
+    def test_service_offering_migration_reports_missing_required_families(self) -> None:
+        with mock.patch.object(
+            service_offering_registration,
+            "_api_items",
+            return_value=[],
+        ):
+            report = service_offering_registration.migrate(
+                dry_run=True,
+                services=["chrome-devtools"],
+            )
+
+        self.assertEqual(1, len(report.errors))
+        self.assertEqual("chrome-devtools", report.errors[0]["service"])
+        self.assertEqual("required_family_completeness", report.errors[0]["stage"])
+        self.assertEqual("required_service_family_missing", report.errors[0]["classification"])
+        self.assertFalse(report.target["env_values_recorded"])
+
+    def test_service_offering_migration_reports_api_stage_and_target_without_traceback(self) -> None:
+        api_error = service_offering_registration.ContextForgeApiError(
+            method="GET",
+            path="/resources?include_inactive=true&limit=1000",
+            classification="http_error",
+            message="Unauthorized",
+            http_status=401,
+        )
+        with mock.patch.object(
+            service_offering_registration,
+            "_request",
+            side_effect=api_error,
+        ):
+            report = service_offering_registration.migrate(
+                dry_run=True,
+                services=["context7"],
+            )
+
+        self.assertEqual("read_resources", report.errors[0]["stage"])
+        self.assertEqual("GET", report.errors[0]["method"])
+        self.assertEqual("/resources?include_inactive=true&limit=1000", report.errors[0]["path"])
+        self.assertEqual(401, report.errors[0]["http_status"])
+        self.assertEqual("error", report.api_diagnostics[0]["outcome"])
+        self.assertEqual(report.target["base_url"], report.errors[0]["base_url"])
+
+    def test_service_offering_api_diagnostics_redact_structured_and_plaintext_secrets(self) -> None:
+        structured = service_offering_registration._safe_error_text(
+            json.dumps(
+                {
+                    "detail": "authentication failed",
+                    "access_token": "structured-secret",
+                    "nested": {"password": "nested-secret"},
+                }
+            )
+        )
+        plain = service_offering_registration._safe_error_text(
+            "Authorization: Bearer plaintext-secret PLATFORM_ADMIN_PASSWORD=env-secret"
+        )
+
+        self.assertIn("authentication failed", structured)
+        self.assertNotIn("structured-secret", structured)
+        self.assertNotIn("nested-secret", structured)
+        self.assertNotIn("plaintext-secret", plain)
+        self.assertNotIn("env-secret", plain)
+        self.assertIn("[REDACTED]", structured)
+        self.assertIn("[REDACTED]", plain)
+
+    def test_service_offering_http_diagnostics_never_reflect_response_body_bearer_material(self) -> None:
+        reflected_bearer = "qa-response-body-bearer-material"
+        http_error = urllib.error.HTTPError(
+            url="http://127.0.0.1:4445/resources",
+            code=401,
+            msg="Unauthorized",
+            hdrs={},
+            fp=io.BytesIO(
+                json.dumps({"detail": f"invalid token {reflected_bearer}"}).encode()
+            ),
+        )
+
+        with mock.patch.object(
+            service_offering_registration,
+            "_token",
+            return_value="request-token-not-logged",
+        ), mock.patch.object(
+            service_offering_registration.urllib.request,
+            "urlopen",
+            side_effect=http_error,
+        ), self.assertRaises(service_offering_registration.ContextForgeApiError) as raised:
+            service_offering_registration._request(
+                "GET",
+                "/resources?include_inactive=true&limit=1000",
+            )
+
+        diagnostic = str(raised.exception)
+        self.assertNotIn(reflected_bearer, diagnostic)
+        self.assertNotIn("request-token-not-logged", diagnostic)
+        self.assertIn("Unauthorized", diagnostic)
+        self.assertEqual(401, raised.exception.diagnostic["http_status"])
+
+    def test_service_offering_registrar_preserves_server_associations_with_uuid_ids(self) -> None:
+        requests: list[tuple[str, str, dict[str, Any] | None]] = []
+        server = {
+            "id": "server-id",
+            "name": "context7_server",
+            "associatedToolIds": ["11111111111111111111111111111111"],
+            "associatedTools": ["context7-local-query-docs"],
+            "associatedResources": ["22222222222222222222222222222222"],
+            "associatedPrompts": ["33333333333333333333333333333333"],
+            "associatedA2aAgents": ["44444444444444444444444444444444"],
+            "ownerEmail": "owner@example.test",
+            "visibility": "public",
+        }
+        metadata = service_offering_metadata("context7", server_id="server-id")
+        offering = service_offering_registration.PlannedOffering(
+            offering_id="context7",
+            service_family="context7",
+            instance_dir="context7",
+            instance_path="server-instances/context7/instance.json",
+            server_id="server-id",
+            resource_uri=metadata["resource_uri"],
+            resource_body={"uri": metadata["resource_uri"], "content": json.dumps(metadata)},
+            metadata=metadata,
+        )
+
+        def fake_request(method: str, path: str, *, body: dict[str, Any] | None = None) -> dict[str, Any]:
+            requests.append((method, path, body))
+            return {}
+
+        with mock.patch.object(service_offering_registration, "_request", side_effect=fake_request):
+            service_offering_registration._associate_resource(offering, "55555555555555555555555555555555", [server])
+
+        self.assertEqual([("PUT", "/servers/server-id")], [(method, path) for method, path, _body in requests])
+        body = requests[0][2] or {}
+        self.assertEqual(["11111111111111111111111111111111"], body["associatedTools"])
+        self.assertNotIn("context7-local-query-docs", body["associatedTools"])
+        self.assertEqual(
+            ["22222222222222222222222222222222", "55555555555555555555555555555555"],
+            body["associatedResources"],
+        )
+        self.assertEqual(["33333333333333333333333333333333"], body["associatedPrompts"])
+        self.assertEqual(["44444444444444444444444444444444"], body["associatedA2aAgents"])
 
     def test_capability_menu_omits_missing_manifest_services_when_live_readback_supplied(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as project_tmp, tempfile.TemporaryDirectory(dir=REPO_ROOT) as instances_tmp:
@@ -478,6 +1161,100 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual(
             "/tmp/contextforge-wrapper-token.local.json.lock",
             entry["environment"]["CONTEXTFORGE_TOKEN_LOCK"],
+        )
+
+    def test_opencode_config_plan_falls_back_to_client_scoped_wrapper_env(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4445",
+                "CONTEXTFORGE_ENV": "/some/client-scoped/contextforge-4445.env",
+                "CONTEXTFORGE_CLIENT_SCOPED_ENV": "/some/client-scoped/contextforge-4445.env",
+                "CONTEXTFORGE_TOKEN_CACHE": "/some/client-scoped/contextforge-wrapper-token-4445.local.json",
+            },
+            clear=True,
+        ):
+            plan = binding.plan_project_init_opencode_config_write(
+                "/home/dgk/workspace/legacy-controlplane-archive",
+                [service_descriptor("context7")],
+                existing_text='{"$schema":"https://opencode.ai/config.json"}\n',
+                plugin_existing_text="",
+            )
+
+        entry = json.loads(plan["next_text"])["mcp"]["context7"]
+        environment = entry["environment"]
+        self.assertEqual("http://127.0.0.1:4445", environment["CONTEXTFORGE_BASE_URL"])
+        self.assertEqual("/some/client-scoped/contextforge-4445.env", environment["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual(
+            "/some/client-scoped/contextforge-wrapper-token-4445.local.json",
+            environment["CONTEXTFORGE_TOKEN_CACHE"],
+        )
+        self.assertEqual(
+            "/some/client-scoped/contextforge-wrapper-token-4445.local.json.lock",
+            environment["CONTEXTFORGE_TOKEN_LOCK"],
+        )
+
+    def test_opencode_wrapper_specific_env_overrides_generic_contextforge_env(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/override/contextforge.env",
+                "CONTEXTFORGE_CLIENT_SCOPED_ENV": "/client-scoped/contextforge.env",
+                "CONTEXTFORGE_ENV": "/generic/contextforge.env",
+                "CONTEXTFORGE_CONFIG_ENV": "/wrong/default/contextforge.env",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://127.0.0.1:4445",
+                "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4444",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/override/token-cache.local.json",
+                "CONTEXTFORGE_TOKEN_CACHE": "/generic/token-cache.local.json",
+            },
+            clear=True,
+        ):
+            entry = binding.build_project_init_opencode_binding_entry(service_descriptor("context7"))
+
+        environment = entry["environment"]
+        self.assertEqual("/override/contextforge.env", environment["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual("http://127.0.0.1:4445", environment["CONTEXTFORGE_BASE_URL"])
+        self.assertEqual("/override/token-cache.local.json", environment["CONTEXTFORGE_TOKEN_CACHE"])
+        self.assertEqual("/override/token-cache.local.json.lock", environment["CONTEXTFORGE_TOKEN_LOCK"])
+
+    def test_opencode_project_init_apply_writes_matching_wrapper_env(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.dict(
+            os.environ,
+            {
+                "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4445",
+                "CONTEXTFORGE_ENV": "/some/client-scoped/contextforge-4445.env",
+                "CONTEXTFORGE_CLIENT_SCOPED_ENV": "/some/client-scoped/contextforge-4445.env",
+                "CONTEXTFORGE_TOKEN_CACHE": "/some/client-scoped/contextforge-wrapper-token-4445.local.json",
+            },
+            clear=True,
+        ):
+            root = Path(tmp).resolve()
+            contextforge_helper_mcp._clear_durable_cache(str(root))
+            contextforge_helper_mcp._CACHED_PLANS.clear()
+            contextforge_helper_mcp._CACHED_RECEIPTS.clear()
+            proposal = contextforge_helper_mcp.cf_project_init_propose(
+                str(root),
+                [service_descriptor("context7")],
+                client_type="opencode",
+            )
+            self.assertTrue(proposal["ok"], proposal)
+            challenge = proposal["approval_challenge"]
+            approved = contextforge_helper_mcp.cf_project_init_approve(
+                str(root),
+                challenge["challenge_id"],
+                challenge["plan_digest"],
+            )
+            self.assertTrue(approved["ok"], approved)
+            applied = contextforge_helper_mcp.cf_project_init_apply(str(root))
+            self.assertTrue(applied["ok"], applied)
+            opencode_config = json.loads((root / "opencode.json").read_text(encoding="utf-8"))
+
+        environment = opencode_config["mcp"]["context7"]["environment"]
+        self.assertEqual("http://127.0.0.1:4445", environment["CONTEXTFORGE_BASE_URL"])
+        self.assertEqual("/some/client-scoped/contextforge-4445.env", environment["CONTEXTFORGE_CONFIG_ENV"])
+        self.assertEqual(
+            "/some/client-scoped/contextforge-wrapper-token-4445.local.json",
+            environment["CONTEXTFORGE_TOKEN_CACHE"],
         )
 
     def test_project_init_bindings_do_not_embed_contextforge_bearer_token_material(self) -> None:
@@ -1609,7 +2386,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("RootValidationError", symlink_result["error"]["type"])
 
     def test_pi_reload_report_does_not_change_normal_readback_contract(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[],
+        ):
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
@@ -3449,7 +4230,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         assert_numbered(proposal["next_turn"])
 
     def test_declined_service_decision_blocks_active_import_and_remains_readable(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ):
             root = Path(tmp).resolve()
             result = helper.record_project_init_service_decision(
                 project_root=root,
@@ -4150,7 +4935,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("do not ask for another reload", runtime_report["assistant_visible_response"])
 
     def test_opencode_readback_distinguishes_mcp_startup_failure_from_reload_pending(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[],
+        ):
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
@@ -4264,7 +5053,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 self.assertIn("do not ask for another reload", readback["assistant_visible_response"])
 
     def test_contextforge_helper_mcp_reports_missing_target_client_projection_without_available_tools(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[
+                registry_service_descriptor("context7"),
+                registry_service_descriptor("github"),
+            ],
+        ):
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
@@ -4496,7 +5292,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("opencode", base_state["services"]["github:canonical"]["target_clients"])
 
     def test_alignment_import_continuation_turn_builds_opencode_approval_package(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ):
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
@@ -4526,7 +5326,7 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("align-existing-project-services", offer["next_turn"]["question_id"])
         self.assertTrue(proposal["ok"], proposal)
         self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
-        self.assertIn("Plan ready for context7.", proposal["assistant_visible_response"])
+        self.assertIn("plan ready for context7.", proposal["assistant_visible_response"].lower())
         self.assertNotIn("Plan ready for context7:canonical", proposal["assistant_visible_response"])
         self.assertIn("opencode.json", proposal["assistant_visible_response"])
         self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
@@ -4659,7 +5459,17 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("Repair this project's existing github projection for opencode without provisioning a new project service instance.", by_binding["github:canonical"]["user_visible_effect"])
 
     def test_contextforge_helper_mcp_reports_project_capability_summary_read_only(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[
+                registry_service_descriptor(
+                    "exa-search",
+                    binding="exa-search:credential_scoped",
+                    instantiation_class="credential_scoped",
+                )
+            ],
+        ):
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
@@ -4709,6 +5519,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("context7:canonical", visible)
         self.assertIn("web-search:credential_scoped", visible)
         self.assertIn("no arbitrary service onboarding", result["non_actions"])
+
+    def test_project_capability_summary_uses_registry_catalog_not_local_manifests(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ), mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            side_effect=AssertionError("capability summary must not use manifest-backed product discovery"),
+        ):
+            result = contextforge_helper_mcp.project_capability_summary(str(Path(tmp).resolve()), client_type="pi")
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(["context7"], [item["capability"] for item in result["onboarding_needed"]])
 
     def test_contextforge_helper_mcp_reports_project_state_readback_read_only(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
@@ -4880,7 +5705,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("new session", applied["next_turn"]["prompt"].lower())
 
     def test_opencode_continue_recovers_recorded_cwd_when_model_supplies_root_slash(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -4901,12 +5730,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertEqual(str(root), proposal["project_root"])
             self.assertIn("assistant_visible_response", proposal)
             self.assertEqual(["context7:canonical"], proposal["selected_service_bindings"])
-            self.assertIn("Plan ready for context7.", proposal["assistant_visible_response"])
+            self.assertIn("plan ready for context7.", proposal["assistant_visible_response"].lower())
             self.assertNotIn("context7:canonical", proposal["assistant_visible_response"])
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
 
     def test_opencode_continue_accepts_natural_service_selection(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        registry_offerings = [
+            registry_service_descriptor("context7"),
+            registry_service_descriptor("mentality", binding="mentality:static_repo_local", instantiation_class="static_repo_local"),
+            registry_service_descriptor("ssh-tmux", binding="ssh-tmux:session_scoped", instantiation_class="session_scoped"),
+        ]
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=registry_offerings,
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -4949,7 +5787,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
 
     def test_pi_continue_accepts_recorded_natural_service_selection(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "pi-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -4972,7 +5814,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
 
     def test_pi_continue_maps_pending_serena_numeric_defer_to_non_serena_plan(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7"), registry_service_descriptor("serena")],
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "pi-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -5002,7 +5848,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIsNone(pending_input)
 
     def test_opencode_continue_preserves_all_services_selection_through_language_input(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        registry_offerings = [
+            registry_service_descriptor("context7"),
+            registry_service_descriptor("exa-search", binding="exa-search:credential_scoped", instantiation_class="credential_scoped"),
+            registry_service_descriptor("github", binding="github:credential_scoped", instantiation_class="credential_scoped"),
+            registry_service_descriptor("mentality", binding="mentality:static_repo_local", instantiation_class="static_repo_local"),
+            registry_service_descriptor("playwright"),
+            registry_service_descriptor("ssh-tmux", binding="ssh-tmux:session_scoped", instantiation_class="session_scoped"),
+            registry_service_descriptor("web-search", binding="web-search:credential_scoped", instantiation_class="credential_scoped"),
+            registry_service_descriptor("serena"),
+        ]
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=registry_offerings,
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -5020,8 +5880,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("Which language", language_turn["assistant_visible_response"])
             self.assertTrue(proposal["ok"], proposal)
             self.assertEqual("project_init", proposal["workflow"])
-            self.assertEqual(10, len(proposal["selected_service_bindings"]))
-            self.assertIn("time:canonical", proposal["selected_service_bindings"])
+            self.assertEqual(8, len(proposal["selected_service_bindings"]))
+            self.assertNotIn("time:canonical", proposal["selected_service_bindings"])
             self.assertIn("serena:", " ".join(proposal["selected_service_bindings"]))
             self.assertIn("language=python", proposal["assistant_visible_response"])
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
@@ -6360,9 +7220,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_service_management_list_uses_simple_status_surface(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
-            contextforge_helper_mcp.common,
-            "discover_contextforge_hosted_services",
-            return_value=[service_descriptor("context7")],
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
         ):
             root = Path(tmp).resolve()
             result = contextforge_helper_mcp.service_management_list(str(root), client_type="pi")
@@ -6375,11 +7235,543 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("activation_class", result["assistant_visible_response"])
         self.assertNotIn("virtual server", result["assistant_visible_response"].lower())
 
-    def test_service_management_enable_confirm_applies_project_state(self) -> None:
+    def test_service_management_list_does_not_use_manifest_discovery_as_product_truth(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ), mock.patch.object(
             contextforge_helper_mcp.common,
             "discover_contextforge_hosted_services",
-            return_value=[service_descriptor("context7")],
+            side_effect=AssertionError("ordinary service menu must not read manifest-backed discovery"),
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.service_management_details(str(root), "context7", client_type="pi")
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("service_management_details", result["status"])
+        self.assertEqual("contextforge_registry", result["service"]["catalog_source"])
+
+    def test_project_init_list_does_not_use_manifest_discovery_as_product_truth(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ), mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            side_effect=AssertionError("project-init service menu must not read manifest-backed discovery"),
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.list_available_capabilities(str(root), client_type="pi")
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("context7:canonical", result["available_services"][0]["service_binding"])
+        self.assertIn("1. context7 - Available", result["assistant_visible_response"])
+
+    def test_opencode_continue_initial_menu_uses_registry_offerings_only(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ), mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            side_effect=AssertionError("project-init continuation menu must not read manifest-backed discovery"),
+        ):
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": ""}) + "\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                result = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="opencode")
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(["context7:canonical"], [item["service_binding"] for item in result["available_services"]])
+        self.assertIn("1. context7 - Available", result["assistant_visible_response"])
+        self.assertNotIn("time", result["assistant_visible_response"].lower())
+
+    def test_opencode_continue_all_services_omits_manifest_only_services(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7"), registry_service_descriptor("github")],
+        ), mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            side_effect=AssertionError("project-init continuation selection must not read manifest-backed discovery"),
+        ):
+            root = Path(tmp).resolve()
+            approval_source = Path(run_tmp) / "opencode-latest-user-message.json"
+            approval_source.write_text(json.dumps({"cwd": str(root), "text": "all services"}) + "\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_source)}):
+                result = contextforge_helper_mcp.cf_project_init_continue(str(root), client_type="opencode")
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(["context7:canonical", "github:canonical"], result["selected_service_bindings"])
+        self.assertNotIn("time:canonical", result["selected_service_bindings"])
+
+    def test_service_management_list_numbers_visible_service_choices(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7"), registry_service_descriptor("github")],
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.service_management_list(str(root), client_type="opencode")
+
+        self.assertTrue(result["ok"], result)
+        self.assertIn("1. context7 - Available", result["assistant_visible_response"])
+        self.assertIn("2. github - Available", result["assistant_visible_response"])
+        self.assertIn("Reply with service names or numbers", result["assistant_visible_response"])
+
+    def test_service_management_list_does_not_resurrect_state_only_services(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[],
+        ):
+            root = Path(tmp).resolve()
+            state = project_state.default_state(root, status="initialized")
+            service = service_descriptor("context7")
+            config_plan = binding.plan_project_init_codex_config_write(root, [service], existing_text="")
+            validation_plan = binding.build_project_init_validation_plan([service], validation_mode="presume_working")
+            state = project_state.apply_project_init_activation_to_state(
+                state,
+                [service],
+                target_client="pi",
+                client_config_plan=config_plan,
+                validation_plan=validation_plan,
+                consent_receipt_refs=CONSENT_REFS,
+            )
+            project_state.write_state_atomic(root, state, updated_by="test")
+            result = contextforge_helper_mcp.service_management_list(str(root), client_type="pi")
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([], result["services"])
+        self.assertIn("No ContextForge services are available.", result["assistant_visible_response"])
+
+    def test_service_management_list_reports_catalog_unavailable_without_empty_catalog_claim(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            side_effect=contextforge_helper_mcp.ContextForgeCatalogUnavailable("http://host.docker.internal:4445", "HTTP 401 Unauthorized"),
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.service_management_list(str(root), client_type="pi")
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("contextforge_catalog_unavailable", result["status"])
+        self.assertEqual([], result["services"])
+        self.assertIn("service catalog unavailable", result["assistant_visible_response"])
+        self.assertIn("No project files or service configuration were changed.", result["assistant_visible_response"])
+        self.assertNotIn("No ContextForge services are available.", result["assistant_visible_response"])
+
+    def test_service_management_enable_reports_catalog_unavailable_before_service_lookup(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            side_effect=contextforge_helper_mcp.ContextForgeCatalogUnavailable("http://host.docker.internal:4445", "HTTP 401 Unauthorized"),
+        ):
+            root = Path(tmp).resolve()
+            result = contextforge_helper_mcp.service_management_enable(str(root), "context7", client_type="opencode", confirm=True)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("contextforge_catalog_unavailable", result["status"])
+        self.assertNotIn("unknown ContextForge service", result["assistant_visible_response"])
+
+    def test_every_catalog_reading_helper_boundary_returns_visible_unavailable_outcome(self) -> None:
+        unavailable = contextforge_helper_mcp.ContextForgeCatalogUnavailable(
+            "http://host.docker.internal:4445",
+            "HTTP 401 Unauthorized",
+        )
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            side_effect=unavailable,
+        ):
+            root = Path(tmp).resolve()
+            calls = {
+                "capability_summary": lambda: contextforge_helper_mcp.project_capability_summary(
+                    str(root),
+                    client_type="opencode",
+                ),
+                "public_capability_summary": lambda: contextforge_helper_mcp.get_project_capability_summary(
+                    str(root),
+                    client_type="opencode",
+                ),
+                "project_init_list": lambda: contextforge_helper_mcp.list_available_capabilities(
+                    str(root),
+                    client_type="opencode",
+                ),
+                "project_init_continue": lambda: contextforge_helper_mcp.cf_project_init_continue(
+                    str(root),
+                    client_type="opencode",
+                ),
+            }
+            for boundary, call in calls.items():
+                with self.subTest(boundary=boundary):
+                    result = call()
+                    self.assertFalse(result["ok"], result)
+                    self.assertEqual("contextforge_catalog_unavailable", result["status"])
+                    self.assertEqual(
+                        result["assistant_visible_response"],
+                        result["message"],
+                    )
+                    self.assertTrue(result["copy_as_complete_visible_response"])
+                    self.assertTrue(result["do_not_summarize"])
+                    self.assertIn("service catalog unavailable", result["assistant_visible_response"])
+                    self.assertNotIn("ContextForgeCatalogUnavailable", result["assistant_visible_response"])
+
+            self.assertEqual([], list(root.iterdir()))
+
+    def test_helper_catalog_collections_fail_visibly_on_malformed_api_shapes(self) -> None:
+        request_type_error = object()
+        malformed_detail = object()
+        cases = [
+            ("null", None),
+            ("string", "wrong"),
+            ("integer", 7),
+            ("nan", float("nan")),
+            ("empty_object", {}),
+            ("null_items", {"items": None}),
+            ("string_items", {"items": "wrong"}),
+            ("non_object_item", {"items": [None]}),
+            ("request_type_error", request_type_error),
+            ("malformed_resource_detail", malformed_detail),
+        ]
+        with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
+            env_file.write("CONTEXTFORGE_BEARER_TOKEN=redacted-test-token\n")
+            env_path = Path(env_file.name)
+        try:
+            for label, malformed in cases:
+                with self.subTest(label=label), tempfile.TemporaryDirectory(
+                    dir=project_state.WORKSPACE_ROOT
+                ) as tmp:
+                    root = Path(tmp).resolve()
+                    contextforge_helper_mcp._CONTEXTFORGE_READBACK_CACHE.clear()
+
+                    def fake_request(base_url: str, path: str, token: str) -> Any:
+                        self.assertEqual("http://cf.example", base_url)
+                        self.assertEqual("catalog-token", token)
+                        if path.startswith("/resources?"):
+                            if malformed is request_type_error:
+                                raise TypeError("synthetic collection decoder failure")
+                            if malformed is malformed_detail:
+                                return {
+                                    "items": [
+                                        {
+                                            "id": "resource-context7-offering",
+                                            "uri": "contextforge://control-plane/service-offerings/context7/v1",
+                                            "tags": ["contextforge-service-offering"],
+                                        }
+                                    ]
+                                }
+                            return malformed
+                        if path == "/resources/resource-context7-offering":
+                            return None
+                        if path.startswith("/servers?") or path.startswith("/gateways?"):
+                            return {"items": []}
+                        raise AssertionError(path)
+
+                    with mock.patch.object(
+                        contextforge_helper_mcp,
+                        "_contextforge_target",
+                        return_value=(env_path, "http://cf.example"),
+                    ), mock.patch(
+                        "contextforge_mcp_wrapper._read_env",
+                        return_value={"CONTEXTFORGE_BEARER_TOKEN": "redacted-test-token"},
+                    ), mock.patch(
+                        "contextforge_mcp_wrapper._token",
+                        return_value="catalog-token",
+                    ), mock.patch.object(
+                        contextforge_helper_mcp,
+                        "_contextforge_request",
+                        side_effect=fake_request,
+                    ), mock.patch.dict(
+                        os.environ,
+                        {"CONTEXTFORGE_HELPER_CATALOG_CACHE_SECONDS": "0"},
+                        clear=False,
+                    ):
+                        result = contextforge_helper_mcp.service_management_list(
+                            str(root),
+                            client_type="opencode",
+                        )
+
+                    self.assertFalse(result["ok"], result)
+                    self.assertEqual("contextforge_catalog_unavailable", result["status"])
+                    self.assertEqual([], result["services"])
+                    self.assertIn("service catalog unavailable", result["assistant_visible_response"])
+                    self.assertNotIn("No ContextForge services are available", result["assistant_visible_response"])
+                    self.assertEqual([], list(root.iterdir()))
+        finally:
+            env_path.unlink(missing_ok=True)
+
+    def test_helper_catalog_resource_details_require_matching_identity_and_content(self) -> None:
+        resource_id = "resource-context7-offering"
+
+        class HostileDetail(Mapping):
+            def __getitem__(self, key: str) -> Any:
+                if key == "id":
+                    return resource_id
+                if key == "content":
+                    return "{}"
+                raise KeyError(key)
+
+            def __iter__(self):
+                return iter(("id", "content"))
+
+            def __len__(self) -> int:
+                return 2
+
+        malformed_details = {
+            "empty_object": {},
+            "collection_object": {"items": []},
+            "id_only": {"id": resource_id},
+            "null_content": {"id": resource_id, "content": None},
+            "scalar_content_shadowing_text": {"id": resource_id, "content": 7, "text": "{}"},
+            "nan_content_object": {"id": resource_id, "content": {"value": float("nan")}},
+            "missing_id": {"content": "{}"},
+            "non_string_id": {"id": 7, "content": "{}"},
+            "mismatched_id": {"id": "another-resource", "content": "{}"},
+            "whitespace_detail_id": {"id": f" {resource_id} ", "content": "{}"},
+            "hostile_mapping": HostileDetail(),
+            "non_native_list_id": {"id": "7", "content": "{}"},
+            "whitespace_list_id": {"id": f" {resource_id} ", "content": "{}"},
+            "internal_whitespace_list_id": {"id": "resource context7", "content": "{}"},
+            "unicode_whitespace_list_id": {"id": "resource\u2003context7", "content": "{}"},
+        }
+        with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
+            env_file.write("CONTEXTFORGE_BEARER_TOKEN=redacted-test-token\n")
+            env_path = Path(env_file.name)
+        try:
+            for label, detail in malformed_details.items():
+                with self.subTest(label=label), tempfile.TemporaryDirectory(
+                    dir=project_state.WORKSPACE_ROOT
+                ) as tmp:
+                    root = Path(tmp).resolve()
+                    contextforge_helper_mcp._CONTEXTFORGE_READBACK_CACHE.clear()
+
+                    def fake_request(base_url: str, path: str, token: str) -> Any:
+                        self.assertEqual("http://cf.example", base_url)
+                        self.assertEqual("catalog-token", token)
+                        if path.startswith("/resources?"):
+                            row_id: Any = resource_id
+                            if label == "non_native_list_id":
+                                row_id = 7
+                            elif label == "whitespace_list_id":
+                                row_id = f" {resource_id} "
+                            elif label == "internal_whitespace_list_id":
+                                row_id = "resource context7"
+                            elif label == "unicode_whitespace_list_id":
+                                row_id = "resource\u2003context7"
+                            return {
+                                "items": [
+                                    {
+                                        "id": row_id,
+                                        "uri": "contextforge://control-plane/service-offerings/context7/v1",
+                                        "tags": ["contextforge-service-offering"],
+                                    }
+                                ]
+                            }
+                        if path.startswith("/resources/"):
+                            return detail
+                        if path.startswith("/servers?") or path.startswith("/gateways?"):
+                            return {"items": []}
+                        raise AssertionError(path)
+
+                    with mock.patch.object(
+                        contextforge_helper_mcp,
+                        "_contextforge_target",
+                        return_value=(env_path, "http://cf.example"),
+                    ), mock.patch(
+                        "contextforge_mcp_wrapper._read_env",
+                        return_value={"CONTEXTFORGE_BEARER_TOKEN": "redacted-test-token"},
+                    ), mock.patch(
+                        "contextforge_mcp_wrapper._token",
+                        return_value="catalog-token",
+                    ), mock.patch.object(
+                        contextforge_helper_mcp,
+                        "_contextforge_request",
+                        side_effect=fake_request,
+                    ), mock.patch.object(
+                        contextforge_helper_mcp.project_state,
+                        "write_state_atomic",
+                        side_effect=AssertionError("catalog failure must not mutate project state"),
+                    ), mock.patch.dict(
+                        os.environ,
+                        {"CONTEXTFORGE_HELPER_CATALOG_CACHE_SECONDS": "0"},
+                        clear=False,
+                    ):
+                        result = contextforge_helper_mcp.service_management_list(
+                            str(root),
+                            client_type="opencode",
+                        )
+
+                    self.assertFalse(result["ok"], result)
+                    self.assertEqual("contextforge_catalog_unavailable", result["status"])
+                    self.assertEqual([], result["services"])
+                    self.assertNotIn("No ContextForge services are available", result["assistant_visible_response"])
+                    self.assertEqual([], list(root.iterdir()))
+        finally:
+            env_path.unlink(missing_ok=True)
+
+    def test_helper_catalog_uses_wrapper_target_instead_of_stale_generic_values(self) -> None:
+        import contextforge_mcp_wrapper as wrapper
+
+        with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
+            selected_env = Path(env_file.name)
+        try:
+            with mock.patch.object(wrapper, "TARGET_CONFIGURATION_ERROR", ""), mock.patch.object(
+                wrapper,
+                "CONFIG_ENV",
+                selected_env,
+            ), mock.patch.object(
+                wrapper,
+                "GATEWAY_BASE",
+                "http://host.docker.internal:4445",
+            ), mock.patch.object(
+                contextforge_helper_mcp.common,
+                "contextforge_env_path",
+                side_effect=AssertionError("helper must not select generic env independently"),
+            ), mock.patch.object(
+                contextforge_helper_mcp.common,
+                "contextforge_base_url",
+                side_effect=AssertionError("helper must not select stale generic base independently"),
+            ):
+                env_path, base_url = contextforge_helper_mcp._contextforge_target()
+
+            self.assertEqual(selected_env, env_path)
+            self.assertEqual("http://host.docker.internal:4445", base_url)
+        finally:
+            selected_env.unlink(missing_ok=True)
+
+    def test_helper_catalog_selects_complete_opencode_profile_with_stale_generic_environment(self) -> None:
+        import contextforge_mcp_wrapper as wrapper
+
+        with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
+            selected_env = Path(env_file.name)
+        try:
+            env = os.environ.copy()
+            for key in {
+                *wrapper.GENERIC_TARGET_KEYS,
+                *(key for keys in wrapper.TARGET_PROFILE_KEYS.values() for key in keys),
+                "CONTEXTFORGE_TOKEN_LOCK",
+            }:
+                env.pop(key, None)
+            env.update(
+                {
+                    "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": str(selected_env),
+                    "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+                    "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/tmp/opencode-target-token.local.json",
+                    "CONTEXTFORGE_CONFIG_ENV": "/tmp/stale-generic-contextforge.env",
+                    "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4444",
+                    "CONTEXTFORGE_TOKEN_CACHE": "/tmp/stale-generic-token.local.json",
+                    "CONTEXTFORGE_TOKEN_LOCK": "/tmp/stale-generic-token.local.json.lock",
+                }
+            )
+            code = (
+                "import json,sys; "
+                f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); "
+                "import contextforge_helper_mcp as h; "
+                "env_path,base_url=h._contextforge_target(); "
+                "print(json.dumps({'env':str(env_path),'base':base_url}))"
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-c", code],
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+
+            selected = json.loads(result.stdout)
+            self.assertEqual(str(selected_env), selected["env"])
+            self.assertEqual("http://host.docker.internal:4445", selected["base"])
+            self.assertNotIn("4444", result.stdout)
+        finally:
+            selected_env.unlink(missing_ok=True)
+
+    def test_helper_catalog_rejects_wrapper_target_profile_conflicts(self) -> None:
+        import contextforge_mcp_wrapper as wrapper
+
+        with mock.patch.object(
+            wrapper,
+            "TARGET_CONFIGURATION_ERROR",
+            "multiple complete ContextForge target profiles are configured: opencode, codex",
+        ), mock.patch.object(
+            wrapper,
+            "GATEWAY_BASE",
+            "http://host.docker.internal:4445",
+        ):
+            with self.assertRaises(contextforge_helper_mcp.ContextForgeCatalogUnavailable) as raised:
+                contextforge_helper_mcp._contextforge_target()
+
+        self.assertIn("multiple complete ContextForge target profiles", str(raised.exception))
+
+    def test_live_registry_readback_fetches_full_service_offering_resource_content(self) -> None:
+        with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
+            env_file.write("CONTEXTFORGE_BEARER_TOKEN=redacted-test-token\n")
+            env_path = Path(env_file.name)
+        calls: list[str] = []
+
+        def fake_request(base_url: str, path: str, token: str) -> Any:
+            self.assertEqual("http://cf.example", base_url)
+            self.assertEqual("token", token)
+            calls.append(path)
+            if path.startswith("/servers?"):
+                return {"items": []}
+            if path.startswith("/gateways?"):
+                return {"items": []}
+            if path.startswith("/resources?"):
+                return {
+                    "items": [
+                        {
+                            "id": "resource-context7-offering",
+                            "uri": "contextforge://control-plane/service-offerings/context7/v1",
+                            "tags": ["contextforge-service-offering"],
+                        },
+                        {"id": "ordinary-resource", "tags": ["service-guidance"]},
+                    ]
+                }
+            if path == "/resources/resource-context7-offering":
+                return {
+                    "id": "resource-context7-offering",
+                    "uri": "contextforge://control-plane/service-offerings/context7/v1",
+                    "tags": ["contextforge-service-offering"],
+                    "content": json.dumps(service_offering_metadata()),
+                }
+            raise AssertionError(path)
+
+        try:
+            with mock.patch.object(
+                contextforge_helper_mcp,
+                "_contextforge_target",
+                return_value=(env_path, "http://cf.example"),
+            ), mock.patch("contextforge_mcp_wrapper._read_env", return_value={"CONTEXTFORGE_BEARER_TOKEN": "redacted-test-token"}), mock.patch(
+                "contextforge_mcp_wrapper._token", return_value="token"
+            ), mock.patch.object(contextforge_helper_mcp, "_contextforge_request", side_effect=fake_request):
+                readback = contextforge_helper_mcp._live_contextforge_registry_readback()
+        finally:
+            env_path.unlink(missing_ok=True)
+
+        self.assertIn("/resources/resource-context7-offering", calls)
+        service_resources = [
+            resource for resource in readback["resources"] if resource.get("id") == "resource-context7-offering"
+        ]
+        self.assertEqual(1, len(service_resources))
+        self.assertIn("content", service_resources[0])
+
+    def test_service_management_enable_confirm_applies_project_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ), mock.patch.object(
+            contextforge_helper_mcp.common,
+            "discover_contextforge_hosted_services",
+            side_effect=AssertionError("service-management enable must use CF metadata descriptor, not local manifest discovery"),
         ):
             root = Path(tmp).resolve()
             result = contextforge_helper_mcp.service_management_enable(
@@ -6398,6 +7790,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_service_management_repair_enables_available_service(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ), mock.patch.object(
             contextforge_helper_mcp.common,
             "discover_contextforge_hosted_services",
             return_value=[service_descriptor("context7")],
@@ -6415,6 +7811,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_service_management_disable_removes_owned_opencode_exposure_and_preserves_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ), mock.patch.object(
             contextforge_helper_mcp.common,
             "discover_contextforge_hosted_services",
             return_value=[service_descriptor("context7")],
@@ -6448,6 +7848,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_service_management_remove_removes_owned_opencode_exposure_and_project_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ), mock.patch.object(
             contextforge_helper_mcp.common,
             "discover_contextforge_hosted_services",
             return_value=[service_descriptor("context7")],
@@ -6479,9 +7883,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_service_management_remove_requires_typed_service_name(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
-            contextforge_helper_mcp.common,
-            "discover_contextforge_hosted_services",
-            return_value=[service_descriptor("context7")],
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
         ) as _catalog:
             root = Path(tmp).resolve()
             state = project_state.default_state(root, status="initialized")
@@ -6505,9 +7909,9 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_service_management_remove_rejects_available_service(self) -> None:
         with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
-            contextforge_helper_mcp.common,
-            "discover_contextforge_hosted_services",
-            return_value=[service_descriptor("context7")],
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
         ):
             root = Path(tmp).resolve()
             result = contextforge_helper_mcp.service_management_remove(

@@ -1,6 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "{env:CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}",
+  "model": "litellm/codex/gpt-5.6-luna",
+  "small_model": "litellm/codex/gpt-5.6-luna",
+  "enabled_providers": ["litellm"],
+  "agent": {
+    "build": {
+      "model": "litellm/codex/gpt-5.6-luna",
+      "variant": "medium"
+    }
+  },
   "mcp": {
     "contextforge-helper": {
       "type": "local",
@@ -21,8 +29,47 @@
     }
   },
   "provider": {
-    "openrouter": {
-      "models": {}
+    "litellm": {
+      "name": "LiteLLM",
+      "npm": "@ai-sdk/openai",
+      "options": {
+        "apiKey": "{env:LITELLM_API_KEY}",
+        "baseURL": "{env:LITELLM_BASE_URL}"
+      },
+      "whitelist": [
+        "codex/gpt-5.6-terra",
+        "codex/gpt-5.6-luna",
+        "codex/gpt-5.6-sol"
+      ],
+      "models": {
+        "codex/gpt-5.6-terra": {
+          "name": "GPT-5.6 Terra (human)",
+          "reasoning": true,
+          "variants": {
+            "high": {
+              "reasoningEffort": "high"
+            }
+          }
+        },
+        "codex/gpt-5.6-luna": {
+          "name": "GPT-5.6 Luna (blind/default)",
+          "reasoning": true,
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            }
+          }
+        },
+        "codex/gpt-5.6-sol": {
+          "name": "GPT-5.6 Sol (evaluator)",
+          "reasoning": true,
+          "variants": {
+            "high": {
+              "reasoningEffort": "high"
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -33,18 +33,18 @@ use.
 ## Roles
 
 - Tested assistant: a real Pi or OpenCode client session launched through the
-  Docker client harness.
+  Docker client harness with Luna (`codex/gpt-5.6-luna`) through LiteLLM and
+  `medium` reasoning.
 - Simulated human responder: a separate model/persona that answers only the
-  tested assistant's user-facing questions. Acceptance-matrix runs use a Pi
-  gpt-5.5 authenticated simulator with `low` thinking unless the controller
-  records a specific equivalent substitute; seeded or direct-provider
-  responders are debug scaffolding.
+  tested assistant's user-facing questions. Acceptance-matrix runs use Terra
+  (`codex/gpt-5.6-terra`) through Pi's LiteLLM provider with `high` thinking;
+  seeded responders are debug scaffolding and direct providers are rejected.
 - Deterministic runner: resets state, launches containers, records commands,
   captures transcripts, enforces role separation, and packages evidence.
 - Semantic evaluator: a non-Spark evaluator that reviews evidence and decides
-  process adequacy. Prefer Codex CLI `exec` with `gpt-5.5`,
-  `-c model_reasoning_effort="high"`, and `--output-schema <FILE>` for
-  evaluator runs. The runner does not decide semantic pass/fail.
+  process adequacy. Use Sol (`litellm/codex/gpt-5.6-sol`) through sandbox
+  OpenCode with the `high` variant. The runner does not decide semantic
+  pass/fail.
 
 Codex subagents may review or evaluate evidence, but they are not the tested
 assistant for this gate. A Codex-only onboarding run proves nothing about Pi or
@@ -182,7 +182,7 @@ The runner also records
 simulated-human cooperation multiplier. At 15/20 or higher, the responder
 should be relentlessly constructive about helping the assistant reach
 successful ContextForge onboarding while still honoring the persona's knowledge
-and approval boundaries. Across three-model quorum batches, all runs in the
+ and approval boundaries. Across three-run Luna quorum batches, all runs in the
 same batch use the same `n`; the next batch adapts from the first three
 structural onboarding outcomes: all three fail => `n += 2`; two fail =>
 `n += 1`; one fails => no change; all three succeed => `n -= 1`, clamped to
@@ -203,18 +203,17 @@ tested assistant receives only the human message, never the control metadata.
 For each foil:
 
 - clients: `pi`, `opencode`;
-- semantic-test model profiles: at least three distinct eligible profiles per
-  client;
+- tested-assistant runs: at least three independent Luna/medium runs per client;
 - user persona coverage: the matrix must include at least one low-knowledge
   user, one higher-knowledge user, and at least two distinct risk postures;
 - execution: isolated target-client home, workspace, scoped credentials,
-  session id, and evidence root per client/model/persona run.
+  session id, and evidence root per client/Luna/persona run.
 
 The same foil can fail in one persona and pass in another. Acceptance requires
 the declared run matrix to pass semantically or for failures to be remediated
 and rerun from fresh state.
 
-Each client/model/persona run must budget enough interaction for a real
+Each client/Luna/persona run must budget enough interaction for a real
 onboarding conversation without coaching or truncation. The proper length is
 persona- and outcome-dependent and should become more determinate as the
 overall onboarding system evolves. All else equal, the interaction should be
@@ -263,7 +262,7 @@ The runner must:
   MCP service, tools, virtual server, prompts, and resources plus
   available-capabilities readback for activation-menu exposure; stop as invalid
   if the foil is already visible;
-- choose one semantic-test model profile for the full run;
+- keep the Luna/medium semantic-test model profile fixed for the full run;
 - start non-ephemeral Pi/OpenCode containers;
 - maintain distinct session ids for tested assistant and simulated human;
 - record every prompt, answer, command, model profile, return code, timeout,
@@ -277,7 +276,7 @@ The runner must:
   seeded/debug, including a redacted responder model profile when model-backed;
 - package source helper records, runtime readbacks, registration readbacks,
   target-client transcripts, and cleanup evidence;
-- declare `semantic_acceptance: requires_non_spark_evaluator`;
+- declare `semantic_acceptance: requires_sol_evaluator`;
 - avoid deterministic scoring of free-form prose.
 
 Allowed deterministic checks are command status, JSON structure, artifact
@@ -291,18 +290,14 @@ regex matching.
 
 ## Evaluator Criteria
 
-Use Codex CLI `exec` with `gpt-5.5`,
-`-c model_reasoning_effort="high"`, and `--output-schema <FILE>` for semantic
-evaluator judgment by default. Use a lower thinking level or a different
-surface only when the controller records an explicit evidence-backed reason.
-The semantic evaluator performs high-dimensional judgment over meaning, route
-adequacy, claim boundaries, leakage, recovery, and efficiency; it is not a
-deterministic transcript scorer. Structured output constrains the evaluator
-artifact shape, not the semantic judgment. Capture raw evaluator events as
-internal evidence when useful, but suppress raw thinking tokens in shared or
-user-facing evidence by default and report conclusions plus concise rationale
-instead. Rendering raw thinking tokens is an explicit design decision that must
-be surface-labeled and justified.
+Use Sol (`litellm/codex/gpt-5.6-sol`) through sandbox OpenCode with the `high`
+variant for semantic evaluator judgment. A different role binding requires an
+explicit evidence-backed reason. The semantic evaluator performs
+high-dimensional judgment over meaning, route adequacy, claim boundaries,
+leakage, recovery, and efficiency; it is not a deterministic transcript scorer.
+Structured validation constrains the evaluator artifact shape, not the semantic
+judgment. Capture raw evaluator events as internal evidence when useful, but
+suppress raw reasoning tokens in shared or user-facing evidence by default.
 
 The evaluator must judge:
 

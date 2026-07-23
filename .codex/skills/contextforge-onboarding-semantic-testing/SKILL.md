@@ -1,9 +1,19 @@
 ---
 name: contextforge-onboarding-semantic-testing
-description: Run ContextForge MCP service-onboarding semantic process gates through real Pi and OpenCode target-client sessions. Use when Codex needs to design, run, evaluate, or refine source-lead-only onboarding proofs where a tested assistant starts from an upstream URL or lead, a simulated human responder answers questions, model-profile quorum evidence is required, and Codex subagents must not substitute for target-client behavior.
+description: Legacy/quarantined ContextForge MCP source-lead onboarding semantic process gate. Do not use for current service-management work unless a later explicit governance decision revives arbitrary/new MCP onboarding.
 ---
 
 # ContextForge Onboarding Semantic Testing
+
+## Rollback Quarantine
+
+This skill documents the abandoned source-lead/new-MCP onboarding ambition. It
+is retained as historical method evidence only. Current product direction is
+CF-registry/catalog known-service management: list, enable, disable, remove,
+repair, details, and target-client proof for services already represented in
+ContextForge with helper metadata. Do not dispatch runs from this skill, create
+foil ladders, or instruct assistants to generate new MCP Docker/API packages
+unless a later explicit governance decision reopens that roadmap.
 
 ## Overview
 
@@ -107,20 +117,17 @@ rollback actions and residual cleanup risk.
 
 - Controller: owns branch/GitHub state, runner package readiness, remediation,
   and final acceptance.
-- Tested assistant: real Pi or OpenCode client session launched through the
-  Docker client harness.
+- Tested assistant: real Pi or OpenCode client session using Luna/medium through
+  the Docker client harness LiteLLM provider.
 - Simulated human responder: separate persona that answers only the tested
-  assistant's user-facing questions. Acceptance-matrix runs use a Pi
-  gpt-5.5 authenticated simulator with `low` thinking unless the controller
-  records a specific equivalent substitute; seeded or direct-provider
-  responders are debug scaffolding.
-- Deterministic runner: resets state, launches clients, selects one model
-  profile per run, records transcripts, and packages evidence.
+  assistant's user-facing questions. Acceptance-matrix runs use Terra
+  (`codex/gpt-5.6-terra`) through Pi's LiteLLM provider with `high` thinking;
+  seeded responders are debug scaffolding and direct providers are rejected.
+- Deterministic runner: resets state, launches clients, keeps Luna/medium fixed
+  for every tested-assistant run, records transcripts, and packages evidence.
 - Semantic evaluator: non-Spark model or SO that judges meaning, route
-  adequacy, claim boundaries, and process success. Prefer Codex CLI `exec`
-  with `gpt-5.5`, `-c model_reasoning_effort="high"`, and
-  `--output-schema <FILE>` for evaluator runs. Use Pi as evaluator only as a
-  fallback when Codex CLI is unavailable or auth-blocked.
+  adequacy, claim boundaries, and process success. Use Sol
+  (`litellm/codex/gpt-5.6-sol`) through sandbox OpenCode with the `high` variant.
 
 ## Veil Rule
 
@@ -174,7 +181,7 @@ helpful toward successful onboarding: answer questions from visible context,
 approve bounded safe next steps when appropriate, request concrete corrections
 instead of derailing, and keep the interaction moving while honoring persona
 knowledge and approval boundaries.
-For three-model quorum batches, all runs in a batch use the same `n`. The next
+For three-run Luna quorum batches, all runs in a batch use the same `n`. The next
 batch adapts from the first three structural onboarding outcomes: if all three
 fail, `n += 2`; if two fail, `n += 1`; if one fails, no change; if all three
 succeed, `n -= 1`. Clamp `n` to `1..20`. This is simulated-human behavior
@@ -185,10 +192,10 @@ control only; it is not sent as hidden guidance to the tested assistant.
 For each onboarding foil, acceptance requires:
 
 - target clients: `pi` and `opencode`;
-- at least three distinct eligible semantic-test model profiles per target
+- at least three independent Luna/medium tested-assistant runs per target
   client;
 - isolated home, workspace, scoped credentials, container name, session id, and
-  evidence root per client/model/persona run;
+  evidence root per client/Luna/persona run;
 - at least one low-knowledge persona, one higher-knowledge persona, and two
   distinct risk postures across the accepted matrix.
 - enough interaction budget for the persona and outcome, without treating a
@@ -268,17 +275,13 @@ failure. Do not rewrite the story into a scripted substitute.
 
 ## Evaluation
 
-Use a non-Spark semantic evaluator for pass/fail judgment. The default
-semantic evaluator surface is Codex CLI `exec` with `gpt-5.5`,
-`-c model_reasoning_effort="high"`, and `--output-schema <FILE>` for the
-scorecard artifact. Use a lower thinking level only with an explicit
-evidence-backed reason. Structured output constrains the evaluator artifact
+Use Sol (`litellm/codex/gpt-5.6-sol`) through sandbox OpenCode with the `high`
+variant for pass/fail judgment. A different role binding requires an explicit
+evidence-backed reason. Structured validation constrains evaluator artifact
 shape; it does not replace semantic judgment. Capture raw evaluator events as
-internal evidence when useful, but suppress raw thinking tokens in shared or
-user-facing evidence by default and report conclusions plus concise rationale
-instead. Any decision to render raw thinking tokens must be explicit,
-surface-labeled, and justified by the controller. The evaluator receives the
-full evidence package after the interaction completes or hits its safety bound.
+internal evidence when useful, but suppress raw reasoning tokens in shared or
+user-facing evidence by default. The evaluator receives the full evidence
+package after the interaction completes or hits its safety bound.
 It must assess every turn and the whole interaction in one after-action review;
 do not call an evaluator inside the live conversation loop or spend one
 evaluator invocation per turn. The evaluator must judge whether the tested

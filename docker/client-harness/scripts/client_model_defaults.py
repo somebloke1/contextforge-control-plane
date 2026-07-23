@@ -37,6 +37,7 @@ def pi_command_prefix(session_id: str) -> str:
     return (
         "cd /workspace && "
         'pi --provider "${CONTEXTFORGE_PI_DEFAULT_PROVIDER}" --model "${CONTEXTFORGE_PI_DEFAULT_MODEL}" '
+        '--thinking "${CONTEXTFORGE_PI_DEFAULT_THINKING}" '
         f"--session-id {shlex.quote(session_id)} --mode json"
     )
 

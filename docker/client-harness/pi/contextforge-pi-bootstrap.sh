@@ -35,56 +35,13 @@ if [[ -f "${CONTEXTFORGE_PI_SHIM_EXTENSION}" ]]; then
   printf '{"portalRoot":"%s"}\n' "${CONTEXTFORGE_PI_SHIM_PORTAL_ROOT}" > "${CONTEXTFORGE_PI_SHIM_INSTALL_DIR}/contextforge-root.json"
 fi
 
-if [[ -f /config/pi/models.json ]]; then
-  export PI_CODING_AGENT_DIR
-  export OPENROUTER_STICKY_KEY="${OPENROUTER_STICKY_KEY:-contextforge-semantic-test}"
-  export OPENROUTER_STICKY_EPOCH_SECONDS="${OPENROUTER_STICKY_EPOCH_SECONDS:-7200}"
-  python3 - <<'PY'
-import json
-import os
-import time
-from pathlib import Path
-
-def effective_sticky_key() -> str:
-    base = os.environ["OPENROUTER_STICKY_KEY"]
-    epoch_seconds = int(os.environ["OPENROUTER_STICKY_EPOCH_SECONDS"])
-    if epoch_seconds <= 0:
-        return base
-    return f"{base}-e{int(time.time() // epoch_seconds)}"
-
-source = Path("/config/pi/models.json")
-target = Path(os.environ["PI_CODING_AGENT_DIR"]) / "models.json"
-data = json.loads(source.read_text(encoding="utf-8"))
-provider = data["providers"]["openrouter-semantic-test"]
-if os.environ.get("OPENROUTER_BASE_URL"):
-    provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]
-if os.environ.get("OPENROUTER_API_KEY"):
-    provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]
-provider["headers"]["x-session-id"] = effective_sticky_key()
-routes = [item.strip() for item in os.environ.get("OPENROUTER_PROVIDER_ROUTES", "").split(",") if item.strip()]
-if not routes and os.environ.get("OPENROUTER_PROVIDER_ROUTE"):
-    routes = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
-if routes:
-    provider["compat"]["openRouterRouting"] = {
-        "only": routes,
-        "order": routes,
-        "allow_fallbacks": False,
-    }
-else:
-    provider["compat"].pop("openRouterRouting", None)
-provider["models"][0]["id"] = os.environ.get("OPENROUTER_MODEL", provider["models"][0]["id"])
-if os.environ.get("CONTEXTFORGE_TEST_CONTEXT_WINDOW"):
-    provider["models"][0]["contextWindow"] = int(os.environ["CONTEXTFORGE_TEST_CONTEXT_WINDOW"])
-local_provider = data["providers"].get("local-llama-qwen")
-if local_provider:
-    if os.environ.get("LOCAL_LLAMA_BASE_URL"):
-        local_provider["baseUrl"] = os.environ["LOCAL_LLAMA_BASE_URL"]
-    if os.environ.get("LOCAL_LLAMA_KEY"):
-        local_provider["apiKey"] = os.environ["LOCAL_LLAMA_KEY"]
-    local_provider["models"][0]["id"] = os.environ.get("LOCAL_LLAMA_MODEL", local_provider["models"][0]["id"])
-target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-PY
+if [[ ! -f /config/pi/models.json || ! -f /config/pi/settings.json ]]; then
+  printf 'Pi sandbox requires /config/pi/models.json and /config/pi/settings.json\n' >&2
+  return 2 2>/dev/null || exit 2
 fi
+
+export PI_CODING_AGENT_DIR
+python3 /usr/local/lib/contextforge-pi-render-config.py
 
 export PI_CODING_AGENT_DIR
 export CONTEXTFORGE_PI_SHIM_PORTAL_ROOT

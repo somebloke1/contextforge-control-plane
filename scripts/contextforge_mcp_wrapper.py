@@ -20,14 +20,110 @@ from typing import Any
 from uuid import uuid4
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CONFIG_ENV = Path(os.environ.get("CONTEXTFORGE_CONFIG_ENV", REPO_ROOT / "config" / "contextforge.env"))
 TLS_CERT = REPO_ROOT / "config" / "tls" / "contextforge-local.crt"
-TOKEN_CACHE = Path(os.environ.get("CONTEXTFORGE_TOKEN_CACHE", REPO_ROOT / "run" / "contextforge-wrapper-token.local.json"))
-TOKEN_LOCK = Path(os.environ.get("CONTEXTFORGE_TOKEN_LOCK", f"{TOKEN_CACHE}.lock"))
-GATEWAY_BASE = os.environ.get(
+TARGET_PROFILE_KEYS = {
+    "opencode": (
+        "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV",
+        "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL",
+        "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE",
+    ),
+    "codex": (
+        "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV",
+        "CONTEXTFORGE_CODEX_WRAPPER_BASE_URL",
+        "CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE",
+    ),
+    "pi": (
+        "CONTEXTFORGE_PI_WRAPPER_CONFIG_ENV",
+        "CONTEXTFORGE_PI_WRAPPER_BASE_URL",
+        "CONTEXTFORGE_PI_WRAPPER_TOKEN_CACHE",
+    ),
+}
+GENERIC_TARGET_KEYS = (
+    "CONTEXTFORGE_CONFIG_ENV",
     "CONTEXTFORGE_BASE_URL",
-    "http://127.0.0.1:4444",
-).rstrip("/")
+    "CONTEXTFORGE_TOKEN_CACHE",
+)
+
+
+def _target_profile_selection() -> tuple[str, str]:
+    configured = {
+        profile: tuple(bool(os.environ.get(key, "").strip()) for key in keys)
+        for profile, keys in TARGET_PROFILE_KEYS.items()
+    }
+    complete_profiles = [profile for profile, values in configured.items() if all(values)]
+    if len(complete_profiles) == 1:
+        return complete_profiles[0], ""
+    if len(complete_profiles) > 1:
+        return complete_profiles[0], (
+            "multiple complete ContextForge target profiles are configured: "
+            + ", ".join(complete_profiles)
+        )
+    partial_profiles = [profile for profile, values in configured.items() if any(values)]
+    if partial_profiles:
+        return partial_profiles[0], ""
+    return "generic", ""
+
+
+def _target_value(profile: str, index: int, default: str | Path) -> tuple[str, str]:
+    profile_key = TARGET_PROFILE_KEYS.get(profile, GENERIC_TARGET_KEYS)[index]
+    generic_key = GENERIC_TARGET_KEYS[index]
+    if os.environ.get(profile_key, "").strip():
+        return os.environ[profile_key].strip(), profile_key
+    if profile_key != generic_key and os.environ.get(generic_key, "").strip():
+        return os.environ[generic_key].strip(), generic_key
+    return str(default), "default"
+
+
+TARGET_PROFILE, TARGET_PROFILE_SELECTION_ERROR = _target_profile_selection()
+_config_env, CONFIG_ENV_SOURCE = _target_value(
+    TARGET_PROFILE,
+    0,
+    REPO_ROOT / "config" / "contextforge.env",
+)
+_gateway_base, GATEWAY_BASE_SOURCE = _target_value(TARGET_PROFILE, 1, "http://127.0.0.1:4444")
+_token_cache, TOKEN_CACHE_SOURCE = _target_value(
+    TARGET_PROFILE,
+    2,
+    REPO_ROOT / "run" / "contextforge-wrapper-token.local.json",
+)
+CONFIG_ENV = Path(_config_env).expanduser()
+GATEWAY_BASE = _gateway_base.rstrip("/")
+TOKEN_CACHE = Path(_token_cache).expanduser()
+TOKEN_LOCK = Path(
+    os.environ.get("CONTEXTFORGE_TOKEN_LOCK", f"{TOKEN_CACHE}.lock")
+    if TOKEN_CACHE_SOURCE in {"CONTEXTFORGE_TOKEN_CACHE", "default"}
+    else f"{TOKEN_CACHE}.lock"
+)
+
+
+def _target_configuration_error() -> str:
+    if TARGET_PROFILE_SELECTION_ERROR:
+        return TARGET_PROFILE_SELECTION_ERROR
+    if TARGET_PROFILE != "generic":
+        expected_keys = TARGET_PROFILE_KEYS[TARGET_PROFILE]
+        missing = [
+            key
+            for key, source in zip(
+                expected_keys,
+                (CONFIG_ENV_SOURCE, GATEWAY_BASE_SOURCE, TOKEN_CACHE_SOURCE),
+                strict=True,
+            )
+            if source != key
+        ]
+        if missing:
+            return (
+                f"incomplete {TARGET_PROFILE} ContextForge target profile; "
+                f"set {', '.join(missing)} instead of mixing target profiles"
+            )
+    elif GATEWAY_BASE_SOURCE != "default" and CONFIG_ENV_SOURCE == "default":
+        return (
+            "CONTEXTFORGE_BASE_URL selects a non-default target without a matching "
+            "CONTEXTFORGE_CONFIG_ENV"
+        )
+    return ""
+
+
+TARGET_CONFIGURATION_ERROR = _target_configuration_error()
 DEFAULT_WRAPPER_IDLE_TIMEOUT_SECONDS = 300
 DEFAULT_WRAPPER_TOOL_TIMEOUT_SECONDS = 120
 SCOPED_SERVER_TOKEN_PERMISSIONS = [
@@ -87,7 +183,18 @@ def _log_bootstrap_error(server_name: str, stage: str, exc: Exception | str) -> 
         "stage": stage,
         "error_type": exc.__class__.__name__ if isinstance(exc, Exception) else "RuntimeError",
         "error": str(exc),
+        "contextforge_base_url": GATEWAY_BASE,
+        "contextforge_target_profile": TARGET_PROFILE,
+        "contextforge_base_url_source": GATEWAY_BASE_SOURCE,
+        "contextforge_config_env": str(CONFIG_ENV),
+        "contextforge_config_env_source": CONFIG_ENV_SOURCE,
+        "contextforge_config_env_exists": CONFIG_ENV.exists(),
+        "contextforge_token_cache": str(TOKEN_CACHE),
+        "contextforge_token_cache_source": TOKEN_CACHE_SOURCE,
     }
+    if isinstance(exc, urllib.error.HTTPError):
+        payload["http_status"] = exc.code
+        payload["http_reason"] = exc.reason
     print(json.dumps(payload, sort_keys=True), file=sys.stderr, flush=True)
 
 
@@ -257,6 +364,8 @@ def _cached_token() -> str | None:
     token = data.get("access_token") if isinstance(data, dict) else None
     if not isinstance(token, str):
         return None
+    if data.get("contextforge_base_url") != GATEWAY_BASE:
+        return None
     exp = _jwt_exp(token)
     if exp is None or exp - int(time.time()) < 60:
         return None
@@ -265,7 +374,10 @@ def _cached_token() -> str | None:
 
 def _write_token_cache(token: str) -> None:
     TOKEN_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps({"access_token": token}, indent=2)
+    payload = json.dumps(
+        {"access_token": token, "contextforge_base_url": GATEWAY_BASE},
+        indent=2,
+    )
     fd = os.open(TOKEN_CACHE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as handle:
         handle.write(payload)
@@ -294,6 +406,8 @@ def _login_token(email: str, password: str) -> str:
 
 
 def _token(email: str | None, password: str | None, bearer_token: str | None = None) -> str:
+    if TARGET_CONFIGURATION_ERROR:
+        raise RuntimeError(TARGET_CONFIGURATION_ERROR)
     env_token = bearer_token or os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
     if env_token:
         return env_token.removeprefix("Bearer ").strip()
@@ -510,6 +624,13 @@ def main() -> int:
         return 2
 
     server_name = sys.argv[1]
+    if TARGET_CONFIGURATION_ERROR:
+        _log_bootstrap_error(
+            server_name,
+            "contextforge_target_configuration",
+            TARGET_CONFIGURATION_ERROR,
+        )
+        return 1
     env = _read_env(CONFIG_ENV) if CONFIG_ENV.exists() else {}
     email = env.get("PLATFORM_ADMIN_EMAIL")
     password = env.get("PLATFORM_ADMIN_PASSWORD")
@@ -517,8 +638,8 @@ def main() -> int:
     env_bearer_token = env.get("CONTEXTFORGE_BEARER_TOKEN") or os.environ.get("CONTEXTFORGE_BEARER_TOKEN")
     try:
         token = _token(email, password, env_bearer_token)
-    except RuntimeError as exc:
-        _log_bootstrap_error(server_name, "auth_token", exc)
+    except Exception as exc:
+        _log_bootstrap_error(server_name, "wrapper_bootstrap_contextforge_api_auth_token", exc)
         print(str(exc), file=sys.stderr)
         return 1
 

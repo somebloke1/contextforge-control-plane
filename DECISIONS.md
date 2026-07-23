@@ -996,3 +996,16 @@ Semantic gates must exercise the tested client agents as configured for the run:
 
 Under no circumstances may the controller, worker agents, runners, evaluators, helper surfaces, or project documentation behave fraudulently or sneak around a declared test boundary. When a semantic gate claims to test ordinary product behavior, the tested assistant may receive only the surfaces a random installer's code assistant would receive through the product, plus the simulated human's ordinary responses. Hidden prompts, harness-only steering, non-product AGENTS.md edits, under-the-table instructions, transcript-specific behavioral nudges, selective omissions, or misleading summaries that make the run appear to prove more than it proves are prohibited. The veil of ignorance between simulated human, tested assistant, runner, evaluator, and controller is a substantive integrity requirement, not a puzzle to bypass. If a failure can be fixed only by a backdoor prompt or by concealing how the test was helped, the correct result is failure classification and product remediation, not a passing claim. Evidence must state the actual surfaces, assistance, mutations, and limitations used. The realm of the fraudulent is the lowest rung of hell in Dante's Inferno. I take that as a signal, I don't want to be in hell.
 <!-- governance-crud:end id=dec-20260622-0002 -->
+
+<!-- governance-crud:start id=dec-20260625-0001 -->
+## dec-20260625-0001: Use ContextForge registry/catalog as known-service offering truth
+
+- Ledger: decisions
+- Status: accepted
+- Repository: /home/dgk/workspace/cf-controlplane
+- Created: 2026-06-25
+- Updated: 2026-06-25
+- Tags: contextforge,service-offerings,project-init,rollback,server-instances
+
+The current product direction abandons arbitrary/source-led MCP service onboarding and returns the helper to known-service management. Assistant-facing service offering menus must derive from ContextForge registry/catalog records plus helper metadata. Repository files under server-instances/<service-slug>/ remain operational backend/provisioning support and may be used to apply or repair known services, but they do not own the ordinary product service menu. Current helper operations are list, enable, disable, remove, repair, and details for known services, with simple Available/Enabled/Disabled status and gates only where they serve the user's requested operation.
+<!-- governance-crud:end id=dec-20260625-0001 -->

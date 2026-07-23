@@ -171,29 +171,12 @@ PY
   printf 'pi_tool=cf_contextforge_pi_readback\n'
 } | tee "${EVIDENCE_FILE}"
 
-docker compose -f compose.yml run --rm --no-deps \
+docker compose -f compose.yml --env-file env/semantic-model.env run --rm --no-deps \
   -v "${REPO_ROOT}:/repo:ro" \
   --env-from-file "${TOKEN_ENV_FILE}" \
   -e NODE_PATH=/usr/lib/node_modules/@earendil-works/pi-coding-agent/node_modules:/usr/lib/node_modules \
   pi bash -lc '
     set -euo pipefail
-    mkdir -p "${PI_CODING_AGENT_DIR}"
-    cp /config/pi/AGENTS.md "${PI_CODING_AGENT_DIR}/AGENTS.md"
-    python3 - <<PY
-import json
-import os
-
-path = "/config/pi/models.json"
-data = json.load(open(path, encoding="utf-8"))
-provider = data["providers"]["openrouter-semantic-test"]
-provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]
-provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]
-provider["compat"]["openRouterRouting"]["only"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
-provider["compat"]["openRouterRouting"]["order"] = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
-provider["models"][0]["id"] = os.environ["OPENROUTER_MODEL"]
-out = os.path.join(os.environ["PI_CODING_AGENT_DIR"], "models.json")
-json.dump(data, open(out, "w", encoding="utf-8"), indent=2)
-PY
     pi \
       --extension /repo/pi-extensions/contextforge-global-shim/index.ts \
       --no-session \

@@ -1,6 +1,6 @@
 ---
 name: code-assistant-dialogue-validation
-description: Evaluate ContextForge client use cases by delegating to a code-assistant dialogue agent that drives real Pi/OpenCode/Codex/Gemini command-line sessions end to end, with a stable session id, continuation across reload/new-session boundaries, observed assistant/tool outputs, and no scripted substitution for agent behavior.
+description: Evaluate ContextForge client use cases by delegating to a code-assistant dialogue agent that drives real Pi or OpenCode/Codex/Gemini command-line sessions end to end, with a stable session id, continuation across reload/new-session boundaries, observed assistant/tool outputs, and no scripted substitution for agent behavior.
 ---
 
 # Code Assistant Dialogue Evaluation
@@ -8,6 +8,7 @@ description: Evaluate ContextForge client use cases by delegating to a code-assi
 Use this skill when a ContextForge acceptance gate depends on how a code
 assistant actually behaves in a client session. This skill is for delegated
 dev-agent evaluation of dialogue, not for replacing the dialogue with scripts.
+A Codex subagent is not a tested-client substitute. Semantic acceptance that relies on tested-assistant behavior needs at least three independent Luna/medium runs when the localized gate requires quorum evidence; Terra/high remains the simulated-human role and Sol/high remains the evaluator role.
 
 ## Layering Rule
 
@@ -124,12 +125,10 @@ client/model under test or a cost-bounded dialogue probe. The evaluator role is
 not a mini-model role: use `gpt-5.5` for pass/fail semantic judgment, narrative
 quality assessment, overclaim detection, and requirement-gap analysis.
 
-For source-lead-only service-onboarding process gates, use
-`contextforge-onboarding-semantic-testing` in addition to this generic dialogue
-method. A Codex subagent is not the tested assistant for that gate: the tested
-assistant must be a real Pi or OpenCode target-client session, with a random
-composite simulated-human persona and at least three eligible semantic-test
-model profiles per target client.
+Source-lead-only service-onboarding process gates are legacy/quarantined in
+the current product direction. Do not invoke
+`contextforge-onboarding-semantic-testing` unless a later explicit governance
+decision revives arbitrary/new MCP onboarding.
 
 Expect raw CLI/JSON streams to become large. Preserve the raw stream as an
 evidence artifact, then use targeted readbacks to extract live values such as

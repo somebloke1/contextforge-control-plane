@@ -2,7 +2,7 @@ ARG BASE_IMAGE=contextforge-client-base:bookworm
 FROM ${BASE_IMAGE}
 
 ARG MCP_CONTEXTFORGE_GATEWAY_VERSION=1.0.3
-ARG PI_CODING_AGENT_VERSION=latest
+ARG PI_CODING_AGENT_VERSION=0.81.1
 
 USER root
 RUN apt-get update \
@@ -16,7 +16,11 @@ RUN apt-get update \
     && npm cache clean --force
 COPY --chown=agent:agent contextforge-pi-bootstrap.sh /usr/local/bin/contextforge-pi-bootstrap
 COPY --chown=agent:agent pi-wrapper.sh /usr/local/bin/pi
-RUN chmod 0755 /usr/local/bin/contextforge-pi-bootstrap /usr/local/bin/pi
+COPY --chown=agent:agent render-config.py /usr/local/lib/contextforge-pi-render-config.py
+RUN test -f /usr/bin/pi \
+    && test -x /usr/bin/pi \
+    && ! test /usr/bin/pi -ef /usr/local/bin/pi \
+    && chmod 0755 /usr/local/bin/contextforge-pi-bootstrap /usr/local/bin/pi
 USER agent
 
 ENV PI_CODING_AGENT_DIR=/home/agent/.pi/agent
