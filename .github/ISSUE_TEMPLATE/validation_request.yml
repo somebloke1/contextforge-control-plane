@@ -1,0 +1,40 @@
+name: Validation request
+description: Request target-client-visible validation of a behavior or surface
+labels: ["validation-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to request validation of a control-plane behavior through
+        an actual target client. Deterministic tests may establish structure,
+        state, transport, command completion, JSON shape, endpoint
+        reachability, and evidence packaging; they must not judge free-form
+        assistant meaning or user-facing success.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Behavior to validate
+      description: The behavior or surface that should be proven in a target client.
+    validations:
+      required: true
+  - type: textarea
+    id: surface
+    attributes:
+      label: Target client and surface
+      description: Which client and which product surface (helper, tool, guidance, prompt/resource).
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What counts as acceptable evidence
+      description: The observable that would constitute target-client-visible proof.
+    validations:
+      required: true
+  - type: checkboxes
+    id: fairness
+    attributes:
+      label: Fairness
+      options:
+        - label: This validation must not rely on harness-only, hidden, or non-product prompts to make an assistant appear to pass.
+          required: true

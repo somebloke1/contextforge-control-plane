@@ -1,0 +1,51 @@
+name: Feature request
+description: Propose an ideal-form feature or enhancement for the control plane
+labels: ["feature-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for a feature, ideal-form, or enhancement proposal.
+        Remember that ContextForge registry/catalog records own the
+        assistant-facing service offering truth; repository scripts and
+        manifests support backend runtime and provisioning.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What is currently hard, missing, or inconsistent?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What you would like to see happen, and why it is the right shape.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Request kind
+      description: The closest category. Maintainers will refine labels.
+      options:
+        - Ideal-form architecture
+        - Development-facing feature
+        - Enhancement to existing behavior
+        - Other
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you considered and why they are worse.
+    validations:
+      required: false
+  - type: textarea
+    id: scope
+    attributes:
+      label: Non-actions / boundaries
+      description: Anything this request must not do (for example, must not mutate runtime services or trust).
+    validations:
+      required: false
