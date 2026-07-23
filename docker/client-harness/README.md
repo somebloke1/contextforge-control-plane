@@ -47,6 +47,24 @@ and Sol/high only by evaluator paths. The generated env file contains only
 LiteLLM and role-selection variables and is written with `0600` semantics
 through `umask 077`.
 
+### Model-policy authority boundary
+
+The sandbox model policy governs the tracked image and Compose launch paths:
+the image `CMD`, harness scripts, and interactive container shells invoke `pi`
+or `/usr/local/bin/pi`, which is the harness wrapper. A tracked semantic test
+must stay on that route. `docker compose run pi bash` followed by a bare `pi`
+remains supported because command lookup reaches the same wrapper.
+
+Operator-selected interpreters such as `bash /usr/local/bin/pi`, direct calls
+to `/usr/bin/pi` or `/usr/local/bin/contextforge-pi-real`, bind-mounting over
+image executables, mutating the image filesystem, or replacing Docker's
+entrypoint are not alternate harness launch modes. They grant arbitrary
+in-container code control and can bypass any client policy by construction.
+Do not use those routes as model-routing evidence, and do not describe their
+behavior as the effective sandbox configuration. This boundary does not weaken
+the fail-closed checks on tracked launchers; it prevents an operator-controlled
+replacement process from being confused with ordinary Pi behavior.
+
 Do not print raw ContextForge env files, bearer headers, passwords, API keys,
 tokens, JWTs, private keys, or credential values into terminal transcripts or
 evidence packages. The Pi/OpenCode sandbox receives `LITELLM_API_KEY` only

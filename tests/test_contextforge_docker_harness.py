@@ -1914,6 +1914,45 @@ print(json.dumps(outputs))
                     self.assertEqual("real-pi-ok", completed.stdout.strip())
                     self.assertFalse(marker.exists())
 
+    def test_tracked_pi_launchers_stay_inside_wrapper_authority_boundary(self) -> None:
+        harness_root = ROOT / "docker/client-harness"
+        readme = (harness_root / "README.md").read_text(encoding="utf-8")
+        contract = (harness_root / "CONTEXTFORGE_HELPER_BASELINE.md").read_text(encoding="utf-8")
+        normalized_docs = " ".join((readme + contract).replace("`", "").split())
+        for phrase in [
+            "Model-policy authority boundary",
+            "tracked image and Compose launch paths",
+            "bash /usr/local/bin/pi",
+            "direct calls to /usr/bin/pi or /usr/local/bin/contextforge-pi-real",
+            "arbitrary in-container code control",
+            "must not be used as helper or model-routing acceptance evidence",
+        ]:
+            self.assertIn(phrase, normalized_docs)
+
+        launchers = [
+            *sorted((harness_root / "scripts").glob("*.sh")),
+            *sorted((harness_root / "scripts").glob("*.py")),
+            harness_root / "config/pi/start-contextforge-baseline.sh",
+            harness_root / "compose.yml",
+        ]
+        for launcher in launchers:
+            with self.subTest(launcher=launcher.relative_to(ROOT)):
+                source = launcher.read_text(encoding="utf-8")
+                self.assertNotIn("CONTEXTFORGE_PI_REAL_BIN", source)
+                self.assertNotIn("contextforge-pi-real", source)
+                self.assertNotIn("/usr/bin/pi", source)
+                self.assertIsNone(re.search(r"\bbash\s+(?:/usr/local/bin/)?pi\b", source))
+                self.assertIsNone(
+                    re.search(r"[\"']bash[\"']\s*,\s*[\"'](?:/usr/local/bin/)?pi[\"']", source)
+                )
+
+        baseline = (harness_root / "config/pi/start-contextforge-baseline.sh").read_text(encoding="utf-8")
+        smoke = (harness_root / "scripts/smoke-agents.sh").read_text(encoding="utf-8")
+        alpine_smoke = (harness_root / "scripts/smoke-pi-alpine.sh").read_text(encoding="utf-8")
+        self.assertIn('exec /usr/local/bin/pi "$@"', baseline)
+        self.assertIn("pi pi --no-session", smoke)
+        self.assertIn("pi-alpine pi --version", alpine_smoke)
+
     def test_pi_wrapper_injects_approved_model_scope_and_role_thinking(self) -> None:
         source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as tmp:

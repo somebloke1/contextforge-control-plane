@@ -84,10 +84,17 @@ followed by a bare `pi` command. The image-level wrapper at `/usr/local/bin/pi`
 seeds the same container-local `models.json`, AGENTS guidance, and shim files
 before delegating to the real npm Pi binary at `/usr/bin/pi`, and defaults that
 bare session to `CONTEXTFORGE_PI_DEFAULT_PROVIDER` and
-`CONTEXTFORGE_PI_DEFAULT_MODEL` unless the command explicitly selects another
-provider or model.
+`CONTEXTFORGE_PI_DEFAULT_MODEL`. Explicit selection remains constrained to the
+LiteLLM provider, approved Terra/Luna/Sol model set, and role-correct reasoning.
   Container-local writes under `/home/agent/.pi/agent/extensions` are harness
-  setup, not project-init approval/apply writes.
+setup, not project-init approval/apply writes.
+
+The policy authority is the tracked image/Compose route that invokes bare `pi`
+or `/usr/local/bin/pi`. Invoking the wrapper as data through a caller-selected
+interpreter, calling the preserved npm binary directly, replacing the Docker
+entrypoint, or altering/mounting over image executables is arbitrary operator
+code control rather than a supported baseline route. Such replacement paths
+must not be used as helper or model-routing acceptance evidence.
 
 The existing smoke script may keep its explicit `--extension` proof. The
 baseline session launcher now materializes the shim into Pi's normal
