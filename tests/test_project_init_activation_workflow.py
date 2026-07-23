@@ -12,7 +12,7 @@ import unittest
 import urllib.error
 from unittest import mock
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -7508,15 +7508,35 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
     def test_helper_catalog_resource_details_require_matching_identity_and_content(self) -> None:
         resource_id = "resource-context7-offering"
+
+        class HostileDetail(Mapping):
+            def __getitem__(self, key: str) -> Any:
+                if key == "id":
+                    return resource_id
+                if key == "content":
+                    return "{}"
+                raise KeyError(key)
+
+            def __iter__(self):
+                return iter(("id", "content"))
+
+            def __len__(self) -> int:
+                return 2
+
         malformed_details = {
             "empty_object": {},
             "collection_object": {"items": []},
             "id_only": {"id": resource_id},
             "null_content": {"id": resource_id, "content": None},
-            "scalar_content": {"id": resource_id, "content": 7},
+            "scalar_content_shadowing_text": {"id": resource_id, "content": 7, "text": "{}"},
+            "nan_content_object": {"id": resource_id, "content": {"value": float("nan")}},
             "missing_id": {"content": "{}"},
             "non_string_id": {"id": 7, "content": "{}"},
             "mismatched_id": {"id": "another-resource", "content": "{}"},
+            "whitespace_detail_id": {"id": f" {resource_id} ", "content": "{}"},
+            "hostile_mapping": HostileDetail(),
+            "non_native_list_id": {"id": "7", "content": "{}"},
+            "whitespace_list_id": {"id": f" {resource_id} ", "content": "{}"},
         }
         with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
             env_file.write("CONTEXTFORGE_BEARER_TOKEN=redacted-test-token\n")
@@ -7533,16 +7553,21 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                         self.assertEqual("http://cf.example", base_url)
                         self.assertEqual("catalog-token", token)
                         if path.startswith("/resources?"):
+                            row_id: Any = resource_id
+                            if label == "non_native_list_id":
+                                row_id = 7
+                            elif label == "whitespace_list_id":
+                                row_id = f" {resource_id} "
                             return {
                                 "items": [
                                     {
-                                        "id": resource_id,
+                                        "id": row_id,
                                         "uri": "contextforge://control-plane/service-offerings/context7/v1",
                                         "tags": ["contextforge-service-offering"],
                                     }
                                 ]
                             }
-                        if path == f"/resources/{resource_id}":
+                        if path.startswith("/resources/"):
                             return detail
                         if path.startswith("/servers?") or path.startswith("/gateways?"):
                             return {"items": []}

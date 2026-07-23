@@ -128,7 +128,9 @@ The helper runtime discovery algorithm is:
    `service-offering`.
 4. For each selected resource, fetch `/resources/{id}` to obtain full content.
    Resource list rows are not authoritative for content completeness. The detail
-   must identify the requested Resource and contain a Resource content field.
+   must identify the requested Resource with the same native nonblank string ID
+   and the precedence-selected `content`, `text`, or `contents` value must have a
+   JSON Resource-content shape.
 5. Parse and validate the JSON content shape.
 6. Read `/servers?include_inactive=true&limit=1000` and
    `/gateways?include_inactive=true&limit=1000`.

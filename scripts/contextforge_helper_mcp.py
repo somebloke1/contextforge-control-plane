@@ -151,20 +151,34 @@ def _is_service_offering_resource(resource: Mapping[str, Any]) -> bool:
 
 
 def _resource_with_content(base_url: str, token: str, resource: dict[str, Any]) -> dict[str, Any]:
-    resource_id = str(resource.get("id") or "")
-    if not resource_id or not _is_service_offering_resource(resource):
+    if not _is_service_offering_resource(resource):
         return resource
+    resource_id = resource.get("id")
+    if not isinstance(resource_id, str) or not resource_id.strip() or resource_id != resource_id.strip():
+        raise TypeError("tagged service-offering Resource list rows require a native nonblank string id")
     full = _contextforge_request(base_url, f"/resources/{resource_id}", token)
-    if not isinstance(full, Mapping):
+    if type(full) is not dict:
         raise TypeError(f"/resources/{resource_id} returned {type(full).__name__}; expected an object")
     detail_id = full.get("id")
-    if not isinstance(detail_id, str) or not detail_id.strip():
+    if not isinstance(detail_id, str) or not detail_id.strip() or detail_id != detail_id.strip():
         raise TypeError(f"/resources/{resource_id} returned an object without a string id")
     if detail_id != resource_id:
         raise ValueError(f"/resources/{resource_id} returned Resource id {detail_id!r}")
-    content_values = [full[key] for key in ("content", "text", "contents") if key in full]
-    if not content_values or not any(isinstance(value, (str, Mapping)) for value in content_values):
+    selected_key = ""
+    selected_content: Any = None
+    for key in ("content", "text", "contents"):
+        candidate = full.get(key)
+        if candidate:
+            selected_key = key
+            selected_content = candidate
+            break
+    if type(selected_content) not in (str, dict):
         raise TypeError(f"/resources/{resource_id} returned an object without Resource content")
+    if isinstance(selected_content, dict):
+        try:
+            full[selected_key] = json.loads(json.dumps(selected_content, allow_nan=False))
+        except (TypeError, ValueError) as exc:
+            raise TypeError(f"/resources/{resource_id} returned non-JSON Resource content") from exc
     merged = dict(resource)
     for key in ("content", "text", "contents", "uri", "name", "title", "description", "mimeType", "mime_type", "tags", "enabled"):
         if key in full:
@@ -233,7 +247,7 @@ def _live_contextforge_registry_readback() -> dict[str, list[dict[str, Any]]]:
         if exc.code == 429 and cached is not None and time.monotonic() - cached[0] <= max(ttl, 300.0):
             return _cached_readback_copy(cached[1])
         raise ContextForgeCatalogUnavailable(base_url, f"HTTP {exc.code} {exc.reason}") from exc
-    except (OSError, RuntimeError, TypeError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
+    except Exception as exc:
         raise ContextForgeCatalogUnavailable(base_url, f"{exc.__class__.__name__}: {exc}") from exc
 
 
