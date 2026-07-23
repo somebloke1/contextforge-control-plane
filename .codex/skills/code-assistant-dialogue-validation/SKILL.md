@@ -8,7 +8,7 @@ description: Evaluate ContextForge client use cases by delegating to a code-assi
 Use this skill when a ContextForge acceptance gate depends on how a code
 assistant actually behaves in a client session. This skill is for delegated
 dev-agent evaluation of dialogue, not for replacing the dialogue with scripts.
-A Codex subagent is not a tested-client substitute. Semantic acceptance that relies on tested-assistant behavior needs at least three independent Luna/medium runs when the localized gate requires quorum evidence; Terra/high remains the simulated-human role and Sol/high remains the evaluator role.
+A Codex subagent is not a tested-client substitute. Semantic acceptance that relies on model behavior needs three distinct eligible semantic-test model profiles when the localized gate requires quorum evidence.
 
 ## Layering Rule
 

@@ -1,11 +1,11 @@
 {
   "schema_uri": "contextforge://client-harness/onboarding-semantic-process-scenarios/v1",
-  "semantic_acceptance": "requires_sol_evaluator",
+  "semantic_acceptance": "requires_non_spark_evaluator",
   "deterministic_semantic_oracles_allowed": false,
-  "minimum_luna_run_quorum_per_client": 3,
+  "minimum_model_quorum_per_client": 3,
   "target_clients": ["pi", "opencode"],
   "persona_sampling": {
-    "selection_scope": "random_composition_per_client_luna_run",
+    "selection_scope": "random_composition_per_client_model_run",
     "stability_rule": "randomly compose once before the run and keep the persona fixed for the whole tested-assistant dialogue",
     "composition_model": "five_dimensional_persona_vector_plus_help_determination_multiplier",
     "random_seed_recording_required": true,
@@ -82,7 +82,7 @@
       ],
       "preexisting_contextforge_cleanup_requirement": "Before acceptance runs, the development ContextForge surface must not already expose the foil as an MCP service, tools, virtual server, service-bound prompt/resource, or client activation-menu entry. Deterministic preflight must use structured registry readback plus activation-menu readback and fail closed if the foil is visible; explicit cleanup is a separate preparation step.",
       "no_service_specific_facts_in_runner_prompt": true,
-      "completion_gate": "pi_and_opencode_each_pass_three_luna_run_semantic_process_matrix_before_fetch"
+      "completion_gate": "pi_and_opencode_each_pass_three_model_semantic_process_matrix_before_fetch"
     },
     {
       "id": "memory",
@@ -109,7 +109,7 @@
       ],
       "preexisting_contextforge_cleanup_requirement": "Before acceptance runs, the development ContextForge surface must not already expose the foil as an MCP service, tools, virtual server, service-bound prompt/resource, or client activation-menu entry. Deterministic preflight must use structured registry readback plus activation-menu readback and fail closed if the foil is visible; explicit cleanup is a separate preparation step.",
       "no_service_specific_facts_in_runner_prompt": true,
-      "completion_gate": "pi_and_opencode_each_pass_three_luna_run_semantic_process_matrix_before_next_foil"
+      "completion_gate": "pi_and_opencode_each_pass_three_model_semantic_process_matrix_before_next_foil"
     }
   ],
   "process_layers": [

@@ -45,7 +45,6 @@ for ((index = 0; index < ${#args[@]}; index += 1)); do
   case "${arg}" in
     --provider)
       ((index + 1 < ${#args[@]})) || fail_model_policy "--provider requires a value"
-      [[ "${has_provider}" == false ]] || fail_model_policy "repeated --provider is forbidden"
       index=$((index + 1))
       validate_provider "${args[index]}"
       has_provider=true
@@ -56,7 +55,6 @@ for ((index = 0; index < ${#args[@]}; index += 1)); do
       ;;
     --model)
       ((index + 1 < ${#args[@]})) || fail_model_policy "--model requires a value"
-      [[ "${has_model}" == false ]] || fail_model_policy "repeated --model is forbidden"
       index=$((index + 1))
       selected_model="${args[index]}"
       expected_thinking "${selected_model}" >/dev/null
@@ -69,16 +67,12 @@ for ((index = 0; index < ${#args[@]}; index += 1)); do
       ;;
     --thinking)
       ((index + 1 < ${#args[@]})) || fail_model_policy "--thinking requires a value"
-      [[ "${has_thinking}" == false ]] || fail_model_policy "repeated --thinking is forbidden"
       index=$((index + 1))
       selected_thinking="${args[index]}"
       has_thinking=true
       ;;
     --thinking=*)
       fail_model_policy "Pi sandbox requires '--thinking LEVEL' syntax"
-      ;;
-    --api-key|--api-key=*)
-      fail_model_policy "--api-key is forbidden; the Pi sandbox uses only LITELLM_API_KEY from its env file"
       ;;
     -p|--prompt)
       ((index + 1 < ${#args[@]})) || fail_model_policy "${arg} requires a value"

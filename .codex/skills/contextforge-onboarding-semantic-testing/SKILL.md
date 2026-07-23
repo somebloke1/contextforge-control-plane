@@ -117,14 +117,14 @@ rollback actions and residual cleanup risk.
 
 - Controller: owns branch/GitHub state, runner package readiness, remediation,
   and final acceptance.
-- Tested assistant: real Pi or OpenCode client session using Luna/medium through
-  the Docker client harness LiteLLM provider.
+- Tested assistant: real Pi or OpenCode client session launched through the
+  Docker client harness.
 - Simulated human responder: separate persona that answers only the tested
   assistant's user-facing questions. Acceptance-matrix runs use Terra
   (`codex/gpt-5.6-terra`) through Pi's LiteLLM provider with `high` thinking;
   seeded responders are debug scaffolding and direct providers are rejected.
-- Deterministic runner: resets state, launches clients, keeps Luna/medium fixed
-  for every tested-assistant run, records transcripts, and packages evidence.
+- Deterministic runner: resets state, launches clients, selects one model
+  profile per run, records transcripts, and packages evidence.
 - Semantic evaluator: non-Spark model or SO that judges meaning, route
   adequacy, claim boundaries, and process success. Use Sol
   (`litellm/codex/gpt-5.6-sol`) through sandbox OpenCode with the `high` variant.
@@ -181,7 +181,7 @@ helpful toward successful onboarding: answer questions from visible context,
 approve bounded safe next steps when appropriate, request concrete corrections
 instead of derailing, and keep the interaction moving while honoring persona
 knowledge and approval boundaries.
-For three-run Luna quorum batches, all runs in a batch use the same `n`. The next
+For three-model quorum batches, all runs in a batch use the same `n`. The next
 batch adapts from the first three structural onboarding outcomes: if all three
 fail, `n += 2`; if two fail, `n += 1`; if one fails, no change; if all three
 succeed, `n -= 1`. Clamp `n` to `1..20`. This is simulated-human behavior
@@ -192,10 +192,10 @@ control only; it is not sent as hidden guidance to the tested assistant.
 For each onboarding foil, acceptance requires:
 
 - target clients: `pi` and `opencode`;
-- at least three independent Luna/medium tested-assistant runs per target
+- at least three distinct eligible semantic-test model profiles per target
   client;
 - isolated home, workspace, scoped credentials, container name, session id, and
-  evidence root per client/Luna/persona run;
+  evidence root per client/model/persona run;
 - at least one low-knowledge persona, one higher-knowledge persona, and two
   distinct risk postures across the accepted matrix.
 - enough interaction budget for the persona and outcome, without treating a

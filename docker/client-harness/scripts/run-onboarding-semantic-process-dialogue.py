@@ -1364,7 +1364,7 @@ def main(argv: list[str] | None = None) -> int:
     summary_base = {
         "schema_uri": "contextforge://client-harness/onboarding-semantic-process-dialogue-run/v1",
         "ok_scope": "runner package only; semantic acceptance requires evaluator review",
-        "semantic_acceptance": "requires_sol_evaluator",
+        "semantic_acceptance": "requires_non_spark_evaluator",
         "deterministic_semantic_oracles_allowed": False,
         "client": args.client,
         "foil": args.foil,
