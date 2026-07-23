@@ -31,6 +31,7 @@ SANDBOX_MODEL_ROLES = {
     "codex/gpt-5.6-luna": ("blind", "medium"),
     "codex/gpt-5.6-sol": ("evaluator", "high"),
 }
+TESTED_ASSISTANT_MODEL = "codex/gpt-5.6-luna"
 API_KEY_ENV_NAMES = (
     "LITELLM_API_KEY",
     "OPENAI_API_KEY",
@@ -86,20 +87,21 @@ def load_semantic_model_profiles(harness_root: Path) -> list[dict[str, Any]]:
     if {str(profile.get("model") or "") for profile in result} != approved_models:
         raise RuntimeError("semantic model profiles do not match the approved LiteLLM model set")
     contract = {
-        "codex/gpt-5.6-terra": ("human", "high", False),
-        "codex/gpt-5.6-luna": ("blind", "medium", True),
-        "codex/gpt-5.6-sol": ("evaluator", "high", False),
+        "codex/gpt-5.6-terra": ("human", "high", False, False),
+        "codex/gpt-5.6-luna": ("blind", "medium", True, True),
+        "codex/gpt-5.6-sol": ("evaluator", "high", False, False),
     }
     if len(result) != len(contract):
         raise RuntimeError("semantic model profiles must contain exactly three entries")
     for profile in result:
-        role, reasoning, is_default = contract[str(profile["model"])]
+        role, reasoning, is_default, quorum_eligible = contract[str(profile["model"])]
         if (
             profile.get("semantic_role") != role
             or profile.get("reasoning_effort") != reasoning
             or profile.get("pi_thinking") != reasoning
             or profile.get("opencode_variant") != reasoning
             or profile.get("default") is not is_default
+            or profile.get("multi_step_quorum_eligible") is not quorum_eligible
         ):
             raise RuntimeError(f"semantic role/reasoning contract mismatch for {profile['model']!r}")
     return result
@@ -277,6 +279,16 @@ def profile_multi_step_quorum_eligible(profile: dict[str, Any]) -> bool:
     return profile.get("multi_step_quorum_eligible") is not False
 
 
+def profile_tested_assistant_eligible(profile: dict[str, Any]) -> bool:
+    return bool(
+        profile.get("provider_kind") == "litellm"
+        and profile.get("model") == TESTED_ASSISTANT_MODEL
+        and profile.get("semantic_role") == "blind"
+        and profile.get("reasoning_effort") == "medium"
+        and profile_multi_step_quorum_eligible(profile)
+    )
+
+
 def profile_context_window(profile: dict[str, Any]) -> int:
     try:
         return int(profile.get("context_window", 0))
@@ -312,6 +324,8 @@ def env_semantic_model_profile(available_env: dict[str, str]) -> dict[str, Any]:
     context_window = value("CONTEXTFORGE_TEST_CONTEXT_WINDOW", default=str(MIN_SEMANTIC_CONTEXT_WINDOW))
     if model not in SANDBOX_MODEL_ROLES:
         raise RuntimeError(f"unsupported sandbox semantic model {model!r}")
+    if model != TESTED_ASSISTANT_MODEL:
+        raise RuntimeError(f"semantic model {model!r} is not available for tested-assistant role")
     semantic_role, reasoning = SANDBOX_MODEL_ROLES[model]
     profile: dict[str, Any] = {
         "id": "env",
@@ -351,7 +365,7 @@ def choose_semantic_model_profile(
         if not profile_supports_client(profile, client):
             raise RuntimeError(f"semantic model env profile does not support client {client!r}")
         return profile
-    available_profiles = [
+    role_agnostic_profiles = [
         profile
         for profile in load_semantic_model_profiles(harness_root)
         if profile_supports_client(profile, client)
@@ -359,6 +373,12 @@ def choose_semantic_model_profile(
         and profile_context_window(profile) >= MIN_SEMANTIC_CONTEXT_WINDOW
         and profile_weight(profile) > 0
     ]
+    if selector not in {"random", "default"} and any(
+        str(profile.get("id") or "") == selector and not profile_tested_assistant_eligible(profile)
+        for profile in role_agnostic_profiles
+    ):
+        raise RuntimeError(f"semantic model profile {selector!r} is not available for tested-assistant role")
+    available_profiles = [profile for profile in role_agnostic_profiles if profile_tested_assistant_eligible(profile)]
     if not available_profiles:
         raise RuntimeError(f"no semantic model profiles are available for client {client!r}")
     if selector == "random":
@@ -391,6 +411,8 @@ def selected_profile_env(
     expected_role, expected_reasoning = SANDBOX_MODEL_ROLES[model]
     if profile.get("semantic_role") != expected_role:
         raise RuntimeError(f"sandbox semantic role mismatch for {model!r}")
+    if model != TESTED_ASSISTANT_MODEL:
+        raise RuntimeError(f"semantic model {model!r} is not available for tested-assistant role")
     display_name = str(profile.get("display_name") or model)
     env: dict[str, str] = {
         "CONTEXTFORGE_TEST_PROVIDER": str(profile.get("provider_label") or provider_kind),
@@ -1032,7 +1054,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = {
             "schema_uri": "contextforge://client-harness/comprehensive-mcp-service-dialogue-run/v1",
             "ok_scope": "runner completed; semantic acceptance requires evaluator review",
-            "semantic_acceptance": "requires_non_spark_evaluator",
+            "semantic_acceptance": "requires_sol_evaluator",
             "client": args.client,
             "service": args.service,
             "service_binding": service_binding,

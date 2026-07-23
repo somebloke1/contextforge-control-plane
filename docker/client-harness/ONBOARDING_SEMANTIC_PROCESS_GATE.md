@@ -33,7 +33,8 @@ use.
 ## Roles
 
 - Tested assistant: a real Pi or OpenCode client session launched through the
-  Docker client harness.
+  Docker client harness with Luna (`codex/gpt-5.6-luna`) through LiteLLM and
+  `medium` reasoning.
 - Simulated human responder: a separate model/persona that answers only the
   tested assistant's user-facing questions. Acceptance-matrix runs use Terra
   (`codex/gpt-5.6-terra`) through Pi's LiteLLM provider with `high` thinking;
@@ -181,7 +182,7 @@ The runner also records
 simulated-human cooperation multiplier. At 15/20 or higher, the responder
 should be relentlessly constructive about helping the assistant reach
 successful ContextForge onboarding while still honoring the persona's knowledge
-and approval boundaries. Across three-model quorum batches, all runs in the
+ and approval boundaries. Across three-run Luna quorum batches, all runs in the
 same batch use the same `n`; the next batch adapts from the first three
 structural onboarding outcomes: all three fail => `n += 2`; two fail =>
 `n += 1`; one fails => no change; all three succeed => `n -= 1`, clamped to
@@ -202,18 +203,17 @@ tested assistant receives only the human message, never the control metadata.
 For each foil:
 
 - clients: `pi`, `opencode`;
-- semantic-test model profiles: at least three distinct eligible profiles per
-  client;
+- tested-assistant runs: at least three independent Luna/medium runs per client;
 - user persona coverage: the matrix must include at least one low-knowledge
   user, one higher-knowledge user, and at least two distinct risk postures;
 - execution: isolated target-client home, workspace, scoped credentials,
-  session id, and evidence root per client/model/persona run.
+  session id, and evidence root per client/Luna/persona run.
 
 The same foil can fail in one persona and pass in another. Acceptance requires
 the declared run matrix to pass semantically or for failures to be remediated
 and rerun from fresh state.
 
-Each client/model/persona run must budget enough interaction for a real
+Each client/Luna/persona run must budget enough interaction for a real
 onboarding conversation without coaching or truncation. The proper length is
 persona- and outcome-dependent and should become more determinate as the
 overall onboarding system evolves. All else equal, the interaction should be
@@ -262,7 +262,7 @@ The runner must:
   MCP service, tools, virtual server, prompts, and resources plus
   available-capabilities readback for activation-menu exposure; stop as invalid
   if the foil is already visible;
-- choose one semantic-test model profile for the full run;
+- keep the Luna/medium semantic-test model profile fixed for the full run;
 - start non-ephemeral Pi/OpenCode containers;
 - maintain distinct session ids for tested assistant and simulated human;
 - record every prompt, answer, command, model profile, return code, timeout,
@@ -276,7 +276,7 @@ The runner must:
   seeded/debug, including a redacted responder model profile when model-backed;
 - package source helper records, runtime readbacks, registration readbacks,
   target-client transcripts, and cleanup evidence;
-- declare `semantic_acceptance: requires_non_spark_evaluator`;
+- declare `semantic_acceptance: requires_sol_evaluator`;
 - avoid deterministic scoring of free-form prose.
 
 Allowed deterministic checks are command status, JSON structure, artifact

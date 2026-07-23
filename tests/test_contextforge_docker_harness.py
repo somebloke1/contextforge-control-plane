@@ -558,17 +558,13 @@ console.log(JSON.stringify({{
         self.assertIn("must not evaluate generated assistant meaning through", gate)
         self.assertIn("string or regex matching", gate)
         self.assertEqual(["pi", "opencode"], scenarios["target_clients"])
-        self.assertEqual(3, scenarios["minimum_model_quorum_per_client"])
+        self.assertEqual(3, scenarios["minimum_luna_run_quorum_per_client"])
         self.assertEqual(
-            [
-                "litellm-codex-gpt-5.6-terra",
-                "litellm-codex-gpt-5.6-luna",
-                "litellm-codex-gpt-5.6-sol",
-            ],
+            ["litellm-codex-gpt-5.6-luna"],
             eligible_profile_ids,
         )
         self.assertEqual(
-            "random_composition_per_client_model_run",
+            "random_composition_per_client_luna_run",
             scenarios["persona_sampling"]["selection_scope"],
         )
         self.assertEqual(
@@ -622,7 +618,7 @@ console.log(JSON.stringify({{
             self.assertIn("Pi or OpenCode", normalized_source)
             self.assertIn("Codex subagent", normalized_source)
             self.assertIn("three", normalized_source)
-            self.assertIn("semantic-test model profiles", normalized_source)
+            self.assertIn("Luna/medium", normalized_source)
         for source in [gate, method, comprehensive_method]:
             normalized_source = " ".join(source.split())
             self.assertIn("domain knowledge", normalized_source)
@@ -639,7 +635,7 @@ console.log(JSON.stringify({{
         ]:
             self.assertIn(persona_dimension, onboarding_skill)
         for source in [dialogue_runner, quorum_runner]:
-            self.assertIn("requires_non_spark_evaluator", source)
+            self.assertIn("requires_sol_evaluator", source)
             self.assertIn("deterministic_semantic_oracles_allowed", source)
             self.assertIn("does not score free-form assistant prose", source)
             self.assertIn("Codex as tested assistant", source)
@@ -699,11 +695,11 @@ console.log(JSON.stringify({{
         self.assertIn("suppress raw reasoning tokens", evaluation_docs)
         self.assertIn("dry_run", dialogue_runner)
         self.assertIn("if not args.dry_run", dialogue_runner)
-        self.assertIn("MIN_MODEL_QUORUM = 3", quorum_runner)
+        self.assertIn("MIN_RUN_QUORUM = 3", quorum_runner)
         self.assertIn("select_persona_indices", quorum_runner)
         self.assertIn("persona_coverage", quorum_runner)
         self.assertIn("parallel_isolated", quorum_runner)
-        self.assertIn("at least three distinct eligible semantic-test model profiles", " ".join(onboarding_skill.split()))
+        self.assertIn("at least three independent Luna/medium tested-assistant runs", " ".join(onboarding_skill.split()))
 
         dialogue_module = _load_script_module(
             ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-dialogue.py",
@@ -1678,6 +1674,15 @@ print(json.dumps(outputs))
             (["--thinking=medium"], {}, "requires '--thinking LEVEL' syntax"),
             (["--models", "openai/gpt-4o"], {}, "--models is fixed"),
             (["--models=openrouter/auto"], {}, "--models is fixed"),
+            (["--api-key", "dummy-secret"], {}, "--api-key is forbidden"),
+            (["--api-key=dummy-secret"], {}, "--api-key is forbidden"),
+            (["--provider", "litellm", "--provider", "litellm"], {}, "repeated --provider"),
+            (
+                ["--model", "codex/gpt-5.6-luna", "--model", "codex/gpt-5.6-luna"],
+                {},
+                "repeated --model",
+            ),
+            (["--thinking", "medium", "--thinking", "medium"], {}, "repeated --thinking"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openai"}, "unsupported Pi sandbox provider"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_MODEL": "gpt-5.5"}, "unsupported Pi sandbox model"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_THINKING": "high"}, "thinking level"),
@@ -2309,7 +2314,16 @@ print(json.dumps(outputs))
         self.assertEqual("litellm-codex-gpt-5.6-luna", selected["id"])
         self.assertEqual("blind", selected["semantic_role"])
         self.assertEqual("medium", selected["reasoning_effort"])
-        self.assertEqual(3, len(random_candidates))
+        self.assertEqual(["litellm-codex-gpt-5.6-luna"], [profile["id"] for profile in random_candidates])
+        for forbidden_profile in ["litellm-codex-gpt-5.6-terra", "litellm-codex-gpt-5.6-sol"]:
+            with self.subTest(forbidden_profile=forbidden_profile):
+                with self.assertRaisesRegex(RuntimeError, "not available for tested-assistant role"):
+                    module.choose_semantic_model_profile(
+                        ROOT / "docker/client-harness",
+                        "pi",
+                        forbidden_profile,
+                        {"LITELLM_API_KEY": "present"},
+                    )
 
     def test_env_semantic_model_selector_builds_litellm_reasoning_profile(self) -> None:
         spec = importlib.util.spec_from_file_location(
@@ -2326,7 +2340,7 @@ print(json.dumps(outputs))
             "env",
             {
                 "CONTEXTFORGE_TEST_PROVIDER": "litellm",
-                "CONTEXTFORGE_TEST_MODEL": "codex/gpt-5.6-sol",
+                "CONTEXTFORGE_TEST_MODEL": "codex/gpt-5.6-luna",
                 "CONTEXTFORGE_TEST_CONTEXT_WINDOW": "272000",
                 "LITELLM_BASE_URL": "http://host.docker.internal:3333/v1",
                 "LITELLM_API_KEY": "present",
@@ -2336,13 +2350,70 @@ print(json.dumps(outputs))
 
         self.assertEqual("env", profile["id"])
         self.assertEqual("litellm", profile["provider_kind"])
-        self.assertEqual("codex/gpt-5.6-sol", profile["model"])
+        self.assertEqual("codex/gpt-5.6-luna", profile["model"])
         self.assertEqual(["LITELLM_API_KEY"], secret_keys)
         self.assertEqual("litellm", env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"])
-        self.assertEqual("codex/gpt-5.6-sol", env["CONTEXTFORGE_PI_DEFAULT_MODEL"])
-        self.assertEqual("high", env["CONTEXTFORGE_PI_DEFAULT_THINKING"])
-        self.assertEqual("high", env["CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT"])
+        self.assertEqual("codex/gpt-5.6-luna", env["CONTEXTFORGE_PI_DEFAULT_MODEL"])
+        self.assertEqual("medium", env["CONTEXTFORGE_PI_DEFAULT_THINKING"])
+        self.assertEqual("medium", env["CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT"])
         self.assertEqual("http://host.docker.internal:3333/v1", env["LITELLM_BASE_URL"])
+
+    def test_semantic_quorums_repeat_only_luna_for_tested_assistant_role(self) -> None:
+        service_runner = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-service-dialogue.py",
+            "role_correct_service_runner_test",
+        )
+        comprehensive = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-comprehensive-mcp-model-quorum.py",
+            "role_correct_comprehensive_quorum_test",
+        )
+        onboarding = _load_script_module(
+            ROOT / "docker/client-harness/scripts/run-onboarding-semantic-process-quorum.py",
+            "role_correct_onboarding_quorum_test",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            harness_root = Path(tmp)
+            (harness_root / "env").mkdir()
+            (harness_root / "semantic-model-profiles.json").write_text(
+                (ROOT / "docker/client-harness/semantic-model-profiles.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (harness_root / "env/semantic-model.env").write_text(
+                "LITELLM_API_KEY=dummy-test-key\n"
+                "LITELLM_BASE_URL=http://host.docker.internal:3333/v1\n",
+                encoding="utf-8",
+            )
+            available_env = service_runner.read_env(harness_root / "env/semantic-model.env")
+            comprehensive_runs = comprehensive.select_profiles(
+                service_runner,
+                harness_root,
+                "pi",
+                available_env,
+                [],
+                3,
+            )
+            onboarding_runs = onboarding.select_profiles(
+                service_runner,
+                harness_root,
+                "opencode",
+                [],
+                3,
+            )
+            self.assertEqual(3, len(comprehensive_runs))
+            self.assertEqual(3, len(onboarding_runs))
+            for run_profile in [*comprehensive_runs, *onboarding_runs]:
+                self.assertEqual("codex/gpt-5.6-luna", run_profile["model"])
+                self.assertEqual("blind", run_profile["semantic_role"])
+                self.assertEqual("medium", run_profile["reasoning_effort"])
+            with self.assertRaisesRegex(RuntimeError, "blind-agent Luna"):
+                comprehensive.select_profiles(
+                    service_runner,
+                    harness_root,
+                    "pi",
+                    available_env,
+                    ["litellm-codex-gpt-5.6-terra"],
+                    3,
+                )
 
     def test_ssh_tmux_live_target_prompt_uses_alias_not_real_host(self) -> None:
         spec = importlib.util.spec_from_file_location(
@@ -2535,7 +2606,7 @@ print(json.dumps(outputs))
                         {"LITELLM_API_KEY": "present"},
                     )
 
-    def test_comprehensive_mcp_semantic_tests_require_three_model_quorum(self) -> None:
+    def test_comprehensive_mcp_semantic_tests_require_role_correct_luna_run_quorum(self) -> None:
         skill = (ROOT / ".codex/skills/comprehensive-mcp-testing/SKILL.md").read_text(encoding="utf-8")
         method = (ROOT / ".codex/skills/comprehensive-mcp-testing/references/method.md").read_text(
             encoding="utf-8"
@@ -2551,18 +2622,18 @@ print(json.dumps(outputs))
 
         self.assertGreaterEqual(len(profiles), 3)
         for phrase in [
-            "at least three distinct eligible semantic-test model profiles",
-            "A one-model pass is useful slice evidence, not a test pass",
-            "The quorum is about model diversity over the same behavior",
+            "at least three independent Luna/medium tested-assistant runs",
+            "A one-run pass is useful slice evidence, not a test pass",
+            "The quorum is about independent blind-agent runs over the same behavior",
             "--service-test-prompt",
             "isolated client harness roots",
         ]:
             self.assertIn(phrase, skill_line_wrapped)
         for phrase in [
-            "`model_quorum`",
-            "Single-profile runs are model-slice evidence only",
-            "A test with one or two passing profiles is `quorum_incomplete`, not passed",
-            "The three-model quorum does not permit deterministic prose scoring",
+            "`run_quorum`",
+            "Single-run evidence is slice evidence only",
+            "A test with one or two passing runs is `quorum_incomplete`, not passed",
+            "The Luna run quorum does not permit deterministic prose scoring",
             "run-comprehensive-mcp-model-quorum.py",
             "does not score semantic pass/fail",
             "`--service-test-prompt`",
@@ -2572,13 +2643,13 @@ print(json.dumps(outputs))
         ]:
             self.assertIn(phrase, method_line_wrapped)
         for phrase in [
-            "MIN_MODEL_QUORUM = 3",
+            "MIN_RUN_QUORUM = 3",
             "semantic_acceptance",
-            "requires_non_spark_evaluator_per_model_and_quorum",
+            "requires_sol_evaluator_per_run_and_quorum",
             "quorum_run_incomplete",
-            "ready_for_evaluator",
+            "ready_for_sol_evaluator",
             "quorum runner does not score free-form assistant prose",
-            "varies only semantic model profile across runs",
+            "keeps Luna/medium fixed across runs",
         ]:
             self.assertIn(phrase, quorum_runner)
 
@@ -2751,6 +2822,90 @@ print(json.dumps(outputs))
                 }
                 with unittest.mock.patch.dict(os.environ, env, clear=True):
                     with self.assertRaisesRegex(ValueError, "reasoning"):
+                        renderer.render_config()
+
+    def test_pi_renderer_rejects_extra_or_direct_configuration_surfaces(self) -> None:
+        renderer = _load_script_module(
+            ROOT / "docker/client-harness/pi/render-config.py",
+            "contextforge_pi_strict_render_config_test",
+        )
+        canonical_models = json.loads(
+            (ROOT / "docker/client-harness/config/pi/models.json").read_text(encoding="utf-8")
+        )
+        canonical_settings = json.loads(
+            (ROOT / "docker/client-harness/config/pi/settings.json").read_text(encoding="utf-8")
+        )
+        mutations = [
+            lambda models, settings: models.update({"directProvider": {"apiKey": "direct"}}),
+            lambda models, settings: models["providers"]["litellm"].update({"headers": {"X-Key": "direct"}}),
+            lambda models, settings: models["providers"]["litellm"].update({"apiKey": "direct-secret"}),
+            lambda models, settings: models["providers"]["litellm"].update({"baseUrl": "https://api.openai.com/v1"}),
+            lambda models, settings: models["providers"]["litellm"]["compat"].update({"unexpected": True}),
+            lambda models, settings: models["providers"]["litellm"]["models"][0].update({"provider": "openai"}),
+            lambda models, settings: settings.update({"provider": "openai"}),
+            lambda models, settings: settings.update({"defaultProvider": "openai"}),
+            lambda models, settings: settings["enabledModels"].append("openai/gpt-4o"),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutate=mutate), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                models = json.loads(json.dumps(canonical_models))
+                settings = json.loads(json.dumps(canonical_settings))
+                mutate(models, settings)
+                models_source = root / "models.json"
+                settings_source = root / "settings.json"
+                models_source.write_text(json.dumps(models), encoding="utf-8")
+                settings_source.write_text(json.dumps(settings), encoding="utf-8")
+                env = {
+                    "CONTEXTFORGE_PI_MODELS_SOURCE": str(models_source),
+                    "CONTEXTFORGE_PI_SETTINGS_SOURCE": str(settings_source),
+                    "PI_CODING_AGENT_DIR": str(root / "target"),
+                }
+                with unittest.mock.patch.dict(os.environ, env, clear=True):
+                    with self.assertRaisesRegex(ValueError, "canonical Pi"):
+                        renderer.render_config()
+
+    def test_opencode_renderer_rejects_extra_or_direct_configuration_surfaces(self) -> None:
+        renderer = _load_script_module(
+            ROOT / "docker/client-harness/opencode/render-config.py",
+            "contextforge_opencode_strict_render_config_test",
+        )
+        canonical = json.loads(
+            (ROOT / "docker/client-harness/config/opencode/opencode.json").read_text(encoding="utf-8")
+        )
+        mutations = [
+            lambda data: data.update({"plugin": ["direct-provider-plugin"]}),
+            lambda data: data["provider"].update({"openai": {"models": {"gpt-4o": {}}}}),
+            lambda data: data.update({"enabled_providers": ["litellm", "openai"]}),
+            lambda data: data["provider"]["litellm"]["options"].update({"headers": {"X-Key": "direct"}}),
+            lambda data: data["provider"]["litellm"]["options"].update({"apiKey": "direct-secret"}),
+            lambda data: data["provider"]["litellm"]["options"].update({"baseURL": "https://api.openai.com/v1"}),
+            lambda data: data["provider"]["litellm"]["whitelist"].append("gpt-4o"),
+            lambda data: data["provider"]["litellm"]["models"]["codex/gpt-5.6-luna"].update(
+                {"provider": "openai"}
+            ),
+            lambda data: data["agent"].update(
+                {"direct": {"model": "openai/gpt-4o", "variant": "high"}}
+            ),
+            lambda data: data["agent"]["build"].update({"fallback_model": "openai/gpt-4o"}),
+            lambda data: data["mcp"]["contextforge-helper"]["environment"].update(
+                {"OPENAI_API_KEY": "direct-secret"}
+            ),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutate=mutate), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source_data = json.loads(json.dumps(canonical))
+                mutate(source_data)
+                source = root / "opencode.source.json"
+                target = root / "opencode.json"
+                source.write_text(json.dumps(source_data), encoding="utf-8")
+                env = {
+                    "CONTEXTFORGE_OPENCODE_CONFIG_SOURCE": str(source),
+                    "CONTEXTFORGE_OPENCODE_CONFIG_TARGET": str(target),
+                }
+                with unittest.mock.patch.dict(os.environ, env, clear=True):
+                    with self.assertRaisesRegex(ValueError, "canonical OpenCode"):
                         renderer.render_config()
 
     def test_opencode_image_provisions_container_local_contextforge_helper_runtime(self) -> None:
@@ -3089,6 +3244,11 @@ print(json.dumps(outputs))
         self.assertIn("-v \"${REPO_ROOT}:/repo:ro\"", host_launcher)
         self.assertIn("ENTRYPOINT [\"/usr/local/bin/contextforge-opencode-entrypoint\"]", dockerfile)
         self.assertIn("OPENCODE_CONFIG_DIR:=/home/agent/.config/opencode", entrypoint)
+        self.assertIn("OPENCODE_DISABLE_PROJECT_CONFIG:=1", entrypoint)
+        self.assertIn("export OPENCODE_DISABLE_PROJECT_CONFIG", entrypoint)
+        self.assertIn("rejects OPENCODE_CONFIG_CONTENT", entrypoint)
+        self.assertIn('export OPENCODE_CONFIG="${CONTEXTFORGE_OPENCODE_CONFIG_TARGET}"', entrypoint)
+        self.assertIn("OpenCode sandbox rejects direct-provider credential", entrypoint)
         self.assertIn("CONTEXTFORGE_OPENCODE_CONFIG_TARGET:=${OPENCODE_CONFIG_DIR}/opencode.json", entrypoint)
         self.assertIn("CONTEXTFORGE_OPENCODE_PLUGIN_TARGET:=${OPENCODE_CONFIG_DIR}/plugins/contextforge-project-init.js", entrypoint)
         self.assertIn("CONTEXTFORGE_OPENCODE_RULES_TARGET:=${OPENCODE_CONFIG_DIR}/AGENTS.md", entrypoint)
@@ -3109,6 +3269,8 @@ print(json.dumps(outputs))
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE: /tmp/contextforge-wrapper-token.local.json", compose)
         self.assertIn("CONTEXTFORGE_OPENCODE_RULES_SOURCE: /config/opencode/AGENTS.md", compose)
         self.assertIn("CONTEXTFORGE_OPENCODE_RULES_TARGET: /home/agent/.config/opencode/AGENTS.md", compose)
+        self.assertGreaterEqual(compose.count('OPENCODE_DISABLE_PROJECT_CONFIG: "1"'), 2)
+        self.assertGreaterEqual(compose.count('OPENCODE_CONFIG_CONTENT: ""'), 2)
         self.assertNotIn("../contextforge-harness/env:/config/contextforge", compose)
         self.assertIn("cp \"${CONTEXTFORGE_OPENCODE_CONFIG_SOURCE}\" \"${CONTEXTFORGE_OPENCODE_CONFIG_TARGET}\"", entrypoint)
         self.assertIn("cp \"${CONTEXTFORGE_OPENCODE_PLUGIN_SOURCE}\" \"${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}\"", entrypoint)
@@ -3289,14 +3451,14 @@ print(json.dumps(outputs))
         self.assertEqual(3, smoke.count("run_opencode_cell "))
         self.assertIn('--thinking "${thinking}"', smoke)
         self.assertIn('CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT="${variant}"', smoke)
-        self.assertEqual(2, smoke.count('require_exact_response "${marker}" "${output}"'))
+        self.assertEqual(2, smoke.count('require_exact_response "${marker}" "${output_file}"'))
         self.assertNotIn('grep -Fxq "${marker}"', smoke)
         self.assertIn("--env-file env/semantic-model.env", smoke)
 
     def test_six_cell_smoke_rejects_multiline_marker_output(self) -> None:
         source = (ROOT / "docker/client-harness/scripts/smoke-agents.sh").read_text(encoding="utf-8")
 
-        def run_smoke(*, noisy: bool) -> subprocess.CompletedProcess[str]:
+        def run_smoke(mode: str) -> subprocess.CompletedProcess[str]:
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 scripts = root / "scripts"
@@ -3318,8 +3480,10 @@ print(json.dumps(outputs))
                     "set -euo pipefail\n"
                     'prompt="${!#}"\n'
                     'marker="${prompt##*: }"\n'
-                    'if [[ "${FAKE_DOCKER_NOISY:-0}" == 1 ]]; then\n'
+                    'if [[ "${FAKE_DOCKER_MODE:-exact}" == noisy ]]; then\n'
                     '  printf "prefix\\n%s\\nsuffix\\n" "${marker}"\n'
+                    'elif [[ "${FAKE_DOCKER_MODE:-exact}" == trailing-blank ]]; then\n'
+                    '  printf "%s\\n\\n" "${marker}"\n'
                     "else\n"
                     '  printf "%s\\n" "${marker}"\n'
                     "fi\n",
@@ -3329,7 +3493,7 @@ print(json.dumps(outputs))
                 env = {
                     **os.environ,
                     "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
-                    "FAKE_DOCKER_NOISY": "1" if noisy else "0",
+                    "FAKE_DOCKER_MODE": mode,
                 }
                 return subprocess.run(
                     [str(smoke)],
@@ -3340,8 +3504,9 @@ print(json.dumps(outputs))
                     check=False,
                 )
 
-        self.assertEqual(0, run_smoke(noisy=False).returncode)
-        self.assertNotEqual(0, run_smoke(noisy=True).returncode)
+        self.assertEqual(0, run_smoke("exact").returncode)
+        self.assertNotEqual(0, run_smoke("noisy").returncode)
+        self.assertNotEqual(0, run_smoke("trailing-blank").returncode)
 
     def test_legacy_sandbox_smokes_use_litellm_config_without_removed_provider(self) -> None:
         for script_name in [
@@ -3429,15 +3594,25 @@ print(json.dumps(outputs))
             env = {
                 **os.environ,
                 "OPENCODE_CONFIG": str(config),
+                "CONTEXTFORGE_OPENCODE_CONFIG_TARGET": str(root / "rendered-opencode.json"),
+                "CONTEXTFORGE_OPENCODE_RENDERER": str(
+                    ROOT / "docker/client-harness/opencode/render-config.py"
+                ),
                 "LITELLM_BASE_URL": "http://host.docker.internal:3333/v1",
                 "LITELLM_API_KEY": "dummy-test-key",
                 "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL": "litellm/codex/gpt-5.6-luna",
+                "CONTEXTFORGE_OPENCODE_SMALL_MODEL": "litellm/codex/gpt-5.6-luna",
+                "CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT": "medium",
+                "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
                 "OPENAI_API_KEY": "",
                 "CODEX_API_KEY": "",
                 "ANTHROPIC_API_KEY": "",
                 "OPENROUTER_API_KEY": "",
                 "GOOGLE_API_KEY": "",
                 "GEMINI_API_KEY": "",
+                "PERPLEXITY_API_KEY": "",
+                "EXA_API_KEY": "",
+                "CONTEXT7_API_KEY": "",
             }
             accepted = subprocess.run(
                 ["bash", str(entrypoint)],
@@ -3460,6 +3635,16 @@ print(json.dumps(outputs))
                 capture_output=True,
                 check=False,
             )
+            malformed = json.loads(canonical)
+            malformed["agent"]["direct"] = {"model": "openai/gpt-4o", "variant": "high"}
+            config.write_text(json.dumps(malformed), encoding="utf-8")
+            direct_agent = subprocess.run(
+                ["bash", str(entrypoint)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
 
         self.assertEqual(0, accepted.returncode, accepted.stderr)
         self.assertEqual("validated", accepted.stdout.strip())
@@ -3467,8 +3652,36 @@ print(json.dumps(outputs))
         self.assertIn("sandbox LiteLLM", misrouted.stderr)
         self.assertEqual(2, direct_key.returncode)
         self.assertIn("direct-provider credential", direct_key.stderr)
+        self.assertNotEqual(0, direct_agent.returncode)
 
-    def test_comprehensive_mcp_gpu_stewardship_is_local_profile_conditional(self) -> None:
+    def test_opencode_entrypoints_reject_runtime_config_content_override(self) -> None:
+        injected = json.dumps(
+            {
+                "model": "openai/gpt-4o",
+                "enabled_providers": ["openai"],
+                "provider": {"openai": {"options": {"apiKey": "direct-secret"}}},
+                "agent": {"rogue": {"model": "openai/gpt-4o"}},
+            }
+        )
+        for entrypoint_path in [
+            ROOT / "docker/client-harness/opencode/entrypoint.sh",
+            ROOT / "docker/client-harness/opencode-alpine/entrypoint.sh",
+        ]:
+            with self.subTest(entrypoint=entrypoint_path.parent.name):
+                result = subprocess.run(
+                    ["bash", str(entrypoint_path)],
+                    env={
+                        "PATH": os.environ.get("PATH", ""),
+                        "OPENCODE_CONFIG_CONTENT": injected,
+                    },
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(2, result.returncode, result.stderr)
+                self.assertIn("rejects OPENCODE_CONFIG_CONTENT", result.stderr)
+
+    def test_comprehensive_mcp_semantic_skill_keeps_fixed_litellm_roles(self) -> None:
         skill = (ROOT / ".codex/skills/comprehensive-mcp-testing/SKILL.md").read_text(encoding="utf-8")
         method = (ROOT / ".codex/skills/comprehensive-mcp-testing/references/method.md").read_text(
             encoding="utf-8"
@@ -3476,14 +3689,12 @@ print(json.dumps(outputs))
         skill_line_wrapped = " ".join(skill.split())
         method_line_wrapped = " ".join(method.split())
 
-        self.assertIn("Determine the selected provider/model profile first", skill_line_wrapped)
-        self.assertIn("Randomize profiles per test run, not per inference", skill_line_wrapped)
-        self.assertIn("Only run local-model/GPU stewardship checks", skill_line_wrapped)
-        self.assertIn("Only check local model servers, `nvidia-smi`, or `ollama ps`", method_line_wrapped)
-        self.assertIn("when that profile is actually hosted by the local model stack", method_line_wrapped)
-        self.assertIn("For local-hosted profiles only, add:", method)
-        self.assertIn("Do not spend time checking `nvidia-smi`, `ollama ps`, or a", method_line_wrapped)
-        self.assertIn("when the active profile is OpenRouter or another remote provider", method_line_wrapped)
+        self.assertIn("All tested-assistant semantic runs use Luna/medium through LiteLLM", skill_line_wrapped)
+        self.assertIn("Terra/high is reserved for simulated humans", skill_line_wrapped)
+        self.assertIn("Sol/high is reserved for semantic evaluation", skill_line_wrapped)
+        self.assertIn("Do not select local, direct-provider, Terra, or Sol profiles for the tested assistant", method_line_wrapped)
+        self.assertNotIn("OpenRouter", skill + method)
+        self.assertNotIn("llama.cpp", skill + method)
 
     def test_comprehensive_mcp_live_target_credentials_stay_out_of_prompts(self) -> None:
         method = (ROOT / ".codex/skills/comprehensive-mcp-testing/references/method.md").read_text(

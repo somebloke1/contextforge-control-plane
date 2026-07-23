@@ -13,6 +13,9 @@ The method layer is case-independent:
   capture, verifier invocation, and package assembly;
 - run the tested client as a real assistant in a stable command-line session or
   explicit continuation chain;
+- use Luna (`codex/gpt-5.6-luna`) through LiteLLM with medium reasoning for every
+  tested-assistant run; reserve Terra/high for simulated humans and Sol/high for
+  semantic evaluation;
 - send only minimal natural prompts that a human would plausibly send;
 - preserve installer equivalence: the tested assistant may receive only the
   same product surfaces a random installer would receive, plus simulated-human
@@ -174,10 +177,10 @@ artifacts, if the assistant substitutes them for ContextForge
 continuation/runtime-apply, or if the dialogue ends at local documentation
 while claiming service availability.
 
-Acceptance requires Pi and OpenCode coverage across at least three distinct
-eligible semantic-test model profiles per target client. Deterministic runner
-checks may package setup, commands, JSON, files, endpoints, and transcripts,
-but semantic adequacy belongs to the evaluator.
+Acceptance requires Pi and OpenCode coverage across at least three independent
+Luna/medium tested-assistant runs per target client. Deterministic runner checks
+may package setup, commands, JSON, files, endpoints, and transcripts, but
+semantic adequacy belongs to Sol/high or the responsible human evaluator.
 
 ## Deterministic Boundary
 
