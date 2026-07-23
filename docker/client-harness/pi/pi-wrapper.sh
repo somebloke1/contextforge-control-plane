@@ -1,5 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
+
+unset BASH_ENV ENV
+readonly PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH
 
 : "${CONTEXTFORGE_PI_REAL_BIN:=/usr/bin/pi}"
 : "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=litellm}"

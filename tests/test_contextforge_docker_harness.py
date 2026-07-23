@@ -1634,6 +1634,9 @@ print(json.dumps(outputs))
         self.assertIn('CONTEXTFORGE_PI_STANDARD_REAL_BIN="/usr/bin/pi"', wrapper)
         self.assertIn('CONTEXTFORGE_PI_ALPINE_REAL_BIN="/usr/local/bin/contextforge-pi-real"', wrapper)
         self.assertIn("must use an exact image-owned path", wrapper)
+        self.assertTrue(wrapper.startswith("#!/bin/bash -p\n"))
+        self.assertIn("unset BASH_ENV ENV", wrapper)
+        self.assertIn('readonly PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"', wrapper)
         self.assertIn(". /usr/local/bin/contextforge-pi-bootstrap", wrapper)
         self.assertIn("default_args+=(--provider \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER}\")", wrapper)
         self.assertIn("default_args+=(--model \"${CONTEXTFORGE_PI_DEFAULT_MODEL}\")", wrapper)
@@ -1778,6 +1781,38 @@ print(json.dumps(outputs))
                     self.assertFalse(runtime_dir.exists())
                     self.assertFalse(approval_path.exists())
 
+            for slug, real_bin in [
+                ("standard-dot", "/usr/bin/../bin/pi"),
+                ("standard-double-slash", "//usr/bin/pi"),
+                ("alpine-dot", "/usr/local/bin/./contextforge-pi-real"),
+                ("alpine-parent", "/usr/local/bin/../bin/contextforge-pi-real"),
+            ]:
+                with self.subTest(slug=slug):
+                    case_root = root / slug
+                    case_root.mkdir()
+                    wrapper = case_root / "pi-wrapper"
+                    wrapper.write_text(source, encoding="utf-8")
+                    wrapper.chmod(0o755)
+                    agent_dir = case_root / "agent"
+                    runtime_dir = case_root / "runtime"
+                    completed = subprocess.run(
+                        [str(wrapper), "--version"],
+                        cwd=ROOT,
+                        env={
+                            **os.environ,
+                            "CONTEXTFORGE_PI_REAL_BIN": real_bin,
+                            "PI_CODING_AGENT_DIR": str(agent_dir),
+                            "CONTEXTFORGE_PROJECT_INIT_RUN_ROOT": str(runtime_dir),
+                        },
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertEqual(2, completed.returncode)
+                    self.assertIn("must use an exact image-owned path", completed.stderr)
+                    self.assertFalse(agent_dir.exists())
+                    self.assertFalse(runtime_dir.exists())
+
             for slug, payload in [
                 ("arbitrary-executable", '#!/usr/bin/env bash\nexit 0\n'),
                 ("copied-wrapper", source),
@@ -1811,6 +1846,73 @@ print(json.dumps(outputs))
                     self.assertIn("must use an exact image-owned path", completed.stderr)
                     self.assertFalse(agent_dir.exists())
                     self.assertFalse(runtime_dir.exists())
+
+    def test_pi_wrapper_ignores_shell_startup_and_path_injection(self) -> None:
+        source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            marker = root / "injection-marker"
+            real_pi = root / "real-pi"
+            real_pi.write_text(
+                "#!/bin/bash\n"
+                '[[ -z "${BASH_ENV:-}" && -z "${ENV:-}" ]] || exit 91\n'
+                '[[ "${PATH}" == "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" ]] || exit 92\n'
+                'printf "real-pi-ok\\n"\n',
+                encoding="utf-8",
+            )
+            real_pi.chmod(0o755)
+            bootstrap = root / "bootstrap"
+            bootstrap.write_text(":\n", encoding="utf-8")
+            wrapper = root / "pi"
+            wrapper.write_text(
+                source.replace(
+                    ". /usr/local/bin/contextforge-pi-bootstrap",
+                    f'. "{bootstrap}"',
+                ).replace(
+                    'readonly CONTEXTFORGE_PI_STANDARD_REAL_BIN="/usr/bin/pi"',
+                    f'readonly CONTEXTFORGE_PI_STANDARD_REAL_BIN="{real_pi}"',
+                ),
+                encoding="utf-8",
+            )
+            wrapper.chmod(0o755)
+            wrapper_symlink = root / "pi-symlink"
+            wrapper_symlink.symlink_to(wrapper)
+            wrapper_hardlink = root / "pi-hardlink"
+            os.link(wrapper, wrapper_hardlink)
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            fake_bash = fake_bin / "bash"
+            fake_bash.write_text(
+                f'#!/bin/sh\nprintf fake-bash > "{marker}"\nexit 93\n',
+                encoding="utf-8",
+            )
+            fake_bash.chmod(0o755)
+            bash_env = root / "bash-env"
+            bash_env.write_text(
+                f'printf bash-env > "{marker}"\nvalidate_provider() {{ return 0; }}\n',
+                encoding="utf-8",
+            )
+            for invocation in [wrapper, wrapper_symlink, wrapper_hardlink]:
+                with self.subTest(invocation=invocation.name):
+                    marker.unlink(missing_ok=True)
+                    completed = subprocess.run(
+                        [str(invocation), "--version"],
+                        cwd=ROOT,
+                        env={
+                            **os.environ,
+                            "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
+                            "BASH_ENV": str(bash_env),
+                            "ENV": str(bash_env),
+                            "BASH_FUNC_validate_provider%%": f"() {{ printf function > '{marker}'; }}",
+                            "CONTEXTFORGE_PI_REAL_BIN": str(real_pi),
+                        },
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertEqual(0, completed.returncode, completed.stderr)
+                    self.assertEqual("real-pi-ok", completed.stdout.strip())
+                    self.assertFalse(marker.exists())
 
     def test_pi_wrapper_injects_approved_model_scope_and_role_thinking(self) -> None:
         source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
