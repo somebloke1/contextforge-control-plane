@@ -17,7 +17,10 @@ RUN apt-get update \
 COPY --chown=agent:agent contextforge-pi-bootstrap.sh /usr/local/bin/contextforge-pi-bootstrap
 COPY --chown=agent:agent pi-wrapper.sh /usr/local/bin/pi
 COPY --chown=agent:agent render-config.py /usr/local/lib/contextforge-pi-render-config.py
-RUN chmod 0755 /usr/local/bin/contextforge-pi-bootstrap /usr/local/bin/pi
+RUN test -f /usr/bin/pi \
+    && test -x /usr/bin/pi \
+    && ! test /usr/bin/pi -ef /usr/local/bin/pi \
+    && chmod 0755 /usr/local/bin/contextforge-pi-bootstrap /usr/local/bin/pi
 USER agent
 
 ENV PI_CODING_AGENT_DIR=/home/agent/.pi/agent

@@ -6,16 +6,13 @@ set -euo pipefail
 : "${CONTEXTFORGE_PI_DEFAULT_MODEL:=codex/gpt-5.6-luna}"
 : "${CONTEXTFORGE_PI_DEFAULT_THINKING:=medium}"
 readonly CONTEXTFORGE_PI_APPROVED_MODELS="litellm/codex/gpt-5.6-terra,litellm/codex/gpt-5.6-luna,litellm/codex/gpt-5.6-sol"
+readonly CONTEXTFORGE_PI_STANDARD_REAL_BIN="/usr/bin/pi"
+readonly CONTEXTFORGE_PI_ALPINE_REAL_BIN="/usr/local/bin/contextforge-pi-real"
 
 fail_model_policy() {
   printf '%s\n' "$1" >&2
   exit 2
 }
-
-[[ -f "${CONTEXTFORGE_PI_REAL_BIN}" && -x "${CONTEXTFORGE_PI_REAL_BIN}" ]] || \
-  fail_model_policy "Pi sandbox real executable is missing or not executable"
-[[ ! "${CONTEXTFORGE_PI_REAL_BIN}" -ef "${BASH_SOURCE[0]}" ]] || \
-  fail_model_policy "Pi sandbox real executable must not resolve to the wrapper"
 
 expected_thinking() {
   case "$1" in
@@ -116,6 +113,15 @@ selected_expected_thinking="$(expected_thinking "${selected_model}")"
 if [[ "${has_thinking}" == true && "${selected_thinking}" != "${selected_expected_thinking}" ]]; then
   fail_model_policy "Pi sandbox thinking level ${selected_thinking} does not match ${selected_model} (${selected_expected_thinking})"
 fi
+
+case "${CONTEXTFORGE_PI_REAL_BIN}" in
+  "${CONTEXTFORGE_PI_STANDARD_REAL_BIN}"|"${CONTEXTFORGE_PI_ALPINE_REAL_BIN}") ;;
+  *) fail_model_policy "Pi sandbox real executable must use an exact image-owned path" ;;
+esac
+[[ -f "${CONTEXTFORGE_PI_REAL_BIN}" && -x "${CONTEXTFORGE_PI_REAL_BIN}" ]] || \
+  fail_model_policy "Pi sandbox real executable is missing or not executable"
+[[ ! "${CONTEXTFORGE_PI_REAL_BIN}" -ef "${BASH_SOURCE[0]}" ]] || \
+  fail_model_policy "Pi sandbox real executable must not resolve to the wrapper"
 
 # shellcheck source=/usr/local/bin/contextforge-pi-bootstrap
 . /usr/local/bin/contextforge-pi-bootstrap

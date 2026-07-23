@@ -1613,6 +1613,9 @@ print(json.dumps(outputs))
         self.assertIn("contextforge-pi-bootstrap.sh", dockerfile)
         self.assertIn("pi-wrapper.sh", dockerfile)
         self.assertIn("CONTEXTFORGE_PI_REAL_BIN=/usr/bin/pi", dockerfile)
+        self.assertIn("test -f /usr/bin/pi", dockerfile)
+        self.assertIn("test -x /usr/bin/pi", dockerfile)
+        self.assertIn("! test /usr/bin/pi -ef /usr/local/bin/pi", dockerfile)
         self.assertIn('MCP_CONTEXTFORGE_GATEWAY_VERSION: "${MCP_CONTEXTFORGE_GATEWAY_VERSION:-1.0.3}"', compose)
 
     def test_pi_image_wraps_bare_pi_for_interactive_harness_sessions(self) -> None:
@@ -1628,6 +1631,9 @@ print(json.dumps(outputs))
         self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=litellm}\"", wrapper)
         self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_MODEL:=codex/gpt-5.6-luna}\"", wrapper)
         self.assertIn(": \"${CONTEXTFORGE_PI_DEFAULT_THINKING:=medium}\"", wrapper)
+        self.assertIn('CONTEXTFORGE_PI_STANDARD_REAL_BIN="/usr/bin/pi"', wrapper)
+        self.assertIn('CONTEXTFORGE_PI_ALPINE_REAL_BIN="/usr/local/bin/contextforge-pi-real"', wrapper)
+        self.assertIn("must use an exact image-owned path", wrapper)
         self.assertIn(". /usr/local/bin/contextforge-pi-bootstrap", wrapper)
         self.assertIn("default_args+=(--provider \"${CONTEXTFORGE_PI_DEFAULT_PROVIDER}\")", wrapper)
         self.assertIn("default_args+=(--model \"${CONTEXTFORGE_PI_DEFAULT_MODEL}\")", wrapper)
@@ -1716,33 +1722,42 @@ print(json.dumps(outputs))
         source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            wrapper = root / "pi-wrapper"
-            wrapper.write_text(source, encoding="utf-8")
-            wrapper.chmod(0o755)
-            directory = root / "directory"
-            directory.mkdir()
-            non_executable = root / "non-executable"
-            non_executable.write_text("not executable\n", encoding="utf-8")
-            broken_symlink = root / "broken-symlink"
-            broken_symlink.symlink_to(root / "missing-target")
-            wrapper_symlink = root / "wrapper-symlink"
-            wrapper_symlink.symlink_to(wrapper)
-            wrapper_hardlink = root / "wrapper-hardlink"
-            os.link(wrapper, wrapper_hardlink)
             cases = [
-                ("missing", root / "missing", "missing or not executable"),
-                ("directory", directory, "missing or not executable"),
-                ("non-executable", non_executable, "missing or not executable"),
-                ("broken-symlink", broken_symlink, "missing or not executable"),
-                ("wrapper", wrapper, "must not resolve to the wrapper"),
-                ("wrapper-symlink", wrapper_symlink, "must not resolve to the wrapper"),
-                ("wrapper-hardlink", wrapper_hardlink, "must not resolve to the wrapper"),
+                ("missing", "missing", "missing or not executable"),
+                ("directory", "directory", "missing or not executable"),
+                ("non-executable", "non-executable", "missing or not executable"),
+                ("broken-symlink", "broken-symlink", "missing or not executable"),
+                ("wrapper", "wrapper", "must not resolve to the wrapper"),
+                ("wrapper-symlink", "wrapper-symlink", "must not resolve to the wrapper"),
+                ("wrapper-hardlink", "wrapper-hardlink", "must not resolve to the wrapper"),
             ]
-            for slug, real_bin, expected_error in cases:
+            for slug, target_kind, expected_error in cases:
                 with self.subTest(slug=slug):
-                    agent_dir = root / f"agent-{slug}"
-                    runtime_dir = root / f"runtime-{slug}"
-                    approval_path = root / f"approval-{slug}.json"
+                    case_root = root / slug
+                    case_root.mkdir()
+                    wrapper = case_root / "pi-wrapper"
+                    real_bin = wrapper if target_kind == "wrapper" else case_root / "real-pi"
+                    wrapper.write_text(
+                        source.replace(
+                            'readonly CONTEXTFORGE_PI_STANDARD_REAL_BIN="/usr/bin/pi"',
+                            f'readonly CONTEXTFORGE_PI_STANDARD_REAL_BIN="{real_bin}"',
+                        ),
+                        encoding="utf-8",
+                    )
+                    wrapper.chmod(0o755)
+                    if target_kind == "directory":
+                        real_bin.mkdir()
+                    elif target_kind == "non-executable":
+                        real_bin.write_text("not executable\n", encoding="utf-8")
+                    elif target_kind == "broken-symlink":
+                        real_bin.symlink_to(case_root / "missing-target")
+                    elif target_kind == "wrapper-symlink":
+                        real_bin.symlink_to(wrapper)
+                    elif target_kind == "wrapper-hardlink":
+                        os.link(wrapper, real_bin)
+                    agent_dir = case_root / "agent"
+                    runtime_dir = case_root / "runtime"
+                    approval_path = case_root / "approval.json"
                     completed = subprocess.run(
                         ["bash", str(wrapper), "--version"],
                         cwd=ROOT,
@@ -1763,24 +1778,61 @@ print(json.dumps(outputs))
                     self.assertFalse(runtime_dir.exists())
                     self.assertFalse(approval_path.exists())
 
+            for slug, payload in [
+                ("arbitrary-executable", '#!/usr/bin/env bash\nexit 0\n'),
+                ("copied-wrapper", source),
+                ("modified-wrapper", source + "\n# modified copy\n"),
+            ]:
+                with self.subTest(slug=slug):
+                    case_root = root / slug
+                    case_root.mkdir()
+                    wrapper = case_root / "pi-wrapper"
+                    wrapper.write_text(source, encoding="utf-8")
+                    wrapper.chmod(0o755)
+                    real_bin = case_root / "real-pi"
+                    real_bin.write_text(payload, encoding="utf-8")
+                    real_bin.chmod(0o755)
+                    agent_dir = case_root / "agent"
+                    runtime_dir = case_root / "runtime"
+                    completed = subprocess.run(
+                        ["bash", str(wrapper), "--version"],
+                        cwd=ROOT,
+                        env={
+                            **os.environ,
+                            "CONTEXTFORGE_PI_REAL_BIN": str(real_bin),
+                            "PI_CODING_AGENT_DIR": str(agent_dir),
+                            "CONTEXTFORGE_PROJECT_INIT_RUN_ROOT": str(runtime_dir),
+                        },
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertEqual(2, completed.returncode)
+                    self.assertIn("must use an exact image-owned path", completed.stderr)
+                    self.assertFalse(agent_dir.exists())
+                    self.assertFalse(runtime_dir.exists())
+
     def test_pi_wrapper_injects_approved_model_scope_and_role_thinking(self) -> None:
         source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            real_pi = root / "real-pi"
+            real_pi.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n', encoding="utf-8")
+            real_pi.chmod(0o755)
             wrapper = root / "pi"
             wrapper.write_text(
                 source.replace(
                     ". /usr/local/bin/contextforge-pi-bootstrap",
                     '. "${CONTEXTFORGE_TEST_BOOTSTRAP}"',
+                ).replace(
+                    'readonly CONTEXTFORGE_PI_STANDARD_REAL_BIN="/usr/bin/pi"',
+                    f'readonly CONTEXTFORGE_PI_STANDARD_REAL_BIN="{real_pi}"',
                 ),
                 encoding="utf-8",
             )
             wrapper.chmod(0o755)
             bootstrap = root / "bootstrap.sh"
             bootstrap.write_text(":\n", encoding="utf-8")
-            real_pi = root / "real-pi"
-            real_pi.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n', encoding="utf-8")
-            real_pi.chmod(0o755)
             completed = subprocess.run(
                 [
                     str(wrapper),
