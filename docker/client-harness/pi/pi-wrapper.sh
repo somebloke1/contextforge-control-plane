@@ -12,6 +12,9 @@ fail_model_policy() {
   exit 2
 }
 
+[[ -x "${CONTEXTFORGE_PI_REAL_BIN}" ]] || \
+  fail_model_policy "Pi sandbox real executable is missing or not executable"
+
 expected_thinking() {
   case "$1" in
     codex/gpt-5.6-terra) printf 'high\n' ;;

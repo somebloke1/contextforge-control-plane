@@ -1648,6 +1648,16 @@ print(json.dumps(outputs))
         self.assertIn("Refusing unsafe CONTEXTFORGE_PI_SHIM_INSTALL_DIR", bootstrap)
         self.assertNotIn("/home/dgk/.pi", dockerfile + wrapper + bootstrap + renderer)
 
+    def test_pi_alpine_preserves_real_npm_executable_before_installing_wrapper(self) -> None:
+        dockerfile = (ROOT / "docker/client-harness/pi-alpine/Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("CONTEXTFORGE_PI_REAL_BIN=/usr/local/bin/contextforge-pi-real", dockerfile)
+        self.assertIn('installed_pi="$(command -v pi)"', dockerfile)
+        self.assertIn('[ "${installed_pi}" = /usr/local/bin/pi ]', dockerfile)
+        self.assertIn('mv "${installed_pi}" /usr/local/bin/contextforge-pi-real', dockerfile)
+        self.assertGreaterEqual(dockerfile.count("test -x /usr/local/bin/contextforge-pi-real"), 2)
+        self.assertIn("COPY --chown=agent:agent pi/pi-wrapper.sh /usr/local/bin/pi", dockerfile)
+
     def test_pi_wrapper_rejects_non_litellm_arguments_before_bootstrap(self) -> None:
         wrapper = ROOT / "docker/client-harness/pi/pi-wrapper.sh"
         base_env = {
@@ -1699,6 +1709,17 @@ print(json.dumps(outputs))
                 )
                 self.assertEqual(2, completed.returncode)
                 self.assertIn(expected_error, completed.stderr)
+
+        missing_real_pi = subprocess.run(
+            ["bash", str(wrapper), "--version"],
+            cwd=ROOT,
+            env={**base_env, "CONTEXTFORGE_PI_REAL_BIN": "/definitely/missing/pi"},
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(2, missing_real_pi.returncode)
+        self.assertIn("real executable is missing or not executable", missing_real_pi.stderr)
 
     def test_pi_wrapper_injects_approved_model_scope_and_role_thinking(self) -> None:
         source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
