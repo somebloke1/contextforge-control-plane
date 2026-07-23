@@ -60,6 +60,19 @@ Required fields:
 - `lifecycle`: one of `active`, `retired`, `deprecated`
 - `provenance`: object describing source and migration history
 
+Recommended v1 extension fields for precise diagnostics and future instance
+selection:
+
+- `scope_type`: concrete isolation signal such as
+  `provider_credential_scope`, `caller_supplied_local_repo`, or
+  `single_workspace_code_intelligence`
+- `instance_model`: concrete runtime/instance strategy; defaults to the
+  instantiation class when no more specific model is declared
+
+Runtime discovery must remain compatible with already-seeded v1 metadata that
+omits these extensions and derive conservative display defaults from
+`scope_model` and `instantiation_class`.
+
 `binding` shapes:
 
 ```json
@@ -86,9 +99,15 @@ server names, gateway names, tags, or repo-local manifests.
 
 - `actions_supported`: subset of `list`, `enable`, `disable`, `remove`,
   `repair`, `details`
-- `required_context`: structured hints such as project root requirements
+- `required_context`: structured hints such as project root, credential scope,
+  request context, or session scope requirements
 - `client_support`: per-client support hints for Pi, OpenCode, Codex, and
   future clients
+
+The runtime descriptor emitted to the helper must preserve these nested helper
+fields, `runtime.reload_required`, the guidance object, and the concrete
+`scope_type`/`instance_model`; it must not silently replace them with empty
+legacy top-level defaults.
 
 `guidance` fields:
 
@@ -155,7 +174,14 @@ input only.
 
 The script must:
 
+- require or report an explicit ContextForge target base URL and matching
+  client-scoped env when operating on the 4445 development instance
 - use ContextForge API routes, not direct database writes
+- read live resources, servers, gateways, and associations during dry-run so
+  create/update/association actions describe target state without mutation
+- include every canonical service family represented by the intended catalog;
+  current development scope includes Time and Chrome DevTools as well as the
+  original nine offerings
 - upsert resources by URI
 - preserve unrelated existing server tool/resource/prompt associations
 - avoid printing secrets
@@ -173,6 +199,10 @@ Deterministic tests must cover:
 - literal and project-hash-template bindings produce expected project-state keys
 - ContextForge catalog read failures return a fail-visible no-mutation result
 - migration preserves existing server associations
+- nested helper/runtime/guidance fields survive runtime discovery
+- credential-scoped services are represented as per-user rather than global
+- dry-run reads target state while performing no mutation
+- all intended canonical service families are covered or fail visibly
 
 Live acceptance still requires qwen-backed Pi and OpenCode runs after the
 metadata move, but deterministic tests own only structure, state, and command

@@ -35,6 +35,7 @@ RESOURCE_NAME_TEMPLATE = "service_offering_{safe_offering_id}_v1"
 SERVICE_OFFERING_TAGS = ["contextforge-service-offering", "service-offering"]
 STANDARD_ACTIONS = ["list", "enable", "disable", "remove", "repair", "details"]
 CANONICAL_SEED_SERVICES = {
+    "chrome-devtools",
     "context7",
     "exa-search",
     "github",
@@ -43,6 +44,7 @@ CANONICAL_SEED_SERVICES = {
     "playwright",
     "serena",
     "ssh-tmux",
+    "time",
     "web-search",
 }
 SERVICE_ALIASES = {
@@ -51,6 +53,9 @@ SERVICE_ALIASES = {
 }
 SECRET_KEY_FRAGMENTS = ("token", "password", "secret", "api_key", "apikey", "private_key", "client_secret")
 UUIDISH_RE = re.compile(r"^[0-9a-fA-F]{32}$|^[0-9a-fA-F-]{36}$")
+TARGET_BASE_URL: str | None = None
+TARGET_ENV_FILE: Path | None = None
+TARGET_TOKEN: str | None = None
 
 
 @dataclass
@@ -69,6 +74,7 @@ class PlannedOffering:
 class MigrationReport:
     created: list[str] = field(default_factory=list)
     updated: list[str] = field(default_factory=list)
+    unchanged: list[str] = field(default_factory=list)
     associated: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     errors: list[dict[str, str]] = field(default_factory=list)
@@ -78,11 +84,13 @@ class MigrationReport:
         return {
             "created": len(self.created),
             "updated": len(self.updated),
+            "unchanged": len(self.unchanged),
             "associated": len(self.associated),
             "skipped": len(self.skipped),
             "errors": len(self.errors),
             "created_services": self.created,
             "updated_services": self.updated,
+            "unchanged_services": self.unchanged,
             "associated_services": self.associated,
             "skipped_services": self.skipped,
             "error_details": self.errors,
@@ -91,19 +99,51 @@ class MigrationReport:
 
 
 def _base_url() -> str:
-    return common.contextforge_base_url()
+    return (TARGET_BASE_URL or common.contextforge_base_url()).rstrip("/")
+
+
+def _target_login_token(base_url: str, email: str, password: str) -> str:
+    for login_path in ("/auth/login", "/auth/email/login"):
+        request = urllib.request.Request(
+            f"{base_url.rstrip('/')}{login_path}",
+            data=json.dumps({"email": email, "password": password}).encode("utf-8"),
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code in {404, 405}:
+                continue
+            raise
+        token = payload.get("access_token") if isinstance(payload, dict) else None
+        if isinstance(token, str) and token:
+            return token
+    raise RuntimeError(f"ContextForge login did not return an access token for {base_url.rstrip('/')}")
 
 
 def _token() -> str:
-    env_path = common.contextforge_env_path()
-    if env_path is None:
+    global TARGET_TOKEN
+    if TARGET_TOKEN:
+        return TARGET_TOKEN
+    env_path = TARGET_ENV_FILE or common.contextforge_env_path()
+    if env_path is None or not env_path.exists():
         raise RuntimeError("no ContextForge client-scoped env file was found")
     env = gateway._read_env(env_path)
-    return gateway._token(
-        env.get("PLATFORM_ADMIN_EMAIL"),
-        env.get("PLATFORM_ADMIN_PASSWORD"),
-        bearer_token=env.get("CONTEXTFORGE_BEARER_TOKEN"),
-    )
+    bearer = str(env.get("CONTEXTFORGE_BEARER_TOKEN") or "").removeprefix("Bearer ").strip()
+    if bearer:
+        TARGET_TOKEN = bearer
+        return TARGET_TOKEN
+    email = str(env.get("PLATFORM_ADMIN_EMAIL") or "")
+    password = str(env.get("PLATFORM_ADMIN_PASSWORD") or "")
+    if not email or not password:
+        raise RuntimeError(f"missing ContextForge credentials in {env_path}")
+    if TARGET_BASE_URL:
+        TARGET_TOKEN = _target_login_token(_base_url(), email, password)
+    else:
+        TARGET_TOKEN = gateway._token(email, password)
+    return TARGET_TOKEN
 
 
 def _request(method: str, path: str, *, body: dict[str, Any] | None = None) -> Any:
@@ -223,7 +263,23 @@ def _scope_model(instance: Mapping[str, Any], instantiation_class: str) -> str:
         return declared
     if instantiation_class == "instance_per_project":
         return "per_project"
+    if instantiation_class in {"credential_scoped", "per_user"}:
+        return "per_user"
     return "global"
+
+
+def _required_context(instance: Mapping[str, Any], scope_model: str, instantiation_class: str) -> dict[str, str]:
+    if scope_model == "per_project":
+        return {"project_root": "required"}
+    scope = instance.get("scope") if isinstance(instance.get("scope"), Mapping) else {}
+    scope_type = str(scope.get("scope_type") or "")
+    if scope_type == "caller_supplied_local_repo":
+        return {"project_root": "request_context_required"}
+    if instantiation_class == "credential_scoped":
+        return {"credential_scope": "required"}
+    if instantiation_class == "session_scoped":
+        return {"session_scope": "required"}
+    return {}
 
 
 def _instantiation_class(instance: Mapping[str, Any]) -> str:
@@ -263,7 +319,10 @@ def _metadata_from_instance(instance: Mapping[str, Any], *, instance_dir: str) -
     server_id, server_name, gateway_id, gateway_name = _contextforge_runtime(instance)
     display_name = _display_name(instance, service_family)
     scope = instance.get("scope") if isinstance(instance.get("scope"), Mapping) else {}
+    scope_type = str(scope.get("scope_type") or scope_model)
     description = str(instance.get("description") or scope.get("notes") or f"{display_name} service.").strip()
+    required_context = _required_context(instance, scope_model, instantiation_class)
+    client_support = {"pi": True, "opencode": True, "codex": False}
     resource_uri = RESOURCE_URI_TEMPLATE.format(offering_id=service_family)
     return {
         "schema_uri": common.SERVICE_OFFERING_SCHEMA_URI,
@@ -275,7 +334,10 @@ def _metadata_from_instance(instance: Mapping[str, Any], *, instance_dir: str) -
         "description": description,
         "aliases": _aliases(instance, service_family, display_name),
         "scope_model": scope_model,
+        "scope_type": scope_type,
+        "scope_label": scope_type.replace("_", " "),
         "instantiation_class": instantiation_class,
+        "instance_model": instantiation_class,
         "binding": _binding(instance, service_family, instantiation_class),
         "runtime": {
             "server_id": server_id,
@@ -286,9 +348,12 @@ def _metadata_from_instance(instance: Mapping[str, Any], *, instance_dir: str) -
         },
         "helper": {
             "actions_supported": STANDARD_ACTIONS,
-            "required_context": {"project_root": "required"} if scope_model == "per_project" else {},
-            "client_support": {"pi": True, "opencode": True, "codex": False},
+            "required_context": required_context,
+            "client_support": client_support,
         },
+        "required_context": required_context,
+        "client_support": client_support,
+        "reload_required": True,
         "guidance": {
             "abstract_resource_uri": f"contextforge://control-plane/guidance/{service_family}/abstract/v1",
             "detail_resource_uri": f"contextforge://control-plane/guidance/{service_family}/detail/v1",
@@ -297,7 +362,7 @@ def _metadata_from_instance(instance: Mapping[str, Any], *, instance_dir: str) -
         "provenance": {
             "source": "server-instances migration seed",
             "seed_instance_dir": instance_dir,
-            "migrated_at": datetime.now(timezone.utc).isoformat(),
+            "migration_schema_version": 1,
         },
     }
 
@@ -341,8 +406,14 @@ def _planned_offerings(selected_services: set[str] | None = None) -> tuple[list[
             continue
         metadata = _metadata_from_instance(instance, instance_dir=entry.name)
         errors = _validate_metadata(metadata)
-        if errors:
-            skipped.append(f"{entry.name}: invalid metadata: {', '.join(errors)}")
+        migration_errors = [
+            error
+            for error in errors
+            if error != "missing runtime.server_id"
+            or not str((metadata.get("runtime") or {}).get("server_name") or "")
+        ]
+        if migration_errors:
+            skipped.append(f"{entry.name}: invalid metadata: {', '.join(migration_errors)}")
             continue
         server_id = str(metadata["runtime"]["server_id"])
         offering = PlannedOffering(
@@ -368,6 +439,37 @@ def _resource_by_uri(resources: Iterable[dict[str, Any]], uri: str) -> dict[str,
         if str(resource.get("uri") or "") == uri:
             return resource
     return None
+
+
+def _resource_content(resource: Mapping[str, Any]) -> dict[str, Any]:
+    content = resource.get("content")
+    if isinstance(content, Mapping):
+        return dict(content)
+    if isinstance(content, str):
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _resource_matches_offering(resource: Mapping[str, Any] | None, offering: PlannedOffering) -> bool:
+    return bool(resource) and _resource_content(resource or {}) == offering.metadata
+
+
+def _hydrate_service_offering_resources(resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    hydrated: list[dict[str, Any]] = []
+    for resource in resources:
+        row = resource
+        uri = str(resource.get("uri") or "")
+        resource_id = str(resource.get("id") or "")
+        if uri.startswith("contextforge://control-plane/service-offerings/") and resource_id and not resource.get("content"):
+            detail = _request("GET", f"/resources/{resource_id}")
+            if isinstance(detail, dict):
+                row = {**resource, **detail}
+        hydrated.append(row)
+    return hydrated
 
 
 def _server_by_id(servers: Iterable[dict[str, Any]], server_id: str) -> dict[str, Any] | None:
@@ -413,6 +515,11 @@ def _with_live_runtime(offering: PlannedOffering, servers: list[dict[str, Any]],
         runtime["gateway_id"] = str(gateway_row["id"])
         runtime["gateway_name"] = str(gateway_row.get("name") or gateway_name)
     metadata["runtime"] = runtime
+    metadata_errors = _validate_metadata(metadata)
+    if metadata_errors:
+        raise RuntimeError(
+            f"resolved metadata for {offering.offering_id} is invalid: {', '.join(metadata_errors)}"
+        )
     return PlannedOffering(
         offering_id=offering.offering_id,
         service_family=offering.service_family,
@@ -429,6 +536,8 @@ def _upsert_resource(offering: PlannedOffering, resources: list[dict[str, Any]])
     existing = _resource_by_uri(resources, offering.resource_uri)
     if existing:
         resource_id = str(existing["id"])
+        if _resource_matches_offering(existing, offering):
+            return "unchanged", resource_id
         _request("PUT", f"/resources/{resource_id}", body=offering.resource_body)
         return "updated", resource_id
     created = _request("POST", "/resources", body={"resource": offering.resource_body, "visibility": VISIBILITY})
@@ -468,14 +577,37 @@ def migrate(*, dry_run: bool = False, services: list[str] | None = None) -> Migr
     selected = _normalize_selected_services(services)
     offerings, skipped = _planned_offerings(selected)
     report.skipped.extend(skipped)
-    resources = [] if dry_run else _api_items("/resources?include_inactive=true&limit=1000")
-    servers = [] if dry_run else _api_items("/servers?include_inactive=true&limit=1000")
-    gateways = [] if dry_run else _api_items("/gateways?include_inactive=true&limit=1000")
-    existing_uris = {str(resource.get("uri") or "") for resource in resources}
+    resources = _hydrate_service_offering_resources(
+        _api_items("/resources?include_inactive=true&limit=1000")
+    )
+    servers = _api_items("/servers?include_inactive=true&limit=1000")
+    gateways = _api_items("/gateways?include_inactive=true&limit=1000")
+    resolved: list[tuple[PlannedOffering, str, str]] = []
 
+    # Resolve every target before applying any mutation so an incomplete all-service
+    # catalog cannot produce a partial update.
     for raw_offering in offerings:
         try:
-            offering = raw_offering if dry_run else _with_live_runtime(raw_offering, servers, gateways)
+            offering = _with_live_runtime(raw_offering, servers, gateways)
+            existing_resource = _resource_by_uri(resources, offering.resource_uri)
+            server = _server_by_id(servers, offering.server_id)
+            existing_resource_id = str((existing_resource or {}).get("id") or "")
+            associated_resource_ids = (
+                _association_ids(server or {}, "associatedResourceIds", "associatedResources")
+                if server
+                else set()
+            )
+            resource_action = (
+                "unchanged"
+                if _resource_matches_offering(existing_resource, offering)
+                else "update" if existing_resource else "create"
+            )
+            association_action = (
+                "preserve"
+                if existing_resource_id and existing_resource_id in associated_resource_ids
+                else "associate"
+            )
+            resolved.append((offering, resource_action, association_action))
             report.planned.append(
                 {
                     "offering_id": offering.offering_id,
@@ -484,38 +616,71 @@ def migrate(*, dry_run: bool = False, services: list[str] | None = None) -> Migr
                     "resource_uri": offering.resource_uri,
                     "runtime_server_id": offering.server_id,
                     "binding": offering.metadata.get("binding"),
+                    "scope_model": offering.metadata.get("scope_model"),
+                    "instantiation_class": offering.metadata.get("instantiation_class"),
+                    "resource_action": resource_action,
+                    "association_action": association_action,
                 }
             )
-            if dry_run:
-                if offering.resource_uri in existing_uris:
-                    report.updated.append(offering.offering_id)
-                else:
-                    report.created.append(offering.offering_id)
-                report.associated.append(offering.offering_id)
-                continue
-            action, resource_id = _upsert_resource(offering, resources)
-            if action == "created":
-                report.created.append(offering.offering_id)
-            else:
-                report.updated.append(offering.offering_id)
-            _associate_resource(offering, resource_id, servers)
-            report.associated.append(offering.offering_id)
         except Exception as exc:  # report all services without leaking local env values
             report.errors.append({"service": raw_offering.offering_id, "error": _safe_error_text(str(exc))})
+
+    if report.errors and not dry_run:
+        report.skipped.append("apply blocked: one or more selected offerings failed live preflight")
+        return report
+
+    for offering, resource_action, association_action in resolved:
+        if dry_run:
+            if resource_action == "unchanged":
+                report.unchanged.append(offering.offering_id)
+            elif resource_action == "update":
+                report.updated.append(offering.offering_id)
+            else:
+                report.created.append(offering.offering_id)
+            if association_action == "associate":
+                report.associated.append(offering.offering_id)
+            continue
+
+        try:
+            action, resource_id = _upsert_resource(offering, resources)
+            if action == "unchanged":
+                report.unchanged.append(offering.offering_id)
+            elif action == "updated":
+                report.updated.append(offering.offering_id)
+            else:
+                report.created.append(offering.offering_id)
+            if association_action == "associate":
+                _associate_resource(offering, resource_id, servers)
+                report.associated.append(offering.offering_id)
+        except Exception as exc:
+            report.errors.append({"service": offering.offering_id, "error": _safe_error_text(str(exc))})
+            break
     return report
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dry-run", action="store_true", help="Print the migration plan as JSON without mutating ContextForge.")
+    parser.add_argument("--dry-run", action="store_true", help="Read live target state and print the migration plan without mutating ContextForge.")
     parser.add_argument("--services", nargs="*", help="Limit to service families or aliases, e.g. context7 github openzeppelin serena.")
+    parser.add_argument("--base-url", help="Explicit ContextForge target base URL, such as http://127.0.0.1:4445.")
+    parser.add_argument("--env-file", type=Path, help="Explicit client-scoped ContextForge env file for the selected target.")
     args = parser.parse_args()
+    global TARGET_BASE_URL, TARGET_ENV_FILE, TARGET_TOKEN
+    TARGET_BASE_URL = args.base_url.rstrip("/") if args.base_url else None
+    TARGET_ENV_FILE = args.env_file.expanduser().resolve() if args.env_file else None
+    TARGET_TOKEN = None
     report = migrate(dry_run=args.dry_run, services=args.services)
     output = {
         "schema_uri": "contextforge://diagnostics/service-offering-registration/v1",
         "dry_run": args.dry_run,
-        "mutation_performed": not args.dry_run,
-        "target": {"base_url": _base_url(), "env_values_recorded": False},
+        "mutation_performed": bool(
+            not args.dry_run and (report.created or report.updated or report.associated)
+        ),
+        "target": {
+            "base_url": _base_url(),
+            "env_file": str(TARGET_ENV_FILE or common.contextforge_env_path() or ""),
+            "env_values_recorded": False,
+        },
         "timestamp": datetime.now(timezone.utc).isoformat(),
         **report.to_json(),
     }

@@ -438,6 +438,7 @@ def _service_offering_metadata_errors(content: Mapping[str, Any]) -> list[str]:
     errors: list[str] = []
     required_strings = (
         "schema_uri",
+        "resource_uri",
         "offering_id",
         "service_family",
         "display_name",
@@ -451,6 +452,10 @@ def _service_offering_metadata_errors(content: Mapping[str, Any]) -> list[str]:
             errors.append(f"missing {key}")
     if content.get("schema_uri") != SERVICE_OFFERING_SCHEMA_URI:
         errors.append("unsupported schema_uri")
+    if not isinstance(content.get("metadata_version"), int):
+        errors.append("invalid metadata_version")
+    if not isinstance(content.get("aliases"), list):
+        errors.append("invalid aliases")
     if str(content.get("lifecycle") or "") != "active":
         errors.append("lifecycle is not active")
     if str(content.get("scope_model") or "") not in {"global", "per_project", "per_user"}:
@@ -460,6 +465,20 @@ def _service_offering_metadata_errors(content: Mapping[str, Any]) -> list[str]:
         errors.append("missing runtime object")
     elif not str(runtime.get("server_id") or "").strip():
         errors.append("missing runtime.server_id")
+    helper = content.get("helper")
+    if not isinstance(helper, Mapping):
+        errors.append("missing helper object")
+    else:
+        if not isinstance(helper.get("actions_supported"), list):
+            errors.append("invalid helper.actions_supported")
+        if not isinstance(helper.get("required_context"), Mapping):
+            errors.append("invalid helper.required_context")
+        if not isinstance(helper.get("client_support"), Mapping):
+            errors.append("invalid helper.client_support")
+    if not isinstance(content.get("guidance"), Mapping):
+        errors.append("missing guidance object")
+    if not isinstance(content.get("provenance"), Mapping):
+        errors.append("missing provenance object")
     binding = content.get("binding")
     if str(content.get("service_binding") or "").strip():
         return errors
@@ -611,6 +630,12 @@ def discover_contextforge_registry_service_offerings(
         service_family = _service_family_from_registry(server, gateway, metadata)
         scope_model = _registry_scope_model(server, metadata)
         instantiation_class = _registry_instantiation_class(scope_model, metadata)
+        helper_metadata = metadata.get("helper") if isinstance(metadata.get("helper"), Mapping) else {}
+        runtime_metadata = metadata.get("runtime") if isinstance(metadata.get("runtime"), Mapping) else {}
+        guidance_metadata = metadata.get("guidance") if isinstance(metadata.get("guidance"), Mapping) else {}
+        required_context = helper_metadata.get("required_context") if isinstance(helper_metadata.get("required_context"), Mapping) else {}
+        client_support = helper_metadata.get("client_support") if isinstance(helper_metadata.get("client_support"), Mapping) else {}
+        actions_supported = helper_metadata.get("actions_supported") if isinstance(helper_metadata.get("actions_supported"), list) else []
         try:
             service_binding = _registry_service_binding(service_family, scope_model, server, metadata, project_root=project_root)
         except ValueError:
@@ -639,10 +664,14 @@ def discover_contextforge_registry_service_offerings(
                 "codex_alias": normalize_codex_alias(str(metadata.get("codex_alias") or metadata.get("client_alias") or service_family)),
                 "instantiation_class": instantiation_class,
                 "scope_model": scope_model,
+                "scope_type": str(metadata.get("scope_type") or scope_model),
                 "scope_label": str(metadata.get("scope_label") or scope_model.replace("_", " ")),
-                "required_context": metadata.get("required_context") if isinstance(metadata.get("required_context"), dict) else {},
-                "client_support": metadata.get("client_support") if isinstance(metadata.get("client_support"), dict) else {},
-                "reload_required": metadata.get("reload_required") if metadata.get("reload_required") is not None else True,
+                "instance_model": str(metadata.get("instance_model") or instantiation_class),
+                "required_context": dict(required_context),
+                "client_support": dict(client_support),
+                "actions_supported": [str(action) for action in actions_supported],
+                "reload_required": runtime_metadata.get("reload_required") if runtime_metadata.get("reload_required") is not None else True,
+                "guidance": dict(guidance_metadata),
                 "virtual_server": server_name,
                 "gateway": str((gateway or {}).get("name") or ""),
                 "contextforge_readback_status": "matched",

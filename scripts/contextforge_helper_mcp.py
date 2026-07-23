@@ -1331,7 +1331,7 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         if isinstance(item, Mapping)
     ]
     onboarding_needed: list[dict[str, str]] = []
-    catalog_services = common.discover_contextforge_hosted_services(project_root=root)
+    catalog_services = _contextforge_registry_service_offerings(root)
     for candidate in catalog_services:
         if not isinstance(candidate, Mapping):
             continue
