@@ -91,12 +91,16 @@ def _error(exc: Exception) -> dict[str, Any]:
     }
 
 
-def _contextforge_env_path() -> Path | None:
-    return common.contextforge_env_path()
+def _contextforge_target() -> tuple[Path | None, str]:
+    import contextforge_mcp_wrapper as gateway
 
-
-def _contextforge_base_url() -> str:
-    return common.contextforge_base_url()
+    if gateway.TARGET_CONFIGURATION_ERROR:
+        raise ContextForgeCatalogUnavailable(
+            gateway.GATEWAY_BASE,
+            gateway.TARGET_CONFIGURATION_ERROR,
+        )
+    env_path = gateway.CONFIG_ENV
+    return (env_path if env_path.exists() else None), gateway.GATEWAY_BASE
 
 
 def _contextforge_request(base_url: str, path: str, token: str) -> Any:
@@ -153,6 +157,14 @@ def _resource_with_content(base_url: str, token: str, resource: dict[str, Any]) 
     full = _contextforge_request(base_url, f"/resources/{resource_id}", token)
     if not isinstance(full, Mapping):
         raise TypeError(f"/resources/{resource_id} returned {type(full).__name__}; expected an object")
+    detail_id = full.get("id")
+    if not isinstance(detail_id, str) or not detail_id.strip():
+        raise TypeError(f"/resources/{resource_id} returned an object without a string id")
+    if detail_id != resource_id:
+        raise ValueError(f"/resources/{resource_id} returned Resource id {detail_id!r}")
+    content_values = [full[key] for key in ("content", "text", "contents") if key in full]
+    if not content_values or not any(isinstance(value, (str, Mapping)) for value in content_values):
+        raise TypeError(f"/resources/{resource_id} returned an object without Resource content")
     merged = dict(resource)
     for key in ("content", "text", "contents", "uri", "name", "title", "description", "mimeType", "mime_type", "tags", "enabled"):
         if key in full:
@@ -174,8 +186,7 @@ def _cached_readback_copy(value: dict[str, list[dict[str, Any]]]) -> dict[str, l
 
 
 def _live_contextforge_registry_readback() -> dict[str, list[dict[str, Any]]]:
-    env_path = _contextforge_env_path()
-    base_url = _contextforge_base_url()
+    env_path, base_url = _contextforge_target()
     if env_path is None:
         raise ContextForgeCatalogUnavailable(base_url, "no ContextForge client-scoped env file was found")
     cache_key = ""

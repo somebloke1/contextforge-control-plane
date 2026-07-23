@@ -7475,12 +7475,8 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
                     with mock.patch.object(
                         contextforge_helper_mcp,
-                        "_contextforge_env_path",
-                        return_value=env_path,
-                    ), mock.patch.object(
-                        contextforge_helper_mcp,
-                        "_contextforge_base_url",
-                        return_value="http://cf.example",
+                        "_contextforge_target",
+                        return_value=(env_path, "http://cf.example"),
                     ), mock.patch(
                         "contextforge_mcp_wrapper._read_env",
                         return_value={"CONTEXTFORGE_BEARER_TOKEN": "redacted-test-token"},
@@ -7509,6 +7505,179 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                     self.assertEqual([], list(root.iterdir()))
         finally:
             env_path.unlink(missing_ok=True)
+
+    def test_helper_catalog_resource_details_require_matching_identity_and_content(self) -> None:
+        resource_id = "resource-context7-offering"
+        malformed_details = {
+            "empty_object": {},
+            "collection_object": {"items": []},
+            "id_only": {"id": resource_id},
+            "null_content": {"id": resource_id, "content": None},
+            "scalar_content": {"id": resource_id, "content": 7},
+            "missing_id": {"content": "{}"},
+            "non_string_id": {"id": 7, "content": "{}"},
+            "mismatched_id": {"id": "another-resource", "content": "{}"},
+        }
+        with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
+            env_file.write("CONTEXTFORGE_BEARER_TOKEN=redacted-test-token\n")
+            env_path = Path(env_file.name)
+        try:
+            for label, detail in malformed_details.items():
+                with self.subTest(label=label), tempfile.TemporaryDirectory(
+                    dir=project_state.WORKSPACE_ROOT
+                ) as tmp:
+                    root = Path(tmp).resolve()
+                    contextforge_helper_mcp._CONTEXTFORGE_READBACK_CACHE.clear()
+
+                    def fake_request(base_url: str, path: str, token: str) -> Any:
+                        self.assertEqual("http://cf.example", base_url)
+                        self.assertEqual("catalog-token", token)
+                        if path.startswith("/resources?"):
+                            return {
+                                "items": [
+                                    {
+                                        "id": resource_id,
+                                        "uri": "contextforge://control-plane/service-offerings/context7/v1",
+                                        "tags": ["contextforge-service-offering"],
+                                    }
+                                ]
+                            }
+                        if path == f"/resources/{resource_id}":
+                            return detail
+                        if path.startswith("/servers?") or path.startswith("/gateways?"):
+                            return {"items": []}
+                        raise AssertionError(path)
+
+                    with mock.patch.object(
+                        contextforge_helper_mcp,
+                        "_contextforge_target",
+                        return_value=(env_path, "http://cf.example"),
+                    ), mock.patch(
+                        "contextforge_mcp_wrapper._read_env",
+                        return_value={"CONTEXTFORGE_BEARER_TOKEN": "redacted-test-token"},
+                    ), mock.patch(
+                        "contextforge_mcp_wrapper._token",
+                        return_value="catalog-token",
+                    ), mock.patch.object(
+                        contextforge_helper_mcp,
+                        "_contextforge_request",
+                        side_effect=fake_request,
+                    ), mock.patch.object(
+                        contextforge_helper_mcp.project_state,
+                        "write_state_atomic",
+                        side_effect=AssertionError("catalog failure must not mutate project state"),
+                    ), mock.patch.dict(
+                        os.environ,
+                        {"CONTEXTFORGE_HELPER_CATALOG_CACHE_SECONDS": "0"},
+                        clear=False,
+                    ):
+                        result = contextforge_helper_mcp.service_management_list(
+                            str(root),
+                            client_type="opencode",
+                        )
+
+                    self.assertFalse(result["ok"], result)
+                    self.assertEqual("contextforge_catalog_unavailable", result["status"])
+                    self.assertEqual([], result["services"])
+                    self.assertNotIn("No ContextForge services are available", result["assistant_visible_response"])
+                    self.assertEqual([], list(root.iterdir()))
+        finally:
+            env_path.unlink(missing_ok=True)
+
+    def test_helper_catalog_uses_wrapper_target_instead_of_stale_generic_values(self) -> None:
+        import contextforge_mcp_wrapper as wrapper
+
+        with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
+            selected_env = Path(env_file.name)
+        try:
+            with mock.patch.object(wrapper, "TARGET_CONFIGURATION_ERROR", ""), mock.patch.object(
+                wrapper,
+                "CONFIG_ENV",
+                selected_env,
+            ), mock.patch.object(
+                wrapper,
+                "GATEWAY_BASE",
+                "http://host.docker.internal:4445",
+            ), mock.patch.object(
+                contextforge_helper_mcp.common,
+                "contextforge_env_path",
+                side_effect=AssertionError("helper must not select generic env independently"),
+            ), mock.patch.object(
+                contextforge_helper_mcp.common,
+                "contextforge_base_url",
+                side_effect=AssertionError("helper must not select stale generic base independently"),
+            ):
+                env_path, base_url = contextforge_helper_mcp._contextforge_target()
+
+            self.assertEqual(selected_env, env_path)
+            self.assertEqual("http://host.docker.internal:4445", base_url)
+        finally:
+            selected_env.unlink(missing_ok=True)
+
+    def test_helper_catalog_selects_complete_opencode_profile_with_stale_generic_environment(self) -> None:
+        import contextforge_mcp_wrapper as wrapper
+
+        with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
+            selected_env = Path(env_file.name)
+        try:
+            env = os.environ.copy()
+            for key in {
+                *wrapper.GENERIC_TARGET_KEYS,
+                *(key for keys in wrapper.TARGET_PROFILE_KEYS.values() for key in keys),
+                "CONTEXTFORGE_TOKEN_LOCK",
+            }:
+                env.pop(key, None)
+            env.update(
+                {
+                    "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": str(selected_env),
+                    "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+                    "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/tmp/opencode-target-token.local.json",
+                    "CONTEXTFORGE_CONFIG_ENV": "/tmp/stale-generic-contextforge.env",
+                    "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4444",
+                    "CONTEXTFORGE_TOKEN_CACHE": "/tmp/stale-generic-token.local.json",
+                    "CONTEXTFORGE_TOKEN_LOCK": "/tmp/stale-generic-token.local.json.lock",
+                }
+            )
+            code = (
+                "import json,sys; "
+                f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); "
+                "import contextforge_helper_mcp as h; "
+                "env_path,base_url=h._contextforge_target(); "
+                "print(json.dumps({'env':str(env_path),'base':base_url}))"
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-c", code],
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+
+            selected = json.loads(result.stdout)
+            self.assertEqual(str(selected_env), selected["env"])
+            self.assertEqual("http://host.docker.internal:4445", selected["base"])
+            self.assertNotIn("4444", result.stdout)
+        finally:
+            selected_env.unlink(missing_ok=True)
+
+    def test_helper_catalog_rejects_wrapper_target_profile_conflicts(self) -> None:
+        import contextforge_mcp_wrapper as wrapper
+
+        with mock.patch.object(
+            wrapper,
+            "TARGET_CONFIGURATION_ERROR",
+            "multiple complete ContextForge target profiles are configured: opencode, codex",
+        ), mock.patch.object(
+            wrapper,
+            "GATEWAY_BASE",
+            "http://host.docker.internal:4445",
+        ):
+            with self.assertRaises(contextforge_helper_mcp.ContextForgeCatalogUnavailable) as raised:
+                contextforge_helper_mcp._contextforge_target()
+
+        self.assertIn("multiple complete ContextForge target profiles", str(raised.exception))
 
     def test_live_registry_readback_fetches_full_service_offering_resource_content(self) -> None:
         with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
@@ -7545,10 +7714,10 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             raise AssertionError(path)
 
         try:
-            with mock.patch.dict(
-                os.environ,
-                {"CONTEXTFORGE_CONFIG_ENV": str(env_path), "CONTEXTFORGE_BASE_URL": "http://cf.example"},
-                clear=False,
+            with mock.patch.object(
+                contextforge_helper_mcp,
+                "_contextforge_target",
+                return_value=(env_path, "http://cf.example"),
             ), mock.patch("contextforge_mcp_wrapper._read_env", return_value={"CONTEXTFORGE_BEARER_TOKEN": "redacted-test-token"}), mock.patch(
                 "contextforge_mcp_wrapper._token", return_value="token"
             ), mock.patch.object(contextforge_helper_mcp, "_contextforge_request", side_effect=fake_request):

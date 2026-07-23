@@ -120,13 +120,15 @@ legacy top-level defaults.
 
 The helper runtime discovery algorithm is:
 
-1. Authenticate to the active ContextForge server using the client-scoped env
-   available to the helper process.
+1. Select the same sole complete client-specific target profile as the wrapper,
+   ignoring stale generic target values; reject partial or conflicting complete
+   profiles, then authenticate using that profile's client-scoped env.
 2. Read `/resources?include_inactive=true&limit=1000`.
 3. Select only resources tagged `contextforge-service-offering` or
    `service-offering`.
 4. For each selected resource, fetch `/resources/{id}` to obtain full content.
-   Resource list rows are not authoritative for content completeness.
+   Resource list rows are not authoritative for content completeness. The detail
+   must identify the requested Resource and contain a Resource content field.
 5. Parse and validate the JSON content shape.
 6. Read `/servers?include_inactive=true&limit=1000` and
    `/gateways?include_inactive=true&limit=1000`.
