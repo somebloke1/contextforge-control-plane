@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="${ROOT}/env/semantic-model.env"
+OUT="${CONTEXTFORGE_SEMANTIC_MODEL_ENV:-${ROOT}/env/semantic-model.env}"
 HOST_ENV="${HOST_ENV:-${HOME}/.config/litellm/client.env}"
 
 if [[ ! -f "${HOST_ENV}" ]]; then

@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -3799,13 +3800,15 @@ print(json.dumps(outputs))
         self.assertIn("http://127.0.0.1:3333/v1", generator)
         self.assertNotIn("OPENROUTER_", generator)
         self.assertNotIn("LOCAL_LLAMA", generator)
+        self.assertIn('OUT="${CONTEXTFORGE_SEMANTIC_MODEL_ENV:-${ROOT}/env/semantic-model.env}"', generator)
         self.assertEqual(3, smoke.count("run_pi_cell "))
         self.assertEqual(3, smoke.count("run_opencode_cell "))
         self.assertIn('--thinking "${thinking}"', smoke)
         self.assertIn('CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT="${variant}"', smoke)
         self.assertEqual(2, smoke.count('require_exact_response "${marker}" "${output_file}"'))
         self.assertNotIn('grep -Fxq "${marker}"', smoke)
-        self.assertIn("--env-file env/semantic-model.env", smoke)
+        self.assertIn('--env-file "${semantic_model_env}"', smoke)
+        self.assertIn('CONTEXTFORGE_SEMANTIC_MODEL_ENV="${semantic_model_env}"', smoke)
         self.assertIn('project_name="contextforge-model-smoke-${runtime_id,,}"', smoke)
         self.assertIn('mktemp -d "${TMPDIR:-/tmp}/contextforge-model-smoke.XXXXXX"', smoke)
         self.assertIn('CONTEXTFORGE_CLIENT_HARNESS_EVIDENCE="${evidence_root}"', smoke)
@@ -3817,6 +3820,10 @@ print(json.dumps(outputs))
         self.assertNotIn('output_file="$(mktemp)"', smoke)
         self.assertIn('down -v --remove-orphans', smoke)
         self.assertIn("reset_model_homes", smoke)
+        self.assertIn('setsid "$@" > "${output_file}" &', smoke)
+        self.assertIn('kill -TERM -- "-${pid}"', smoke)
+        self.assertIn('label=com.docker.compose.project=${project_name}', smoke)
+        self.assertIn('docker rm -f "${resources[@]}"', smoke)
         self.assertIn("trap 'terminate 143' TERM", smoke)
         self.assertIn("--no-context-files --no-extensions", smoke)
         self.assertIn("CONTEXTFORGE_OPENCODE_MODEL_SMOKE=1", smoke)
@@ -3831,6 +3838,51 @@ print(json.dumps(outputs))
         self.assertIn("OpenCode model smoke rejects alternate OPENCODE_CONFIG paths", entrypoint)
         self.assertIn('if [[ "${CONTEXTFORGE_OPENCODE_MODEL_SMOKE}" == 0 ]]', entrypoint)
         self.assertIn('data["mcp"] = {}', renderer)
+
+    def test_semantic_model_env_generator_override_preserves_normal_default(self) -> None:
+        source = (ROOT / "docker/client-harness/scripts/make-semantic-model-env.sh").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            env_dir = root / "env"
+            runtime_root = root / "runtime"
+            scripts.mkdir()
+            env_dir.mkdir()
+            runtime_root.mkdir()
+            generator = scripts / "make-semantic-model-env.sh"
+            generator.write_text(source, encoding="utf-8")
+            generator.chmod(0o755)
+            host_env = root / "client.env"
+            host_env.write_text(
+                "LITELLM_API_KEY=dummy-test-key\nLITELLM_BASE_URL=http://127.0.0.1:3333/v1\n",
+                encoding="utf-8",
+            )
+            base_env = {**os.environ, "HOST_ENV": str(host_env)}
+
+            default_result = subprocess.run(
+                [str(generator)],
+                env=base_env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            default_output = env_dir / "semantic-model.env"
+            self.assertEqual(0, default_result.returncode, default_result.stderr)
+            self.assertTrue(default_output.is_file())
+            default_contents = default_output.read_text(encoding="utf-8")
+
+            override = runtime_root / "semantic-model.env"
+            override_result = subprocess.run(
+                [str(generator)],
+                env={**base_env, "CONTEXTFORGE_SEMANTIC_MODEL_ENV": str(override)},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, override_result.returncode, override_result.stderr)
+            self.assertTrue(override.is_file())
+            self.assertEqual(default_contents, default_output.read_text(encoding="utf-8"))
+            self.assertEqual(0, override.stat().st_mode & 0o077)
 
     def test_six_cell_smoke_rejects_multiline_marker_output(self) -> None:
         source = (ROOT / "docker/client-harness/scripts/smoke-agents.sh").read_text(encoding="utf-8")
@@ -3849,7 +3901,7 @@ print(json.dumps(outputs))
                 smoke.chmod(0o755)
                 generator = scripts / "make-semantic-model-env.sh"
                 generator.write_text(
-                    '#!/usr/bin/env bash\nset -euo pipefail\nmkdir -p "$(dirname "$0")/../env"\n: > "$(dirname "$0")/../env/semantic-model.env"\n',
+                    '#!/usr/bin/env bash\nset -euo pipefail\n: "${CONTEXTFORGE_SEMANTIC_MODEL_ENV:?}"\n: > "${CONTEXTFORGE_SEMANTIC_MODEL_ENV}"\n',
                     encoding="utf-8",
                 )
                 generator.chmod(0o755)
@@ -3894,6 +3946,7 @@ print(json.dumps(outputs))
                 self.assertTrue(logged_homes)
                 self.assertTrue(all(line == "pi-home|opencode-home" for line in logged_homes))
                 self.assertEqual([], list(temp_root.iterdir()))
+                self.assertFalse((root / "env/semantic-model.env").exists())
                 return result
 
         self.assertEqual(0, run_smoke("exact").returncode)
@@ -3915,7 +3968,7 @@ print(json.dumps(outputs))
             smoke.chmod(0o755)
             generator = scripts / "make-semantic-model-env.sh"
             generator.write_text(
-                '#!/usr/bin/env bash\nset -euo pipefail\nmkdir -p "$(dirname "$0")/../env"\n: > "$(dirname "$0")/../env/semantic-model.env"\n',
+                '#!/usr/bin/env bash\nset -euo pipefail\n: "${CONTEXTFORGE_SEMANTIC_MODEL_ENV:?}"\n: > "${CONTEXTFORGE_SEMANTIC_MODEL_ENV}"\n',
                 encoding="utf-8",
             )
             generator.chmod(0o755)
@@ -3923,29 +3976,89 @@ print(json.dumps(outputs))
             docker.write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
+                'case "${1:-}" in\n'
+                '  ps)\n'
+                '    [[ ! -e "${FAKE_DOCKER_CONTAINER_STATE}" ]] || printf "fake-container\\n"\n'
+                '    exit 0\n'
+                '    ;;\n'
+                '  rm)\n'
+                '    rm -f "${FAKE_DOCKER_CONTAINER_STATE}"\n'
+                '    printf "container\\n" >> "${FAKE_DOCKER_CLEANUP_LOG}"\n'
+                '    exit 0\n'
+                '    ;;\n'
+                '  network)\n'
+                '    if [[ "${2:-}" == ls && -e "${FAKE_DOCKER_NETWORK_STATE}" ]]; then printf "fake-network\\n"; fi\n'
+                '    if [[ "${2:-}" == rm ]]; then rm -f "${FAKE_DOCKER_NETWORK_STATE}"; printf "network\\n" >> "${FAKE_DOCKER_CLEANUP_LOG}"; fi\n'
+                '    exit 0\n'
+                '    ;;\n'
+                '  volume)\n'
+                '    if [[ "${2:-}" == ls && -e "${FAKE_DOCKER_VOLUME_STATE}" ]]; then printf "fake-volume\\n"; fi\n'
+                '    if [[ "${2:-}" == rm ]]; then rm -f "${FAKE_DOCKER_VOLUME_STATE}"; printf "volume\\n" >> "${FAKE_DOCKER_CLEANUP_LOG}"; fi\n'
+                '    exit 0\n'
+                '    ;;\n'
+                "esac\n"
                 'if [[ " $* " == *" down -v --remove-orphans "* ]]; then\n'
+                '  printf "down\\n" >> "${FAKE_DOCKER_CLEANUP_LOG}"\n'
                 "  exit 0\n"
                 "fi\n"
-                'kill -TERM "$PPID"\n',
+                ': > "${FAKE_DOCKER_CONTAINER_STATE}"\n'
+                ': > "${FAKE_DOCKER_NETWORK_STATE}"\n'
+                ': > "${FAKE_DOCKER_VOLUME_STATE}"\n'
+                'printf "%s\\n" "$$" > "${FAKE_DOCKER_ACTIVE_PID}"\n'
+                'sleep 30 &\n'
+                'printf "%s\\n" "$!" > "${FAKE_DOCKER_CHILD_PID}"\n'
+                'wait\n',
                 encoding="utf-8",
             )
             docker.chmod(0o755)
-            result = subprocess.run(
+            active_pid_file = root / "active.pid"
+            child_pid_file = root / "child.pid"
+            cleanup_log = root / "cleanup.log"
+            container_state = root / "container.state"
+            network_state = root / "network.state"
+            volume_state = root / "volume.state"
+            process = subprocess.Popen(
                 [str(smoke)],
                 cwd=root,
                 env={
                     **os.environ,
                     "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
                     "TMPDIR": str(temp_root),
+                    "FAKE_DOCKER_ACTIVE_PID": str(active_pid_file),
+                    "FAKE_DOCKER_CHILD_PID": str(child_pid_file),
+                    "FAKE_DOCKER_CLEANUP_LOG": str(cleanup_log),
+                    "FAKE_DOCKER_CONTAINER_STATE": str(container_state),
+                    "FAKE_DOCKER_NETWORK_STATE": str(network_state),
+                    "FAKE_DOCKER_VOLUME_STATE": str(volume_state),
                 },
                 text=True,
-                capture_output=True,
-                check=False,
-                timeout=10,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
-
-            self.assertNotEqual(0, result.returncode)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline and not child_pid_file.exists():
+                time.sleep(0.01)
+            self.assertTrue(child_pid_file.exists(), "fake Compose cell did not become active")
+            active_pid = int(active_pid_file.read_text(encoding="utf-8"))
+            child_pid = int(child_pid_file.read_text(encoding="utf-8"))
+            started = time.monotonic()
+            process.terminate()
+            time.sleep(0.75)
             self.assertEqual([], list(temp_root.iterdir()))
+            for pid in [active_pid, child_pid]:
+                with self.subTest(pid=pid, phase="immediate"):
+                    with self.assertRaises(ProcessLookupError):
+                        os.kill(pid, 0)
+            stdout, stderr = process.communicate(timeout=5)
+
+            self.assertNotEqual(0, process.returncode, (stdout, stderr))
+            self.assertLess(time.monotonic() - started, 3)
+            self.assertFalse((root / "env/semantic-model.env").exists())
+            self.assertFalse(container_state.exists())
+            self.assertFalse(network_state.exists())
+            self.assertFalse(volume_state.exists())
+            cleanup_actions = set(cleanup_log.read_text(encoding="utf-8").splitlines())
+            self.assertTrue({"down", "container", "network", "volume"} <= cleanup_actions)
 
     def test_opencode_model_smoke_rejects_reused_config_and_plugin_surfaces(self) -> None:
         source = (ROOT / "docker/client-harness/opencode/entrypoint.sh").read_text(encoding="utf-8")

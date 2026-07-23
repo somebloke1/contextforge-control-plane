@@ -170,11 +170,12 @@ alias. `scripts/smoke-agents.sh` makes six response calls (three models through
 each client), selects Pi thinking/OpenCode variants explicitly, and requires a
 unique marker from every cell. It uses a fresh Compose project and writable
 temporary mounts, forces project-scoped named client homes, and removes those
-homes before every cell. All transient files live under one signal-cleaned
-runtime root. Pi extensions are disabled; OpenCode rejects reused default or
+homes before every cell. The generated credential env and all other transient
+files live under one signal-cleaned runtime root; an active Compose cell runs in
+its own process group so interruption can reap it before removing project
+resources. Pi extensions are disabled; OpenCode rejects reused default or
 alternate config/plugin surfaces before rendering a model-only config with no
-MCP or onboarding hooks. Normal helper-enabled client configuration is
-unchanged.
+MCP or onboarding hooks. Normal helper-enabled client configuration is unchanged.
 
 The Pi config follows the public Pi custom model docs from:
 
