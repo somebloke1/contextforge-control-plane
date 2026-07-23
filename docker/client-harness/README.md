@@ -41,10 +41,11 @@ simulation uses the corresponding host endpoint recorded as
 | `codex/gpt-5.6-sol` | evaluator | high |
 
 `semantic-model-profiles.json` preserves the same role/reasoning metadata for
-Pi and OpenCode. Luna is the default profile; a specific profile id or `random`
-may be selected explicitly. The generated env file contains only LiteLLM and
-role-selection variables and is written with `0600` semantics through
-`umask 077`.
+Pi and OpenCode. Every tested-assistant run uses Luna/medium; `random` therefore
+randomizes no model role. Terra/high is selected only by simulated-human paths,
+and Sol/high only by evaluator paths. The generated env file contains only
+LiteLLM and role-selection variables and is written with `0600` semantics
+through `umask 077`.
 
 Do not print raw ContextForge env files, bearer headers, passwords, API keys,
 tokens, JWTs, private keys, or credential values into terminal transcripts or

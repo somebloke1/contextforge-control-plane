@@ -23,14 +23,14 @@ Each test slice must declare:
 
 - `service`: ContextForge service slug.
 - `client`: `pi` or `opencode`.
-- `model`: one semantic-test model profile selected for the test run. Record
-  the selected profile id, provider kind, model id, key env name, base URL env,
-  route-preference list, and client-specific default model variables. Do not
-  hardcode a provider or model name in the test package, and do not change the
-  model per inference within a run.
-- `model_quorum`: acceptance requires the same semantic bundle to pass on at
-  least three distinct eligible semantic-test model profiles. Single-profile
-  runs are model-slice evidence only; they do not satisfy the test pass gate.
+- `model`: the Luna/medium semantic-test model profile through the sandbox
+  LiteLLM endpoint. Record the profile id, model id, key env name, base URL env,
+  and client-specific default model variables. Do not change the model or role
+  within or between tested-assistant quorum runs.
+- `run_quorum`: acceptance requires the same semantic bundle to pass in at
+  least three independent Luna/medium runs. Single-run evidence is slice
+  evidence only; it does not satisfy the test pass gate. A test with one or two
+  passing runs is `quorum_incomplete`, not passed.
 - `state`: target-client virgin reset; no stale container/home/workspace state.
 - `behavior_bundle`: the small user-behavior slice being explored.
 - `prompt`: natural, short, sufficient user request.
@@ -93,21 +93,15 @@ without printing them. A direct sidecar/backend smoke with those credentials
 proves only the backend/auth layer; Pi/OpenCode usability still requires
 target-client-visible tool use and semantic evaluation.
 
-When a model stops after the first safe tool call, do not immediately solve the
+When Luna stops after the first safe tool call, do not immediately solve the
 failure by making the prompt more technical. Classify the observed route first:
 if the first tool result is ambiguous, incomplete, or not user-meaningful, that
 is product-surface evidence. Prefer improving safe tool descriptions or safe
 result normalization so a one-call-tolerant interaction still gives an ordinary
 user useful output. If the result shape is already clear and complete, but one
 model alone still fails while other models pass the same bundle, record a
-model-adequacy finding and consider disabling that model from the default pool
-for multi-step semantic tests.
-
-Profiles marked single-shot or `multi_step_quorum_eligible=false` remain useful
-for explicit diagnostic or one-call tests, but default acceptance-oriented
-quorum selection must exclude them. They may not supply one of the three
-multi-step quorum passes unless a later branch revalidates the exact
-client/provider path and changes the profile metadata.
+Luna-adequacy finding while preserving the fixed tested-assistant role. Do not
+substitute Terra, Sol, a local model, or a direct-provider profile.
 
 For every bundle, record the mapping:
 
@@ -149,11 +143,11 @@ tested assistant; it required real Pi or OpenCode client sessions. That historic
 method remains evidence only, not active product scope.
 
 Use `docker/client-harness/scripts/run-comprehensive-mcp-model-quorum.py` for
-acceptance-oriented execution. It selects or accepts at least three distinct
-eligible model profiles, calls the single-profile dialogue runner once per
-profile, preserves each profile's raw output, and writes a quorum summary under
+acceptance-oriented execution. It launches at least three independent
+Luna/medium runs, calls the single-run dialogue runner once per isolated run,
+preserves each run's raw output, and writes a quorum summary under
 `docker/client-harness/evidence/comprehensive-mcp-quorum/`. The quorum runner
-only determines whether enough model-profile runs completed structurally; it
+only determines whether enough Luna runs completed structurally; it
 does not score semantic pass/fail.
 
 Use `--service-test-prompt` when the same service/client pair needs a second or
@@ -166,12 +160,12 @@ or pass/fail language into the tested assistant prompt. Record
 so reviewers can distinguish the default service fixture from localized bundle
 coverage.
 
-## Three-Model Quorum
+## Luna Run Quorum
 
-Every semantic test must pass on at least three distinct eligible model
-profiles before it can be accepted. Eligible means the profile is available for
-the target client, has the required provider credential, satisfies the current
-minimum context-window floor, and is not excluded by the test package.
+Every semantic test must pass in at least three independent Luna/medium runs
+before it can be accepted. Terra/high is reserved for simulated humans;
+Sol/high is reserved for semantic evaluation. Do not select local,
+direct-provider, Terra, or Sol profiles for the tested assistant.
 
 For a quorum run, keep these variables constant:
 
@@ -182,25 +176,24 @@ For a quorum run, keep these variables constant:
 - allowed mutation/non-action policy;
 - deterministic setup checks and evidence package shape.
 
-Only the selected semantic-test model profile should vary. Record one
-sub-evidence root per profile, then assemble a quorum packet that maps each
-profile id to its raw artifacts and semantic evaluator verdict. A model that
-fails is evidence, not noise; classify it before deciding whether to remediate,
-rerun, or add another eligible profile. A test with one or two passing profiles
-is `quorum_incomplete`, not passed.
+The tested-assistant model and reasoning remain Luna/medium across every run.
+Record one sub-evidence root per run, then assemble a quorum packet that maps
+each run id to raw artifacts and its Sol evaluator verdict. A failed run is
+evidence, not noise; classify it before remediation or rerun. A test with one
+or two passing runs is `quorum_incomplete`, not passed.
 
-The three-model quorum does not permit deterministic prose scoring. Each model
-run still requires semantic evaluation for route use, user-facing clarity,
+The Luna run quorum does not permit deterministic prose scoring. Each run still
+requires Sol/high semantic evaluation for route use, user-facing clarity,
 leakage, recovery, and behavioral acceptance.
 
-Quorum runs should execute eligible profiles concurrently, not serially, once
+Quorum runs should execute Luna sessions concurrently, not serially, once
 the runner can isolate target-client state. Parallelism must not reuse the same
 client home volume, `/workspace`, client-scoped token file, container name,
-session id, or evidence directory across profiles. If the runner cannot provide
+session id, or evidence directory across runs. If the runner cannot provide
 those isolated surfaces, fall back to `--jobs 1` and record the lost-concurrency
 risk as harness debt. Successful parallel evidence should record
 `execution_mode: parallel_isolated`, the job count, each isolation root, and
-the per-profile run suffix.
+the per-run suffix.
 
 ## Model-Sized Evaluation Packets
 
@@ -382,20 +375,12 @@ The runner does not decide semantic pass/fail. The evaluator narrative is part o
 
 Before starting a model-backed Pi/OpenCode slice, capture a short ownership
 preflight. First identify the configured semantic profile from the env file and
-client defaults. Always check active runners and slice-owned containers. Only
-check local model servers, `nvidia-smi`, or `ollama ps` when that profile is
-actually hosted by the local model stack.
+client defaults; fail closed unless it is Luna/medium through the sandbox
+LiteLLM endpoint. Always check active runners and slice-owned containers.
 
 ```bash
 ps -u "$USER" -o pid,stat,cmd
 docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Command}}'
-```
-
-For local-hosted profiles only, add:
-
-```bash
-nvidia-smi
-ollama ps
 ```
 
 Also read any active-slice ledger from the controlling issue comment,
@@ -408,16 +393,8 @@ first.
 
 Interpretation rules:
 
-- GPU and local model server signals are relevant only for a local-hosted
-  semantic profile. Do not spend time checking `nvidia-smi`, `ollama ps`, or a
-  llama server when the active profile is OpenRouter or another remote provider.
-- For local-hosted profiles, GPU memory held by a local model server is not by
-  itself proof of active inference. Treat nonzero `GPU-Util`, active client
-  runner processes, growing transcript files, or a live command session as
-  stronger evidence of an active test turn.
-- For local-hosted profiles, a local model server process holding many GiB with
-  `GPU-Util` near 0% is usually resident/idle model state. Do not kill it or
-  declare a hung slice from memory residency alone.
+- Do not run local-model or direct-provider diagnostics as a substitute for
+  checking the fixed Luna/medium LiteLLM route.
 - Running `cf-mcp-<service>-<client>-*` containers are slice ownership evidence.
   Reuse, inspect, or stop only containers whose names and evidence paths belong
   to the current comprehensive MCP testing loop.
@@ -425,16 +402,15 @@ Interpretation rules:
   evidence root, command ledger, raw transcript mtimes, and runner process list
   before deciding it is stale. Prefer attaching/readback to understand the
   state over starting a duplicate session.
-- If ownership is unclear, do not kill model servers or client containers
-  speculatively. Record the ambiguity and ask the SO, or isolate the next test
+- If ownership is unclear, do not kill client containers speculatively. Record
+  the ambiguity and ask the SO, or isolate the next test
   with a new explicit container name and evidence directory only after resource
   contention is understood.
 - If a stale slice-owned container is idle, preserve its transcript/evidence
   before cleanup. Cleanup should reset by deleting the whole slice-owned
   container/home/workspace state, not by hand-calculating deltas inside it.
-- If GPU utilization is pegged during a local-model profile, defer new
-  model-backed launches until the active owner is identified. A controller may
-  continue deterministic repo/GitHub work while waiting.
+- A controller may continue deterministic repo/GitHub work while waiting for an
+  active Luna run to complete.
 
 State transitions:
 

@@ -7,13 +7,15 @@ description: Orchestrate ContextForge comprehensive MCP service testing through 
 
 ## Core Rule
 
-Treat this as a semantic, model-engaged test regimen. Deterministic tooling may establish structure, runtime facts, command exit status, JSON validity, endpoint reachability, file existence, and evidence packaging. It must not decide whether free-form assistant prose satisfies a service interaction requirement. Use SO judgment or a non-Spark evaluator for meaning.
+Treat this as a semantic, model-engaged test regimen. Deterministic tooling may establish structure, runtime facts, command exit status, JSON validity, endpoint reachability, file existence, and evidence packaging. It must not decide whether free-form assistant prose satisfies a service interaction requirement. Use Sol/high or SO judgment for meaning.
 
-Every semantic service/client test must pass on at least three distinct
-eligible semantic-test model profiles before the controller may call that test
-accepted. A one-model pass is useful slice evidence, not a test pass. If fewer
-than three eligible profiles are available, the test is blocked for acceptance
-until the profile pool or provider credentials are repaired.
+All tested-assistant semantic runs use Luna/medium through LiteLLM. Terra/high
+is reserved for simulated humans. Sol/high is reserved for semantic evaluation.
+Every semantic service/client test must pass on at least three independent
+Luna/medium tested-assistant runs before the controller may call that test
+accepted. A one-run pass is useful slice evidence, not a test pass. The quorum
+is about independent blind-agent runs over the same behavior, not model-role
+diversity.
 
 Short of direct user testing, usability evidence comes from a broad and diverse
 set of semantic test bundles with runners dispatched by sub-agents. The bundle
@@ -38,11 +40,11 @@ governance decision revives arbitrary/new MCP onboarding.
 1. Re-anchor on the current branch, issue map, runner, and evidence paths.
 2. Define the service/client slice before running it: service issue, client type, safe functions, user-behavior bundle, mutating-function policy, expected evidence, and failure triage target.
 3. Start from a virgin target-client harness state. Reset the target client container/home volume/workspace rather than calculating cleanup deltas.
-4. Run a real Pi or OpenCode command-line session with one semantic-test model profile selected for the whole run, using a stable session identity for each interaction phase.
+4. Run a real Pi or OpenCode command-line session with the Luna/medium tested-assistant profile fixed for the whole run, using a stable session identity for each interaction phase.
 5. Keep prompts natural, short, and minimally sufficient. Do not coach the tested assistant with tool-call names unless the use case explicitly requires that signal.
 6. Require the tested assistant to use the ContextForge-installed tools exposed in the client session. Direct upstream package execution, shell scripts, or hand-written MCP clients are bypass evidence, not successful service use.
 7. Preserve raw transcripts, command ledgers, summaries, and any container/runtime readback needed to reproduce the run.
-8. Repeat the same semantic bundle on at least three distinct eligible model profiles before claiming a test pass.
+8. Repeat the same semantic bundle in at least three independent Luna/medium runs before claiming a test pass.
 9. Have an evaluator or SO read the evidence semantically and classify outcomes. Search or parse transcripts only to locate evidence, not to score meaning.
 10. Triage findings:
    - Service tool/schema/upstream/guidance/credential defects go to that service's Comprehensive `<name>` MCP Testing issue.
@@ -67,8 +69,8 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
 
 Supported clients are `pi` and `opencode`. Supported services are defined in `docker/client-harness/comprehensive-mcp-testing-services.json`.
 
-For acceptance-oriented semantic testing, prefer the quorum runner so three
-distinct model-profile runs are packaged together:
+For acceptance-oriented semantic testing, prefer the quorum runner so at least
+three independent Luna/medium tested-assistant runs are packaged together:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
@@ -80,8 +82,8 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python \
   --no-build
 ```
 
-Use the single-profile dialogue runner for debugging, candidate evidence, or
-isolating one model/provider failure. Do not treat it as acceptance evidence by
+Use the single-run dialogue runner for debugging, candidate evidence, or
+isolating one client/runtime failure. Do not treat it as acceptance evidence by
 itself.
 
 When a service needs more than one focused behavior bundle, pass a compact
@@ -128,39 +130,19 @@ transcript dumps.
 
 Before launching another model-backed client session, check for active
 runner/client processes, existing evidence from the current slice, and
-target-client containers left from the prior run. Determine the selected
-provider/model profile first. The profile source is provider-agnostic and may
-name any supported provider kind, key env, base URL env, client support set,
-and route-preference list. Randomize profiles per test run, not per inference.
-Only run local-model/GPU stewardship checks when the selected semantic profile
-is actually hosted by a local model server. When a
-local model profile is in use, distinguish loaded local model residency from
-active generation: GPU memory held by a local model server with near-zero
-utilization is not the same signal as an in-flight tested-assistant turn. Do
-not stack duplicate sessions just because the controller lost conversational
-context. If GPU utilization is pegged during a local-model profile, identify
-whether a known test slice is still running before dispatching more model work;
-stop only sessions owned by this testing loop or ask the SO when ownership is
-unclear.
+target-client containers left from the prior run. Verify the tested assistant
+is Luna/medium through the sandbox LiteLLM endpoint. Do not select local,
+direct-provider, Terra, or Sol profiles for the tested assistant. Randomize
+persona and isolated run identity where the gate requires it, never the fixed
+tested-assistant role. Do not stack duplicate sessions because the controller
+lost conversational context; stop only sessions owned by this testing loop.
 
-If the configured remote semantic-test model plausibly lacks the agentic
-capacity needed for a slice, treat that as a model-adequacy hypothesis. Do not
-compensate with over-specific prompts, deterministic prose checks, or unrelated
-local-provider diagnostics. Re-run the same compact package with a stronger
-configured semantic-test profile and compare the model-backed transcripts
-semantically.
-
-If one model repeatedly stops after the first safe tool call while stronger
-models complete the intended read-only workflow, treat that as both model-risk
-evidence and product-surface evidence. First ask whether the safe tool result
-itself can be made clearer or more complete without mutating state; ordinary
-users benefit from self-explanatory tool output. Only remove or disable that
-model from the default quorum pool after the same model remains uniquely
-inadequate despite a reasonable, user-facing result shape.
-
-Profiles marked single-shot or `multi_step_quorum_eligible=false` may be used
-for explicit diagnostic runs, but they do not count toward the default
-three-model quorum for multi-step semantic acceptance.
+If Luna repeatedly stops after the first safe tool call, treat that as both
+model-adequacy and product-surface evidence. Do not compensate with
+over-specific prompts, deterministic prose checks, a direct-provider fallback,
+or a role swap. First ask whether the safe tool result can be made clearer or
+more complete for an ordinary user, then rerun the same compact package in a
+fresh isolated Luna session.
 
 Use [method.md](references/method.md#active-session-stewardship) for the concrete preflight/readback commands and ownership rules.
 
@@ -168,9 +150,8 @@ Before broad fan-out, maintain a one-line active-slice ledger in the issue
 comment, evidence summary, or controller notes: service, client, container,
 session ids, evidence root, start time, current state, and owner. Refresh that
 ledger before starting any new model-backed turn. If the selected semantic
-profile is local-hosted and the only signal is resident GPU memory at 0%
-utilization, treat it as loaded-model residency, not a reason to kill or
-duplicate sessions. If a slice-owned container remains after the turn, either
+profile is not Luna/medium through the sandbox LiteLLM endpoint, fail closed
+instead of launching. If a slice-owned container remains after the turn, either
 reuse it deliberately for readback or preserve evidence and reset it before the
 next attempt.
 
@@ -189,26 +170,23 @@ Use gpt-5.5/non-Spark agents for semantic evaluation of model-agent interactions
 
 The controller retains GitHub privileges and final acceptance. Subagents return evidence and recommendations, not readiness authority.
 
-## Model Quorum
+## Luna Run Quorum
 
-A semantic test pass requires a quorum of at least three distinct eligible
-semantic-test model profiles. The profiles must run the same service, client,
-prompt bundle, reset discipline, and target surface. Record each profile id,
-provider kind, model id, route-preference list, context window, evidence root,
-and evaluator verdict. The quorum is about model diversity over the same
-behavior, not three retries on one model.
+A semantic test pass requires at least three independent Luna/medium
+tested-assistant runs over the same service, client, prompt bundle, reset
+discipline, and target surface. Record each run id, fixed profile/model identity,
+evidence root, and Sol evaluator verdict. A one-run pass is useful slice
+evidence, not a test pass.
 
-Quorum execution should run profiles concurrently by default through isolated
-client harness roots. Each profile run needs its own home directory, workspace,
-client-scoped token mount, container name, session id, and evidence root. Use
-sequential mode only for debugging or when a service explicitly cannot tolerate
-parallel target-client runs.
+Run the Luna sessions concurrently by default through isolated client harness
+roots. Each run needs its own home directory, workspace, client-scoped token
+mount, container name, session id, and evidence root. Use sequential mode only
+for debugging or when a service cannot tolerate parallel target-client runs.
 
-If one profile fails and others pass, classify that failure before replacing
-it: model-adequacy, provider/runtime outage, client/tool defect, prompt/package
-defect, or genuine product failure. Do not hide a failed model run by silently
-dropping it from the packet. If a candidate is unavailable or below the minimum
-context-window floor, it is ineligible rather than failed.
+If one run fails and others pass, classify it before rerunning: Luna adequacy,
+LiteLLM/runtime outage, client/tool defect, prompt/package defect, or genuine
+product failure. Do not hide failed runs or substitute Terra, Sol, local, or
+direct-provider models into the tested-assistant quorum.
 
 ## Refinement Trigger
 

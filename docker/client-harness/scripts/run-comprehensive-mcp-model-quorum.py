@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one comprehensive MCP slice across a quorum of semantic model profiles."""
+"""Run one comprehensive MCP slice across independent Luna/medium runs."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import concurrent.futures
 import importlib.util
 import json
 import os
-import random
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -16,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 
-MIN_MODEL_QUORUM = 3
+MIN_RUN_QUORUM = 3
 
 
 def load_dialogue_runner() -> Any:
@@ -40,8 +39,9 @@ def select_profiles(
     available_env: dict[str, str],
     requested: list[str],
     count: int,
-    seed: int | None,
+    seed: int | None = None,
 ) -> list[dict[str, Any]]:
+    del seed
     eligible = [
         profile
         for profile in dialogue.load_semantic_model_profiles(harness_root)
@@ -49,25 +49,22 @@ def select_profiles(
         and dialogue.profile_available(profile, available_env)
         and dialogue.profile_context_window(profile) >= dialogue.MIN_SEMANTIC_CONTEXT_WINDOW
         and dialogue.profile_multi_step_quorum_eligible(profile)
+        and dialogue.profile_tested_assistant_eligible(profile)
         and dialogue.profile_weight(profile) > 0
     ]
     by_id = {str(profile.get("id") or ""): profile for profile in eligible}
     if requested:
         missing = [profile_id for profile_id in requested if profile_id not in by_id]
         if missing:
-            raise RuntimeError(f"requested profiles are not eligible for {client}: {', '.join(missing)}")
-        selected = [by_id[profile_id] for profile_id in requested]
-    else:
-        if len(eligible) < count:
-            raise RuntimeError(f"need {count} eligible profiles for {client}; found {len(eligible)}")
-        rng = random.Random(seed)
-        selected = rng.sample(eligible, count)
-    ids = [str(profile.get("id") or "") for profile in selected]
-    if len(set(ids)) != len(ids):
-        raise RuntimeError("semantic model quorum requires distinct profile ids")
-    if len(selected) < MIN_MODEL_QUORUM:
-        raise RuntimeError(f"semantic model quorum requires at least {MIN_MODEL_QUORUM} profiles")
-    return selected
+            raise RuntimeError(
+                "tested-assistant run quorum requires blind-agent Luna/medium; "
+                f"rejected: {', '.join(missing)}"
+            )
+    if len(eligible) != 1:
+        raise RuntimeError(f"expected exactly one blind-agent Luna/medium profile for {client}; found {len(eligible)}")
+    if count < MIN_RUN_QUORUM:
+        raise RuntimeError(f"run quorum requires at least {MIN_RUN_QUORUM} independent Luna runs")
+    return [eligible[0] for _ in range(count)]
 
 
 def parse_summary(stdout: str) -> dict[str, Any] | None:
@@ -96,14 +93,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--client", choices=["pi", "opencode"], required=True)
     parser.add_argument("--service", required=True)
     parser.add_argument("--timeout", type=int, default=420)
-    parser.add_argument("--count", type=int, default=MIN_MODEL_QUORUM)
-    parser.add_argument("--profile", action="append", default=[], help="Explicit profile id; repeat for quorum.")
-    parser.add_argument("--seed", type=int, default=None, help="Optional random seed for reproducible selection.")
-    parser.add_argument("--jobs", type=int, default=0, help="Concurrent profile runs; default is one job per selected profile.")
+    parser.add_argument("--count", type=int, default=MIN_RUN_QUORUM)
+    parser.add_argument("--profile", action="append", default=[], help="Explicit tested-assistant profile id; only Luna is accepted.")
+    parser.add_argument("--seed", type=int, default=None, help="Compatibility option; Luna run selection is deterministic.")
+    parser.add_argument("--jobs", type=int, default=0, help="Concurrent Luna runs; default is one job per selected run.")
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument(
         "--service-test-prompt",
-        help="Override the default natural service-test prompt for each model-profile run.",
+        help="Override the default natural service-test prompt for each Luna run.",
     )
     parser.add_argument("--contextforge-host-base-url", default=os.environ.get("CONTEXTFORGE_HOST_BASE_URL"))
     parser.add_argument("--contextforge-container-base-url", default=os.environ.get("CONTEXTFORGE_CONTAINER_BASE_URL"))
@@ -114,10 +111,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if args.count < MIN_MODEL_QUORUM:
-        raise SystemExit(f"--count must be at least {MIN_MODEL_QUORUM}")
-    if args.profile and len(args.profile) < MIN_MODEL_QUORUM:
-        raise SystemExit(f"provide at least {MIN_MODEL_QUORUM} --profile values")
+    if args.count < MIN_RUN_QUORUM:
+        raise SystemExit(f"--count must be at least {MIN_RUN_QUORUM}")
 
     dialogue = load_dialogue_runner()
     uc1 = dialogue.load_uc1_module()
@@ -172,9 +167,9 @@ def main(argv: list[str] | None = None) -> int:
             summary = {
                 "schema_uri": "contextforge://client-harness/comprehensive-mcp-model-quorum/v1",
                 "ok_scope": "structural model-quorum execution package only",
-                "semantic_acceptance": "requires_non_spark_evaluator_per_model_and_quorum",
+                "semantic_acceptance": "requires_sol_evaluator_per_run_and_quorum",
                 "quorum_status": "prebuild_failed",
-                "minimum_model_quorum": MIN_MODEL_QUORUM,
+                "minimum_run_quorum": MIN_RUN_QUORUM,
                 "client": args.client,
                 "service": args.service,
                 "service_issue": service_map[args.service]["issue"],
@@ -183,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
                 "output_root": str(output_root),
                 "prebuild": prebuild,
                 "selected_profiles": [profile_record(dialogue, profile) for profile in profiles],
-                "completed_profile_count": 0,
+                "completed_run_count": 0,
                 "runs": [],
             }
             write_json(output_root / "quorum-summary.json", summary)
@@ -260,9 +255,9 @@ def main(argv: list[str] | None = None) -> int:
     summary = {
         "schema_uri": "contextforge://client-harness/comprehensive-mcp-model-quorum/v1",
         "ok_scope": "structural model-quorum execution package only",
-        "semantic_acceptance": "requires_non_spark_evaluator_per_model_and_quorum",
-        "quorum_status": "ready_for_evaluator" if len(completed) >= MIN_MODEL_QUORUM else "quorum_run_incomplete",
-        "minimum_model_quorum": MIN_MODEL_QUORUM,
+        "semantic_acceptance": "requires_sol_evaluator_per_run_and_quorum",
+        "quorum_status": "ready_for_sol_evaluator" if len(completed) >= MIN_RUN_QUORUM else "quorum_run_incomplete",
+        "minimum_run_quorum": MIN_RUN_QUORUM,
         "client": args.client,
         "service": args.service,
         "service_issue": service_map[args.service]["issue"],
@@ -274,22 +269,22 @@ def main(argv: list[str] | None = None) -> int:
         "prebuild": prebuild,
         "selected_profiles": [profile_record(dialogue, profile) for profile in profiles],
         "service_test_prompt_override_used": bool(args.service_test_prompt),
-        "completed_profile_count": len(completed),
+        "completed_run_count": len(completed),
         "runs": runs,
         "deterministic_non_actions": [
             "quorum runner does not score free-form assistant prose",
-            "quorum runner does not hide failed model-profile runs",
-            "quorum runner varies only semantic model profile across runs",
+            "quorum runner does not hide failed Luna/medium runs",
+            "quorum runner keeps Luna/medium fixed across runs",
         ],
         "evaluator_required_narrative": [
-            "judge each model run for client-visible ContextForge tool route use",
-            "classify every failed profile before replacement or acceptance",
-            "accept quorum only if at least three distinct eligible profiles pass semantically",
+            "use Sol/high to judge each Luna run for client-visible ContextForge tool route use",
+            "classify every failed run before replacement or acceptance",
+            "accept quorum only if at least three independent Luna/medium runs pass semantically",
         ],
     }
     write_json(output_root / "quorum-summary.json", summary)
     print(json.dumps(summary, indent=2, sort_keys=True))
-    return 0 if len(completed) >= MIN_MODEL_QUORUM else 1
+    return 0 if len(completed) >= MIN_RUN_QUORUM else 1
 
 
 if __name__ == "__main__":

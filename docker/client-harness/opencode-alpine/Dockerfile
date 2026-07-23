@@ -28,8 +28,10 @@ RUN apk add --no-cache \
     && npm install -g "opencode-ai@${OPENCODE_VERSION}" \
     && npm cache clean --force
 
-COPY --chown=agent:agent entrypoint.sh /usr/local/bin/contextforge-opencode-alpine-entrypoint
-RUN chmod 0755 /usr/local/bin/contextforge-opencode-alpine-entrypoint
+COPY --chown=agent:agent opencode-alpine/entrypoint.sh /usr/local/bin/contextforge-opencode-alpine-entrypoint
+COPY --chown=agent:agent opencode/render-config.py /usr/local/bin/contextforge-opencode-render-config
+RUN chmod 0755 /usr/local/bin/contextforge-opencode-alpine-entrypoint \
+      /usr/local/bin/contextforge-opencode-render-config
 
 USER ${USERNAME}
 WORKDIR /workspace
