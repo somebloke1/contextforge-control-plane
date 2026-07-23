@@ -1,0 +1,10 @@
+{
+  "defaultProvider": "litellm",
+  "defaultModel": "codex/gpt-5.6-luna",
+  "defaultThinkingLevel": "medium",
+  "enabledModels": [
+    "litellm/codex/gpt-5.6-terra",
+    "litellm/codex/gpt-5.6-luna",
+    "litellm/codex/gpt-5.6-sol"
+  ]
+}

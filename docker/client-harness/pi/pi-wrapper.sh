@@ -2,14 +2,16 @@
 set -euo pipefail
 
 : "${CONTEXTFORGE_PI_REAL_BIN:=/usr/bin/pi}"
-: "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=openrouter-semantic-test}"
-: "${CONTEXTFORGE_PI_DEFAULT_MODEL:=${OPENROUTER_MODEL:-google/gemma-4-26b-a4b-it}}"
+: "${CONTEXTFORGE_PI_DEFAULT_PROVIDER:=litellm}"
+: "${CONTEXTFORGE_PI_DEFAULT_MODEL:=codex/gpt-5.6-luna}"
+: "${CONTEXTFORGE_PI_DEFAULT_THINKING:=medium}"
 
 # shellcheck source=/usr/local/bin/contextforge-pi-bootstrap
 . /usr/local/bin/contextforge-pi-bootstrap
 
 has_provider=false
 has_model=false
+has_thinking=false
 skip_defaults=false
 latest_prompt=""
 expect_prompt_value=false
@@ -26,6 +28,9 @@ for arg in "$@"; do
       ;;
     --model|--model=*)
       has_model=true
+      ;;
+    --thinking|--thinking=*)
+      has_thinking=true
       ;;
     -p|--prompt)
       expect_prompt_value=true
@@ -46,6 +51,9 @@ if [[ "${skip_defaults}" == false ]]; then
   fi
   if [[ "${has_model}" == false ]]; then
     default_args+=(--model "${CONTEXTFORGE_PI_DEFAULT_MODEL}")
+  fi
+  if [[ "${has_thinking}" == false ]]; then
+    default_args+=(--thinking "${CONTEXTFORGE_PI_DEFAULT_THINKING}")
   fi
 fi
 

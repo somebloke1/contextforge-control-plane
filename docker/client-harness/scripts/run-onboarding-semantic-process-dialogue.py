@@ -288,30 +288,29 @@ def responder_model_config(
     available_env: dict[str, str],
     service_runner: Any,
 ) -> dict[str, Any]:
-    provider_kind = profile_value(profile, "provider_kind", available_env.get("CONTEXTFORGE_TEST_PROVIDER_KIND", "openrouter"))
-    if provider_kind != "openrouter":
-        raise RuntimeError("model-backed simulated human responder currently requires an OpenRouter semantic profile")
-    model = profile_value(profile, "model", available_env.get("OPENROUTER_MODEL") or available_env.get("CONTEXTFORGE_TEST_MODEL"))
-    if not model:
-        raise RuntimeError("model-backed simulated human responder could not determine an OpenRouter model")
-    key_env = profile_value(profile, "api_key_env", "OPENROUTER_API_KEY")
+    provider_kind = profile_value(profile, "provider_kind", available_env.get("CONTEXTFORGE_TEST_PROVIDER_KIND", "litellm"))
+    if provider_kind != "litellm":
+        raise RuntimeError("model-backed simulated human responder requires the LiteLLM sandbox provider")
+    model = available_env.get("CONTEXTFORGE_TERRA_MODEL", "codex/gpt-5.6-terra")
+    if model != "codex/gpt-5.6-terra":
+        raise RuntimeError(f"unsupported simulated-human model {model!r}")
+    key_env = "LITELLM_API_KEY"
     api_key = os.environ.get(key_env) or available_env.get(key_env)
     if not api_key:
         raise RuntimeError(f"model-backed simulated human responder is missing {key_env}")
-    base_url_env = profile_value(profile, "base_url_env", "OPENROUTER_BASE_URL")
     base_url = (
-        (os.environ.get(base_url_env) or available_env.get(base_url_env))
-        if base_url_env
-        else ""
-    ) or profile_value(profile, "default_base_url", "https://openrouter.ai/api/v1")
-    routes = service_runner.route_preferences(profile) if profile is not None else []
+        os.environ.get("CONTEXTFORGE_LITELLM_HOST_BASE_URL")
+        or available_env.get("CONTEXTFORGE_LITELLM_HOST_BASE_URL")
+        or "http://127.0.0.1:3333/v1"
+    )
     return {
         "provider_kind": provider_kind,
         "model": model,
         "api_key_env": key_env,
         "api_key": api_key,
         "base_url": base_url.rstrip("/"),
-        "route_preferences": routes,
+        "route_preferences": [],
+        "reasoning_effort": "high",
     }
 
 
@@ -537,12 +536,13 @@ def copy_native_pi_session_transcript(
     return evidence
 
 
-def openrouter_chat_completion(config: dict[str, Any], messages: list[dict[str, str]]) -> str:
+def litellm_chat_completion(config: dict[str, Any], messages: list[dict[str, str]]) -> str:
     body: dict[str, Any] = {
         "model": config["model"],
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": 220,
+        "reasoning_effort": config["reasoning_effort"],
     }
     routes = config.get("route_preferences") or []
     if routes:
@@ -562,14 +562,14 @@ def openrouter_chat_completion(config: dict[str, Any], messages: list[dict[str, 
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
-        raise RuntimeError(f"OpenRouter responder request failed: HTTP {exc.code} {exc.reason}: {detail}") from exc
+        raise RuntimeError(f"LiteLLM responder request failed: HTTP {exc.code} {exc.reason}: {detail}") from exc
     choices = payload.get("choices") if isinstance(payload, dict) else None
     if not isinstance(choices, list) or not choices:
-        raise RuntimeError("OpenRouter responder response did not include choices")
+        raise RuntimeError("LiteLLM responder response did not include choices")
     message = choices[0].get("message") if isinstance(choices[0], dict) else None
     content = message.get("content") if isinstance(message, dict) else None
     if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("OpenRouter responder response did not include message content")
+        raise RuntimeError("LiteLLM responder response did not include message content")
     return content.strip()
 
 
@@ -1545,6 +1545,8 @@ def main(argv: list[str] | None = None) -> int:
         "compose",
         "-f",
         str(harness_root / "compose.yml"),
+        "--env-file",
+        str(semantic_env_file),
         "run",
         "--name",
         container,
@@ -1668,7 +1670,7 @@ def main(argv: list[str] | None = None) -> int:
                 runner_observation=runner_observation,
             )
             try:
-                responder_text = openrouter_chat_completion(responder_config, messages)
+                responder_text = litellm_chat_completion(responder_config, messages)
                 prompt, continue_conversation, parsed_structured = parse_simulated_human_response(responder_text)
                 responder_turns.append(
                     {

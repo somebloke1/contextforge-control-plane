@@ -37,52 +37,45 @@ fi
 
 if [[ -f /config/pi/models.json ]]; then
   export PI_CODING_AGENT_DIR
-  export OPENROUTER_STICKY_KEY="${OPENROUTER_STICKY_KEY:-contextforge-semantic-test}"
-  export OPENROUTER_STICKY_EPOCH_SECONDS="${OPENROUTER_STICKY_EPOCH_SECONDS:-7200}"
   python3 - <<'PY'
 import json
 import os
-import time
 from pathlib import Path
-
-def effective_sticky_key() -> str:
-    base = os.environ["OPENROUTER_STICKY_KEY"]
-    epoch_seconds = int(os.environ["OPENROUTER_STICKY_EPOCH_SECONDS"])
-    if epoch_seconds <= 0:
-        return base
-    return f"{base}-e{int(time.time() // epoch_seconds)}"
 
 source = Path("/config/pi/models.json")
 target = Path(os.environ["PI_CODING_AGENT_DIR"]) / "models.json"
 data = json.loads(source.read_text(encoding="utf-8"))
-provider = data["providers"]["openrouter-semantic-test"]
-if os.environ.get("OPENROUTER_BASE_URL"):
-    provider["baseUrl"] = os.environ["OPENROUTER_BASE_URL"]
-if os.environ.get("OPENROUTER_API_KEY"):
-    provider["apiKey"] = os.environ["OPENROUTER_API_KEY"]
-provider["headers"]["x-session-id"] = effective_sticky_key()
-routes = [item.strip() for item in os.environ.get("OPENROUTER_PROVIDER_ROUTES", "").split(",") if item.strip()]
-if not routes and os.environ.get("OPENROUTER_PROVIDER_ROUTE"):
-    routes = [os.environ["OPENROUTER_PROVIDER_ROUTE"]]
-if routes:
-    provider["compat"]["openRouterRouting"] = {
-        "only": routes,
-        "order": routes,
-        "allow_fallbacks": False,
-    }
-else:
-    provider["compat"].pop("openRouterRouting", None)
-provider["models"][0]["id"] = os.environ.get("OPENROUTER_MODEL", provider["models"][0]["id"])
-if os.environ.get("CONTEXTFORGE_TEST_CONTEXT_WINDOW"):
-    provider["models"][0]["contextWindow"] = int(os.environ["CONTEXTFORGE_TEST_CONTEXT_WINDOW"])
-local_provider = data["providers"].get("local-llama-qwen")
-if local_provider:
-    if os.environ.get("LOCAL_LLAMA_BASE_URL"):
-        local_provider["baseUrl"] = os.environ["LOCAL_LLAMA_BASE_URL"]
-    if os.environ.get("LOCAL_LLAMA_KEY"):
-        local_provider["apiKey"] = os.environ["LOCAL_LLAMA_KEY"]
-    local_provider["models"][0]["id"] = os.environ.get("LOCAL_LLAMA_MODEL", local_provider["models"][0]["id"])
+if set(data.get("providers", {})) != {"litellm"}:
+    raise SystemExit("Pi sandbox models must contain only the litellm provider")
+provider = data["providers"]["litellm"]
+expected_models = {
+    "codex/gpt-5.6-terra",
+    "codex/gpt-5.6-luna",
+    "codex/gpt-5.6-sol",
+}
+if {model["id"] for model in provider.get("models", [])} != expected_models:
+    raise SystemExit("Pi sandbox models do not match the approved LiteLLM set")
+if provider.get("api") != "openai-responses" or provider.get("compat", {}).get("supportsReasoningEffort") is not True:
+    raise SystemExit("Pi sandbox models must use reasoning-enabled OpenAI Responses")
+if any(model.get("reasoning") is not True or not model.get("thinkingLevelMap") for model in provider["models"]):
+    raise SystemExit("Pi sandbox models must define reasoning and thinking maps")
+provider["baseUrl"] = os.environ.get("LITELLM_BASE_URL", "http://host.docker.internal:3333/v1").rstrip("/")
+if os.environ.get("LITELLM_API_KEY"):
+    provider["apiKey"] = os.environ["LITELLM_API_KEY"]
 target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+settings_source = Path("/config/pi/settings.json")
+if settings_source.exists():
+    settings = json.loads(settings_source.read_text(encoding="utf-8"))
+    model = os.environ.get("CONTEXTFORGE_PI_DEFAULT_MODEL", "codex/gpt-5.6-luna")
+    if model not in expected_models:
+        raise SystemExit(f"unsupported Pi sandbox model: {model!r}")
+    settings["defaultProvider"] = "litellm"
+    settings["defaultModel"] = model
+    settings["defaultThinkingLevel"] = os.environ.get("CONTEXTFORGE_PI_DEFAULT_THINKING", "medium")
+    settings["enabledModels"] = [f"litellm/{model}" for model in sorted(expected_models)]
+    settings_target = Path(os.environ["PI_CODING_AGENT_DIR"]) / "settings.json"
+    settings_target.write_text(json.dumps(settings, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 fi
 

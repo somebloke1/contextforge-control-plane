@@ -21,38 +21,36 @@ package sources; no application-published images are used.
 
 ## Secrets
 
-Do not commit `env/semantic-model.env`. Generate it from the host or populate
-it directly from `env/semantic-model.env.example`:
+Do not commit `env/semantic-model.env`. Generate it from the read-only host
+credential file `${HOME}/.config/litellm/client.env` (override its path with
+`HOST_ENV`), or populate it directly from `env/semantic-model.env.example`:
 
 ```sh
 scripts/make-semantic-model-env.sh
 ```
 
-Semantic-test runs choose one provider-agnostic model profile per run from
-`semantic-model-profiles.json` unless `--semantic-model-profile env` or a
-specific profile id is supplied. Profiles can name any supported provider kind,
-model id, provider-specific key env, base URL env, client support set, and
-route-preference list. The current profile pool is OpenRouter-backed and uses
-`OPENROUTER_API_KEY` on the host only. Pi/OpenCode Docker containers must not
-receive the real provider key; runners start a host-side proxy, configure the
-container with a host-gateway base URL, and pass only an ephemeral dummy key
-into the container. Route preferences are profile-specific, while empty route lists
-leave routing to OpenRouter. The generated local env file is written with mode
-`0600` semantics through `umask 077`.
+The sandbox model provider is exactly `litellm`, using `LITELLM_API_KEY` and
+Docker endpoint `http://host.docker.internal:3333/v1`. Host-side Terra
+simulation uses the corresponding host endpoint recorded as
+`CONTEXTFORGE_LITELLM_HOST_BASE_URL`. Its exact model set and semantic roles are:
 
-`OPENROUTER_STICKY_KEY` is a non-secret cache-affinity key. It is passed as the
-OpenRouter `x-session-id` header where the client config surface supports model
-request headers. Use one stable base sticky key across the semantic-test profile
-so Pi and OpenCode share provider sticky routing for prompt caching. At client
-bootstrap/config render time the harness appends a coarse epoch bucket
-controlled by `OPENROUTER_STICKY_EPOCH_SECONDS` and defaulting to two hours.
-This keeps cache affinity stable within an active testing window while naturally
-resetting it between testing epochs.
+| Model | Role | Reasoning |
+| --- | --- | --- |
+| `codex/gpt-5.6-terra` | human | high |
+| `codex/gpt-5.6-luna` | blind and default | medium |
+| `codex/gpt-5.6-sol` | evaluator | high |
+
+`semantic-model-profiles.json` preserves the same role/reasoning metadata for
+Pi and OpenCode. Luna is the default profile; a specific profile id or `random`
+may be selected explicitly. The generated env file contains only LiteLLM and
+role-selection variables and is written with `0600` semantics through
+`umask 077`.
 
 Do not print raw ContextForge env files, bearer headers, passwords, API keys,
 tokens, JWTs, private keys, or credential values into terminal transcripts or
-evidence packages. Do not pass provider API keys into target-client Docker
-containers. For diagnostics, report key presence/status, file permissions,
+evidence packages. The Pi/OpenCode sandbox receives `LITELLM_API_KEY` only
+through the ignored Compose env file; do not copy it into tracked config or
+auth records. For diagnostics, report key presence/status, file permissions,
 selected non-secret ids, and redacted values only. Pipe env-like or transcript
 output through the shared redactor before it is written under `evidence/`,
 exported from a container, or copied into GitHub:
@@ -96,31 +94,24 @@ This validates that all five client commands launch.
 
 ## Semantic Model Probe
 
-Pi and OpenCode semantic-test paths read provider/model defaults and available
-provider secrets from `env/semantic-model.env` on the host. Remote provider
-secrets remain host-only; target-client containers receive an ephemeral dummy
-provider key and a host-gateway proxy base URL:
+Pi and OpenCode semantic-test paths explicitly pass
+`--env-file env/semantic-model.env` to Docker Compose:
 
 ```sh
 scripts/probe-semantic-model.sh
 ```
 
-By default the env file can reach OpenRouter through:
+By default the env file reaches LiteLLM through:
 
 ```text
-https://openrouter.ai/api/v1
+http://host.docker.internal:3333/v1
 ```
 
-and begins with model id:
-
-```text
-google/gemma-4-26b-a4b-it
-```
-
-The current default multi-step semantic quorum is Gemma, Qwen Coder, and
-DeepSeek v4-class model profiles. Diagnostic or future-candidate profiles may
-remain listed but are excluded from random quorum selection unless explicitly
-marked eligible.
+Pi uses `openai-responses`, reasoning-enabled model records, and model-level
+thinking maps. OpenCode enables only the `litellm` provider through
+`@ai-sdk/openai`, with Luna as both default and small model. The probe checks
+all three advertised endpoint ids plus each client's effective config and model
+listing.
 
 Each comprehensive runner invocation records the selected semantic profile in
 the evidence summary. Random profile selection is per test run, not per
@@ -132,8 +123,7 @@ scripts/smoke-agents.sh
 ```
 
 The legacy `scripts/probe-llama.sh` name remains only as a compatibility
-wrapper. Do not use it as a local llama-server check unless the configured
-semantic-test profile is actually local-hosted.
+wrapper; it now runs the same LiteLLM probe.
 
 The probe writes exact advertised model identity reports to ignored local
 evidence files:
@@ -143,10 +133,12 @@ evidence/pi-semantic-model-identity.json
 evidence/opencode-semantic-model-identity.json
 ```
 
-Each report records the expected harness model id, the endpoint-advertised
-model ids, the exercised client surface, and a `current`, `stale`, or `unverified`
-status. A mismatch marks the evidence stale rather than silently
-accepting a nearby alias.
+Each report is a three-entry JSON array recording the expected harness model
+id, endpoint-advertised model ids, exercised client surface, and a `current`,
+`stale`, or `unverified` status. A mismatch fails rather than accepting a nearby
+alias. `scripts/smoke-agents.sh` makes six response calls (three models through
+each client), selects Pi thinking/OpenCode variants explicitly, and requires a
+unique marker from every cell.
 
 The Pi config follows the public Pi custom model docs from:
 
@@ -158,15 +150,6 @@ The OpenCode config follows the public OpenCode config/provider docs:
 
 - https://opencode.ai/docs/config/
 - https://opencode.ai/docs/providers/
-
-Prompt caching is provider-level. For Gemini through OpenRouter, keep stable
-prompt prefixes across turns and use the shared sticky key so repeated agent
-sessions route to the same provider cache context for the current epoch. Inspect
-`usage.prompt_tokens_details.cached_tokens` where raw responses are available.
-Do not add Anthropic-style `cache_control` markers for this Gemini profile;
-Google prompt caching is implicit for eligible repeated prefixes.
-Do not enable or evaluate OpenRouter response caching via `X-OpenRouter-Cache`;
-that caches identical whole responses and is not the semantic-test objective.
 
 ## Isolated Onboarding Runs
 

@@ -50,7 +50,12 @@ SEMANTIC_MODEL_OVERRIDE_KEYS = [
     "OPENROUTER_PROVIDER_ROUTES",
     "CONTEXTFORGE_PI_DEFAULT_MODEL",
     "CONTEXTFORGE_PI_DEFAULT_PROVIDER",
+    "CONTEXTFORGE_PI_DEFAULT_THINKING",
     "CONTEXTFORGE_OPENCODE_DEFAULT_MODEL",
+    "CONTEXTFORGE_OPENCODE_SMALL_MODEL",
+    "CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT",
+    "LITELLM_BASE_URL",
+    "CONTEXTFORGE_LITELLM_HOST_BASE_URL",
 ]
 
 
@@ -74,7 +79,34 @@ def load_semantic_model_profiles(harness_root: Path) -> list[dict[str, Any]]:
     profiles = data.get("profiles")
     if not isinstance(profiles, list):
         raise RuntimeError("semantic-model-profiles.json must contain a profiles list")
-    return [profile for profile in profiles if isinstance(profile, dict)]
+    result = [profile for profile in profiles if isinstance(profile, dict)]
+    approved_models = {
+        "codex/gpt-5.6-terra",
+        "codex/gpt-5.6-luna",
+        "codex/gpt-5.6-sol",
+    }
+    if {str(profile.get("provider_kind") or "") for profile in result} != {"litellm"}:
+        raise RuntimeError("semantic model profiles must use only the litellm provider")
+    if {str(profile.get("model") or "") for profile in result} != approved_models:
+        raise RuntimeError("semantic model profiles do not match the approved LiteLLM model set")
+    contract = {
+        "codex/gpt-5.6-terra": ("human", "high", False),
+        "codex/gpt-5.6-luna": ("blind", "medium", True),
+        "codex/gpt-5.6-sol": ("evaluator", "high", False),
+    }
+    if len(result) != len(contract):
+        raise RuntimeError("semantic model profiles must contain exactly three entries")
+    for profile in result:
+        role, reasoning, is_default = contract[str(profile["model"])]
+        if (
+            profile.get("semantic_role") != role
+            or profile.get("reasoning_effort") != reasoning
+            or profile.get("pi_thinking") != reasoning
+            or profile.get("opencode_variant") != reasoning
+            or profile.get("default") is not is_default
+        ):
+            raise RuntimeError(f"semantic role/reasoning contract mismatch for {profile['model']!r}")
+    return result
 
 
 def default_session_id(client: str, service: str, phase: str, timestamp: str) -> str:
@@ -279,16 +311,25 @@ def env_semantic_model_profile(available_env: dict[str, str]) -> dict[str, Any]:
                 return candidate
         return default
 
-    provider_kind = value("CONTEXTFORGE_TEST_PROVIDER_KIND", "CONTEXTFORGE_TEST_PROVIDER", default="openrouter")
-    model = value("CONTEXTFORGE_TEST_MODEL", "OPENROUTER_MODEL")
+    provider_kind = value("CONTEXTFORGE_TEST_PROVIDER_KIND", "CONTEXTFORGE_TEST_PROVIDER", default="litellm")
+    if provider_kind != "litellm":
+        raise RuntimeError(f"unsupported sandbox semantic provider_kind {provider_kind!r}")
+    model = value("CONTEXTFORGE_TEST_MODEL", default="codex/gpt-5.6-luna")
     if not model:
-        raise RuntimeError("semantic model env selector requires CONTEXTFORGE_TEST_MODEL or OPENROUTER_MODEL")
+        raise RuntimeError("semantic model env selector requires CONTEXTFORGE_TEST_MODEL")
     context_window = value("CONTEXTFORGE_TEST_CONTEXT_WINDOW", default=str(MIN_SEMANTIC_CONTEXT_WINDOW))
-    routes = [
-        item.strip()
-        for item in value("OPENROUTER_PROVIDER_ROUTES", "OPENROUTER_PROVIDER_ROUTE", "CONTEXTFORGE_TEST_PROVIDER_ROUTE").split(",")
-        if item.strip()
-    ]
+    approved_models = {
+        "codex/gpt-5.6-terra",
+        "codex/gpt-5.6-luna",
+        "codex/gpt-5.6-sol",
+    }
+    if model not in approved_models:
+        raise RuntimeError(f"unsupported sandbox semantic model {model!r}")
+    reasoning = {
+        "codex/gpt-5.6-terra": "high",
+        "codex/gpt-5.6-luna": "medium",
+        "codex/gpt-5.6-sol": "high",
+    }[model]
     profile: dict[str, Any] = {
         "id": "env",
         "display_name": value("CONTEXTFORGE_TEST_MODEL_NAME", default=model),
@@ -296,19 +337,22 @@ def env_semantic_model_profile(available_env: dict[str, str]) -> dict[str, Any]:
         "provider_label": value("CONTEXTFORGE_TEST_PROVIDER", default=provider_kind),
         "model": model,
         "context_window": int(context_window),
-        "route_preferences": routes,
+        "route_preferences": [],
+        "reasoning_effort": reasoning,
         "multi_step_quorum_eligible": True,
         "weight": 1,
     }
-    if provider_kind == "openrouter":
-        profile.update(
-            {
-                "api_key_env": "OPENROUTER_API_KEY",
-                "base_url_env": "OPENROUTER_BASE_URL",
-                "default_base_url": value("OPENROUTER_BASE_URL", default="https://openrouter.ai/api/v1"),
-                "pi_provider": value("CONTEXTFORGE_PI_DEFAULT_PROVIDER", default="openrouter-semantic-test"),
-            }
-        )
+    profile.update(
+        {
+            "api_key_env": "LITELLM_API_KEY",
+            "base_url_env": "LITELLM_BASE_URL",
+            "default_base_url": value("LITELLM_BASE_URL", default="http://host.docker.internal:3333/v1"),
+            "pi_provider": "litellm",
+            "pi_thinking": reasoning,
+            "opencode_model": f"litellm/{model}",
+            "opencode_variant": reasoning,
+        }
+    )
     return profile
 
 
@@ -338,6 +382,11 @@ def choose_semantic_model_profile(
         if not profiles:
             raise RuntimeError(f"no multi-step semantic model profiles are available for client {client!r}")
         return random.choices(profiles, weights=[profile_weight(profile) for profile in profiles], k=1)[0]
+    if selector == "default":
+        defaults = [profile for profile in available_profiles if profile.get("default") is True]
+        if len(defaults) != 1:
+            raise RuntimeError(f"expected exactly one default semantic model profile for client {client!r}")
+        return defaults[0]
     matches = [profile for profile in available_profiles if str(profile.get("id") or "") == selector]
     if len(matches) != 1:
         raise RuntimeError(f"semantic model profile {selector!r} is not available for client {client!r}")
@@ -372,7 +421,19 @@ def selected_profile_env(
     base_url = base_url or str(profile.get("default_base_url") or "")
     if base_url_env and base_url:
         env[base_url_env] = base_url
-    if provider_kind == "openrouter":
+    if provider_kind == "litellm":
+        reasoning = str(profile.get("reasoning_effort") or "").strip()
+        if reasoning not in {"medium", "high"}:
+            raise RuntimeError(f"unsupported LiteLLM reasoning effort {reasoning!r}")
+        if base_url:
+            env["LITELLM_BASE_URL"] = base_url
+        env["CONTEXTFORGE_PI_DEFAULT_PROVIDER"] = "litellm"
+        env["CONTEXTFORGE_PI_DEFAULT_MODEL"] = model
+        env["CONTEXTFORGE_PI_DEFAULT_THINKING"] = str(profile.get("pi_thinking") or reasoning)
+        env["CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"] = str(profile.get("opencode_model") or f"litellm/{model}")
+        env["CONTEXTFORGE_OPENCODE_SMALL_MODEL"] = env["CONTEXTFORGE_OPENCODE_DEFAULT_MODEL"]
+        env["CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT"] = str(profile.get("opencode_variant") or reasoning)
+    elif provider_kind == "openrouter":
         routes = route_preferences(profile)
         env["OPENROUTER_MODEL"] = model
         env["OPENROUTER_OPENCODE_MODEL"] = model
@@ -428,6 +489,8 @@ def redacted_profile_summary(
         "provider_label": profile.get("provider_label"),
         "model": profile.get("model"),
         "display_name": profile.get("display_name"),
+        "semantic_role": profile.get("semantic_role"),
+        "reasoning_effort": profile.get("reasoning_effort"),
         "context_window": profile_context_window(profile),
         "minimum_context_window": MIN_SEMANTIC_CONTEXT_WINDOW,
         "api_key_env": key_env or None,
@@ -649,8 +712,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument(
         "--semantic-model-profile",
-        default=os.environ.get("CONTEXTFORGE_SEMANTIC_MODEL_PROFILE", "random"),
-        help="Semantic model profile id, 'random' for per-test-run random choice, or 'env' to use explicit environment values.",
+        default=os.environ.get("CONTEXTFORGE_SEMANTIC_MODEL_PROFILE", "default"),
+        help="Semantic model profile id, 'default' for Luna, 'random' for a per-run choice, or 'env' for explicit values.",
     )
     parser.add_argument(
         "--service-test-prompt",
@@ -831,6 +894,8 @@ def main(argv: list[str] | None = None) -> int:
             "compose",
             "-f",
             str(harness_root / "compose.yml"),
+            "--env-file",
+            str(semantic_env_file),
             "run",
             "--name",
             container,

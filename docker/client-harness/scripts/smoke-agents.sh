@@ -5,19 +5,45 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
 mkdir -p evidence
-if [[ ! -f env/semantic-model.env ]]; then
-  scripts/make-semantic-model-env.sh
-fi
+scripts/make-semantic-model-env.sh
 
-echo "== Pi agent smoke =="
-docker compose -f compose.yml run --rm pi bash -lc '
-  set -euo pipefail
-  pi --list-models "${CONTEXTFORGE_PI_DEFAULT_MODEL}"
-  pi --no-session --no-tools --no-context-files -p "Reply with exactly: pi-semantic-model-ok"
-' | tee evidence/pi-agent-smoke.txt
+run_pi_cell() {
+  local slug="$1"
+  local model="$2"
+  local thinking="$3"
+  local marker="pi-${slug}-${thinking}-ok"
+  local output
+  output="$(docker compose -f compose.yml --env-file env/semantic-model.env run --rm \
+    -e CONTEXTFORGE_PI_DEFAULT_MODEL="${model}" \
+    -e CONTEXTFORGE_PI_DEFAULT_THINKING="${thinking}" \
+    pi pi --no-session --no-tools --no-context-files \
+      --provider litellm --model "${model}" --thinking "${thinking}" \
+      -p "Reply with exactly: ${marker}")"
+  printf '%s\n' "${output}" | tee "evidence/pi-${slug}-agent-smoke.txt"
+  grep -Fxq "${marker}" <<<"${output}"
+}
 
-echo "== OpenCode agent smoke =="
-docker compose -f compose.yml run --rm opencode bash -lc '
-  set -euo pipefail
-  opencode run --model "${CONTEXTFORGE_OPENCODE_DEFAULT_MODEL}" --agent build --format default "Reply with exactly: opencode-semantic-model-ok"
-' | tee evidence/opencode-agent-smoke.txt
+run_opencode_cell() {
+  local slug="$1"
+  local model="$2"
+  local variant="$3"
+  local marker="opencode-${slug}-${variant}-ok"
+  local opencode_model="litellm/${model}"
+  local output
+  output="$(docker compose -f compose.yml --env-file env/semantic-model.env run --rm \
+    -e CONTEXTFORGE_OPENCODE_DEFAULT_MODEL="${opencode_model}" \
+    -e CONTEXTFORGE_OPENCODE_SMALL_MODEL="${opencode_model}" \
+    -e CONTEXTFORGE_OPENCODE_DEFAULT_VARIANT="${variant}" \
+    opencode opencode run --model "${opencode_model}" --agent build --format default \
+      "Reply with exactly: ${marker}")"
+  printf '%s\n' "${output}" | tee "evidence/opencode-${slug}-agent-smoke.txt"
+  grep -Fxq "${marker}" <<<"${output}"
+}
+
+run_pi_cell terra codex/gpt-5.6-terra high
+run_pi_cell luna codex/gpt-5.6-luna medium
+run_pi_cell sol codex/gpt-5.6-sol high
+
+run_opencode_cell terra codex/gpt-5.6-terra high
+run_opencode_cell luna codex/gpt-5.6-luna medium
+run_opencode_cell sol codex/gpt-5.6-sol high
