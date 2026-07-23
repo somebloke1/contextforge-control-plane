@@ -31,6 +31,11 @@ if [[ -n "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
   exit 2
 fi
 unset OPENCODE_CONFIG_CONTENT
+
+path_present() {
+  [[ -e "$1" || -L "$1" ]]
+}
+
 case "${CONTEXTFORGE_OPENCODE_MODEL_SMOKE}" in
   0) ;;
   1)
@@ -42,6 +47,19 @@ case "${CONTEXTFORGE_OPENCODE_MODEL_SMOKE}" in
           "${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}" != "${OPENCODE_CONFIG_DIR}/plugins/contextforge-project-init.js" ||
           "${CONTEXTFORGE_OPENCODE_RULES_TARGET}" != "${OPENCODE_CONFIG_DIR}/AGENTS.md" ]]; then
       printf 'OpenCode model smoke requires exact isolated config targets\n' >&2
+      exit 2
+    fi
+    case "${OPENCODE_CONFIG:-}" in
+      ""|"/home/agent/.config/opencode/opencode.json"|"${CONTEXTFORGE_OPENCODE_CONFIG_TARGET}") ;;
+      *)
+        printf 'OpenCode model smoke rejects alternate OPENCODE_CONFIG paths\n' >&2
+        exit 2
+        ;;
+    esac
+    if [[ -L "/home/agent/.config" ]] ||
+       path_present "/home/agent/.config/opencode" ||
+       path_present "${OPENCODE_CONFIG_DIR}"; then
+      printf 'OpenCode model smoke requires fresh hook-free default and isolated config directories\n' >&2
       exit 2
     fi
     ;;
@@ -79,12 +97,6 @@ if [[ "${CONTEXTFORGE_OPENCODE_MODEL_SMOKE}" == 0 ]]; then
   if [ -f "${CONTEXTFORGE_OPENCODE_RULES_SOURCE}" ]; then
     cp "${CONTEXTFORGE_OPENCODE_RULES_SOURCE}" "${CONTEXTFORGE_OPENCODE_RULES_TARGET}"
   fi
-elif [[ -e "${CONTEXTFORGE_OPENCODE_PLUGIN_TARGET}" ||
-        -e "${CONTEXTFORGE_OPENCODE_RULES_TARGET}" ||
-        -e "/home/agent/.config/opencode/plugins/contextforge-project-init.js" ||
-        -e "/home/agent/.config/opencode/AGENTS.md" ]]; then
-  printf 'OpenCode model smoke requires a fresh hook-free config directory\n' >&2
-  exit 2
 fi
 cp "${CONTEXTFORGE_OPENCODE_CONFIG_SOURCE}" "${CONTEXTFORGE_OPENCODE_CONFIG_TARGET}"
 

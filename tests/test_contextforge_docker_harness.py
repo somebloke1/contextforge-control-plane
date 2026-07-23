@@ -3806,10 +3806,18 @@ print(json.dumps(outputs))
         self.assertEqual(2, smoke.count('require_exact_response "${marker}" "${output_file}"'))
         self.assertNotIn('grep -Fxq "${marker}"', smoke)
         self.assertIn("--env-file env/semantic-model.env", smoke)
-        self.assertIn('project_name="contextforge-model-smoke-$$"', smoke)
+        self.assertIn('project_name="contextforge-model-smoke-${runtime_id,,}"', smoke)
         self.assertIn('mktemp -d "${TMPDIR:-/tmp}/contextforge-model-smoke.XXXXXX"', smoke)
         self.assertIn('CONTEXTFORGE_CLIENT_HARNESS_EVIDENCE="${evidence_root}"', smoke)
+        self.assertIn("CONTEXTFORGE_CLIENT_HARNESS_PI_HOME=pi-home", smoke)
+        self.assertIn("CONTEXTFORGE_CLIENT_HARNESS_OPENCODE_HOME=opencode-home", smoke)
+        self.assertIn('mktemp "${runtime_root}/expected.XXXXXX"', smoke)
+        self.assertIn('mktemp "${runtime_root}/pi-${slug}.XXXXXX"', smoke)
+        self.assertIn('mktemp "${runtime_root}/opencode-${slug}.XXXXXX"', smoke)
+        self.assertNotIn('output_file="$(mktemp)"', smoke)
         self.assertIn('down -v --remove-orphans', smoke)
+        self.assertIn("reset_model_homes", smoke)
+        self.assertIn("trap 'terminate 143' TERM", smoke)
         self.assertIn("--no-context-files --no-extensions", smoke)
         self.assertIn("CONTEXTFORGE_OPENCODE_MODEL_SMOKE=1", smoke)
         self.assertIn("OPENCODE_CONFIG_DIR=/home/agent/.config/opencode-model-smoke", smoke)
@@ -3819,7 +3827,8 @@ print(json.dumps(outputs))
         renderer = (ROOT / "docker/client-harness/opencode/render-config.py").read_text(encoding="utf-8")
         self.assertIn("OpenCode model smoke requires its isolated config directory", entrypoint)
         self.assertIn("OpenCode model smoke requires exact isolated config targets", entrypoint)
-        self.assertIn("OpenCode model smoke requires a fresh hook-free config directory", entrypoint)
+        self.assertIn("OpenCode model smoke requires fresh hook-free default and isolated config directories", entrypoint)
+        self.assertIn("OpenCode model smoke rejects alternate OPENCODE_CONFIG paths", entrypoint)
         self.assertIn('if [[ "${CONTEXTFORGE_OPENCODE_MODEL_SMOKE}" == 0 ]]', entrypoint)
         self.assertIn('data["mcp"] = {}', renderer)
 
@@ -3831,8 +3840,10 @@ print(json.dumps(outputs))
                 root = Path(tmp)
                 scripts = root / "scripts"
                 fake_bin = root / "bin"
+                temp_root = root / "tmp"
                 scripts.mkdir()
                 fake_bin.mkdir()
+                temp_root.mkdir()
                 smoke = scripts / "smoke-agents.sh"
                 smoke.write_text(source, encoding="utf-8")
                 smoke.chmod(0o755)
@@ -3846,6 +3857,10 @@ print(json.dumps(outputs))
                 docker.write_text(
                     "#!/usr/bin/env bash\n"
                     "set -euo pipefail\n"
+                    'if [[ " $* " == *" down -v --remove-orphans "* ]]; then\n'
+                    "  exit 0\n"
+                    "fi\n"
+                    'printf "%s|%s\\n" "${CONTEXTFORGE_CLIENT_HARNESS_PI_HOME:-}" "${CONTEXTFORGE_CLIENT_HARNESS_OPENCODE_HOME:-}" >> "${FAKE_DOCKER_LOG}"\n'
                     'prompt="${!#}"\n'
                     'marker="${prompt##*: }"\n'
                     'if [[ "${FAKE_DOCKER_MODE:-exact}" == noisy ]]; then\n'
@@ -3862,8 +3877,12 @@ print(json.dumps(outputs))
                     **os.environ,
                     "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
                     "FAKE_DOCKER_MODE": mode,
+                    "FAKE_DOCKER_LOG": str(root / "docker.log"),
+                    "TMPDIR": str(temp_root),
+                    "CONTEXTFORGE_CLIENT_HARNESS_PI_HOME": str(root / "hostile-pi-home"),
+                    "CONTEXTFORGE_CLIENT_HARNESS_OPENCODE_HOME": str(root / "hostile-opencode-home"),
                 }
-                return subprocess.run(
+                result = subprocess.run(
                     [str(smoke)],
                     cwd=root,
                     env=env,
@@ -3871,10 +3890,152 @@ print(json.dumps(outputs))
                     capture_output=True,
                     check=False,
                 )
+                logged_homes = (root / "docker.log").read_text(encoding="utf-8").splitlines()
+                self.assertTrue(logged_homes)
+                self.assertTrue(all(line == "pi-home|opencode-home" for line in logged_homes))
+                self.assertEqual([], list(temp_root.iterdir()))
+                return result
 
         self.assertEqual(0, run_smoke("exact").returncode)
         self.assertNotEqual(0, run_smoke("noisy").returncode)
         self.assertNotEqual(0, run_smoke("trailing-blank").returncode)
+
+    def test_six_cell_smoke_sigterm_removes_all_trap_owned_temporary_files(self) -> None:
+        source = (ROOT / "docker/client-harness/scripts/smoke-agents.sh").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            fake_bin = root / "bin"
+            temp_root = root / "tmp"
+            scripts.mkdir()
+            fake_bin.mkdir()
+            temp_root.mkdir()
+            smoke = scripts / "smoke-agents.sh"
+            smoke.write_text(source, encoding="utf-8")
+            smoke.chmod(0o755)
+            generator = scripts / "make-semantic-model-env.sh"
+            generator.write_text(
+                '#!/usr/bin/env bash\nset -euo pipefail\nmkdir -p "$(dirname "$0")/../env"\n: > "$(dirname "$0")/../env/semantic-model.env"\n',
+                encoding="utf-8",
+            )
+            generator.chmod(0o755)
+            docker = fake_bin / "docker"
+            docker.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                'if [[ " $* " == *" down -v --remove-orphans "* ]]; then\n'
+                "  exit 0\n"
+                "fi\n"
+                'kill -TERM "$PPID"\n',
+                encoding="utf-8",
+            )
+            docker.chmod(0o755)
+            result = subprocess.run(
+                [str(smoke)],
+                cwd=root,
+                env={
+                    **os.environ,
+                    "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
+                    "TMPDIR": str(temp_root),
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=10,
+            )
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertEqual([], list(temp_root.iterdir()))
+
+    def test_opencode_model_smoke_rejects_reused_config_and_plugin_surfaces(self) -> None:
+        source = (ROOT / "docker/client-harness/opencode/entrypoint.sh").read_text(encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def run_case(case_name: str, surface: str | None = None) -> subprocess.CompletedProcess[str]:
+                case_root = root / case_name
+                home = case_root / "home"
+                case_root.mkdir()
+                home.mkdir()
+                renderer = case_root / "render-config"
+                renderer.write_text("#!/usr/bin/env bash\nset -euo pipefail\n", encoding="utf-8")
+                renderer.chmod(0o755)
+                entrypoint = case_root / "entrypoint.sh"
+                entrypoint.write_text(
+                    source.replace(
+                        "/usr/local/bin/contextforge-opencode-render-config",
+                        str(renderer),
+                    ).replace("/home/agent", str(home)),
+                    encoding="utf-8",
+                )
+                entrypoint.chmod(0o755)
+                config_source = case_root / "opencode.json"
+                config_source.write_text("{}\n", encoding="utf-8")
+                config_dir = home / ".config/opencode-model-smoke"
+                config_target = config_dir / "opencode.json"
+                default_target = home / ".config/opencode/opencode.json"
+
+                if surface == "default-plugin":
+                    hostile = default_target.parent / "plugins/hostile.js"
+                    hostile.parent.mkdir(parents=True)
+                    hostile.write_text("throw new Error('hostile');\n", encoding="utf-8")
+                elif surface == "isolated-plugin":
+                    hostile = config_dir / "plugins/hostile.js"
+                    hostile.parent.mkdir(parents=True)
+                    hostile.write_text("throw new Error('hostile');\n", encoding="utf-8")
+                elif surface == "config-parent-symlink":
+                    external_config = case_root / "external-config"
+                    external_config.mkdir()
+                    (home / ".config").symlink_to(external_config, target_is_directory=True)
+
+                opencode_config = str(default_target)
+                if surface == "alternate-env-path":
+                    opencode_config = str(case_root / "hostile-opencode.json")
+
+                env = {
+                    "PATH": os.environ.get("PATH", ""),
+                    "HOME": str(home),
+                    "OPENCODE_CONFIG": opencode_config,
+                    "OPENCODE_CONFIG_DIR": str(config_dir),
+                    "OPENCODE_DISABLE_PROJECT_CONFIG": "1",
+                    "CONTEXTFORGE_OPENCODE_MODEL_SMOKE": "1",
+                    "CONTEXTFORGE_OPENCODE_CONFIG_SOURCE": str(config_source),
+                    "CONTEXTFORGE_OPENCODE_CONFIG_TARGET": str(config_target),
+                    "CONTEXTFORGE_OPENCODE_PLUGIN_TARGET": str(config_dir / "plugins/contextforge-project-init.js"),
+                    "CONTEXTFORGE_OPENCODE_RULES_TARGET": str(config_dir / "AGENTS.md"),
+                    "CONTEXTFORGE_PROJECT_INIT_RUN_ROOT": str(home / ".local/state/project-init"),
+                    "XDG_RUNTIME_DIR": str(home / ".local/state/runtime"),
+                    "OPENAI_API_KEY": "",
+                    "CODEX_API_KEY": "",
+                    "ANTHROPIC_API_KEY": "",
+                    "OPENROUTER_API_KEY": "",
+                    "GOOGLE_API_KEY": "",
+                    "GEMINI_API_KEY": "",
+                    "PERPLEXITY_API_KEY": "",
+                    "EXA_API_KEY": "",
+                    "CONTEXT7_API_KEY": "",
+                }
+                return subprocess.run(
+                    ["bash", str(entrypoint), "/bin/true"],
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+            clean = run_case("clean")
+            self.assertEqual(0, clean.returncode, clean.stderr)
+            for surface in [
+                "default-plugin",
+                "isolated-plugin",
+                "config-parent-symlink",
+                "alternate-env-path",
+            ]:
+                with self.subTest(surface=surface):
+                    rejected = run_case(surface, surface)
+                    self.assertEqual(2, rejected.returncode, rejected.stderr)
+                    self.assertIn("OpenCode model smoke", rejected.stderr)
 
     def test_legacy_sandbox_smokes_use_litellm_config_without_removed_provider(self) -> None:
         for script_name in [
