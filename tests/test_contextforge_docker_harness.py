@@ -1712,6 +1712,11 @@ print(json.dumps(outputs))
             (["--mode", "socket"], {}, "unsupported Pi sandbox output mode: socket"),
             (["--mode=json"], {}, "requires '--mode MODE' syntax"),
             (["--mode", "json", "--mode", "text"], {}, "repeated --mode"),
+            (["-p", "--mode", "rpc"], {}, "unsupported Pi sandbox control mode: rpc"),
+            (["--print", "--mode", "rpc"], {}, "unsupported Pi sandbox control mode: rpc"),
+            (["--mode", "rpc", "--print"], {}, "unsupported Pi sandbox control mode: rpc"),
+            (["--print", "--mode=rpc"], {}, "unsupported Pi sandbox control mode: rpc"),
+            (["--print", "--provider", "openai"], {}, "unsupported Pi sandbox provider"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openai"}, "unsupported Pi sandbox provider"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_MODEL": "gpt-5.5"}, "unsupported Pi sandbox model"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_THINKING": "high"}, "thinking level"),
@@ -2002,10 +2007,16 @@ print(json.dumps(outputs))
         self.assertIn('build pi pi-alpine', policy_probe)
         self.assertIn('project_name="contextforge-pi-policy-$$"', policy_probe)
         self.assertIn('down -v --remove-orphans', policy_probe)
-        self.assertIn('"${service}" pi --mode rpc', policy_probe)
+        self.assertIn('reject_rpc "${service}" canonical --mode rpc', policy_probe)
+        self.assertIn('reject_rpc "${service}" short-print-first -p --mode rpc', policy_probe)
+        self.assertIn('reject_rpc "${service}" long-print-first --print --mode rpc', policy_probe)
+        self.assertIn('reject_rpc "${service}" print-last --mode rpc --print', policy_probe)
+        self.assertIn('reject_rpc "${service}" equals-after-print --print --mode=rpc', policy_probe)
+        self.assertIn("{\"type\":\"get_state\"}", policy_probe)
         self.assertIn("PI_CODING_AGENT_DIR=/proc/contextforge-policy-probe", policy_probe)
         self.assertIn("unsupported Pi sandbox control mode: rpc", policy_probe)
         self.assertIn('"${service}" pi --version', policy_probe)
+        self.assertIn('[[ "${version}" == 0.81.1 ]]', policy_probe)
         self.assertNotIn("curl", policy_probe)
 
     def test_pi_wrapper_injects_approved_model_scope_and_role_thinking(self) -> None:

@@ -107,10 +107,7 @@ for ((index = 0; index < ${#args[@]}; index += 1)); do
       fail_model_policy "--api-key is forbidden; the Pi sandbox uses only LITELLM_API_KEY from its env file"
       ;;
     -p|--print)
-      ((index + 1 < ${#args[@]})) || fail_model_policy "${arg} requires a value"
       has_print=true
-      index=$((index + 1))
-      latest_prompt="${args[index]}"
       ;;
     --prompt)
       ((index + 1 < ${#args[@]})) || fail_model_policy "${arg} requires a value"
@@ -135,6 +132,9 @@ for ((index = 0; index < ${#args[@]}; index += 1)); do
       ;;
     --version|-V|version|--help|-h|help|update)
       skip_defaults=true
+      ;;
+    *)
+      [[ "${arg}" == -* ]] || latest_prompt="${arg}"
       ;;
   esac
 done

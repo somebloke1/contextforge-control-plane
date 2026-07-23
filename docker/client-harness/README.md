@@ -100,7 +100,8 @@ and `CONTEXTFORGE_SERVER_ID`, never `PLATFORM_ADMIN_EMAIL` or
 docker compose -f compose.yml build
 ```
 
-The current validated build installed these npm-package versions on 2026-06-16:
+The Pi build was revalidated on 2026-07-23; the other recorded npm-package
+versions are from 2026-06-16:
 
 | Client | Package | Version |
 | --- | --- | --- |
@@ -108,7 +109,7 @@ The current validated build installed these npm-package versions on 2026-06-16:
 | Claude Code | `@anthropic-ai/claude-code` | `2.1.179` |
 | Gemini CLI | `@google/gemini-cli` | `0.46.0` |
 | OpenCode | `opencode-ai` | `1.17.7` |
-| Pi Coding Agent | `@earendil-works/pi-coding-agent` | `0.79.6` |
+| Pi Coding Agent | `@earendil-works/pi-coding-agent` | `0.81.1` |
 
 ## Launch Checks
 
