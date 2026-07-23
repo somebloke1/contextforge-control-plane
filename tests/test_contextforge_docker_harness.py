@@ -1717,6 +1717,8 @@ print(json.dumps(outputs))
             (["--mode", "rpc", "--print"], {}, "unsupported Pi sandbox control mode: rpc"),
             (["--print", "--mode=rpc"], {}, "unsupported Pi sandbox control mode: rpc"),
             (["--print", "--provider", "openai"], {}, "unsupported Pi sandbox provider"),
+            (["--prompt", "--mode", "rpc"], {}, "unsupported Pi sandbox option: --prompt"),
+            (["--prompt=message", "--mode", "rpc"], {}, "unsupported Pi sandbox option: --prompt"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_PROVIDER": "openai"}, "unsupported Pi sandbox provider"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_MODEL": "gpt-5.5"}, "unsupported Pi sandbox model"),
             ([], {"CONTEXTFORGE_PI_DEFAULT_THINKING": "high"}, "thinking level"),
@@ -2007,11 +2009,19 @@ print(json.dumps(outputs))
         self.assertIn('build pi pi-alpine', policy_probe)
         self.assertIn('project_name="contextforge-pi-policy-$$"', policy_probe)
         self.assertIn('down -v --remove-orphans', policy_probe)
-        self.assertIn('reject_rpc "${service}" canonical --mode rpc', policy_probe)
-        self.assertIn('reject_rpc "${service}" short-print-first -p --mode rpc', policy_probe)
-        self.assertIn('reject_rpc "${service}" long-print-first --print --mode rpc', policy_probe)
-        self.assertIn('reject_rpc "${service}" print-last --mode rpc --print', policy_probe)
-        self.assertIn('reject_rpc "${service}" equals-after-print --print --mode=rpc', policy_probe)
+        self.assertIn('reject_invocation "${service}" canonical "${rpc_error}" --mode rpc', policy_probe)
+        self.assertIn('reject_invocation "${service}" short-print-first "${rpc_error}" -p --mode rpc', policy_probe)
+        self.assertIn('reject_invocation "${service}" long-print-first "${rpc_error}" --print --mode rpc', policy_probe)
+        self.assertIn('reject_invocation "${service}" print-last "${rpc_error}" --mode rpc --print', policy_probe)
+        self.assertIn('reject_invocation "${service}" equals-after-print "${rpc_error}" --print --mode=rpc', policy_probe)
+        self.assertIn(
+            'reject_invocation "${service}" legacy-prompt-hides-mode "${prompt_error}" --prompt --mode rpc',
+            policy_probe,
+        )
+        self.assertIn(
+            'reject_invocation "${service}" legacy-prompt-equals "${prompt_error}" --prompt=message --mode rpc',
+            policy_probe,
+        )
         self.assertIn("{\"type\":\"get_state\"}", policy_probe)
         self.assertIn("PI_CODING_AGENT_DIR=/proc/contextforge-policy-probe", policy_probe)
         self.assertIn("unsupported Pi sandbox control mode: rpc", policy_probe)

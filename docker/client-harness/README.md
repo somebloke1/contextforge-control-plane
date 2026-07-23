@@ -57,6 +57,9 @@ text/print execution or `--mode json`. The wrapper rejects RPC mode and a TTY
 interactive session before bootstrap because those upstream modes expose
 post-start model or thinking-level controls that cannot be governed by argv.
 Version, help, and LiteLLM-scoped model-list metadata commands remain supported.
+Pi 0.81.1 has no canonical `--prompt` option, so the wrapper rejects that legacy
+spelling rather than assigning it an arity; use `-p`/`--print` and a positional
+prompt.
 
 Operator-selected interpreters such as `bash /usr/local/bin/pi`, direct calls
 to `/usr/bin/pi` or `/usr/local/bin/contextforge-pi-real`, bind-mounting over

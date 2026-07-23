@@ -109,13 +109,8 @@ for ((index = 0; index < ${#args[@]}; index += 1)); do
     -p|--print)
       has_print=true
       ;;
-    --prompt)
-      ((index + 1 < ${#args[@]})) || fail_model_policy "${arg} requires a value"
-      index=$((index + 1))
-      latest_prompt="${args[index]}"
-      ;;
-    --prompt=*)
-      latest_prompt="${arg#--prompt=}"
+    --prompt|--prompt=*)
+      fail_model_policy "unsupported Pi sandbox option: --prompt; use --print with a positional prompt"
       ;;
     --list-models)
       ((index + 1 < ${#args[@]})) || fail_model_policy "--list-models requires the litellm provider"
