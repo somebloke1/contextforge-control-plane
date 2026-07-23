@@ -518,10 +518,18 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
 
         with mock.patch.object(service_offering_registration, "_planned_offerings", return_value=([offering], [])), mock.patch.object(
             service_offering_registration, "_api_items", side_effect=fake_items
+        ), mock.patch.object(
+            service_offering_registration,
+            "_hydrate_service_offering_resources",
+            side_effect=lambda resources: resources,
+        ), mock.patch.object(
+            service_offering_registration,
+            "_target_owner_email",
+            return_value=service_offering_registration.OWNER,
         ), mock.patch.object(service_offering_registration, "_upsert_resource") as upsert, mock.patch.object(
             service_offering_registration, "_associate_resource"
         ) as associate:
-            report = service_offering_registration.migrate(dry_run=True)
+            report = service_offering_registration.migrate(dry_run=True, services=["context7"])
 
         upsert.assert_not_called()
         associate.assert_not_called()
@@ -563,9 +571,16 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             "_planned_offerings",
             return_value=([offering(good_metadata), offering(bad_metadata)], []),
         ), mock.patch.object(service_offering_registration, "_api_items", side_effect=fake_items), mock.patch.object(
+            service_offering_registration,
+            "_target_owner_email",
+            return_value=service_offering_registration.OWNER,
+        ), mock.patch.object(
             service_offering_registration, "_upsert_resource"
         ) as upsert, mock.patch.object(service_offering_registration, "_associate_resource") as associate:
-            report = service_offering_registration.migrate(dry_run=False)
+            report = service_offering_registration.migrate(
+                dry_run=False,
+                services=["context7", "time"],
+            )
 
         upsert.assert_not_called()
         associate.assert_not_called()
@@ -595,18 +610,138 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             resource_body=service_offering_registration._resource_body(metadata),
             metadata=metadata,
         )
-        existing = {"id": "resource-id", "uri": metadata["resource_uri"], "content": json.dumps(metadata)}
+        expected = offering.resource_body
+        content_shapes = {
+            "content": expected["content"],
+            "text": expected["content"],
+            "contents": [{"text": expected["content"]}],
+        }
+        for content_key, content_value in content_shapes.items():
+            with self.subTest(content_key=content_key):
+                existing = {
+                    "id": "resource-id",
+                    "uri": expected["uri"],
+                    "name": expected["name"],
+                    "title": expected["title"],
+                    "description": expected["description"],
+                    "mime_type": expected["mimeType"],
+                    content_key: content_value,
+                    "tags": [{"label": tag} for tag in expected["tags"]],
+                    "visibility": expected["visibility"],
+                    "ownerEmail": expected["owner_email"],
+                }
 
-        with mock.patch.object(service_offering_registration, "_request") as request:
-            action, resource_id = service_offering_registration._upsert_resource(offering, [existing])
+                with mock.patch.object(service_offering_registration, "_request") as request:
+                    action, resource_id = service_offering_registration._upsert_resource(offering, [existing])
 
-        request.assert_not_called()
-        self.assertEqual("unchanged", action)
-        self.assertEqual("resource-id", resource_id)
+                request.assert_not_called()
+                self.assertEqual("unchanged", action)
+                self.assertEqual("resource-id", resource_id)
         self.assertEqual(
             metadata,
             service_offering_registration._metadata_from_instance(instance, instance_dir="context7"),
         )
+
+    def test_service_offering_resource_upsert_updates_any_drifted_managed_field(self) -> None:
+        metadata = service_offering_metadata("context7", server_id="server-id")
+        offering = service_offering_registration.PlannedOffering(
+            offering_id="context7",
+            service_family="context7",
+            instance_dir="context7",
+            instance_path="server-instances/context7/instance.json",
+            server_id="server-id",
+            resource_uri=metadata["resource_uri"],
+            resource_body=service_offering_registration._resource_body(metadata),
+            metadata=metadata,
+        )
+        expected = offering.resource_body
+        existing = {
+            "id": "resource-id",
+            "uri": expected["uri"],
+            "name": expected["name"],
+            "title": expected["title"],
+            "description": "stale description",
+            "mimeType": expected["mimeType"],
+            "text": expected["content"],
+            "tags": [*expected["tags"], "stale-tag"],
+            "visibility": expected["visibility"],
+            "ownerEmail": expected["owner_email"],
+        }
+
+        with mock.patch.object(service_offering_registration, "_request", return_value={}) as request:
+            action, resource_id = service_offering_registration._upsert_resource(offering, [existing])
+
+        self.assertEqual("updated", action)
+        self.assertEqual("resource-id", resource_id)
+        request.assert_called_once_with("PUT", "/resources/resource-id", body=expected)
+        self.assertEqual(
+            ["description", "tags"],
+            service_offering_registration._resource_contract_differences(existing, offering),
+        )
+
+    def test_service_offering_migration_reports_missing_required_families(self) -> None:
+        with mock.patch.object(
+            service_offering_registration,
+            "_api_items",
+            return_value=[],
+        ):
+            report = service_offering_registration.migrate(
+                dry_run=True,
+                services=["chrome-devtools"],
+            )
+
+        self.assertEqual(1, len(report.errors))
+        self.assertEqual("chrome-devtools", report.errors[0]["service"])
+        self.assertEqual("required_family_completeness", report.errors[0]["stage"])
+        self.assertEqual("required_service_family_missing", report.errors[0]["classification"])
+        self.assertFalse(report.target["env_values_recorded"])
+
+    def test_service_offering_migration_reports_api_stage_and_target_without_traceback(self) -> None:
+        api_error = service_offering_registration.ContextForgeApiError(
+            method="GET",
+            path="/resources?include_inactive=true&limit=1000",
+            classification="http_error",
+            message="Unauthorized",
+            http_status=401,
+        )
+        with mock.patch.object(
+            service_offering_registration,
+            "_request",
+            side_effect=api_error,
+        ):
+            report = service_offering_registration.migrate(
+                dry_run=True,
+                services=["context7"],
+            )
+
+        self.assertEqual("read_resources", report.errors[0]["stage"])
+        self.assertEqual("GET", report.errors[0]["method"])
+        self.assertEqual("/resources?include_inactive=true&limit=1000", report.errors[0]["path"])
+        self.assertEqual(401, report.errors[0]["http_status"])
+        self.assertEqual("error", report.api_diagnostics[0]["outcome"])
+        self.assertEqual(report.target["base_url"], report.errors[0]["base_url"])
+
+    def test_service_offering_api_diagnostics_redact_structured_and_plaintext_secrets(self) -> None:
+        structured = service_offering_registration._safe_error_text(
+            json.dumps(
+                {
+                    "detail": "authentication failed",
+                    "access_token": "structured-secret",
+                    "nested": {"password": "nested-secret"},
+                }
+            )
+        )
+        plain = service_offering_registration._safe_error_text(
+            "Authorization: Bearer plaintext-secret PLATFORM_ADMIN_PASSWORD=env-secret"
+        )
+
+        self.assertIn("authentication failed", structured)
+        self.assertNotIn("structured-secret", structured)
+        self.assertNotIn("nested-secret", structured)
+        self.assertNotIn("plaintext-secret", plain)
+        self.assertNotIn("env-secret", plain)
+        self.assertIn("[REDACTED]", structured)
+        self.assertIn("[REDACTED]", plain)
 
     def test_service_offering_registrar_preserves_server_associations_with_uuid_ids(self) -> None:
         requests: list[tuple[str, str, dict[str, Any] | None]] = []
@@ -2148,7 +2283,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertEqual("RootValidationError", symlink_result["error"]["type"])
 
     def test_pi_reload_report_does_not_change_normal_readback_contract(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[],
+        ):
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
@@ -3988,7 +4127,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         assert_numbered(proposal["next_turn"])
 
     def test_declined_service_decision_blocks_active_import_and_remains_readable(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ):
             root = Path(tmp).resolve()
             result = helper.record_project_init_service_decision(
                 project_root=root,
@@ -4689,7 +4832,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertIn("do not ask for another reload", runtime_report["assistant_visible_response"])
 
     def test_opencode_readback_distinguishes_mcp_startup_failure_from_reload_pending(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[],
+        ):
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="opencode")
@@ -4803,7 +4950,14 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                 self.assertIn("do not ask for another reload", readback["assistant_visible_response"])
 
     def test_contextforge_helper_mcp_reports_missing_target_client_projection_without_available_tools(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[
+                registry_service_descriptor("context7"),
+                registry_service_descriptor("github"),
+            ],
+        ):
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7"), service_descriptor("github")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
@@ -5035,7 +5189,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("opencode", base_state["services"]["github:canonical"]["target_clients"])
 
     def test_alignment_import_continuation_turn_builds_opencode_approval_package(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ):
             root = Path(tmp).resolve()
             selected = [service_descriptor("context7")]
             config_plan = binding.plan_project_init_target_client_activation(root, selected, target_client="pi")
@@ -5526,7 +5684,11 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             self.assertIn("Approve or decline?", proposal["assistant_visible_response"])
 
     def test_pi_continue_accepts_recorded_natural_service_selection(self) -> None:
-        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp:
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, tempfile.TemporaryDirectory() as run_tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            return_value=[registry_service_descriptor("context7")],
+        ):
             root = Path(tmp).resolve()
             approval_source = Path(run_tmp) / "pi-latest-user-message.json"
             contextforge_helper_mcp._clear_durable_cache(str(root))
@@ -7113,6 +7275,51 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertFalse(result["ok"], result)
         self.assertEqual("contextforge_catalog_unavailable", result["status"])
         self.assertNotIn("unknown ContextForge service", result["assistant_visible_response"])
+
+    def test_every_catalog_reading_helper_boundary_returns_visible_unavailable_outcome(self) -> None:
+        unavailable = contextforge_helper_mcp.ContextForgeCatalogUnavailable(
+            "http://host.docker.internal:4445",
+            "HTTP 401 Unauthorized",
+        )
+        with tempfile.TemporaryDirectory(dir=project_state.WORKSPACE_ROOT) as tmp, mock.patch.object(
+            contextforge_helper_mcp,
+            "_contextforge_registry_service_offerings",
+            side_effect=unavailable,
+        ):
+            root = Path(tmp).resolve()
+            calls = {
+                "capability_summary": lambda: contextforge_helper_mcp.project_capability_summary(
+                    str(root),
+                    client_type="opencode",
+                ),
+                "public_capability_summary": lambda: contextforge_helper_mcp.get_project_capability_summary(
+                    str(root),
+                    client_type="opencode",
+                ),
+                "project_init_list": lambda: contextforge_helper_mcp.list_available_capabilities(
+                    str(root),
+                    client_type="opencode",
+                ),
+                "project_init_continue": lambda: contextforge_helper_mcp.cf_project_init_continue(
+                    str(root),
+                    client_type="opencode",
+                ),
+            }
+            for boundary, call in calls.items():
+                with self.subTest(boundary=boundary):
+                    result = call()
+                    self.assertFalse(result["ok"], result)
+                    self.assertEqual("contextforge_catalog_unavailable", result["status"])
+                    self.assertEqual(
+                        result["assistant_visible_response"],
+                        result["message"],
+                    )
+                    self.assertTrue(result["copy_as_complete_visible_response"])
+                    self.assertTrue(result["do_not_summarize"])
+                    self.assertIn("service catalog unavailable", result["assistant_visible_response"])
+                    self.assertNotIn("ContextForgeCatalogUnavailable", result["assistant_visible_response"])
+
+            self.assertEqual([], list(root.iterdir()))
 
     def test_live_registry_readback_fetches_full_service_offering_resource_content(self) -> None:
         with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:

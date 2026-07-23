@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -58,6 +59,29 @@ TARGET_ENV_FILE: Path | None = None
 TARGET_TOKEN: str | None = None
 
 
+class ContextForgeApiError(RuntimeError):
+    def __init__(
+        self,
+        *,
+        method: str,
+        path: str,
+        classification: str,
+        message: str,
+        http_status: int | None = None,
+    ) -> None:
+        self.diagnostic: dict[str, Any] = {
+            "method": method,
+            "path": path,
+            "base_url": _base_url(),
+            "classification": classification,
+        }
+        if http_status is not None:
+            self.diagnostic["http_status"] = http_status
+        super().__init__(
+            f"{method} {path} on {_base_url()} failed ({classification}): {message}"
+        )
+
+
 @dataclass
 class PlannedOffering:
     offering_id: str
@@ -77,8 +101,10 @@ class MigrationReport:
     unchanged: list[str] = field(default_factory=list)
     associated: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
-    errors: list[dict[str, str]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
     planned: list[dict[str, Any]] = field(default_factory=list)
+    api_diagnostics: list[dict[str, Any]] = field(default_factory=list)
+    target: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -95,11 +121,67 @@ class MigrationReport:
             "skipped_services": self.skipped,
             "error_details": self.errors,
             "planned": self.planned,
+            "api_diagnostics": self.api_diagnostics,
+            "target": self.target,
         }
 
 
 def _base_url() -> str:
     return (TARGET_BASE_URL or common.contextforge_base_url()).rstrip("/")
+
+
+def _target_env_path() -> Path | None:
+    return TARGET_ENV_FILE or common.contextforge_env_path()
+
+
+def _configured_source(keys: Iterable[str], selected_value: str) -> str:
+    for key in keys:
+        raw = os.environ.get(key, "").strip()
+        if raw and raw.rstrip("/") == selected_value.rstrip("/"):
+            return key
+    return "default"
+
+
+def _target_descriptor() -> dict[str, Any]:
+    env_path = _target_env_path()
+    base_url = _base_url()
+    return {
+        "base_url": base_url,
+        "base_url_source": "--base-url"
+        if TARGET_BASE_URL
+        else _configured_source(common.CONTEXTFORGE_BASE_URL_CANDIDATES, base_url),
+        "env_file": str(env_path or ""),
+        "env_file_source": "--env-file"
+        if TARGET_ENV_FILE
+        else _configured_source(
+            common.CONTEXTFORGE_ENV_CANDIDATES,
+            str(env_path or ""),
+        ),
+        "env_file_exists": bool(env_path and env_path.exists()),
+        "env_values_recorded": False,
+    }
+
+
+def _target_env_values() -> dict[str, str]:
+    env_path = _target_env_path()
+    if env_path is None or not env_path.exists():
+        raise RuntimeError("no ContextForge client-scoped env file was found")
+    env = gateway._read_env(env_path)
+    declared_urls = {
+        value.rstrip("/")
+        for key in common.CONTEXTFORGE_BASE_URL_CANDIDATES
+        if (value := str(env.get(key) or "").strip())
+    }
+    if declared_urls and declared_urls != {_base_url()}:
+        raise RuntimeError(
+            "ContextForge target mismatch: the selected client-scoped env declares "
+            f"{sorted(declared_urls)}, not {_base_url()}"
+        )
+    return env
+
+
+def _target_owner_email() -> str:
+    return str(_target_env_values().get("PLATFORM_ADMIN_EMAIL") or OWNER).strip() or OWNER
 
 
 def _target_login_token(base_url: str, email: str, password: str) -> str:
@@ -127,10 +209,8 @@ def _token() -> str:
     global TARGET_TOKEN
     if TARGET_TOKEN:
         return TARGET_TOKEN
-    env_path = TARGET_ENV_FILE or common.contextforge_env_path()
-    if env_path is None or not env_path.exists():
-        raise RuntimeError("no ContextForge client-scoped env file was found")
-    env = gateway._read_env(env_path)
+    env_path = _target_env_path()
+    env = _target_env_values()
     bearer = str(env.get("CONTEXTFORGE_BEARER_TOKEN") or "").removeprefix("Bearer ").strip()
     if bearer:
         TARGET_TOKEN = bearer
@@ -139,10 +219,7 @@ def _token() -> str:
     password = str(env.get("PLATFORM_ADMIN_PASSWORD") or "")
     if not email or not password:
         raise RuntimeError(f"missing ContextForge credentials in {env_path}")
-    if TARGET_BASE_URL:
-        TARGET_TOKEN = _target_login_token(_base_url(), email, password)
-    else:
-        TARGET_TOKEN = gateway._token(email, password)
+    TARGET_TOKEN = _target_login_token(_base_url(), email, password)
     return TARGET_TOKEN
 
 
@@ -158,10 +235,40 @@ def _request(method: str, path: str, *, body: dict[str, Any] | None = None) -> A
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             payload = response.read()
-        return json.loads(payload) if payload else None
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {exc.code}: {_safe_error_text(error_body)}") from exc
+        raise ContextForgeApiError(
+            method=method,
+            path=path,
+            classification="http_error",
+            http_status=exc.code,
+            message=_safe_error_text(error_body) or str(exc.reason),
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise ContextForgeApiError(
+            method=method,
+            path=path,
+            classification="transport_error",
+            message=_safe_error_text(str(exc.reason)),
+        ) from exc
+    except OSError as exc:
+        raise ContextForgeApiError(
+            method=method,
+            path=path,
+            classification="io_error",
+            message=_safe_error_text(str(exc)),
+        ) from exc
+    if not payload:
+        return None
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise ContextForgeApiError(
+            method=method,
+            path=path,
+            classification="invalid_json_response",
+            message=str(exc),
+        ) from exc
 
 
 def _api_items(path: str) -> list[dict[str, Any]]:
@@ -170,13 +277,38 @@ def _api_items(path: str) -> list[dict[str, Any]]:
         return [item for item in data["items"] if isinstance(item, dict)]
     if isinstance(data, list):
         return [item for item in data if isinstance(item, dict)]
-    return []
+    raise ContextForgeApiError(
+        method="GET",
+        path=path,
+        classification="invalid_collection_response",
+        message=f"expected an array or an object with an items array, got {type(data).__name__}",
+    )
 
 
 def _safe_error_text(text: str) -> str:
-    redacted = text
-    for fragment in SECRET_KEY_FRAGMENTS:
-        redacted = redacted.replace(fragment.upper(), f"{fragment.upper()}[REDACTED]")
+    def redact_json(value: Any, key: str = "") -> Any:
+        if key and any(fragment in key.lower() for fragment in SECRET_KEY_FRAGMENTS):
+            return "[REDACTED]"
+        if isinstance(value, Mapping):
+            return {str(item_key): redact_json(item, str(item_key)) for item_key, item in value.items()}
+        if isinstance(value, list):
+            return [redact_json(item) for item in value]
+        return value
+
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        redacted = text
+    else:
+        redacted = json.dumps(redact_json(parsed), sort_keys=True, separators=(",", ":"))
+    redacted = re.sub(r"(?i)\bBearer\s+[^\s,;]+", "Bearer [REDACTED]", redacted)
+    secret_key_pattern = "|".join(re.escape(fragment) for fragment in SECRET_KEY_FRAGMENTS)
+    redacted = re.sub(
+        rf"(?i)\b([A-Z0-9_.-]*(?:{secret_key_pattern})[A-Z0-9_.-]*)"
+        r"(\s*[:=]\s*)(?:\"[^\"]*\"|'[^']*'|[^\s,;}]+)",
+        r"\1\2[REDACTED]",
+        redacted,
+    )
     return redacted[:1000]
 
 
@@ -367,7 +499,7 @@ def _metadata_from_instance(instance: Mapping[str, Any], *, instance_dir: str) -
     }
 
 
-def _resource_body(metadata: Mapping[str, Any]) -> dict[str, Any]:
+def _resource_body(metadata: Mapping[str, Any], *, owner_email: str = OWNER) -> dict[str, Any]:
     offering_id = str(metadata["offering_id"])
     safe_offering_id = offering_id.replace("-", "_")
     return {
@@ -379,7 +511,7 @@ def _resource_body(metadata: Mapping[str, Any]) -> dict[str, Any]:
         "content": json.dumps(metadata, sort_keys=True, separators=(",", ":")),
         "tags": sorted(set(SERVICE_OFFERING_TAGS) | {offering_id}),
         "visibility": VISIBILITY,
-        "owner_email": OWNER,
+        "owner_email": owner_email,
     }
 
 
@@ -442,20 +574,62 @@ def _resource_by_uri(resources: Iterable[dict[str, Any]], uri: str) -> dict[str,
 
 
 def _resource_content(resource: Mapping[str, Any]) -> dict[str, Any]:
-    content = resource.get("content")
-    if isinstance(content, Mapping):
-        return dict(content)
-    if isinstance(content, str):
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
+    for key in ("content", "text", "contents"):
+        content = resource.get(key)
+        candidates = content if isinstance(content, list) else [content]
+        for candidate in candidates:
+            if isinstance(candidate, Mapping) and any(
+                nested_key in candidate for nested_key in ("content", "text")
+            ):
+                nested = candidate.get("content") or candidate.get("text")
+                candidates.append(nested)
+                continue
+            if isinstance(candidate, Mapping):
+                return dict(candidate)
+            if not isinstance(candidate, str) or not candidate.strip():
+                continue
+            try:
+                parsed = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
     return {}
 
 
+def _resource_contract_differences(
+    resource: Mapping[str, Any] | None,
+    offering: PlannedOffering,
+) -> list[str]:
+    if not resource:
+        return ["missing_resource"]
+    expected = offering.resource_body
+    differences: list[str] = []
+    aliases = {
+        "uri": ("uri",),
+        "name": ("name",),
+        "title": ("title",),
+        "description": ("description",),
+        "mimeType": ("mimeType", "mime_type"),
+        "visibility": ("visibility",),
+        "owner_email": ("owner_email", "ownerEmail"),
+    }
+    for expected_key, actual_keys in aliases.items():
+        actual = next(
+            (resource.get(key) for key in actual_keys if resource.get(key) is not None),
+            None,
+        )
+        if str(actual or "") != str(expected.get(expected_key) or ""):
+            differences.append(expected_key)
+    if _tag_values(resource.get("tags")) != _tag_values(expected.get("tags")):
+        differences.append("tags")
+    if _resource_content(resource) != offering.metadata:
+        differences.append("content")
+    return differences
+
+
 def _resource_matches_offering(resource: Mapping[str, Any] | None, offering: PlannedOffering) -> bool:
-    return bool(resource) and _resource_content(resource or {}) == offering.metadata
+    return not _resource_contract_differences(resource, offering)
 
 
 def _hydrate_service_offering_resources(resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -464,7 +638,7 @@ def _hydrate_service_offering_resources(resources: list[dict[str, Any]]) -> list
         row = resource
         uri = str(resource.get("uri") or "")
         resource_id = str(resource.get("id") or "")
-        if uri.startswith("contextforge://control-plane/service-offerings/") and resource_id and not resource.get("content"):
+        if uri.startswith("contextforge://control-plane/service-offerings/") and resource_id:
             detail = _request("GET", f"/resources/{resource_id}")
             if isinstance(detail, dict):
                 row = {**resource, **detail}
@@ -527,7 +701,7 @@ def _with_live_runtime(offering: PlannedOffering, servers: list[dict[str, Any]],
         instance_path=offering.instance_path,
         server_id=str(live["id"]),
         resource_uri=offering.resource_uri,
-        resource_body=_resource_body(metadata),
+        resource_body=_resource_body(metadata, owner_email=_target_owner_email()),
         metadata=metadata,
     )
 
@@ -572,16 +746,113 @@ def _normalize_selected_services(values: list[str] | None) -> set[str] | None:
     return {SERVICE_ALIASES.get(value, value) for value in values}
 
 
+def _error_detail(service: str, stage: str, exc: Exception) -> dict[str, Any]:
+    detail: dict[str, Any] = {
+        "service": service,
+        "stage": stage,
+        "error_type": exc.__class__.__name__,
+        "error": _safe_error_text(str(exc)),
+        "base_url": _base_url(),
+    }
+    if isinstance(exc, ContextForgeApiError):
+        detail.update(exc.diagnostic)
+    return detail
+
+
+def _read_api_collection(
+    report: MigrationReport,
+    *,
+    stage: str,
+    path: str,
+) -> list[dict[str, Any]] | None:
+    try:
+        items = _api_items(path)
+    except Exception as exc:
+        detail = _error_detail("catalog", stage, exc)
+        report.errors.append(detail)
+        report.api_diagnostics.append({"stage": stage, "outcome": "error", **detail})
+        return None
+    report.api_diagnostics.append(
+        {
+            "stage": stage,
+            "method": "GET",
+            "path": path,
+            "base_url": _base_url(),
+            "outcome": "ok",
+            "item_count": len(items),
+        }
+    )
+    return items
+
+
 def migrate(*, dry_run: bool = False, services: list[str] | None = None) -> MigrationReport:
-    report = MigrationReport()
+    report = MigrationReport(target=_target_descriptor())
     selected = _normalize_selected_services(services)
     offerings, skipped = _planned_offerings(selected)
     report.skipped.extend(skipped)
-    resources = _hydrate_service_offering_resources(
-        _api_items("/resources?include_inactive=true&limit=1000")
+    required_families = selected if selected is not None else CANONICAL_SEED_SERVICES
+    planned_families = {offering.service_family for offering in offerings}
+    for missing_family in sorted(required_families - planned_families):
+        report.errors.append(
+            {
+                "service": missing_family,
+                "stage": "required_family_completeness",
+                "error_type": "MissingMigrationSeed",
+                "classification": "required_service_family_missing",
+                "error": (
+                    f"required service family {missing_family} has no usable "
+                    "server-instances migration seed"
+                ),
+                "base_url": _base_url(),
+            }
+        )
+
+    resource_rows = _read_api_collection(
+        report,
+        stage="read_resources",
+        path="/resources?include_inactive=true&limit=1000",
     )
-    servers = _api_items("/servers?include_inactive=true&limit=1000")
-    gateways = _api_items("/gateways?include_inactive=true&limit=1000")
+    if resource_rows is None:
+        return report
+    try:
+        resources = _hydrate_service_offering_resources(resource_rows)
+    except Exception as exc:
+        detail = _error_detail("catalog", "hydrate_service_offering_resources", exc)
+        report.errors.append(detail)
+        report.api_diagnostics.append(
+            {"stage": "hydrate_service_offering_resources", "outcome": "error", **detail}
+        )
+        return report
+    report.api_diagnostics.append(
+        {
+            "stage": "hydrate_service_offering_resources",
+            "method": "GET",
+            "path": "/resources/{resource_id}",
+            "base_url": _base_url(),
+            "outcome": "ok",
+            "item_count": sum(
+                1
+                for resource in resources
+                if str(resource.get("uri") or "").startswith(
+                    "contextforge://control-plane/service-offerings/"
+                )
+            ),
+        }
+    )
+    servers = _read_api_collection(
+        report,
+        stage="read_servers",
+        path="/servers?include_inactive=true&limit=1000",
+    )
+    if servers is None:
+        return report
+    gateways = _read_api_collection(
+        report,
+        stage="read_gateways",
+        path="/gateways?include_inactive=true&limit=1000",
+    )
+    if gateways is None:
+        return report
     resolved: list[tuple[PlannedOffering, str, str]] = []
 
     # Resolve every target before applying any mutation so an incomplete all-service
@@ -602,6 +873,7 @@ def migrate(*, dry_run: bool = False, services: list[str] | None = None) -> Migr
                 if _resource_matches_offering(existing_resource, offering)
                 else "update" if existing_resource else "create"
             )
+            resource_differences = _resource_contract_differences(existing_resource, offering)
             association_action = (
                 "preserve"
                 if existing_resource_id and existing_resource_id in associated_resource_ids
@@ -619,11 +891,12 @@ def migrate(*, dry_run: bool = False, services: list[str] | None = None) -> Migr
                     "scope_model": offering.metadata.get("scope_model"),
                     "instantiation_class": offering.metadata.get("instantiation_class"),
                     "resource_action": resource_action,
+                    "resource_differences": resource_differences,
                     "association_action": association_action,
                 }
             )
         except Exception as exc:  # report all services without leaking local env values
-            report.errors.append({"service": raw_offering.offering_id, "error": _safe_error_text(str(exc))})
+            report.errors.append(_error_detail(raw_offering.offering_id, "resolve_live_runtime", exc))
 
     if report.errors and not dry_run:
         report.skipped.append("apply blocked: one or more selected offerings failed live preflight")
@@ -653,7 +926,7 @@ def migrate(*, dry_run: bool = False, services: list[str] | None = None) -> Migr
                 _associate_resource(offering, resource_id, servers)
                 report.associated.append(offering.offering_id)
         except Exception as exc:
-            report.errors.append({"service": offering.offering_id, "error": _safe_error_text(str(exc))})
+            report.errors.append(_error_detail(offering.offering_id, "apply_resource_contract", exc))
             break
     return report
 
@@ -669,18 +942,17 @@ def main() -> int:
     TARGET_BASE_URL = args.base_url.rstrip("/") if args.base_url else None
     TARGET_ENV_FILE = args.env_file.expanduser().resolve() if args.env_file else None
     TARGET_TOKEN = None
-    report = migrate(dry_run=args.dry_run, services=args.services)
+    try:
+        report = migrate(dry_run=args.dry_run, services=args.services)
+    except Exception as exc:  # deterministic CLI boundary for target/config failures
+        report = MigrationReport(target=_target_descriptor())
+        report.errors.append(_error_detail("catalog", "migration_bootstrap", exc))
     output = {
         "schema_uri": "contextforge://diagnostics/service-offering-registration/v1",
         "dry_run": args.dry_run,
         "mutation_performed": bool(
             not args.dry_run and (report.created or report.updated or report.associated)
         ),
-        "target": {
-            "base_url": _base_url(),
-            "env_file": str(TARGET_ENV_FILE or common.contextforge_env_path() or ""),
-            "env_values_recorded": False,
-        },
         "timestamp": datetime.now(timezone.utc).isoformat(),
         **report.to_json(),
     }

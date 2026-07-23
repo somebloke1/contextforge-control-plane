@@ -74,8 +74,10 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
     def test_wrapper_supports_dev_harness_env_overrides(self) -> None:
         source = (REPO_ROOT / "scripts" / "contextforge_mcp_wrapper.py").read_text(encoding="utf-8")
 
-        self.assertIn('CONTEXTFORGE_CONFIG_ENV", REPO_ROOT / "config" / "contextforge.env"', source)
-        self.assertIn('CONTEXTFORGE_TOKEN_CACHE", REPO_ROOT / "run" / "contextforge-wrapper-token.local.json"', source)
+        self.assertIn("TARGET_PROFILE_KEYS", source)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV", source)
+        self.assertIn("CONTEXTFORGE_CODEX_WRAPPER_BASE_URL", source)
+        self.assertIn("CONTEXTFORGE_PI_WRAPPER_TOKEN_CACHE", source)
         self.assertIn('CONTEXTFORGE_TOKEN_LOCK", f"{TOKEN_CACHE}.lock"', source)
         self.assertIn('env.get("CONTEXTFORGE_BEARER_TOKEN") or os.environ.get("CONTEXTFORGE_BEARER_TOKEN")', source)
         self.assertIn('env.get("CONTEXTFORGE_SERVER_ID")', source)
@@ -85,6 +87,97 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
         self.assertIn("refresh_email = None if scoped_token_id or env_bearer_token else email", source)
         self.assertIn("refresh_password = None if scoped_token_id or env_bearer_token else password", source)
         self.assertIn("if not email or not password:", source)
+
+    def test_wrapper_selects_opencode_target_profile_atomically(self) -> None:
+        env = os.environ.copy()
+        target_keys = {
+            *wrapper.GENERIC_TARGET_KEYS,
+            *(key for keys in wrapper.TARGET_PROFILE_KEYS.values() for key in keys),
+            "CONTEXTFORGE_TOKEN_LOCK",
+        }
+        for key in target_keys:
+            env.pop(key, None)
+        env.update(
+            {
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/run/opencode/contextforge.env",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/tmp/opencode-token.local.json",
+                "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4444",
+            }
+        )
+        code = (
+            "import json,sys; "
+            f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); "
+            "import contextforge_mcp_wrapper as w; "
+            "print(json.dumps({'profile': w.TARGET_PROFILE, 'config': str(w.CONFIG_ENV), "
+            "'base': w.GATEWAY_BASE, 'cache': str(w.TOKEN_CACHE), 'lock': str(w.TOKEN_LOCK), "
+            "'base_source': w.GATEWAY_BASE_SOURCE}))"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+
+        selected = json.loads(result.stdout)
+        self.assertEqual("opencode", selected["profile"])
+        self.assertEqual("/run/opencode/contextforge.env", selected["config"])
+        self.assertEqual("http://host.docker.internal:4445", selected["base"])
+        self.assertEqual("/tmp/opencode-token.local.json", selected["cache"])
+        self.assertEqual("/tmp/opencode-token.local.json.lock", selected["lock"])
+        self.assertEqual("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL", selected["base_source"])
+
+    def test_wrapper_rejects_partial_profile_instead_of_mixing_target_sources(self) -> None:
+        env = os.environ.copy()
+        for key in {
+            *wrapper.GENERIC_TARGET_KEYS,
+            *(key for keys in wrapper.TARGET_PROFILE_KEYS.values() for key in keys),
+        }:
+            env.pop(key, None)
+        env.update(
+            {
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/run/opencode/contextforge.env",
+                "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4444",
+            }
+        )
+        code = (
+            "import sys; "
+            f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); "
+            "import contextforge_mcp_wrapper as w; print(w.TARGET_CONFIGURATION_ERROR)"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+
+        self.assertIn("incomplete opencode ContextForge target profile", result.stdout)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL", result.stdout)
+
+    def test_cached_token_is_bound_to_exact_contextforge_base_url(self) -> None:
+        payload = wrapper.base64.urlsafe_b64encode(
+            json.dumps({"exp": int(time.time()) + 3600}).encode()
+        ).decode().rstrip("=")
+        token = f"header.{payload}.signature"
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT / "run") as tmp:
+            cache = Path(tmp) / "target-bound-token.local.json"
+            with mock.patch.object(wrapper, "TOKEN_CACHE", cache), mock.patch.object(
+                wrapper,
+                "GATEWAY_BASE",
+                "http://127.0.0.1:4445",
+            ):
+                wrapper._write_token_cache(token)
+                self.assertEqual(token, wrapper._cached_token())
+                with mock.patch.object(wrapper, "GATEWAY_BASE", "http://127.0.0.1:4444"):
+                    self.assertIsNone(wrapper._cached_token())
 
     def test_wrapper_scoped_server_token_create_and_revoke_use_catalog_api(self) -> None:
         calls: list[dict[str, object]] = []

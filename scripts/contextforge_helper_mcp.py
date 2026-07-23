@@ -1331,7 +1331,10 @@ def project_capability_summary(project_root: str, client_type: str = DEFAULT_CLI
         if isinstance(item, Mapping)
     ]
     onboarding_needed: list[dict[str, str]] = []
-    catalog_services = _contextforge_registry_service_offerings(root)
+    try:
+        catalog_services = _contextforge_registry_service_offerings(root)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     for candidate in catalog_services:
         if not isinstance(candidate, Mapping):
             continue
@@ -3934,6 +3937,8 @@ def list_available_capabilities(
             ),
         }
         return client_visible_project_init_list_payload(result)
+    except ContextForgeCatalogUnavailable as exc:
+        return _catalog_unavailable_payload(root, client_type, exc)
     except Exception as exc:
         return _error(exc)
 
@@ -4249,6 +4254,9 @@ def cf_project_init_continue(
                 _remember_pending_project_init_input(project_root, selected)
             return client_visible_project_init_plan_payload(result, include_next_turn=client_type != "codex")
         return client_visible_project_init_list_payload({"ok": True, **capabilities})
+    except ContextForgeCatalogUnavailable as exc:
+        root = project_state.validate_project_root(project_root, require_workspace=True)
+        return _catalog_unavailable_payload(root, client_type, exc)
     except Exception as exc:
         return _error(exc)
 

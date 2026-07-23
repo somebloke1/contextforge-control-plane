@@ -183,9 +183,14 @@ The script must:
   current development scope includes Time and Chrome DevTools as well as the
   original nine offerings
 - upsert resources by URI
+- compare the complete managed resource contract (`uri`, names and description,
+  MIME type, JSON content, tags, visibility, and owner) using the stock list and
+  detail response shapes before deciding that an existing resource is unchanged
 - preserve unrelated existing server tool/resource/prompt associations
 - avoid printing secrets
-- report created, updated, associated, skipped, and errored records
+- fail visibly when a requested or canonical family has no usable migration seed
+- report the selected target/env sources, API stage/path/outcome diagnostics,
+  created, updated, unchanged, associated, skipped, and errored records
 - support dry-run JSON output
 
 ## Tests
