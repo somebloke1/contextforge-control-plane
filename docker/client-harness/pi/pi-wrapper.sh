@@ -12,8 +12,10 @@ fail_model_policy() {
   exit 2
 }
 
-[[ -x "${CONTEXTFORGE_PI_REAL_BIN}" ]] || \
+[[ -f "${CONTEXTFORGE_PI_REAL_BIN}" && -x "${CONTEXTFORGE_PI_REAL_BIN}" ]] || \
   fail_model_policy "Pi sandbox real executable is missing or not executable"
+[[ ! "${CONTEXTFORGE_PI_REAL_BIN}" -ef "${BASH_SOURCE[0]}" ]] || \
+  fail_model_policy "Pi sandbox real executable must not resolve to the wrapper"
 
 expected_thinking() {
   case "$1" in

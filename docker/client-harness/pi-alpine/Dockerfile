@@ -30,13 +30,16 @@ RUN apk add --no-cache \
     && installed_pi="$(command -v pi)" \
     && [ "${installed_pi}" = /usr/local/bin/pi ] \
     && mv "${installed_pi}" /usr/local/bin/contextforge-pi-real \
+    && test -f /usr/local/bin/contextforge-pi-real \
     && test -x /usr/local/bin/contextforge-pi-real \
     && npm cache clean --force
 
 COPY --chown=agent:agent pi/contextforge-pi-bootstrap.sh /usr/local/bin/contextforge-pi-bootstrap
 COPY --chown=agent:agent pi/pi-wrapper.sh /usr/local/bin/pi
 COPY --chown=agent:agent pi/render-config.py /usr/local/lib/contextforge-pi-render-config.py
-RUN test -x /usr/local/bin/contextforge-pi-real \
+RUN test -f /usr/local/bin/contextforge-pi-real \
+    && test -x /usr/local/bin/contextforge-pi-real \
+    && ! test /usr/local/bin/contextforge-pi-real -ef /usr/local/bin/pi \
     && chmod 0755 /usr/local/bin/contextforge-pi-bootstrap /usr/local/bin/pi
 
 USER ${USERNAME}

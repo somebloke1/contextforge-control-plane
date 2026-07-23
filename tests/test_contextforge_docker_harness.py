@@ -1655,7 +1655,9 @@ print(json.dumps(outputs))
         self.assertIn('installed_pi="$(command -v pi)"', dockerfile)
         self.assertIn('[ "${installed_pi}" = /usr/local/bin/pi ]', dockerfile)
         self.assertIn('mv "${installed_pi}" /usr/local/bin/contextforge-pi-real', dockerfile)
+        self.assertGreaterEqual(dockerfile.count("test -f /usr/local/bin/contextforge-pi-real"), 2)
         self.assertGreaterEqual(dockerfile.count("test -x /usr/local/bin/contextforge-pi-real"), 2)
+        self.assertIn("! test /usr/local/bin/contextforge-pi-real -ef /usr/local/bin/pi", dockerfile)
         self.assertIn("COPY --chown=agent:agent pi/pi-wrapper.sh /usr/local/bin/pi", dockerfile)
 
     def test_pi_wrapper_rejects_non_litellm_arguments_before_bootstrap(self) -> None:
@@ -1710,16 +1712,56 @@ print(json.dumps(outputs))
                 self.assertEqual(2, completed.returncode)
                 self.assertIn(expected_error, completed.stderr)
 
-        missing_real_pi = subprocess.run(
-            ["bash", str(wrapper), "--version"],
-            cwd=ROOT,
-            env={**base_env, "CONTEXTFORGE_PI_REAL_BIN": "/definitely/missing/pi"},
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        self.assertEqual(2, missing_real_pi.returncode)
-        self.assertIn("real executable is missing or not executable", missing_real_pi.stderr)
+    def test_pi_wrapper_rejects_invalid_real_executables_without_bootstrap_side_effects(self) -> None:
+        source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wrapper = root / "pi-wrapper"
+            wrapper.write_text(source, encoding="utf-8")
+            wrapper.chmod(0o755)
+            directory = root / "directory"
+            directory.mkdir()
+            non_executable = root / "non-executable"
+            non_executable.write_text("not executable\n", encoding="utf-8")
+            broken_symlink = root / "broken-symlink"
+            broken_symlink.symlink_to(root / "missing-target")
+            wrapper_symlink = root / "wrapper-symlink"
+            wrapper_symlink.symlink_to(wrapper)
+            wrapper_hardlink = root / "wrapper-hardlink"
+            os.link(wrapper, wrapper_hardlink)
+            cases = [
+                ("missing", root / "missing", "missing or not executable"),
+                ("directory", directory, "missing or not executable"),
+                ("non-executable", non_executable, "missing or not executable"),
+                ("broken-symlink", broken_symlink, "missing or not executable"),
+                ("wrapper", wrapper, "must not resolve to the wrapper"),
+                ("wrapper-symlink", wrapper_symlink, "must not resolve to the wrapper"),
+                ("wrapper-hardlink", wrapper_hardlink, "must not resolve to the wrapper"),
+            ]
+            for slug, real_bin, expected_error in cases:
+                with self.subTest(slug=slug):
+                    agent_dir = root / f"agent-{slug}"
+                    runtime_dir = root / f"runtime-{slug}"
+                    approval_path = root / f"approval-{slug}.json"
+                    completed = subprocess.run(
+                        ["bash", str(wrapper), "--version"],
+                        cwd=ROOT,
+                        env={
+                            **os.environ,
+                            "CONTEXTFORGE_PI_REAL_BIN": str(real_bin),
+                            "PI_CODING_AGENT_DIR": str(agent_dir),
+                            "CONTEXTFORGE_PROJECT_INIT_RUN_ROOT": str(runtime_dir),
+                            "CONTEXTFORGE_HELPER_APPROVAL_SOURCE_PATH": str(approval_path),
+                        },
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertEqual(2, completed.returncode)
+                    self.assertIn(expected_error, completed.stderr)
+                    self.assertFalse(agent_dir.exists())
+                    self.assertFalse(runtime_dir.exists())
+                    self.assertFalse(approval_path.exists())
 
     def test_pi_wrapper_injects_approved_model_scope_and_role_thinking(self) -> None:
         source = (ROOT / "docker/client-harness/pi/pi-wrapper.sh").read_text(encoding="utf-8")
