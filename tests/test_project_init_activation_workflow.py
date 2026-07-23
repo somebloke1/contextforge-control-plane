@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
 from pathlib import Path
 from typing import Any
@@ -679,6 +680,76 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
             service_offering_registration._resource_contract_differences(existing, offering),
         )
 
+    def test_service_offering_resource_upsert_updates_named_managed_resource_on_uri_drift(self) -> None:
+        metadata = service_offering_metadata("context7", server_id="server-id")
+        offering = service_offering_registration.PlannedOffering(
+            offering_id="context7",
+            service_family="context7",
+            instance_dir="context7",
+            instance_path="server-instances/context7/instance.json",
+            server_id="server-id",
+            resource_uri=metadata["resource_uri"],
+            resource_body=service_offering_registration._resource_body(metadata),
+            metadata=metadata,
+        )
+        expected = offering.resource_body
+        existing = {
+            "id": "managed-resource-id",
+            "uri": "contextforge://control-plane/service-offerings/context7/v0",
+            "name": expected["name"],
+            "title": expected["title"],
+            "description": expected["description"],
+            "mimeType": expected["mimeType"],
+            "text": expected["content"],
+            "tags": ["stale-tag"],
+            "visibility": expected["visibility"],
+            "ownerEmail": expected["owner_email"],
+        }
+
+        with mock.patch.object(service_offering_registration, "_request", return_value={}) as request:
+            action, resource_id = service_offering_registration._upsert_resource(
+                offering,
+                [existing],
+            )
+
+        self.assertEqual("updated", action)
+        self.assertEqual("managed-resource-id", resource_id)
+        request.assert_called_once_with(
+            "PUT",
+            "/resources/managed-resource-id",
+            body=expected,
+        )
+
+    def test_service_offering_resource_lookup_rejects_conflicting_managed_identities(self) -> None:
+        metadata = service_offering_metadata("context7", server_id="server-id")
+        offering = service_offering_registration.PlannedOffering(
+            offering_id="context7",
+            service_family="context7",
+            instance_dir="context7",
+            instance_path="server-instances/context7/instance.json",
+            server_id="server-id",
+            resource_uri=metadata["resource_uri"],
+            resource_body=service_offering_registration._resource_body(metadata),
+            metadata=metadata,
+        )
+        resources = [
+            {"id": "exact-uri", "uri": offering.resource_uri, "name": "other"},
+            {
+                "id": "managed-name",
+                "uri": "contextforge://control-plane/service-offerings/context7/v0",
+                "name": offering.resource_body["name"],
+                "tags": offering.resource_body["tags"],
+            },
+        ]
+
+        with mock.patch.object(service_offering_registration, "_request") as request, self.assertRaisesRegex(
+            RuntimeError,
+            "multiple Resources match managed offering identity",
+        ):
+            service_offering_registration._upsert_resource(offering, resources)
+
+        request.assert_not_called()
+
     def test_service_offering_migration_reports_missing_required_families(self) -> None:
         with mock.patch.object(
             service_offering_registration,
@@ -742,6 +813,38 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
         self.assertNotIn("env-secret", plain)
         self.assertIn("[REDACTED]", structured)
         self.assertIn("[REDACTED]", plain)
+
+    def test_service_offering_http_diagnostics_never_reflect_response_body_bearer_material(self) -> None:
+        reflected_bearer = "qa-response-body-bearer-material"
+        http_error = urllib.error.HTTPError(
+            url="http://127.0.0.1:4445/resources",
+            code=401,
+            msg="Unauthorized",
+            hdrs={},
+            fp=io.BytesIO(
+                json.dumps({"detail": f"invalid token {reflected_bearer}"}).encode()
+            ),
+        )
+
+        with mock.patch.object(
+            service_offering_registration,
+            "_token",
+            return_value="request-token-not-logged",
+        ), mock.patch.object(
+            service_offering_registration.urllib.request,
+            "urlopen",
+            side_effect=http_error,
+        ), self.assertRaises(service_offering_registration.ContextForgeApiError) as raised:
+            service_offering_registration._request(
+                "GET",
+                "/resources?include_inactive=true&limit=1000",
+            )
+
+        diagnostic = str(raised.exception)
+        self.assertNotIn(reflected_bearer, diagnostic)
+        self.assertNotIn("request-token-not-logged", diagnostic)
+        self.assertIn("Unauthorized", diagnostic)
+        self.assertEqual(401, raised.exception.diagnostic["http_status"])
 
     def test_service_offering_registrar_preserves_server_associations_with_uuid_ids(self) -> None:
         requests: list[tuple[str, str, dict[str, Any] | None]] = []
@@ -7320,6 +7423,92 @@ class ProjectInitActivationWorkflowTests(unittest.TestCase):
                     self.assertNotIn("ContextForgeCatalogUnavailable", result["assistant_visible_response"])
 
             self.assertEqual([], list(root.iterdir()))
+
+    def test_helper_catalog_collections_fail_visibly_on_malformed_api_shapes(self) -> None:
+        request_type_error = object()
+        malformed_detail = object()
+        cases = [
+            ("null", None),
+            ("string", "wrong"),
+            ("integer", 7),
+            ("nan", float("nan")),
+            ("empty_object", {}),
+            ("null_items", {"items": None}),
+            ("string_items", {"items": "wrong"}),
+            ("non_object_item", {"items": [None]}),
+            ("request_type_error", request_type_error),
+            ("malformed_resource_detail", malformed_detail),
+        ]
+        with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:
+            env_file.write("CONTEXTFORGE_BEARER_TOKEN=redacted-test-token\n")
+            env_path = Path(env_file.name)
+        try:
+            for label, malformed in cases:
+                with self.subTest(label=label), tempfile.TemporaryDirectory(
+                    dir=project_state.WORKSPACE_ROOT
+                ) as tmp:
+                    root = Path(tmp).resolve()
+                    contextforge_helper_mcp._CONTEXTFORGE_READBACK_CACHE.clear()
+
+                    def fake_request(base_url: str, path: str, token: str) -> Any:
+                        self.assertEqual("http://cf.example", base_url)
+                        self.assertEqual("catalog-token", token)
+                        if path.startswith("/resources?"):
+                            if malformed is request_type_error:
+                                raise TypeError("synthetic collection decoder failure")
+                            if malformed is malformed_detail:
+                                return {
+                                    "items": [
+                                        {
+                                            "id": "resource-context7-offering",
+                                            "uri": "contextforge://control-plane/service-offerings/context7/v1",
+                                            "tags": ["contextforge-service-offering"],
+                                        }
+                                    ]
+                                }
+                            return malformed
+                        if path == "/resources/resource-context7-offering":
+                            return None
+                        if path.startswith("/servers?") or path.startswith("/gateways?"):
+                            return {"items": []}
+                        raise AssertionError(path)
+
+                    with mock.patch.object(
+                        contextforge_helper_mcp,
+                        "_contextforge_env_path",
+                        return_value=env_path,
+                    ), mock.patch.object(
+                        contextforge_helper_mcp,
+                        "_contextforge_base_url",
+                        return_value="http://cf.example",
+                    ), mock.patch(
+                        "contextforge_mcp_wrapper._read_env",
+                        return_value={"CONTEXTFORGE_BEARER_TOKEN": "redacted-test-token"},
+                    ), mock.patch(
+                        "contextforge_mcp_wrapper._token",
+                        return_value="catalog-token",
+                    ), mock.patch.object(
+                        contextforge_helper_mcp,
+                        "_contextforge_request",
+                        side_effect=fake_request,
+                    ), mock.patch.dict(
+                        os.environ,
+                        {"CONTEXTFORGE_HELPER_CATALOG_CACHE_SECONDS": "0"},
+                        clear=False,
+                    ):
+                        result = contextforge_helper_mcp.service_management_list(
+                            str(root),
+                            client_type="opencode",
+                        )
+
+                    self.assertFalse(result["ok"], result)
+                    self.assertEqual("contextforge_catalog_unavailable", result["status"])
+                    self.assertEqual([], result["services"])
+                    self.assertIn("service catalog unavailable", result["assistant_visible_response"])
+                    self.assertNotIn("No ContextForge services are available", result["assistant_visible_response"])
+                    self.assertEqual([], list(root.iterdir()))
+        finally:
+            env_path.unlink(missing_ok=True)
 
     def test_live_registry_readback_fetches_full_service_offering_resource_content(self) -> None:
         with tempfile.NamedTemporaryFile("w", dir=REPO_ROOT, delete=False) as env_file:

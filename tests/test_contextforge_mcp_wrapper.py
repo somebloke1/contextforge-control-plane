@@ -103,6 +103,8 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
                 "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
                 "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/tmp/opencode-token.local.json",
                 "CONTEXTFORGE_BASE_URL": "http://127.0.0.1:4444",
+                "CONTEXTFORGE_TOKEN_CACHE": "/tmp/stale-generic-token.local.json",
+                "CONTEXTFORGE_TOKEN_LOCK": "/tmp/stale-generic-token.local.json.lock",
             }
         )
         code = (
@@ -130,6 +132,83 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
         self.assertEqual("/tmp/opencode-token.local.json", selected["cache"])
         self.assertEqual("/tmp/opencode-token.local.json.lock", selected["lock"])
         self.assertEqual("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL", selected["base_source"])
+
+    def test_wrapper_prefers_complete_profile_over_earlier_partial_profile(self) -> None:
+        env = os.environ.copy()
+        for key in {
+            *wrapper.GENERIC_TARGET_KEYS,
+            *(key for keys in wrapper.TARGET_PROFILE_KEYS.values() for key in keys),
+            "CONTEXTFORGE_TOKEN_LOCK",
+        }:
+            env.pop(key, None)
+        env.update(
+            {
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/run/partial-opencode.env",
+                "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV": "/run/codex/contextforge.env",
+                "CONTEXTFORGE_CODEX_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+                "CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE": "/tmp/codex-token.local.json",
+            }
+        )
+        code = (
+            "import json,sys; "
+            f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); "
+            "import contextforge_mcp_wrapper as w; "
+            "print(json.dumps({'profile':w.TARGET_PROFILE,'error':w.TARGET_CONFIGURATION_ERROR,"
+            "'config':str(w.CONFIG_ENV),'base':w.GATEWAY_BASE,'cache':str(w.TOKEN_CACHE)}))"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+
+        selected = json.loads(result.stdout)
+        self.assertEqual("codex", selected["profile"])
+        self.assertEqual("", selected["error"])
+        self.assertEqual("/run/codex/contextforge.env", selected["config"])
+        self.assertEqual("http://host.docker.internal:4445", selected["base"])
+        self.assertEqual("/tmp/codex-token.local.json", selected["cache"])
+
+    def test_wrapper_rejects_multiple_complete_profiles(self) -> None:
+        env = os.environ.copy()
+        for key in {
+            *wrapper.GENERIC_TARGET_KEYS,
+            *(key for keys in wrapper.TARGET_PROFILE_KEYS.values() for key in keys),
+            "CONTEXTFORGE_TOKEN_LOCK",
+        }:
+            env.pop(key, None)
+        env.update(
+            {
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/run/opencode/contextforge.env",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE": "/tmp/opencode-token.local.json",
+                "CONTEXTFORGE_CODEX_WRAPPER_CONFIG_ENV": "/run/codex/contextforge.env",
+                "CONTEXTFORGE_CODEX_WRAPPER_BASE_URL": "http://127.0.0.1:4444",
+                "CONTEXTFORGE_CODEX_WRAPPER_TOKEN_CACHE": "/tmp/codex-token.local.json",
+            }
+        )
+        code = (
+            "import sys; "
+            f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); "
+            "import contextforge_mcp_wrapper as w; print(w.TARGET_CONFIGURATION_ERROR)"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+
+        self.assertIn("multiple complete ContextForge target profiles", result.stdout)
+        self.assertIn("opencode", result.stdout)
+        self.assertIn("codex", result.stdout)
 
     def test_wrapper_rejects_partial_profile_instead_of_mixing_target_sources(self) -> None:
         env = os.environ.copy()
@@ -161,6 +240,40 @@ class ContextForgeMcpWrapperLifecycleTests(unittest.TestCase):
 
         self.assertIn("incomplete opencode ContextForge target profile", result.stdout)
         self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL", result.stdout)
+
+    def test_wrapper_rejects_generic_cache_and_lock_mixed_into_specific_profile(self) -> None:
+        env = os.environ.copy()
+        for key in {
+            *wrapper.GENERIC_TARGET_KEYS,
+            *(key for keys in wrapper.TARGET_PROFILE_KEYS.values() for key in keys),
+            "CONTEXTFORGE_TOKEN_LOCK",
+        }:
+            env.pop(key, None)
+        env.update(
+            {
+                "CONTEXTFORGE_OPENCODE_WRAPPER_CONFIG_ENV": "/run/opencode/contextforge.env",
+                "CONTEXTFORGE_OPENCODE_WRAPPER_BASE_URL": "http://host.docker.internal:4445",
+                "CONTEXTFORGE_TOKEN_CACHE": "/tmp/generic-token.local.json",
+                "CONTEXTFORGE_TOKEN_LOCK": "/tmp/generic-token.local.json.lock",
+            }
+        )
+        code = (
+            "import sys; "
+            f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); "
+            "import contextforge_mcp_wrapper as w; print(w.TARGET_CONFIGURATION_ERROR)"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+
+        self.assertIn("incomplete opencode ContextForge target profile", result.stdout)
+        self.assertIn("CONTEXTFORGE_OPENCODE_WRAPPER_TOKEN_CACHE", result.stdout)
 
     def test_cached_token_is_bound_to_exact_contextforge_base_url(self) -> None:
         payload = wrapper.base64.urlsafe_b64encode(

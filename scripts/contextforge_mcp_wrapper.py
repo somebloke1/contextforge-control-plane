@@ -45,11 +45,23 @@ GENERIC_TARGET_KEYS = (
 )
 
 
-def _target_profile() -> str:
-    for profile, keys in TARGET_PROFILE_KEYS.items():
-        if any(os.environ.get(key, "").strip() for key in keys):
-            return profile
-    return "generic"
+def _target_profile_selection() -> tuple[str, str]:
+    configured = {
+        profile: tuple(bool(os.environ.get(key, "").strip()) for key in keys)
+        for profile, keys in TARGET_PROFILE_KEYS.items()
+    }
+    complete_profiles = [profile for profile, values in configured.items() if all(values)]
+    if len(complete_profiles) == 1:
+        return complete_profiles[0], ""
+    if len(complete_profiles) > 1:
+        return complete_profiles[0], (
+            "multiple complete ContextForge target profiles are configured: "
+            + ", ".join(complete_profiles)
+        )
+    partial_profiles = [profile for profile, values in configured.items() if any(values)]
+    if partial_profiles:
+        return partial_profiles[0], ""
+    return "generic", ""
 
 
 def _target_value(profile: str, index: int, default: str | Path) -> tuple[str, str]:
@@ -62,7 +74,7 @@ def _target_value(profile: str, index: int, default: str | Path) -> tuple[str, s
     return str(default), "default"
 
 
-TARGET_PROFILE = _target_profile()
+TARGET_PROFILE, TARGET_PROFILE_SELECTION_ERROR = _target_profile_selection()
 _config_env, CONFIG_ENV_SOURCE = _target_value(
     TARGET_PROFILE,
     0,
@@ -85,13 +97,16 @@ TOKEN_LOCK = Path(
 
 
 def _target_configuration_error() -> str:
+    if TARGET_PROFILE_SELECTION_ERROR:
+        return TARGET_PROFILE_SELECTION_ERROR
     if TARGET_PROFILE != "generic":
-        expected_config_key, expected_base_key, _ = TARGET_PROFILE_KEYS[TARGET_PROFILE]
+        expected_keys = TARGET_PROFILE_KEYS[TARGET_PROFILE]
         missing = [
             key
-            for key, source in (
-                (expected_config_key, CONFIG_ENV_SOURCE),
-                (expected_base_key, GATEWAY_BASE_SOURCE),
+            for key, source in zip(
+                expected_keys,
+                (CONFIG_ENV_SOURCE, GATEWAY_BASE_SOURCE, TOKEN_CACHE_SOURCE),
+                strict=True,
             )
             if source != key
         ]

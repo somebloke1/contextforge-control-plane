@@ -111,12 +111,20 @@ def _contextforge_request(base_url: str, path: str, token: str) -> Any:
     return json.loads(payload) if payload else None
 
 
-def _api_items(data: Any) -> list[dict[str, Any]]:
-    if isinstance(data, dict) and isinstance(data.get("items"), list):
-        return [item for item in data["items"] if isinstance(item, dict)]
-    if isinstance(data, list):
-        return [item for item in data if isinstance(item, dict)]
-    return []
+def _api_items(data: Any, *, endpoint: str) -> list[dict[str, Any]]:
+    if isinstance(data, dict):
+        items = data.get("items")
+        if not isinstance(items, list):
+            raise TypeError(f"{endpoint} returned an object without an items array")
+    elif isinstance(data, list):
+        items = data
+    else:
+        raise TypeError(
+            f"{endpoint} returned {type(data).__name__}; expected an array or an object with an items array"
+        )
+    if any(not isinstance(item, dict) for item in items):
+        raise TypeError(f"{endpoint} items must all be objects")
+    return list(items)
 
 
 def _resource_tags(resource: Mapping[str, Any]) -> set[str]:
@@ -144,7 +152,7 @@ def _resource_with_content(base_url: str, token: str, resource: dict[str, Any]) 
         return resource
     full = _contextforge_request(base_url, f"/resources/{resource_id}", token)
     if not isinstance(full, Mapping):
-        return resource
+        raise TypeError(f"/resources/{resource_id} returned {type(full).__name__}; expected an object")
     merged = dict(resource)
     for key in ("content", "text", "contents", "uri", "name", "title", "description", "mimeType", "mime_type", "tags", "enabled"):
         if key in full:
@@ -188,11 +196,23 @@ def _live_contextforge_registry_readback() -> dict[str, list[dict[str, Any]]]:
         cached = _CONTEXTFORGE_READBACK_CACHE.get(cache_key)
         if ttl > 0 and cached is not None and now - cached[0] <= ttl:
             return _cached_readback_copy(cached[1])
-        resources = _api_items(_contextforge_request(base_url, "/resources?include_inactive=true&limit=1000", token))
+        resources_path = "/resources?include_inactive=true&limit=1000"
+        servers_path = "/servers?include_inactive=true&limit=1000"
+        gateways_path = "/gateways?include_inactive=true&limit=1000"
+        resources = _api_items(
+            _contextforge_request(base_url, resources_path, token),
+            endpoint=resources_path,
+        )
         resources = [_resource_with_content(base_url, token, resource) for resource in resources]
         readback = {
-            "servers": _api_items(_contextforge_request(base_url, "/servers?include_inactive=true&limit=1000", token)),
-            "gateways": _api_items(_contextforge_request(base_url, "/gateways?include_inactive=true&limit=1000", token)),
+            "servers": _api_items(
+                _contextforge_request(base_url, servers_path, token),
+                endpoint=servers_path,
+            ),
+            "gateways": _api_items(
+                _contextforge_request(base_url, gateways_path, token),
+                endpoint=gateways_path,
+            ),
             "resources": resources,
         }
         if ttl > 0:
@@ -202,7 +222,7 @@ def _live_contextforge_registry_readback() -> dict[str, list[dict[str, Any]]]:
         if exc.code == 429 and cached is not None and time.monotonic() - cached[0] <= max(ttl, 300.0):
             return _cached_readback_copy(cached[1])
         raise ContextForgeCatalogUnavailable(base_url, f"HTTP {exc.code} {exc.reason}") from exc
-    except (OSError, RuntimeError, urllib.error.URLError, json.JSONDecodeError) as exc:
+    except (OSError, RuntimeError, TypeError, ValueError, urllib.error.URLError, json.JSONDecodeError) as exc:
         raise ContextForgeCatalogUnavailable(base_url, f"{exc.__class__.__name__}: {exc}") from exc
 
 

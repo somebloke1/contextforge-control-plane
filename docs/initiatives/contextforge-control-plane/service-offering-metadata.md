@@ -145,6 +145,8 @@ name, gateway name, local manifest content, or code constants.
 
 If ContextForge cannot be read, fail visibly with
 `contextforge_catalog_unavailable` and perform no project file changes.
+Malformed collection/detail response shapes are catalog read failures, not
+evidence for an empty catalog, and must use the same fail-visible outcome.
 
 Invalid, ambiguous, or conflicting metadata is skipped with diagnostic evidence,
 not converted into an inferred offering. Conflicts include duplicate
@@ -183,11 +185,14 @@ The script must:
   current development scope includes Time and Chrome DevTools as well as the
   original nine offerings
 - upsert resources by URI
+- when a managed Resource's URI has drifted, identify it by the stable managed
+  reserved name and update that Resource even when tags also drift; reject
+  conflicting URI/name matches instead of creating a duplicate
 - compare the complete managed resource contract (`uri`, names and description,
   MIME type, JSON content, tags, visibility, and owner) using the stock list and
   detail response shapes before deciding that an existing resource is unchanged
 - preserve unrelated existing server tool/resource/prompt associations
-- avoid printing secrets
+- avoid printing secrets or reflecting HTTP response bodies in diagnostics
 - fail visibly when a requested or canonical family has no usable migration seed
 - report the selected target/env sources, API stage/path/outcome diagnostics,
   created, updated, unchanged, associated, skipped, and errored records

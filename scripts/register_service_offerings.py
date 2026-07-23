@@ -236,13 +236,13 @@ def _request(method: str, path: str, *, body: dict[str, Any] | None = None) -> A
         with urllib.request.urlopen(request, timeout=30) as response:
             payload = response.read()
     except urllib.error.HTTPError as exc:
-        error_body = exc.read().decode("utf-8", errors="replace")
+        exc.read()  # Drain the response without reflecting attacker-controlled bearer material.
         raise ContextForgeApiError(
             method=method,
             path=path,
             classification="http_error",
             http_status=exc.code,
-            message=_safe_error_text(error_body) or str(exc.reason),
+            message=str(exc.reason) or "request rejected",
         ) from exc
     except urllib.error.URLError as exc:
         raise ContextForgeApiError(
@@ -566,11 +566,25 @@ def _planned_offerings(selected_services: set[str] | None = None) -> tuple[list[
     return list(planned_by_offering.values()), skipped
 
 
-def _resource_by_uri(resources: Iterable[dict[str, Any]], uri: str) -> dict[str, Any] | None:
+def _resource_for_offering(
+    resources: Iterable[dict[str, Any]],
+    offering: PlannedOffering,
+) -> dict[str, Any] | None:
+    expected_name = str(offering.resource_body.get("name") or "")
+    matches = []
     for resource in resources:
-        if str(resource.get("uri") or "") == uri:
-            return resource
-    return None
+        exact_uri = str(resource.get("uri") or "") == offering.resource_uri
+        managed_name = (
+            expected_name
+            and str(resource.get("name") or "") == expected_name
+        )
+        if exact_uri or managed_name:
+            matches.append(resource)
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"multiple Resources match managed offering identity for {offering.offering_id}"
+        )
+    return matches[0] if matches else None
 
 
 def _resource_content(resource: Mapping[str, Any]) -> dict[str, Any]:
@@ -638,10 +652,19 @@ def _hydrate_service_offering_resources(resources: list[dict[str, Any]]) -> list
         row = resource
         uri = str(resource.get("uri") or "")
         resource_id = str(resource.get("id") or "")
-        if uri.startswith("contextforge://control-plane/service-offerings/") and resource_id:
+        is_service_offering = uri.startswith(
+            "contextforge://control-plane/service-offerings/"
+        ) or bool(_tag_values(resource.get("tags")).intersection(SERVICE_OFFERING_TAGS))
+        if is_service_offering and resource_id:
             detail = _request("GET", f"/resources/{resource_id}")
-            if isinstance(detail, dict):
-                row = {**resource, **detail}
+            if not isinstance(detail, dict):
+                raise ContextForgeApiError(
+                    method="GET",
+                    path=f"/resources/{resource_id}",
+                    classification="invalid_resource_response",
+                    message=f"expected an object, got {type(detail).__name__}",
+                )
+            row = {**resource, **detail}
         hydrated.append(row)
     return hydrated
 
@@ -707,7 +730,7 @@ def _with_live_runtime(offering: PlannedOffering, servers: list[dict[str, Any]],
 
 
 def _upsert_resource(offering: PlannedOffering, resources: list[dict[str, Any]]) -> tuple[str, str]:
-    existing = _resource_by_uri(resources, offering.resource_uri)
+    existing = _resource_for_offering(resources, offering)
     if existing:
         resource_id = str(existing["id"])
         if _resource_matches_offering(existing, offering):
@@ -860,7 +883,7 @@ def migrate(*, dry_run: bool = False, services: list[str] | None = None) -> Migr
     for raw_offering in offerings:
         try:
             offering = _with_live_runtime(raw_offering, servers, gateways)
-            existing_resource = _resource_by_uri(resources, offering.resource_uri)
+            existing_resource = _resource_for_offering(resources, offering)
             server = _server_by_id(servers, offering.server_id)
             existing_resource_id = str((existing_resource or {}).get("id") or "")
             associated_resource_ids = (
